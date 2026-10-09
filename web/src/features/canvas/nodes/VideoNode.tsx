@@ -6,13 +6,16 @@
 
 "use client";
 
+import type { FrameSelection } from "@noxrea/shared";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  LoadingOutlined,
   PauseIcon,
   PlayIcon,
+  ReloadOutlined,
   UploadOutlined,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
@@ -24,6 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAssetsStore } from "@/features/assets/store";
 import {
+  type CapturedFrameInfo,
   captureFrame as captureFrameApi,
   type CropRectPx,
   cropVideo as cropVideoApi,
@@ -34,6 +38,7 @@ import {
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
+import { useCanvasVideo } from "@/features/canvas/hooks/use-canvas-video";
 import { createEdge } from "@/features/canvas/node-defaults";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
@@ -181,6 +186,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const { notification } = useAppFeedback();
   // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
+  const generating = isGenerating(data.taskBinding);
+  let loadingSrc = src;
+  if (data.upload?.uploading) loadingSrc = data.upload.previewUrl || "";
+  else if (data.upload?.error || generating) loadingSrc = "";
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
   // 同一时刻只跑一个），startedAt 驱动忙浮层的实时耗时
   const [busy, setBusy] = useState<{
@@ -193,7 +202,39 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   /** 当前播放是否由 hover 预览触发（用户点击播放后置 false）：
    *  连线 / 拖动让位逻辑只停 hover 预览，不碰用户主动播放 */
   const hoverPlayingRef = useRef(false);
-  const [playing, setPlaying] = useState(false);
+  const playbackAttemptRef = useRef(0);
+  const [playback, setPlayback] = useState({ src: loadingSrc, playing: false });
+  if (playback.src !== loadingSrc) setPlayback({ src: loadingSrc, playing: false });
+  const playing = playback.src === loadingSrc && playback.playing;
+  const setPlaying = useCallback((value: boolean) => setPlayback({ src: loadingSrc, playing: value }), [loadingSrc]);
+  const panelOpen = useCanvasStore(
+    (s) => s.frameCaptureNodeId === id || s.clipCaptureNodeId === id,
+  );
+  // Clip preview owns looping; native loop would briefly jump back to zero.
+  const clipOpen = useCanvasStore((s) => s.clipCaptureNodeId === id);
+  const cropOpen = useCanvasStore((s) => s.croppingNodeId === id);
+  const { setElement, requestLoad, retry: retryVideo, status: videoLoadStatus } = useCanvasVideo(
+    id, loadingSrc, playing || panelOpen || cropOpen || busy !== null,
+  );
+  const videoLoadBlocked = videoLoadStatus === "failed" || videoLoadStatus === "stalled";
+  const playbackLoadReleaseRef = useRef<(() => void) | null>(null);
+  const releasePlaybackLoad = useCallback(() => {
+    playbackLoadReleaseRef.current?.();
+    playbackLoadReleaseRef.current = null;
+  }, []);
+  const handlePlaybackStopped = useCallback(() => {
+    playbackAttemptRef.current += 1;
+    hoverPlayingRef.current = false;
+    releasePlaybackLoad();
+    setPlaying(false);
+  }, [releasePlaybackLoad, setPlaying]);
+  const stopPlayback = useCallback((resetTime = false) => {
+    handlePlaybackStopped();
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    if (resetTime) video.currentTime = 0;
+  }, [handlePlaybackStopped]);
   /**
    * 音量：0~1。= 0 等价于静音；切换静音时用 lastVolume 记住上次非零值。
    * 默认 50%（浏览器自动播放策略下 hover 预览大概率带声播放；被拦截时静默降级）。
@@ -211,13 +252,31 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const togglePlay = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    releasePlaybackLoad();
     // 点击播放是用户手势：解除静音降级，允许带声播放；
     // 用户接管播放后，不再是 hover 预览（连线/拖动让位逻辑不再管它）
     setAutoplayMuted(false);
+    playbackAttemptRef.current += 1;
     hoverPlayingRef.current = false;
-    if (v.paused) { v.play(); setPlaying(true); }
-    else { v.pause(); setPlaying(false); }
-  }, []);
+    if (v.paused) {
+      const attempt = playbackAttemptRef.current;
+      const release = requestLoad();
+      retryVideo();
+      playbackLoadReleaseRef.current = release;
+      v.play().then(() => {
+        if (playbackAttemptRef.current === attempt) setPlaying(true);
+      }).catch((error: unknown) => {
+        if (playbackAttemptRef.current !== attempt) return;
+        stopPlayback();
+        if (!(error instanceof DOMException) || error.name !== "AbortError") {
+          notifyActionFailed(notification, t, undefined, "media.playFailed", id);
+        }
+      }).finally(() => {
+        release();
+        if (playbackLoadReleaseRef.current === release) playbackLoadReleaseRef.current = null;
+      });
+    } else stopPlayback();
+  }, [requestLoad, retryVideo, releasePlaybackLoad, setPlaying, stopPlayback, notification, t, id]);
 
   /** 同步音量到 video 元素，并把最终值绑回 state（拖动结束也会走 setVolume） */
   const applyVolume = useCallback((value: number) => {
@@ -235,6 +294,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [volume, lastVolume, applyVolume]);
 
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => captureAbortRef.current?.abort(), [src]);
+  useEffect(() => () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    playbackAttemptRef.current += 1;
+    hoverPlayingRef.current = false;
+    releasePlaybackLoad();
+  }, [loadingSrc, panelOpen, releasePlaybackLoad]);
 
   /** 选帧 / 片段截取面板打开期间：hover 播放会顶掉面板的循环预览与所选帧，
       mouseleave 的「暂停 + 归零」也会掐断面板的自动播放，必须整体让位 */
@@ -252,18 +322,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     interaction.mode === "connecting" || interaction.mode === "dragging-nodes";
 
   useEffect(() => {
-    if (!interactionBusy) return;
+    if (!interactionBusy && !videoLoadBlocked) return;
     // 未触发的 hover 延迟一并取消
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     // 已在 hover 预览中的立即停播归零（与 mouseleave 同语义）；用户主动播放不动
     if (!hoverPlayingRef.current) return;
-    hoverPlayingRef.current = false;
-    const v = videoRef.current;
-    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); }
-  }, [interactionBusy]);
+    stopPlayback(true);
+  }, [interactionBusy, videoLoadBlocked, stopPlayback]);
 
   const handleMouseEnter = useCallback(() => {
-    if (capturingFrame() || busy || interactionBusy) return;
+    if (capturingFrame() || busy || interactionBusy || videoLoadBlocked) return;
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
     hoverTimerRef.current = setTimeout(() => {
       hoverTimerRef.current = null;
@@ -271,26 +339,39 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       if (capturingFrame() || busy || interactionBusy) return;
       const v = videoRef.current;
       if (v && v.paused) {
+        releasePlaybackLoad();
+        playbackLoadReleaseRef.current = requestLoad();
+        const attempt = ++playbackAttemptRef.current;
+        hoverPlayingRef.current = true;
+        const playbackSrc = v.getAttribute("src");
+        const isCurrent = () => hoverPlayingRef.current && playbackAttemptRef.current === attempt && videoRef.current === v && v.getAttribute("src") === playbackSrc && !capturingFrame();
         // 每次悬停都先尝试带声播放：浏览器对带声自动播放的放行条件是「页面有过任意交互」
         // （粘性激活），交互过后重试即恢复有声；被拦截才降级为静音自动播放。
         // 降级不做成粘性——否则首个节点会永久锁死在静音，直到用户手动碰音量。
         v.muted = false;
         setAutoplayMuted(false);
-        v.play().then(() => { hoverPlayingRef.current = true; setPlaying(true); }).catch(() => {
+        v.play().then(() => { if (isCurrent()) setPlaying(true); }).catch((error: unknown) => {
+          if (!isCurrent()) return;
+          if (!(error instanceof DOMException) || error.name !== "NotAllowedError") {
+            stopPlayback();
+            return;
+          }
           v.muted = true;
           setAutoplayMuted(true);
-          v.play().then(() => { hoverPlayingRef.current = true; setPlaying(true); }).catch(() => {});
+          v.play().then(() => { if (isCurrent()) setPlaying(true); }).catch(() => {
+            if (isCurrent()) {
+              stopPlayback();
+            }
+          });
         });
       }
     }, HOVER_PLAY_DELAY);
-  }, [capturingFrame, busy, interactionBusy]);
+  }, [capturingFrame, busy, interactionBusy, videoLoadBlocked, requestLoad, releasePlaybackLoad, setPlaying, stopPlayback]);
   const handleMouseLeave = useCallback(() => {
     if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
-    hoverPlayingRef.current = false;
-    if (capturingFrame() || busy) return;
-    const v = videoRef.current;
-    if (v) { v.pause(); v.currentTime = 0; setPlaying(false); }
-  }, [capturingFrame, busy]);
+    if (!hoverPlayingRef.current) return;
+    stopPlayback(true);
+  }, [stopPlayback]);
 
   /**
    * 回填音轨结论到节点数据。
@@ -362,7 +443,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame, data.duration, id]);
 
-  const captureFrame = useCallback(async (time: number | null) => {
+  const captureFrame = useCallback(async (selection: FrameSelection) => {
     const v = videoRef.current;
     if (!v || !src) {
       // 确认不自关契约的兜底：视频元素被生成态浮层换掉（videoRef 为空）或源
@@ -371,38 +452,46 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       return;
     }
     // 其他派生操作仍在服务端处理中：给出 busy 反馈而不是静默吞掉（与截取一致）
-    if (busy) {
+    if (busy || captureAbortRef.current) {
       notifyNodeBusy(notification, t, id);
       return;
     }
+    const controller = new AbortController();
+    captureAbortRef.current = controller;
     setBusy({ kind: "capture", startedAt: Date.now() });
     // 抽帧被接受：关闭帧截取面板（面板不在确认时自关——busy 守卫拒绝时面板
     // 保持打开、播放位置原样保留可重试，与截取面板的「确认不自关」契约一致）
     useCanvasStore.getState().setFrameCaptureNodeId(null);
     try {
-      const seekTime = time !== null ? Math.max(0, Math.min(time, v.duration || time)) : v.currentTime;
       const videoKey = toFileKey(src);
-      const res = await captureFrameApi(videoKey, seekTime);
+      const res = await captureFrameApi(videoKey, selection, controller.signal);
+      if (controller.signal.aborted) return;
       if (!res.ok) {
         // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案
         const errJson = await res.json().catch(() => null);
+        if (controller.signal.aborted) return;
         notifyActionFailed(notification, t, errJson?.error as string | undefined, "error.capture_frame.capture_failed", id);
         return;
       }
-      const json = await res.json();
-      const imgUrl = json.data?.url;
-      if (!imgUrl) {
+      const json = await res.json() as { data?: CapturedFrameInfo };
+      if (controller.signal.aborted) return;
+      const frame = json.data;
+      if (!frame?.url) {
         notifyActionFailed(notification, t, undefined, "error.capture_frame.capture_failed", id);
         return;
       }
 
-      const nw = v.videoWidth, nh = v.videoHeight;
-      const label = `${data.label || t("common.frame")} #${Math.round(seekTime * 10) / 10}s`;
-      await createNodeFromUrl(id, imgUrl, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
+      const currentNode = useCanvasStore.getState().nodes.find((node) => node.id === id);
+      if (videoRef.current !== v || currentNode?.type !== NODE_TYPE.VIDEO || currentNode.data.src !== src) return;
+      const { width: nw, height: nh, time: capturedTime } = frame;
+      const label = `${data.label || t("common.frame")} #${Math.round(capturedTime * 10) / 10}s`;
+      await createNodeFromUrl(id, frame.url, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
     } catch (e) {
+      if (controller.signal.aborted) return;
       console.error("Frame capture failed:", e);
       notifyActionFailed(notification, t, undefined, "error.capture_frame.capture_failed", id);
     } finally {
+      captureAbortRef.current = null;
       setBusy(null);
     }
   }, [src, data.label, id, t, notification, busy]);
@@ -669,12 +758,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         case "save-asset": handleSaveToAssets(); break;
         case "preview-fullscreen": if (src) setPreviewOpen(true); break;
         case "capture-frame": {
-          const v = videoRef.current;
-          if (detail.time === -1) {
-            captureFrame(v?.duration ? v.duration - 0.1 : 10);
-          } else {
-            captureFrame(detail.time);
-          }
+          void captureFrame(detail.selection);
           break;
         }
         case "detach-audio":
@@ -717,21 +801,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [id, src]);
 
   const hasVideo = src && src.length > 0;
-  // 帧截取 / 片段截取面板打开期间：播放控件保持常显（不受悬停影响）——
-  // 用户在面板里拖选区时鼠标不在节点上，控件淡出会导致无法边拖边听对点
-  const panelOpen = useCanvasStore(
-    (s) => s.frameCaptureNodeId === id || s.clipCaptureNodeId === id,
-  );
-  // 片段截取面板打开期间关闭原生 loop：区间循环由面板回跳控制，原生 loop 到头
-  // 会先跳回 0、再被拉回入点，每圈多两次 seek 且画面闪跳。帧截取面板不受此限——
-  // 它复用节点播放按钮「边听边看」，播放到末尾原生 loop 反而是期望行为
-  const clipOpen = useCanvasStore((s) => s.clipCaptureNodeId === id);
-
   // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
   // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，
   // 与播放位置无关），避免在 effect 里同步 setState 造成级联渲染
-  const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
-  const cropOpen = croppingNodeId === id;
   const captureFrameSnapshot = useCallback((): { src: string; w: number; h: number } | null => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return null;
@@ -757,12 +829,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
     videoCleanupRef.current?.();
     videoCleanupRef.current = null;
     videoRef.current = el;
+    setElement(el);
     // 元素挂载即同步默认音量：state 初值 0.5，但 DOM volume 默认是 1，不写会失配。
     // 条件渲染链下元素可能晚于首个 effect 挂载，放在 ref 回调里才保证生效。
     if (el) el.volume = 0.5;
     if (el) videoCleanupRef.current = registerVideoElement(id, el);
-  }, [id]);
-  const generating = isGenerating(data.taskBinding);
+  }, [id, setElement]);
 
   return (
     <div className="group relative w-full h-full flex flex-col node-tilt">
@@ -803,7 +875,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         {data.upload?.uploading ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden">
             {data.upload?.previewUrl && (
-              <video src={data.upload.previewUrl} muted playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
+              <video ref={setElement} muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 px-8">
               {uploadProgress != null ? (
@@ -831,19 +903,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
                 用响应式属性而非命令式改 DOM，元素重挂也自动带上 */}
             <video
               ref={setVideoRef}
-              src={src}
               className="absolute inset-0 w-full h-full rounded-lg"
               loop={!clipOpen}
               muted={volume === 0 || autoplayMuted}
               playsInline
-              preload="metadata"
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoadedMeta}
               // 播放状态以 video 的真实事件为准：拖动轨道、换源等都会直接
               // 调用 pause()，只改 DOM 的话按钮图标会停在过期的状态上
               onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-              onEnded={() => setPlaying(false)}
+              onPause={handlePlaybackStopped}
+              onEnded={handlePlaybackStopped}
               onContextMenu={(e) => e.preventDefault()}
             />
             {/* 底部渐变遮罩：与控件栏同步显隐，静止时保持画面纯净 */}
@@ -879,6 +949,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
         {/* 分离音频 / 捕获帧 / 截取片段 / 画面裁剪处理中：同步请求可能持续数秒到分钟级，
             忙浮层给出操作文案 + 实时耗时 */}
+        {((cropOpen && videoLoadStatus !== "ready") || videoLoadStatus === "failed" || videoLoadStatus === "stalled") && (
+          <div className="nodrag nowheel absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 text-center text-white" role={videoLoadStatus === "failed" || videoLoadStatus === "stalled" ? "alert" : "status"}>
+            {videoLoadStatus !== "failed" && videoLoadStatus !== "stalled" && <LoadingOutlined className="size-5" />}
+            <span className="text-sm">{t(videoLoadStatus === "failed" ? "media.loadFailed" : videoLoadStatus === "stalled" ? "media.loadTimedOut" : "media.loading")}</span>
+            <div className="flex flex-wrap justify-center gap-2">
+              {(videoLoadStatus === "failed" || videoLoadStatus === "stalled") && <Button size="sm" onClick={retryVideo}><ReloadOutlined />{t("media.retry")}</Button>}
+              {cropOpen && <Button size="sm" variant="secondary" onClick={() => useCanvasStore.getState().setCroppingNodeId(null)}>{t("common.cancel")}</Button>}
+            </div>
+          </div>
+        )}
         {busy && (
           <BusyOverlay
             label={
@@ -896,7 +976,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       </div>
 
       {/* 画面裁剪面板：挂 body 之外以露出顶部工具条（与图片裁剪同构） */}
-      {cropOpen && (
+      {cropOpen && videoLoadStatus === "ready" && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
           <VideoCropPanel
             nodeId={id}
