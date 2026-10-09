@@ -4,6 +4,8 @@
  * 归属说明：lib/model-store 与 settings 界面共同消费它，
  * 放在 features 会让 lib 反向依赖 feature，故归属 lib/api。
  */
+import { stripTrailingSlash } from "@noxrea/shared/url";
+
 import { api, apiRaw } from "@/lib/api/client";
 
 export const modelApi = {
@@ -52,7 +54,7 @@ export const modelApi = {
   createProvider: (name: string, baseUrl: string, apiKey: string, protocol?: string) =>
     api<{ id: string }>(`/api/model-config/providers`, {
       method: "POST",
-      body: JSON.stringify({ name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey, protocol }),
+      body: JSON.stringify({ name, baseUrl: stripTrailingSlash(baseUrl), apiKey, protocol }),
     }),
 
   /** 拉取模型参数定义。 */

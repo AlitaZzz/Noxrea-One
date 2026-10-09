@@ -3,6 +3,7 @@
  * 将用户传入的参考图路径或 URL 解析为可访问的资源，并做路径穿越防护。
  */
 
+import { MANAGED_FILE_PATH, stripTrailingSlash } from "@noxrea/shared/url";
 import { logEvent } from "@server/core/logger/utils";
 import { getConfig } from "@server/core/config";
 import { isPathWithinBase } from "@server/core/paths";
@@ -78,11 +79,11 @@ async function resolveRefList(urls: string[]): Promise<string[]> {
 
     // 同源 URL（/api/files/ 或纯存储路径）：
     // 配置了 PUBLIC_URL → 拼公网 URL 透传（上游按 URL 拉取）；未配置 → 回退读盘转 base64
-    if (url.startsWith("/api/files/") || (!url.startsWith("http://") && !url.startsWith("https://"))) {
-      const relPath = url.startsWith("/api/files/") ? url.replace(/^\/api\/files\//, "") : url;
-      const publicUrl = getConfig().PUBLIC_URL.replace(/\/+$/, "");
+    if (url.startsWith(MANAGED_FILE_PATH) || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      const relPath = url.startsWith(MANAGED_FILE_PATH) ? url.slice(MANAGED_FILE_PATH.length) : url;
+      const publicUrl = stripTrailingSlash(getConfig().PUBLIC_URL);
       if (publicUrl) {
-        resolved.push(`${publicUrl}/api/files/${relPath}`);
+        resolved.push(`${publicUrl}${MANAGED_FILE_PATH}${relPath}`);
         continue;
       }
       resolved.push(await readSelfFile(relPath));

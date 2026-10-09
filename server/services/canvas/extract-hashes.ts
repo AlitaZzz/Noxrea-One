@@ -4,6 +4,8 @@
  * 决定是否重算 file_refs 账本（前端不再参与该判定）。
  */
 
+import { MANAGED_FILE_PATH, getManagedFilePathname } from "@noxrea/shared/url";
+
 interface CanvasNode {
   data?: Record<string, unknown>;
 }
@@ -11,9 +13,11 @@ interface CanvasNode {
 /** 从 /api/files/{userId}/{hash[:2]}/{hash}{ext} URL 中提取 64 位 hash */
 export function extractHashFromUrl(url: string): string | null {
   if (!url || typeof url !== "string") return null;
-  const idx = url.indexOf("/api/files/");
+  const pathname = getManagedFilePathname(url);
+  if (!pathname) return null;
+  const idx = pathname.indexOf(MANAGED_FILE_PATH);
   if (idx === -1) return null;
-  const path = url.slice(idx + "/api/files/".length);
+  const path = pathname.slice(idx + MANAGED_FILE_PATH.length);
   const parts = path.split("/");
   if (parts.length !== 3) return null;
   const fn = parts[2];

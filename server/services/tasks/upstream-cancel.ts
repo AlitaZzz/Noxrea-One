@@ -9,6 +9,7 @@ import { logEvent, errText } from "@server/core/logger/utils";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
+import { stripTrailingSlash } from "@noxrea/shared/url";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 
 /** 上游取消是尽力而为的旁路请求：取短超时，不让取消接口为一个旁路等待太久 */
@@ -51,7 +52,7 @@ export async function cancelUpstreamTask(input: UpstreamCancelInput): Promise<vo
       return;
     }
 
-    const baseUrl = provider.baseUrl.replace(/\/+$/, "");
+    const baseUrl = stripTrailingSlash(provider.baseUrl);
     const endpoints = input.model
       ? resolveProviderEndpoints(hostFromBaseUrl(baseUrl), input.model, input.capability ?? "")
       : undefined;

@@ -7,6 +7,10 @@
     ".": {
       "types": "./index.ts",
       "default": "./index.ts"
+    },
+    "./url": {
+      "types": "./url.ts",
+      "default": "./url.ts"
     }
   },
   "dependencies": {

@@ -27,6 +27,7 @@ import type { AddAssetsBatchResult } from "@/features/assets/store";
 import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
 import { runMediaUpload } from "@/features/canvas/upload";
 import { expandAccept } from "@/features/canvas/upload/pick-files";
+import { withManagedFileWidth } from "@/lib/file-url";
 import { kindOfBlob, loadUploadLimits, type UploadLimits } from "@/lib/upload-formats";
 import { isOffline } from "@/lib/utils/upload";
 
@@ -376,12 +377,12 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                   return (
                   <Card key={f.id} className="group relative size-[130px] shrink-0 gap-0 overflow-hidden rounded-md border-border/50 bg-popover p-0 shadow-none">
                     {kind === "image" ? (
-                      <img src={f.url ? `${f.url}?w=200` : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
+                      <img src={f.url ? withManagedFileWidth(f.url, 200) : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
                     ) : kind === "video" ? (
                       <div className="w-full h-full relative flex items-center justify-center bg-black/50">
                         {f.url ? (
                           <img
-                            src={`${f.url}?w=200`}
+                            src={withManagedFileWidth(f.url, 200)}
                             alt=""
                             draggable={false}
                             className="absolute inset-0 w-full h-full object-cover"

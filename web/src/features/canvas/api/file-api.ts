@@ -2,13 +2,14 @@
  * 文件（Files）相关 API 封装：上传约束、抽帧、音视频分离等媒体处理接口。
  */
 import type { FrameSelection } from "@noxrea/shared";
+import { MANAGED_FILE_PATH } from "@noxrea/shared/url";
 
 import { apiRaw } from "@/lib/api/client";
 
 /** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
     后端媒体接口的统一入参格式，抽帧/代理/雪碧图/截取等调用方共用 */
 export function toFileKey(url: string): string {
-  return url.replace(/^\/api\/files\//, "").split("?")[0];
+  return (url.startsWith(MANAGED_FILE_PATH) ? url.slice(MANAGED_FILE_PATH.length) : url).split("?")[0];
 }
 
 /** 响应包含图片 URL、尺寸和抽帧时间。 */

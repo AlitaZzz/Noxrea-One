@@ -6,7 +6,7 @@
 
 import { ArkProtocol } from "./base";
 import { parseScanSyncResult } from "@server/services/protocols/openai/shared";
-import type { ProtocolRequestResult, ProtocolResponse } from "@server/services/protocols/base";
+import { getProtocolEndpoints, type ProtocolRequestResult, type ProtocolResponse } from "@server/services/protocols/base";
 
 /** 裸 base64 产物补 PNG 前缀（对齐 openai/image 的兜底约定） */
 const B64_MIME = "data:image/png;base64,";
@@ -20,7 +20,7 @@ export class ArkImageProtocol extends ArkProtocol {
   ): ProtocolRequestResult {
     // 端点可被渠道配置覆盖（对齐 openai 行为）；ark 兼容接口无独立 edits
     // 路径（参考图由请求体携带），故不接 hasRef 形参
-    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const endpoints = getProtocolEndpoints(channelConfig);
     const endpoint = endpoints?.["image.generations"] ?? "/v1/images/generations";
     return this.buildPost(baseUrl, endpoint, apiKey, body);
   }

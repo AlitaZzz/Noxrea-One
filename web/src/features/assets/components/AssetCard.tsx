@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
+import { withManagedFileWidth } from "@/lib/file-url";
 
 import { AssetHoverPreview } from "./AssetHoverPreview";
 
@@ -113,7 +114,7 @@ export default function AssetCard({
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
   const sourceUrl = asset.sourceUrl;
-  const thumbUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=300` : sourceUrl;
+  const thumbUrl = withManagedFileWidth(sourceUrl, 300);
 
   return (
     <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>

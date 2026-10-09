@@ -35,6 +35,7 @@ vi.mock("@/lib/api/model-api", () => ({
 
 vi.mock("@/lib/global-notification", () => ({
   showGlobalNotification: () => mocks.notify,
+  notifyFailure: (...args: unknown[]) => mocks.notify.error(...args),
 }));
 
 vi.mock("@/lib/i18n/config", () => ({

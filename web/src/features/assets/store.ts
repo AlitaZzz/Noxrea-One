@@ -6,9 +6,7 @@ import { create } from "zustand";
 
 import { ASSET_BATCH_LIMIT, assetApi, type AssetCountersDto, type AssetFolderDto, type AssetItemDto, type AssetSkippedDto } from "@/features/assets/api";
 import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput, MediaType } from "@/features/assets/types";
-import { ApiError } from "@/lib/api/client";
-import { resolveApiError } from "@/lib/api/error-message";
-import { showGlobalNotification } from "@/lib/global-notification";
+import { notifyFailure } from "@/lib/global-notification";
 import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 
 // --- Helpers ---
@@ -54,16 +52,6 @@ function dtoToFolder(dto: AssetFolderDto): AssetFolder {
 function toIntId(id: string): number | undefined {
   const n = parseInt(id, 10);
   return Number.isNaN(n) ? undefined : n;
-}
-
-/** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
-function notifyFailure(e: unknown, fallbackKey: string) {
-  if (e instanceof SessionChangedError) return;
-  showGlobalNotification().error({
-    title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
-    placement: "bottomRight",
-    duration: 6,
-  });
 }
 
 // --- Shared pagination helper ---

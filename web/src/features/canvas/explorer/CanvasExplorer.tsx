@@ -51,6 +51,7 @@ import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
 import { ASSET_CATEGORIES, isGenerating, NODE_TYPE } from "@/lib/constants";
+import { withManagedFileWidth } from "@/lib/file-url";
 import { formatBytes, formatDateTime, formatTime } from "@/lib/utils/format";
 
 export const DRAWER_WIDTH = 360;
@@ -321,9 +322,7 @@ function ElementItemImpl(props: ElementItemProps) {
   const label: string = rawLabel || typeLabel || nodeType;
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
   const sourceUrl = (node.data as { src?: string }).src;
-  const thumb = nodeType === NODE_TYPE.VIDEO && sourceUrl?.includes("/api/files/")
-    ? `${sourceUrl}?w=64`
-    : sourceUrl;
+  const thumb = nodeType === NODE_TYPE.VIDEO ? withManagedFileWidth(sourceUrl, 64) : sourceUrl;
   const hasPreview = Boolean(
     (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb),
   );
@@ -411,7 +410,7 @@ function ElementItemImpl(props: ElementItemProps) {
         style={hasPreview ? undefined : { background: `${getNodeTypeColor(nodeType)}18` }}
       >
         {nodeType === NODE_TYPE.IMAGE && src ? (
-          <img src={src + "?w=64"} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
+          <img src={withManagedFileWidth(src, 64)} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
         ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
           <>
             <img src={thumb} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />

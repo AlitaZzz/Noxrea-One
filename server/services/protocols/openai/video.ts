@@ -10,6 +10,7 @@ import type {
   ProtocolService,
   PollResult,
 } from "@server/services/protocols/base";
+import { getProtocolEndpoints } from "@server/services/protocols/base";
 import {
   parseScanPollResult,
   parseScanSyncResult,
@@ -29,7 +30,7 @@ export class OpenAiVideoProtocol implements ProtocolService {
     body: Record<string, unknown>,
     channelConfig?: Record<string, unknown>
   ): ProtocolRequestResult {
-    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const endpoints = getProtocolEndpoints(channelConfig);
     const endpoint = endpoints?.["video.generations"] ?? "/videos";
 
     return {

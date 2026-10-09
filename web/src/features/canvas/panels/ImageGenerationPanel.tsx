@@ -30,6 +30,7 @@ import ModelParamFields from "@/features/model/components/ModelParamFields";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { withManagedFileWidth } from "@/lib/file-url";
 import { useModelStore } from "@/lib/model-store";
 
 import ImageRefCard from "../shared/ImageRefCard";
@@ -189,7 +190,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   const references = useMemo<ReferenceItem[]>(() => {
     return refOrder.map((src, i) => ({
       src,
-      thumbnail: src.includes("/api/files/") ? `${src}?w=64` : src,
+      thumbnail: withManagedFileWidth(src, 64),
       index: i,
       kind: "image" as const,
     }));

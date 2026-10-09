@@ -10,6 +10,7 @@ import type {
   ProtocolService,
   PollResult,
 } from "@server/services/protocols/base";
+import { getProtocolEndpoints } from "@server/services/protocols/base";
 import {
   parseScanPollResult,
   parseScanSyncResult,
@@ -30,8 +31,7 @@ export class OpenAiImageProtocol implements ProtocolService {
     channelConfig?: Record<string, unknown>,
     hasRef?: boolean
   ): ProtocolRequestResult {
-    // 解析 channel config 中的 endpoints
-    const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+    const endpoints = getProtocolEndpoints(channelConfig);
 
     // 有参考图（图生图/编辑）→ /images/edits，否则 → /images/generations
     // hasRef 由调用方依据前端原始 refImages 判定，而非 body 里已被映射的字段。

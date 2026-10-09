@@ -3,6 +3,7 @@
  * 管理供应商及其模型清单的增删改、能力标记，
  * 支持从供应商远端拉取模型列表、读取服务商预设与模型参数配置缓存。
  */
+import { stripTrailingSlash } from "@noxrea/shared/url";
 import { create } from "zustand";
 
 import { ApiError } from "@/lib/api/client";
@@ -12,20 +13,10 @@ import {
   resolveApiError,
 } from "@/lib/api/error-message";
 import { modelApi } from "@/lib/api/model-api";
-import { showGlobalNotification } from "@/lib/global-notification";
+import { notifyFailure, showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";
 import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 import type { ModelCapability, ModelParamConfig,ModelProvider, ProviderPreset } from "@/lib/types/models";
-
-/** 写操作失败提示（store 层统一负责，UI 只处理成功分支）；e 为 ApiError 时 message 已本地化 */
-function notifyFailure(e: unknown, fallbackKey: string) {
-  if (e instanceof SessionChangedError) return;
-  showGlobalNotification().error({
-    title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, fallbackKey),
-    placement: "bottomRight",
-    duration: 6,
-  });
-}
 
 /** 拉取远端模型列表失败：toast 统一在此弹出，调用方只处理成功分支 */
 function fetchModelsFailure(msg: string): { success: false; error: string } {
@@ -195,7 +186,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
       notifyFailure(e, "model_config.provider_add_failed");
       return false;
     }
-    const provider: ModelProvider = { id: data.id, name, baseUrl: baseUrl.replace(/\/$/, ""), apiKey: apiKey, models: [] };
+    const provider: ModelProvider = { id: data.id, name, baseUrl: stripTrailingSlash(baseUrl), apiKey: apiKey, models: [] };
     if (protocol) provider.protocol = protocol;
     set((s) => ({ providers: [...s.providers, provider] }));
     return true;

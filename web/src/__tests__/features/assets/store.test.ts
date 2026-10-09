@@ -21,6 +21,7 @@ vi.mock("@/features/assets/api", () => ({
 
 vi.mock("@/lib/global-notification", () => ({
   showGlobalNotification: () => ({ error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() }),
+  notifyFailure: vi.fn(),
 }));
 
 vi.mock("@/lib/i18n/config", () => ({

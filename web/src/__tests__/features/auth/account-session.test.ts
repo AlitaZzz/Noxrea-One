@@ -14,7 +14,10 @@ vi.mock("@/lib/api/model-api", () => ({ modelApi: {
   fetchProviders: mocks.fetchProviders, fetchPresets: async () => [], fetchModelParams: async () => ({}),
 } }));
 vi.mock("@/features/project/api", () => ({ projectApi: { deleteProject: mocks.deleteProject } }));
-vi.mock("@/lib/global-notification", () => ({ showGlobalNotification: () => ({ error: mocks.notify }) }));
+vi.mock("@/lib/global-notification", () => ({
+  showGlobalNotification: () => ({ error: mocks.notify }),
+  notifyFailure: () => undefined,
+}));
 vi.mock("@/lib/i18n/config", () => ({
   default: { t: (key: string) => key, exists: () => false }, setAppLanguage: mocks.language,
 }));

@@ -9,6 +9,7 @@ import { fetchWithTimeout } from "@server/core/http-client";
 import { getProvider } from "@server/crud/model-config";
 import { logger } from "@server/core/logger";
 import { ok, failCode } from "@server/core/response";
+import { stripTrailingSlash } from "@noxrea/shared/url";
 import type { ErrorCode } from "@server/core/errors/codes";
 
 const router = new Hono();
@@ -45,11 +46,6 @@ function classifyUpstreamFailure(params: {
     return { error: "models.upstream_server_error", ctx };
   }
   return { error: "models.upstream_fetch_failed", ctx };
-}
-
-/** 去掉末尾斜杠 */
-function stripTrailingSlash(url: string): string {
-  return url.replace(/\/+$/, "");
 }
 
 /** 模型列表路径：直接请求 {baseUrl}/models，不自动补 /v1 */

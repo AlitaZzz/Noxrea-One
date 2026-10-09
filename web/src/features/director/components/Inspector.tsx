@@ -36,6 +36,7 @@ import { DIRECTOR_CHARACTER_COLOR, DIRECTOR_CHARACTER_HEX } from "@/features/dir
 import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";
+import { withManagedFileWidth } from "@/lib/file-url";
 
 import PoseSliders from "./PoseSliders";
 
@@ -228,7 +229,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                     data-selected={shot.selected || undefined}
                     onClick={() => toggleShotSelected(shot.id)}
                   >
-                    <img src={shot.url + "?w=320"} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                    <img src={withManagedFileWidth(shot.url, 320)} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
                     <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-xs tabular-nums text-white">{shot.name}</span>
                   </Button>
                   <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-1.5 bg-black/55 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">

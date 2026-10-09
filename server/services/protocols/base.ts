@@ -10,6 +10,19 @@ export interface ProtocolRequestResult {
   body?: unknown;
 }
 
+/** 读取渠道协议配置中的 endpoint 表，过滤掉非字符串值。 */
+export function getProtocolEndpoints(
+  channelConfig?: Record<string, unknown>
+): Record<string, string> | undefined {
+  const protocol = channelConfig?.protocol;
+  if (!protocol || typeof protocol !== "object") return undefined;
+  const endpoints = (protocol as Record<string, unknown>).endpoints;
+  if (!endpoints || typeof endpoints !== "object") return undefined;
+
+  const entries = Object.entries(endpoints).filter(([, value]) => typeof value === "string");
+  return entries.length > 0 ? Object.fromEntries(entries) as Record<string, string> : undefined;
+}
+
 /** LLM 工具调用（function calling） */
 export interface ProtocolToolCall {
   id: string;

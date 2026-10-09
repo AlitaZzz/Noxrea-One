@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
+import { withManagedFileWidth } from "@/lib/file-url";
 
 import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { findReferenceNode, useRevealCanvasNode } from "./reveal-node";
@@ -45,9 +46,9 @@ function ImageRefCard({
   const [dragging, setDragging] = useState(false);
 
   /** 存储服务上的图走缩略参数，外链原样使用（缩略按 56px 卡的 2 倍取 112） */
-  const thumbnail = src.includes("/api/files/") ? `${src}?w=112` : src;
+  const thumbnail = withManagedFileWidth(src, 112);
   /** 预览按显示上限 240 的 2 倍屏取图 */
-  const preview = src.includes("/api/files/") ? `${src}?w=480` : src;
+  const preview = withManagedFileWidth(src, 480);
 
   return (
     <ReferenceHoverPreview

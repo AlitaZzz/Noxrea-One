@@ -10,6 +10,7 @@ import type { ReactElement } from "react";
 
 import { HoverCard, HoverCardContent, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { AssetItem } from "@/features/assets/types";
+import { withManagedFileWidth } from "@/lib/file-url";
 
 const PREVIEW_MAX_WIDTH = 400;
 const HOVER_OPEN_DELAY = 600;
@@ -35,7 +36,7 @@ export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
   const isVideo = asset.mediaType === "video";
   const isImage = asset.mediaType === "image";
   const isText = asset.mediaType === "text";
-  const bigUrl = sourceUrl?.includes("/api/files/") ? `${sourceUrl}?w=${PREVIEW_MAX_WIDTH}` : sourceUrl;
+  const bigUrl = withManagedFileWidth(sourceUrl, PREVIEW_MAX_WIDTH);
   const hasText = typeof asset.plainText === "string" && asset.plainText.trim().length > 0;
   const hasPreviewContent = isText ? hasText : (isImage || isVideo) && Boolean(sourceUrl);
 

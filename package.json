@@ -21,7 +21,6 @@
     "test:server": "vitest run --config vitest.config.ts",
     "test:watch": "npm -w web run test:watch",
     "prisma:migrate": "prisma migrate dev",
-    "backfill:file-meta": "tsx --env-file=.env server/scripts/backfill-file-meta.ts",
     "prisma:generate": "prisma generate",
     "prisma:studio": "prisma studio",
     "postinstall": "prisma generate"

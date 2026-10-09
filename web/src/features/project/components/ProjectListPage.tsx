@@ -26,20 +26,8 @@ import { useCurrentUser } from "@/features/auth/UserContext";
 import { flushAndWait } from "@/features/canvas/stores/canvas-store";
 import { useProjectStore } from "@/features/project/store";
 import type { ProjectSummary } from "@/features/project/types";
+import { withManagedFileWidth } from "@/lib/file-url";
 import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
-
-function projectThumbnailUrl(src: string): string {
-  if (!src.includes("/api/files/")) return src;
-  const hashIndex = src.indexOf("#");
-  const hash = hashIndex >= 0 ? src.slice(hashIndex) : "";
-  const withoutHash = hashIndex >= 0 ? src.slice(0, hashIndex) : src;
-  const queryIndex = withoutHash.indexOf("?");
-  const pathname = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
-  const query = queryIndex >= 0 ? withoutHash.slice(queryIndex + 1) : "";
-  const params = new URLSearchParams(query);
-  params.set("w", "480");
-  return `${pathname}?${params.toString()}${hash}`;
-}
 
 // 固定信息区高度，让空列表首帧与项目数据加载后的网格行保持同一尺寸。
 const PROJECT_CARD_INFO_CLASS = "h-[100px] shrink-0 p-3";
@@ -214,7 +202,7 @@ export default function ProjectListPage() {
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图）；跳转由整卡 stretched-link 承担 */}
               <div className="flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground">
                 {p.thumbnail ? (
-                  <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
+                  <img src={withManagedFileWidth(p.thumbnail, 480)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}

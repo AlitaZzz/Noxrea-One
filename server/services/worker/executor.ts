@@ -11,6 +11,7 @@ import {
 import { getProvider } from "@server/crud/model-config";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
+import { stripTrailingSlash } from "@noxrea/shared/url";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
 import {
   GenerationFailureError,
@@ -91,7 +92,7 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
     const model = task.model ?? (ctx.config.model as string) ?? "";
 
     // 4. 规范化 baseUrl（去末尾斜杠）
-    const baseUrl = provider.baseUrl.replace(/\/+$/, "");
+    const baseUrl = stripTrailingSlash(provider.baseUrl);
 
     // 5. 从 model-ui.json 获取模型默认参数（按 host + 模型名 + 能力）
     const modelParams = getModelParams(hostFromBaseUrl(baseUrl), model, capability);

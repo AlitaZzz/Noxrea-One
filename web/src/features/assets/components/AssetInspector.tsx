@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
 import { ASSET_CATEGORIES } from "@/lib/constants";
+import { withManagedFileWidth } from "@/lib/file-url";
 import { MOD_KEY } from "@/lib/platform";
 import { formatBytes, formatTime } from "@/lib/utils/format";
 import { copyText } from "@/lib/utils/text-export";
@@ -85,9 +86,7 @@ function typeLabelKey(type: string): string | undefined {
 function Preview({ asset }: { asset: AssetItem }) {
   const [audioDuration, setAudioDuration] = useState(0);
 
-  const thumbUrl = asset.sourceUrl?.includes("/api/files/")
-    ? `${asset.sourceUrl}?w=400`
-    : asset.sourceUrl;
+  const thumbUrl = withManagedFileWidth(asset.sourceUrl, 400);
 
   return (
     <div

@@ -8,6 +8,7 @@ import { logger } from "@server/core/logger";
 import { getConfig } from "@server/core/config";
 import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
+import { stripTrailingSlash } from "@noxrea/shared/url";
 import type { PollOutcome } from "@server/services/tasks/poll-loop";
 import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
@@ -73,7 +74,7 @@ async function _doResumePoll(
     if (!proto?.buildPollUrl) throw new Error("Protocol does not support polling");
     protocol = proto;
 
-    const baseUrl = provider.baseUrl.replace(/\/+$/, "");
+    const baseUrl = stripTrailingSlash(provider.baseUrl);
     const model = task.model ?? "";
     const endpoints = model
       ? resolveProviderEndpoints(hostFromBaseUrl(baseUrl), model, task.type)

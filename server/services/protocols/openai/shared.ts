@@ -9,8 +9,7 @@
  * 两者皆无才视为 pending。
  */
 
-import type { PollResult } from "../base";
-import { defaultPollUrl } from "../base";
+import { defaultPollUrl, getProtocolEndpoints, type PollResult } from "../base";
 import {
   extractUpstreamMessage,
   normalizeStatus,
@@ -27,7 +26,7 @@ export function getPollFieldName(
   channelConfig?: Record<string, unknown>,
   capability?: string
 ): string | null {
-  const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+  const endpoints = getProtocolEndpoints(channelConfig);
   const pollPath = (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
   if (!pollPath) return null;
   // 跳过 {model} 占位符，取第一个真正的任务 ID 字段占位符（如 {video_id} / {task_id}）
@@ -41,7 +40,7 @@ function getPollPath(
   channelConfig?: Record<string, unknown>,
   capability?: string
 ): string | undefined {
-  const endpoints = (channelConfig?.protocol as Record<string, unknown>)?.endpoints as Record<string, string> | undefined;
+  const endpoints = getProtocolEndpoints(channelConfig);
   return (capability && endpoints?.[`${capability}.poll`]) || endpoints?.["poll"];
 }
 

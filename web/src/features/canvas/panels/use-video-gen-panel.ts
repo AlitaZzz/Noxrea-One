@@ -15,6 +15,7 @@ import { useMemo } from "react";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { withManagedFileWidth } from "@/lib/file-url";
 
 import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
@@ -155,7 +156,7 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     }));
     const images: ReferenceItem[] = refOrder.map((src, i) => ({
       src,
-      thumbnail: src.includes("/api/files/") ? `${src}?w=128` : src,
+      thumbnail: withManagedFileWidth(src, 128),
       index: i,
       kind: "image",
     }));

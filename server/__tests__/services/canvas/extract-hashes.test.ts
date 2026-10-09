@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractHashCountsFromCanvas,
+  extractHashFromUrl,
   hashCountsEqual,
 } from "@server/services/canvas/extract-hashes";
 
@@ -28,6 +29,12 @@ describe("extractHashesFromCanvas", () => {
       ],
     });
     expect(counts.size).toBe(0);
+  });
+
+  it("忽略 query 和 hash 中伪造的托管文件路径", () => {
+    const hash = "a".repeat(64);
+    expect(extractHashFromUrl("https://cdn.example.com/image.png?source=/api/files/1/aa/" + hash + ".png")).toBeNull();
+    expect(extractHashFromUrl("https://cdn.example.com/image.png#/api/files/1/aa/" + hash + ".png")).toBeNull();
   });
 });
 
