@@ -17,6 +17,8 @@ vi.mock("wavesurfer.js", () => ({
       getDuration: vi.fn(() => 0),
       isPlaying: vi.fn(() => false),
       setTime: vi.fn(),
+      play: vi.fn(),
+      pause: vi.fn(),
     })),
   },
 }));
@@ -55,9 +57,11 @@ describe("音频截取条带层级契约", () => {
     expect(track.className).not.toContain("rounded-");
     expect(track.className).toContain("overflow-visible");
 
-    const wrapper = track.querySelector(":scope > div");
-    expect(wrapper!.className).toContain("pointer-events-none");
+    // 按类名组合定位裁剪层，不依赖「恰好是轨道第一个子 div」的位置约定
+    const wrapper = track.querySelector('[class*="overflow-hidden"][class*="pointer-events-none"]');
+    expect(wrapper).toBeTruthy();
     expect(wrapper!.className).toContain("overflow-hidden");
+    expect(wrapper!.className).toContain("pointer-events-none");
     expect(wrapper!.className).toContain("rounded-lg");
     expect(wrapper!.querySelector(":scope > .bg-black")).toBeTruthy();
   });
