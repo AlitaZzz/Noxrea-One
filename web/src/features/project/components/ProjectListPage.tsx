@@ -211,19 +211,14 @@ export default function ProjectListPage() {
               key={p.id}
               className="group relative flex h-full flex-col gap-0 overflow-hidden border-border bg-card p-0"
             >
-              {/* Preview area（服务端投影：自定义封面优先，否则画布首图） */}
-              <Link
-                href={`/canvas/${p.id}`}
-                onClick={() => setActiveProject(p.id)}
-                aria-label={p.name}
-                className="relative flex aspect-video h-auto w-full shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
+              {/* Preview area（服务端投影：自定义封面优先，否则画布首图）；跳转由整卡 stretched-link 承担 */}
+              <div className="relative flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground">
                 {p.thumbnail ? (
                   <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}
-              </Link>
+              </div>
 
               {/* Info */}
               <CardContent className={PROJECT_CARD_INFO_CLASS}>
@@ -231,21 +226,14 @@ export default function ProjectListPage() {
                   {editingId === p.id ? (
                     <Input
                       ref={editInputRef}
-                      className="flex-1 min-w-0 text-sm font-medium"
+                      className="relative z-10 flex-1 min-w-0 text-sm font-medium"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       onBlur={() => { if (editName.trim()) renameProject(p.id, editName.trim()); setEditingId(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                     />
                   ) : (
-                    <Link
-                      href={`/canvas/${p.id}`}
-                      onClick={() => setActiveProject(p.id)}
-                      aria-label={p.name}
-                      className="inline-flex h-auto min-w-0 flex-1 cursor-pointer items-center justify-start rounded-none px-0 py-0 text-left text-sm font-medium text-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      <span className="truncate">{p.name}</span>
-                    </Link>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name}</span>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -253,6 +241,7 @@ export default function ProjectListPage() {
                         size="icon-xs"
                         variant="ghost"
                         aria-label={t("common.moreActions")}
+                        className="relative z-10"
                       >
                         <EllipsisOutlined />
                       </Button>
@@ -296,6 +285,14 @@ export default function ProjectListPage() {
                   </div>
                 </div>
               </CardContent>
+
+              {/* 整卡跳转（stretched-link）：铺满卡片承担导航，菜单/重命名等交互控件以 relative z-10 浮于其上 */}
+              <Link
+                href={`/canvas/${p.id}`}
+                onClick={() => setActiveProject(p.id)}
+                aria-label={p.name}
+                className="absolute inset-0 z-0 cursor-pointer rounded-[inherit] outline-none focus-visible:inset-ring-3 focus-visible:inset-ring-ring/50"
+              />
             </Card>
           ))}
         </div>
