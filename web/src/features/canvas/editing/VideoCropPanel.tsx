@@ -291,9 +291,8 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
           className="absolute inset-0 w-full h-full"
           style={{ pointerEvents: "none", userSelect: "none" }}
         />
-        {/* Dark overlay outside crop area */}
-        <div className="pointer-events-none absolute inset-0 bg-black/50" />
-
+        {/* 裁剪框的 9999px 投影负责压暗框外区域，框内保持原始亮度（裁剪结果预览）；
+            不另铺全幅遮罩，否则框内会被二次压暗 */}
         {/* Cutout for crop area (clear the dark overlay) */}
         <div
           className="absolute pointer-events-none shadow-[0_0_0_9999px_rgb(0_0_0_/_50%)]"
@@ -302,11 +301,11 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
             top: `${crop.y * 100}%`,
             width: `${crop.w * 100}%`,
             height: `${crop.h * 100}%`,
-            border: "1.5px solid var(--primary)",
+            border: "1.5px solid #fff",
           }}
         >
-          {/* Rule of thirds */}
-          <div className="absolute inset-0 pointer-events-none">
+          {/* Rule of thirds：细线加轻微投影，明亮画面下仍可辨 */}
+          <div className="absolute inset-0 pointer-events-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.55)]">
             <div className="absolute top-1/3 left-0 right-0 h-px bg-white/30" />
             <div className="absolute top-2/3 left-0 right-0 h-px bg-white/30" />
             <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/30" />

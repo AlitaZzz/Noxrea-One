@@ -412,62 +412,68 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       {/* 波形轨道：wavesurfer 与选区叠层共用同一坐标系（轨道全宽） */}
       <div
         ref={trackRef}
-        className="relative cursor-ew-resize touch-none overflow-visible rounded-xl bg-black"
+        className="relative cursor-ew-resize touch-none overflow-visible rounded-lg bg-black"
         style={{ width: FRAME_TRACK_WIDTH, height: PANEL_WAVE_HEIGHT + 16 }}
         onPointerDown={operable ? (e) => clipStartDrag("track", e) : undefined}
       >
-        <div
-          ref={containerRef}
-          className="audio-waveform-panel absolute inset-x-0 top-2"
-          style={{ opacity: failed ? 0 : 1 }}
-        />
+        {/* 视觉层统一裁剪进容器圆角：波形/压暗/选区不得溢出圆角；
+            overflow-visible 留给端帽与面板浮层 */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+          <div
+            ref={containerRef}
+            className="audio-waveform-panel absolute inset-x-0 top-2"
+            style={{ opacity: failed ? 0 : 1 }}
+          />
 
-        {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
-        {clipRange && (
-          <>
-            <div className="pointer-events-none absolute inset-0 z-10">
-              <div
-                className="absolute inset-y-0 left-0 bg-black/55 rounded-sm"
-                style={{ width: `${clipRange.inR * 100}%` }}
-              />
-              <div
-                className="absolute inset-y-0 right-0 bg-black/55 rounded-sm"
-                style={{ width: `${(1 - clipRange.outR) * 100}%` }}
-              />
-            </div>
-            {/* 中段整体可拖动：拖动平移区间（时长不变），原地点击定位播放头；
-                端帽 z-30 优先接管两端 */}
-            <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
-              <div
-                className={`pointer-events-auto nodrag nopan absolute inset-y-0 touch-none ${clipDragging === "band" ? "cursor-grabbing" : "cursor-grab"}`}
-                style={{ left: `${clipRange.inR * 100}%`, width: `${(clipRange.outR - clipRange.inR) * 100}%` }}
-                onPointerDown={(e) => clipStartDrag("band", e)}
-              >
+          {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
+          {clipRange && (
+            <>
+              <div className="pointer-events-none absolute inset-0 z-10">
                 <div
-                  className="absolute inset-0 border-2 border-primary bg-primary/15"
+                  className="absolute inset-y-0 left-0 bg-black/55"
+                  style={{ width: `${clipRange.inR * 100}%` }}
                 />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span
-                    className="rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
-                  >
-                    {((clipRange.outR - clipRange.inR) * duration).toFixed(2)}s
-                  </span>
+                <div
+                  className="absolute inset-y-0 right-0 bg-black/55"
+                  style={{ width: `${(1 - clipRange.outR) * 100}%` }}
+                />
+              </div>
+              {/* 中段整体可拖动：拖动平移区间（时长不变），原地点击定位播放头；
+                  端帽 z-30 优先接管两端 */}
+              <div className="pointer-events-none absolute inset-0 z-10">
+                <div
+                  className={`pointer-events-auto nodrag nopan absolute inset-y-0 touch-none ${clipDragging === "band" ? "cursor-grabbing" : "cursor-grab"}`}
+                  style={{ left: `${clipRange.inR * 100}%`, width: `${(clipRange.outR - clipRange.inR) * 100}%` }}
+                  onPointerDown={(e) => clipStartDrag("band", e)}
+                >
+                  <div
+                    className="absolute inset-0 rounded-lg border-2 border-white bg-white/15"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span
+                      className="rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
+                    >
+                      {((clipRange.outR - clipRange.inR) * duration).toFixed(2)}s
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-            {/* 播放进度竖线：循环试听当前位置的细线标记（只展示，不接管指针） */}
-            <div className="pointer-events-none absolute inset-0 z-20 overflow-visible">
-              <div
-                className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
-                style={{ left: `${progress * 100}%` }}
-              />
-            </div>
-            {/* 区间双手柄：白色端帽，z-30 压过着色层 */}
-            <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
-              {clipHandleRenderer("in", clipRange.inR)}
-              {clipHandleRenderer("out", clipRange.outR)}
-            </div>
-          </>
+              {/* 播放进度竖线：循环试听当前位置的细线标记（只展示，不接管指针） */}
+              <div className="pointer-events-none absolute inset-0 z-20">
+                <div
+                  className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
+                  style={{ left: `${progress * 100}%` }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+        {/* 区间双手柄：白色端帽，z-30 压过着色层；端帽伸出轨道边缘，不参与圆角裁剪 */}
+        {clipRange && (
+          <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
+            {clipHandleRenderer("in", clipRange.inR)}
+            {clipHandleRenderer("out", clipRange.outR)}
+          </div>
         )}
 
         {/* 面板级提示（互斥场景共用样式，合并渲染）：

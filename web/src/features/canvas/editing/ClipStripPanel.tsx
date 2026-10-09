@@ -678,57 +678,62 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
         style={{ width: FRAME_TRACK_WIDTH }}
         onPointerDown={handleTrackDown}
       >
-        {/* 格子/压暗/选区/手柄共用同一坐标系（轨道全宽），雪碧图贴满轨道两端 */}
-        <div className="absolute inset-0 rounded-xl bg-black" />
-        <div className="absolute inset-0 flex overflow-hidden">{trackCells}</div>
+        {/* 视觉层统一裁剪进容器圆角：格子/压暗/选区不得溢出圆角；
+            overflow-visible 留给端帽与面板浮层 */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+          {/* 格子/压暗/选区/手柄共用同一坐标系（轨道全宽），雪碧图贴满轨道两端 */}
+          <div className="absolute inset-0 bg-black" />
+          <div className="absolute inset-0 flex overflow-hidden">{trackCells}</div>
 
-        {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
-        {bandRange && (
-          <>
-            <div className="pointer-events-none absolute inset-0 z-10">
-              <div
-                className="absolute inset-y-0 left-0 bg-black/55"
-                style={{ width: `${bandRange.inR * 100}%` }}
-              />
-              <div
-                className="absolute inset-y-0 right-0 bg-black/55"
-                style={{ width: `${(1 - bandRange.outR) * 100}%` }}
-              />
-            </div>
-            <div className="pointer-events-none absolute inset-0 z-10 overflow-visible">
-              {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
-              <div
-                className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
-                style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
-                onPointerDown={handleBandDown}
-              >
+          {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
+          {bandRange && (
+            <>
+              <div className="pointer-events-none absolute inset-0 z-10">
                 <div
-                  className="absolute inset-0 border-2 border-primary bg-primary/15"
+                  className="absolute inset-y-0 left-0 bg-black/55"
+                  style={{ width: `${bandRange.inR * 100}%` }}
                 />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span
-                    className="rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
-                  >
-                    {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
-                  </span>
+                <div
+                  className="absolute inset-y-0 right-0 bg-black/55"
+                  style={{ width: `${(1 - bandRange.outR) * 100}%` }}
+                />
+              </div>
+              <div className="pointer-events-none absolute inset-0 z-10">
+                {/* 中段整体可拖动：按住平移区间（时长不变），端帽 z-30 优先接管两端 */}
+                <div
+                  className={`pointer-events-auto absolute inset-y-0 touch-none ${operable ? "cursor-grab" : "cursor-default"}`}
+                  style={{ left: `${bandRange.inR * 100}%`, width: `${(bandRange.outR - bandRange.inR) * 100}%` }}
+                  onPointerDown={handleBandDown}
+                >
+                  <div
+                    className="absolute inset-0 rounded-lg border-2 border-white bg-white/15"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span
+                      className="rounded-md bg-popover px-2 py-0.5 text-xs tabular-nums text-popover-foreground shadow-md"
+                    >
+                      {((bandRange.outR - bandRange.inR) * duration).toFixed(2)}s
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {/* 播放进度竖线：循环扫播当前位置的细线标记（只展示，不接管指针） */}
-        {operable && rangeInitialized && (
-          <div className="pointer-events-none absolute inset-0 z-20 overflow-visible">
-            <div
-              className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
-              style={{ left: `${playedRatio * 100}%` }}
-            />
-          </div>
-        )}
+          {/* 播放进度竖线：循环扫播当前位置的细线标记（只展示，不接管指针） */}
+          {operable && rangeInitialized && (
+            <div className="pointer-events-none absolute inset-0 z-20">
+              <div
+                className="absolute inset-y-0 w-0.5 -translate-x-1/2 rounded-full bg-white/90"
+                style={{ left: `${playedRatio * 100}%` }}
+              />
+            </div>
+          )}
+        </div>
 
         {/* 区间双手柄：白色端帽，z-30 压过着色层（未初始化/代理未就绪不渲染）；
-            手柄容器自带 pointer-events-auto，从 none 的层里把指针事件接回来 */}
+            手柄容器自带 pointer-events-auto，从 none 的层里把指针事件接回来。
+            端帽伸出轨道边缘，在裁剪层之外渲染 */}
         {operable && rangeInitialized && (
           <div className="pointer-events-none absolute inset-0 z-30 overflow-visible">
             {handleRenderer("in", inRatio)}

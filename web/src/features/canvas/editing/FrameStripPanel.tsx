@@ -257,36 +257,40 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
         style={{ width: FRAME_TRACK_WIDTH }}
         onPointerDown={handleTrackDown}
       >
-        {/* 背板铺满整条轨道，格子铺满内容区——与播放头坐标系一致（同片段截取面板） */}
-        <div className="absolute inset-0 rounded-xl bg-black" />
-        <div className="absolute inset-0 flex overflow-hidden">
-          {ready ? (
-            count > 0 && spriteUrl ? (
-              Array.from(Array(count).keys()).map((i) => (
-                // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
-                // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
-                // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
-                //
-                // 不再追加 -1px 左边距（contain 时代用于遮蔽格子间接缝）：
-                // cover 模式下内容溢出格子被裁切，边缘本就被自身背景盖住，
-                // 累计 -1px 只会让末尾格子的右缘逐渐偏离轨道右缘、播放头超出雪碧图
-                <div
-                  key={i}
-                  className="relative h-full shrink-0 overflow-hidden"
-                  style={{ width: frameWidth }}
-                >
-                  <div className="absolute bg-black" style={cellStyle(i)} />
-                </div>
-              ))
+        {/* 视觉层统一裁剪进轨道圆角：背板与帧格不得溢出圆角；
+            overflow-visible 留给播放头圆点（伸出轨道顶缘）等浮层 */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+          {/* 背板铺满整条轨道，格子铺满内容区——与播放头坐标系一致（同片段截取面板） */}
+          <div className="absolute inset-0 bg-black" />
+          <div className="absolute inset-0 flex overflow-hidden">
+            {ready ? (
+              count > 0 && spriteUrl ? (
+                Array.from(Array(count).keys()).map((i) => (
+                  // 帧格只做展示，不挂钩点击定位：定位统一交给轨道的指针事件。
+                  // 若在这里定位，松手时浏览器补发的 click 会把播放头吸附回格中心，
+                  // 表现为「松手后位置跳一下」（格数少时尤其像吸到整数秒）
+                  //
+                  // 不再追加 -1px 左边距（contain 时代用于遮蔽格子间接缝）：
+                  // cover 模式下内容溢出格子被裁切，边缘本就被自身背景盖住，
+                  // 累计 -1px 只会让末尾格子的右缘逐渐偏离轨道右缘、播放头超出雪碧图
+                  <div
+                    key={i}
+                    className="relative h-full shrink-0 overflow-hidden"
+                    style={{ width: frameWidth }}
+                  >
+                    <div className="absolute bg-black" style={cellStyle(i)} />
+                  </div>
+                ))
+              ) : (
+                // 雪碧图不可用：退化为空轨道，播放头与时间码仍可定位与截取
+                <div className="size-full bg-white/10" />
+              )
             ) : (
-              // 雪碧图不可用：退化为空轨道，播放头与时间码仍可定位与截取
-              <div className="size-full bg-white/10" />
-            )
-          ) : (
-            <div className="flex size-full items-center justify-center px-4 text-xs text-white/60">
-              {status === "error" ? t("capture.unavailable") : t("capture.loading")}
-            </div>
-          )}
+              <div className="flex size-full items-center justify-center px-4 text-xs text-white/60">
+                {status === "error" ? t("capture.unavailable") : t("capture.loading")}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 播放头：白色圆点 + 竖线 */}
