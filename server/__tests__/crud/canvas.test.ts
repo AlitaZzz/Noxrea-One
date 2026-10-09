@@ -23,7 +23,7 @@ vi.mock("@server/services/storage/file-ref-ledger", () => ({
   removeSourceFileRefs: mocks.removeSourceFileRefs,
 }));
 
-import { updateProject, deleteProject, projectExists, CanvasCoverUrlError, CanvasLeaseLostError } from "@server/crud/canvas";
+import { updateProject, updateProjectDelta, deleteProject, projectExists, CanvasCoverUrlError, CanvasLeaseLostError } from "@server/crud/canvas";
 import { joinCanvasRoom, resetCanvasPresence } from "@server/services/canvas/editor-lease";
 import { stringifyJson } from "@server/crud/json-column";
 
@@ -141,6 +141,47 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
       (call: unknown[]) => (call[1] as { sourceType: string }).sourceType,
     );
     expect(sources).toEqual(["canvas", "canvas_cover"]);
+  });
+});
+
+describe("updateProjectDelta 原子合并", () => {
+  it("按 ID 合并节点/边并重算摘要与引用账本", async () => {
+    mocks.findFirst.mockResolvedValue({
+      id: "p1", revision: 3,
+      canvasData: stringifyJson({
+        nodes: [
+          { id: "n1", data: { src: url(HASH_A) } },
+          { id: "keep", data: {} },
+          { id: "old", data: {} },
+        ],
+        edges: [{ id: "e1", source: "n1", target: "old" }],
+      }),
+    });
+    mocks.update.mockResolvedValue({
+      id: "p1", revision: 4,
+      canvasData: stringifyJson({ nodes: [], edges: [] }),
+    });
+    await updateProjectDelta("p1", 1, {
+      nodes: { upsert: [{ id: "n1", data: { src: url(HASH_B) } }], delete: ["old"] },
+      edges: { upsert: [], delete: ["e1"] },
+    }, { baseRevision: 3, lease: joinAs() });
+
+    const update = mocks.update.mock.calls[0]![0] as { data: { canvasData: string; revision: unknown } };
+    expect(JSON.parse(update.data.canvasData)).toEqual({
+      nodes: [{ id: "n1", data: { src: url(HASH_B) } }, { id: "keep", data: {} }],
+      edges: [],
+    });
+    expect(update.data.revision).toEqual({ increment: 1 });
+    expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
+    const [, , counts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [unknown, unknown, Map<string, number>];
+    expect(Object.fromEntries(counts)).toEqual({ [HASH_B]: 1 });
+  });
+
+  it("revision 不一致时不合并", async () => {
+    await expect(updateProjectDelta("p1", 1, {
+      nodes: { upsert: [], delete: [] }, edges: { upsert: [] , delete: [] },
+    }, { baseRevision: 2, lease: joinAs() })).rejects.toMatchObject({ currentRevision: 3 });
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });
 

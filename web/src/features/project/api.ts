@@ -42,4 +42,18 @@ export const projectApi = {
       keepalive,
       skipUnauthorized: keepalive || skipUnauthorized,
     }),
+
+  /** 保存画布增量；仅用于卸载阶段整量请求超过 keepalive 配额时。 */
+  saveProjectDeltaRaw: (
+    id: string | number,
+    body: string,
+    keepalive = false,
+    skipUnauthorized = false,
+  ): Promise<Response> =>
+    apiRaw(`/api/canvas/projects/${id}`, {
+      method: "PATCH",
+      body,
+      keepalive,
+      skipUnauthorized: keepalive || skipUnauthorized,
+    }),
 };

@@ -4,12 +4,13 @@
  */
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/http/middleware/auth";
-import { canvasCreateSchema, canvasUpdateSchema } from "@server/schemas/canvas";
+import { canvasCreateSchema, canvasDeltaSchema, canvasUpdateSchema } from "@server/schemas/canvas";
 import {
   getProjects,
   createProject,
   getProject,
   updateProject,
+  updateProjectDelta,
   deleteProject,
   projectExists,
   CanvasRevisionConflictError,
@@ -200,6 +201,39 @@ router.put("/api/canvas/projects/:id", async (c) => {
     throw error;
   }
 
+});
+
+// PATCH /api/canvas/projects/:id：合并画布增量（仅卸载 keepalive 使用）
+router.patch("/api/canvas/projects/:id", async (c) => {
+  const auth = await authenticateRequest(c.req.raw);
+  if ("error" in auth) return auth.error;
+  const id = c.req.param("id");
+  if (!isValidId(id)) return failCode(400, "canvas.invalid_project_id");
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return failCode(400, "common.invalid_json");
+  }
+  const parsed = canvasDeltaSchema.safeParse(body);
+  if (!parsed.success) return failCode(422, "common.invalid_request");
+  try {
+    const project = await updateProjectDelta(id, auth.user.id, parsed.data, {
+      baseRevision: parsed.data.baseRevision,
+      lease: parsed.data.lease,
+    });
+    if (!project) return failCode(404, "canvas.project_not_found");
+    return c.json(ok(project));
+  } catch (error) {
+    if (error instanceof CanvasRevisionConflictError) {
+      return failCode(409, "canvas.project_revision_conflict", { revision: error.currentRevision });
+    }
+    if (error instanceof CanvasLeaseLostError) {
+      return failCode(409, "canvas.project_revision_conflict",
+        error.currentRevision !== null ? { revision: error.currentRevision } : undefined);
+    }
+    throw error;
+  }
 });
 
 /**

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createProject: vi.fn(),
   getProject: vi.fn(),
   updateProject: vi.fn(),
+  updateProjectDelta: vi.fn(),
   deleteProject: vi.fn(),
   projectExists: vi.fn(),
 }));
@@ -25,6 +26,7 @@ vi.mock("@server/crud/canvas", async (importOriginal) => {
     createProject: mocks.createProject,
     getProject: mocks.getProject,
     updateProject: mocks.updateProject,
+    updateProjectDelta: mocks.updateProjectDelta,
     deleteProject: mocks.deleteProject,
     projectExists: mocks.projectExists,
   };
@@ -345,5 +347,54 @@ describe("PUT /api/canvas/projects/:id（租约契约）", () => {
     const conflict = await put("/api/canvas/projects/p1234567890123", { canvasData: { nodes: [] }, baseRevision: 3, lease: 42 });
     expect(conflict.status).toBe(409);
     expect(((await conflict.json()) as { ctx?: Record<string, number> }).ctx).toEqual({ revision: 9 });
+  });
+});
+
+describe("PATCH /api/canvas/projects/:id（增量租约契约）", () => {
+  const delta = {
+    nodes: { upsert: [{ id: "n1", type: "text-node" }], delete: ["n2"] },
+    edges: { upsert: [], delete: [] },
+    baseRevision: 3,
+    lease: 42,
+  };
+
+  it("合法增量原样传入 CRUD", async () => {
+    mocks.updateProjectDelta.mockResolvedValue(project);
+    const response = await router.request("/api/canvas/projects/p1234567890123", {
+      method: "PATCH",
+      body: JSON.stringify(delta),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(response.status).toBe(200);
+    expect(mocks.updateProjectDelta).toHaveBeenCalledWith(
+      "p1234567890123",
+      1,
+      { ...delta },
+      { baseRevision: 3, lease: 42 },
+    );
+  });
+
+  it("拒绝没有节点 ID 的增量", async () => {
+    const response = await router.request("/api/canvas/projects/p1234567890123", {
+      method: "PATCH",
+      body: JSON.stringify({ ...delta, nodes: { upsert: [{ type: "text-node" }], delete: [] } }),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(response.status).toBe(422);
+    expect(mocks.updateProjectDelta).not.toHaveBeenCalled();
+  });
+
+  it("租约失效映射为 409 并返回当前 revision", async () => {
+    mocks.updateProjectDelta.mockRejectedValueOnce(new CanvasLeaseLostError(8));
+    const response = await router.request("/api/canvas/projects/p1234567890123", {
+      method: "PATCH",
+      body: JSON.stringify(delta),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "canvas.project_revision_conflict",
+      ctx: { revision: 8 },
+    });
   });
 });

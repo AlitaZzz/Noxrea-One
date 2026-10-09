@@ -28,7 +28,7 @@ import { getCanvasLease } from "@/features/project/canvas-lease";
 import { saveMutex } from "@/features/project/save-mutex";
 import { useSessionExpiredStore } from "@/features/project/session-expired-store";
 import { useProjectStore } from "@/features/project/store";
-import type { CanvasData } from "@/features/project/types";
+import type { CanvasData, CanvasDataDelta } from "@/features/project/types";
 import { parseErrorBody } from "@/lib/api/error-message";
 
 const SAVE_DELAY = 2000;
@@ -147,6 +147,35 @@ function buildCanvasData(): CanvasData {
   };
 }
 
+function cloneCanvasData(data: CanvasData): CanvasData {
+  return structuredClone(data);
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** 以最后一次已落库快照为基线计算节点、边和画布设置增量。 */
+export function createCanvasDataDelta(base: CanvasData, current: CanvasData): CanvasDataDelta {
+  const baseNodes = new Map(base.nodes.map((node) => [node.id, node]));
+  const currentNodes = new Map(current.nodes.map((node) => [node.id, node]));
+  const baseEdges = new Map(base.edges.map((edge) => [edge.id, edge]));
+  const currentEdges = new Map(current.edges.map((edge) => [edge.id, edge]));
+  const nodeUpsert = current.nodes.filter((node) => !sameJson(baseNodes.get(node.id), node));
+  const edgeUpsert = current.edges.filter((edge) => !sameJson(baseEdges.get(edge.id), edge));
+  const nodeDelete = base.nodes.filter((node) => !currentNodes.has(node.id)).map((node) => node.id);
+  const edgeDelete = base.edges.filter((edge) => !currentEdges.has(edge.id)).map((edge) => edge.id);
+  const delta: CanvasDataDelta = {
+    nodes: { upsert: nodeUpsert, delete: nodeDelete },
+    edges: { upsert: edgeUpsert, delete: edgeDelete },
+  };
+  if (!sameJson(base.viewport, current.viewport)) delta.viewport = current.viewport;
+  if (base.minimapVisible !== current.minimapVisible) delta.minimapVisible = current.minimapVisible;
+  if (base.snapToGrid !== current.snapToGrid) delta.snapToGrid = current.snapToGrid;
+  if (base.agentModel !== current.agentModel) delta.agentModel = current.agentModel ?? null;
+  return delta;
+}
+
 class SaveManager {
   private dirty = false;
   private saving = false;
@@ -172,6 +201,8 @@ class SaveManager {
   private pendingDelay: number = SAVE_DELAY;
   /** 本轮 dirty 的起始时刻（ms），配合 MAX_SAVE_WAIT 限制保存延迟上限 */
   private dirtySince: number | null = null;
+  /** 当前项目最近一次确认落库的画布快照，仅用于卸载增量请求。 */
+  private persistedCanvas: { projectId: string; data: CanvasData } | null = null;
 
   // ==================== 公开接口 ====================
 
@@ -218,6 +249,7 @@ class SaveManager {
     this.dirtySince = null;
     this.pendingSave = null;
     this.pendingDelay = SAVE_DELAY;
+    this.persistedCanvas = null;
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
@@ -284,6 +316,12 @@ class SaveManager {
    */
   flushOnHide(): void {
     this.flush({ keepalive: false, skipUnauthorized: true });
+  }
+
+  /** 握手采纳服务端快照后建立增量保存基线。 */
+  setBaselineFromCurrent(projectId: string): void {
+    if (getCanvasProjectId() !== projectId) return;
+    this.persistedCanvas = { projectId, data: cloneCanvasData(buildCanvasData()) };
   }
 
   /**
@@ -437,18 +475,25 @@ class SaveManager {
       throw new Error(`[SaveManager] no editor lease for project ${projectId}`);
     }
 
-    const body = JSON.stringify({ baseRevision, lease, canvasData });
-    if (opts.keepalive) {
-      const bytes = new TextEncoder().encode(body).byteLength;
-      if (bytes > KEEPALIVE_BODY_LIMIT) throw new KeepaliveBodyTooLargeError(bytes);
+    const fullBody = JSON.stringify({ baseRevision, lease, canvasData });
+    let body = fullBody;
+    let incremental = false;
+    const fullBytes = new TextEncoder().encode(fullBody).byteLength;
+    if (opts.keepalive && fullBytes > KEEPALIVE_BODY_LIMIT) {
+      const baseline = this.persistedCanvas?.projectId === projectId ? this.persistedCanvas.data : null;
+      if (baseline === null) throw new KeepaliveBodyTooLargeError(fullBytes);
+      const delta = createCanvasDataDelta(baseline, canvasData);
+      body = JSON.stringify({ baseRevision, lease, ...delta });
+      const deltaBytes = new TextEncoder().encode(body).byteLength;
+      if (deltaBytes > KEEPALIVE_BODY_LIMIT) {
+        throw new KeepaliveBodyTooLargeError(deltaBytes);
+      }
+      incremental = true;
     }
 
-    const res = await projectApi.saveProjectRaw(
-      projectId,
-      body,
-      opts.keepalive,
-      opts.skipUnauthorized,
-    );
+    const res = incremental
+      ? await projectApi.saveProjectDeltaRaw(projectId, body, opts.keepalive, opts.skipUnauthorized)
+      : await projectApi.saveProjectRaw(projectId, body, opts.keepalive, opts.skipUnauthorized);
 
     // 落库失败（5xx 等）必须抛错 —— 否则 save() 开头的 dirty=false 不会被撤销、
     // 也不重排定时器，改动静默丢失。
@@ -477,6 +522,7 @@ class SaveManager {
 
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
     useProjectStore.getState().updateProjectRevision(projectId, baseRevision + 1);
+    this.persistedCanvas = { projectId, data: cloneCanvasData(canvasData) };
   }
 
   /** 进入过期态：停用全部保存路径，交由过期弹窗引导刷新（刷新即重新取得编辑权）。 */

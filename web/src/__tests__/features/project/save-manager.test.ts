@@ -3,17 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, GroupNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
-import { saveManager } from "@/features/project/save-manager";
+import { createCanvasDataDelta, saveManager } from "@/features/project/save-manager";
 import type { CanvasData } from "@/features/project/types";
 import { NODE_TYPE } from "@/lib/constants";
 
 const mocks = vi.hoisted(() => ({
   saveProjectRaw: vi.fn(),
+  saveProjectDeltaRaw: vi.fn(),
   revision: 7,
 }));
 
 vi.mock("@/features/project/api", () => ({
-  projectApi: { saveProjectRaw: mocks.saveProjectRaw },
+  projectApi: { saveProjectRaw: mocks.saveProjectRaw, saveProjectDeltaRaw: mocks.saveProjectDeltaRaw },
 }));
 
 vi.mock("@/features/project/store", () => ({
@@ -39,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.revision = 7;
   mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
+  mocks.saveProjectDeltaRaw.mockResolvedValue({ ok: true, status: 200 });
   saveManager.resetForProjectSwitch();
   resetCanvasLease();
   setCanvasLease("p1", 42);
@@ -182,6 +184,53 @@ describe("SaveManager snapshot serialization", () => {
     useCanvasStore.getState().restoreFromProject("p1", saved);
     expect(takeCanvasSnapshot()).toMatchObject(original);
     expect({ nodes, edges }).toEqual(original);
+  });
+});
+
+describe("画布增量保存", () => {
+  it("整量 keepalive 超限时发送相对已落库基线的增量", async () => {
+    const baseline = Array.from({ length: 100 }, (_, index) => ({
+      ...textNode(`n${index}`),
+      data: { ...textNode(`n${index}`).data, plainText: "x".repeat(900) },
+    }));
+    useCanvasStore.setState({ nodes: baseline });
+    saveManager.setBaselineFromCurrent("p1");
+    const changed = { ...baseline[0]!, data: { ...baseline[0]!.data, plainText: "changed" } };
+    useCanvasStore.setState({ nodes: [changed, ...baseline.slice(1)] });
+
+    saveManager.markDirty();
+    saveManager.flushOnUnload();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+    expect(mocks.saveProjectDeltaRaw).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(mocks.saveProjectDeltaRaw.mock.calls[0]![1] as string) as {
+      nodes: { upsert: Array<{ id: string }>; delete: string[] };
+    };
+    expect(body.nodes.upsert.map((node) => node.id)).toEqual(["n0"]);
+    expect(body.nodes.delete).toEqual([]);
+  });
+
+  it("只发送相对已落库基线发生变化的节点和设置", () => {
+    const base: CanvasData = {
+      nodes: [textNode("a"), textNode("b")],
+      edges: [{ id: "e1", source: "a", target: "b" }],
+      viewport: { x: 0, y: 0, zoom: 1 }, minimapVisible: true, snapToGrid: false,
+    };
+    const changed = { ...textNode("a"), data: { ...textNode("a").data, plainText: "changed" } };
+    const current: CanvasData = {
+      ...base,
+      nodes: [changed],
+      edges: [],
+      snapToGrid: true,
+    };
+    expect(createCanvasDataDelta(base, current)).toEqual({
+      nodes: { upsert: [changed], delete: ["b"] },
+      edges: { upsert: [], delete: ["e1"] },
+      snapToGrid: true,
+    });
   });
 });
 

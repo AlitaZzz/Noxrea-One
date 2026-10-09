@@ -54,6 +54,15 @@ export interface CanvasData {
   agentModel?: string;
 }
 
+export interface CanvasDataDelta {
+  nodes: { upsert: AnyNode[]; delete: string[] };
+  edges: { upsert: AnyEdge[]; delete: string[] };
+  viewport?: ViewportState;
+  minimapVisible?: boolean;
+  snapToGrid?: boolean;
+  agentModel?: string | null;
+}
+
 // ============================================================
 // 历史记录（undo/redo）
 // ============================================================

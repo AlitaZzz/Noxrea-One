@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   clearHistory: vi.fn(),
   runSuppressed: vi.fn(),
   notifyEvicted: vi.fn(),
+  setBaselineFromCurrent: vi.fn(),
   updateProjectRevision: vi.fn(),
   adoptProject: vi.fn(),
 }));
@@ -49,6 +50,7 @@ vi.mock("@/features/canvas/agent/user-action-tracker", () => ({
 vi.mock("@/features/project/save-manager", () => ({
   saveManager: {
     notifyEvicted: (...args: unknown[]) => mocks.notifyEvicted(...args),
+    setBaselineFromCurrent: (...args: unknown[]) => mocks.setBaselineFromCurrent(...args),
   },
 }));
 
@@ -124,6 +126,7 @@ describe("画布会话事件处理", () => {
       expect(mocks.adoptProject).toHaveBeenCalledWith(VALID_PAYLOAD.project);
       expect(mocks.runSuppressed).toHaveBeenCalledTimes(1);
       expect(mocks.restoreFromProject).toHaveBeenCalledWith("p1", ADOPTED);
+      expect(mocks.setBaselineFromCurrent).toHaveBeenCalledWith("p1");
       expect(mocks.clearHistory).toHaveBeenCalledTimes(1);
       expect(getCanvasLease("p1")).toBe(42);
       // 采纳路径是取得编辑权，不是被驱逐

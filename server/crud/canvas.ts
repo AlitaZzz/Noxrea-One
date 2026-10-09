@@ -132,6 +132,82 @@ export async function updateProject(
   });
 }
 
+export interface CanvasDelta {
+  nodes: { upsert: Record<string, unknown>[]; delete: string[] };
+  edges: { upsert: Record<string, unknown>[]; delete: string[] };
+  viewport?: { x: number; y: number; zoom: number };
+  minimapVisible?: boolean;
+  snapToGrid?: boolean;
+  agentModel?: string | null;
+}
+
+/**
+ * 合并卸载阶段的画布增量。读取、合并、摘要派生、文件引用账本和 revision
+ * 都在同一项目写临界区与数据库事务内完成，避免增量请求成为另一条弱写路径。
+ */
+export async function updateProjectDelta(
+  id: string,
+  userId: number,
+  delta: CanvasDelta,
+  options: { baseRevision: number; lease: number },
+) {
+  return withProjectGate(id, async () => {
+    if (!isCurrentLease(id, options.lease)) {
+      throw await leaseLostError(id, userId);
+    }
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.canvasProject.findFirst({
+        where: { id, userId },
+        select: { id: true, revision: true, canvasData: true },
+      });
+      if (!existing) return null;
+      if (existing.revision !== options.baseRevision) {
+        throw new CanvasRevisionConflictError(existing.revision);
+      }
+
+      const current = parseJsonObject(existing.canvasData);
+      const currentNodes = Array.isArray(current.nodes) ? current.nodes as Record<string, unknown>[] : [];
+      const currentEdges = Array.isArray(current.edges) ? current.edges as Record<string, unknown>[] : [];
+      const deletedNodes = new Set(delta.nodes.delete);
+      const deletedEdges = new Set(delta.edges.delete);
+      const nodeUpserts = new Map(delta.nodes.upsert.map((node) => [node.id as string, node]));
+      const edgeUpserts = new Map(delta.edges.upsert.map((edge) => [edge.id as string, edge]));
+      const existingNodeIds = new Set(currentNodes.map((node) => node.id as string));
+      const existingEdgeIds = new Set(currentEdges.map((edge) => edge.id as string));
+      const nodes = currentNodes
+        .filter((node) => !deletedNodes.has(node.id as string))
+        .map((node) => nodeUpserts.get(node.id as string) ?? node)
+        .concat(delta.nodes.upsert.filter((node) => !existingNodeIds.has(node.id as string)));
+      const edges = currentEdges
+        .filter((edge) => !deletedEdges.has(edge.id as string))
+        .map((edge) => edgeUpserts.get(edge.id as string) ?? edge)
+        .concat(delta.edges.upsert.filter((edge) => !existingEdgeIds.has(edge.id as string)));
+      const next: Record<string, unknown> = { ...current, nodes, edges };
+      if (delta.viewport !== undefined) next.viewport = delta.viewport;
+      if (delta.minimapVisible !== undefined) next.minimapVisible = delta.minimapVisible;
+      if (delta.snapToGrid !== undefined) next.snapToGrid = delta.snapToGrid;
+      if (delta.agentModel !== undefined) next.agentModel = delta.agentModel;
+
+      const summary = deriveCanvasSummary(next);
+      const updated = await tx.canvasProject.update({
+        where: { id },
+        data: {
+          canvasData: stringifyJson(next),
+          revision: { increment: 1 },
+          nodeCount: summary.nodeCount,
+          thumbnailSrc: summary.thumbnailSrc,
+        },
+      });
+      const oldCounts = extractHashCountsFromCanvas(current);
+      const newCounts = extractHashCountsFromCanvas(next);
+      if (!hashCountsEqual(oldCounts, newCounts)) {
+        await replaceSourceFileRefs(tx, { userId, sourceType: "canvas", sourceId: id }, newCounts);
+      }
+      return { ...updated, canvasData: parseJsonObject(updated.canvasData) };
+    });
+  });
+}
+
 async function updateProjectRow(
   id: string,
   userId: number,
@@ -231,4 +307,3 @@ export async function deleteProject(id: string, userId: number) {
     return tx.canvasProject.deleteMany({ where: { id, userId } });
   });
 }
-

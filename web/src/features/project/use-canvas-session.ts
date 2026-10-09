@@ -128,6 +128,9 @@ export function handleCanvasHandshake(
   const adopted = useProjectStore.getState().adoptProject(data.project);
   if (!adopted) return "rejected";
   runSuppressed(() => useCanvasStore.getState().restoreFromProject(projectId, adopted));
+  // 增量卸载保存必须以清洗后的画布状态为基线，避免把服务端已存在的节点
+  // 误判为新增。
+  saveManager.setBaselineFromCurrent(projectId);
   setCanvasLease(projectId, lease);
   useHistoryStore.getState().clear();
   return "adopted";
