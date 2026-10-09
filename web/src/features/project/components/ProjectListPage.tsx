@@ -69,8 +69,7 @@ export default function ProjectListPage() {
   const pathname = usePathname();
 
   // 进入项目列表页时：先等待画布未落盘的保存完成，再拉取数据库。
-  // 浏览器回退按钮导航时，/canvas 卸载会触发兜底保存（异步 PUT），
-  // 若不等待直接拉列表，GET 会与保存 PUT 竞态，拿到旧的 updatedAt 排序。
+  // 若不等待直接拉列表，GET 可能与画布保存竞态，拿到旧的 updatedAt 排序。
   useEffect(() => {
     if (pathname !== "/project") return;
     let cancelled = false;

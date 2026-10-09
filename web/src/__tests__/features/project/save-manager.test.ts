@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, GroupNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { resetCanvasLease, setCanvasLease } from "@/features/project/canvas-lease";
-import { createCanvasDataDelta, saveManager } from "@/features/project/save-manager";
+import { saveManager } from "@/features/project/save-manager";
 import type { CanvasData } from "@/features/project/types";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -213,24 +213,50 @@ describe("画布增量保存", () => {
     expect(body.nodes.delete).toEqual([]);
   });
 
-  it("只发送相对已落库基线发生变化的节点和设置", () => {
-    const base: CanvasData = {
-      nodes: [textNode("a"), textNode("b")],
-      edges: [{ id: "e1", source: "a", target: "b" }],
-      viewport: { x: 0, y: 0, zoom: 1 }, minimapVisible: true, snapToGrid: false,
-    };
-    const changed = { ...textNode("a"), data: { ...textNode("a").data, plainText: "changed" } };
-    const current: CanvasData = {
-      ...base,
-      nodes: [changed],
-      edges: [],
-      snapToGrid: true,
-    };
-    expect(createCanvasDataDelta(base, current)).toEqual({
-      nodes: { upsert: [changed], delete: ["b"] },
-      edges: { upsert: [], delete: ["e1"] },
-      snapToGrid: true,
+  it("增量保存覆盖边增删和画布级设置差异", async () => {
+    const nodes = Array.from({ length: 100 }, (_, index) => ({
+      ...textNode(`n${index}`),
+      data: { ...textNode(`n${index}`).data, plainText: "x".repeat(900) },
+    }));
+    const oldEdge: AnyEdge = { id: "old", source: "n0", target: "n1" };
+    useCanvasStore.setState({
+      nodes,
+      edges: [oldEdge],
+      minimapVisible: true,
+      snapToGrid: false,
+      agentModel: "base-model",
     });
+    syncLiveViewport({ x: 0, y: 0, zoom: 1 });
+    saveManager.setBaselineFromCurrent("p1");
+
+    const newEdge: AnyEdge = { id: "new", source: "n1", target: "n2" };
+    useCanvasStore.setState({
+      edges: [newEdge],
+      minimapVisible: false,
+      snapToGrid: true,
+      agentModel: "next-model",
+    });
+    syncLiveViewport({ x: -80, y: 40, zoom: 1.25 });
+
+    saveManager.markDirty();
+    saveManager.flushOnUnload();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mocks.saveProjectDeltaRaw).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(mocks.saveProjectDeltaRaw.mock.calls[0]![1] as string) as {
+      edges: { upsert: AnyEdge[]; delete: string[] };
+      viewport: { x: number; y: number; zoom: number };
+      minimapVisible: boolean;
+      snapToGrid: boolean;
+      agentModel: string;
+    };
+    expect(body.edges).toEqual({ upsert: [newEdge], delete: ["old"] });
+    expect(body.viewport).toEqual({ x: -80, y: 40, zoom: 1.25 });
+    expect(body.minimapVisible).toBe(false);
+    expect(body.snapToGrid).toBe(true);
+    expect(body.agentModel).toBe("next-model");
   });
 });
 

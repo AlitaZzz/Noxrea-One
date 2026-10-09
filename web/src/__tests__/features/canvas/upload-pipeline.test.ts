@@ -25,9 +25,7 @@ vi.mock("@/features/project/save-manager", () => ({
   saveManager: {
     markDirty: vi.fn(),
     markDirtyImmediate: vi.fn(),
-    flushSave: vi.fn(),
     flushAndWait: vi.fn(),
-    status: { dirty: false, saving: false },
   },
 }));
 // 只替换上传执行体，保留并发控制与其余真实实现

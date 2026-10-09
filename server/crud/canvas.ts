@@ -3,6 +3,7 @@
  * 按用户读写画布工程、节点数据与缩略图等持久化信息。
  */
 import { prisma } from "@server/core/database/client";
+import type { CanvasDelta } from "@server/schemas/canvas";
 import { newId } from "@server/utils/id";
 import { withProjectGate, isCurrentLease } from "@server/services/canvas/editor-lease";
 import { extractHashCountsFromCanvas, extractHashFromUrl, hashCountsEqual } from "@server/services/canvas/extract-hashes";
@@ -130,15 +131,6 @@ export async function updateProject(
     }
     return updateProjectRow(id, userId, data, options);
   });
-}
-
-export interface CanvasDelta {
-  nodes: { upsert: Record<string, unknown>[]; delete: string[] };
-  edges: { upsert: Record<string, unknown>[]; delete: string[] };
-  viewport?: { x: number; y: number; zoom: number };
-  minimapVisible?: boolean;
-  snapToGrid?: boolean;
-  agentModel?: string | null;
 }
 
 /**

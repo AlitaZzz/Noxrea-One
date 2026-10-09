@@ -13,7 +13,7 @@
  * 职责：
  *  - dirty 状态管理（trailing save queue，只保存最终最新状态）
  *  - save: PUT /api/canvas/projects/{id}（携带 baseRevision + 编辑权租约令牌）
- *  - flushSave / flushOnHide：页面存活场景的紧急保存（普通请求，无 64KB 限制）
+ *  - flushAndWait / flushOnHide：页面存活场景的紧急保存（普通请求，无 64KB 限制）
  *  - flushOnUnload：页面真正卸载前的兜底（keepalive，受 64KB 请求体上限约束）
  *  - 错误处理：失败保持 dirty 继续重试；409 即租约失效，无条件进入过期态
  *
@@ -156,7 +156,7 @@ function sameJson(a: unknown, b: unknown): boolean {
 }
 
 /** 以最后一次已落库快照为基线计算节点、边和画布设置增量。 */
-export function createCanvasDataDelta(base: CanvasData, current: CanvasData): CanvasDataDelta {
+function createCanvasDataDelta(base: CanvasData, current: CanvasData): CanvasDataDelta {
   const baseNodes = new Map(base.nodes.map((node) => [node.id, node]));
   const currentNodes = new Map(current.nodes.map((node) => [node.id, node]));
   const baseEdges = new Map(base.edges.map((edge) => [edge.id, edge]));
@@ -261,22 +261,6 @@ class SaveManager {
     if (clearExpired) {
       useSessionExpiredStore.getState().resetExpired();
     }
-  }
-
-  /** 立即保存最新状态（fire-and-forget；页面存活，故无需 keepalive） */
-  flushSave(): void {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    if (this.saving) {
-      // 在途保存收尾后立即补存，而非丢弃定时器等默认延迟重排
-      if (this.dirty) {
-        this.pendingSave = { keepalive: false, skipUnauthorized: false };
-      }
-      return;
-    }
-    void this.save(false);
   }
 
   /**
@@ -478,17 +462,19 @@ class SaveManager {
     const fullBody = JSON.stringify({ baseRevision, lease, canvasData });
     let body = fullBody;
     let incremental = false;
-    const fullBytes = new TextEncoder().encode(fullBody).byteLength;
-    if (opts.keepalive && fullBytes > KEEPALIVE_BODY_LIMIT) {
-      const baseline = this.persistedCanvas?.projectId === projectId ? this.persistedCanvas.data : null;
-      if (baseline === null) throw new KeepaliveBodyTooLargeError(fullBytes);
-      const delta = createCanvasDataDelta(baseline, canvasData);
-      body = JSON.stringify({ baseRevision, lease, ...delta });
-      const deltaBytes = new TextEncoder().encode(body).byteLength;
-      if (deltaBytes > KEEPALIVE_BODY_LIMIT) {
-        throw new KeepaliveBodyTooLargeError(deltaBytes);
+    if (opts.keepalive) {
+      const fullBytes = new TextEncoder().encode(fullBody).byteLength;
+      if (fullBytes > KEEPALIVE_BODY_LIMIT) {
+        const baseline = this.persistedCanvas?.projectId === projectId ? this.persistedCanvas.data : null;
+        if (baseline === null) throw new KeepaliveBodyTooLargeError(fullBytes);
+        const delta = createCanvasDataDelta(baseline, canvasData);
+        body = JSON.stringify({ baseRevision, lease, ...delta });
+        const deltaBytes = new TextEncoder().encode(body).byteLength;
+        if (deltaBytes > KEEPALIVE_BODY_LIMIT) {
+          throw new KeepaliveBodyTooLargeError(deltaBytes);
+        }
+        incremental = true;
       }
-      incremental = true;
     }
 
     const res = incremental

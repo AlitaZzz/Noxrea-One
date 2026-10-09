@@ -49,3 +49,5 @@ export const canvasDeltaSchema = z.object({
   baseRevision: z.number().int().min(1),
   lease: z.number().int().min(1),
 });
+
+export type CanvasDelta = Omit<z.infer<typeof canvasDeltaSchema>, "baseRevision" | "lease">;

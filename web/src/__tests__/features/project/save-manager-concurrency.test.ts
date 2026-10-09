@@ -4,7 +4,7 @@
  * 覆盖核心不变量：
  *   - 写通道单飞：保存进行中绝不发出第二个服务端写请求（同 baseRevision 并发必然 409）。
  *   - 内容有主：保存 / revision 回写一律按 getCanvasProjectId 寻址。
- *   - 保存期间的改动在收尾后补存（pendingSave / flushSave）。
+ *   - 保存期间的改动在收尾后补存（pendingSave）。
  *   - flushAndWait 可正常返回，不永久挂起。
  *   - 保存请求携带 baseRevision + 编辑权租约令牌（fencing token）；无租约不派发。
  *   - 409 = 租约失效（编辑权已属其他页面实例）：同步服务端版本并无条件进入
@@ -253,29 +253,6 @@ describe("SaveManager 并发保存", () => {
     // 增量未被丢弃：仍保持 dirty，页面存活时由后续保存承接
     const s = saveManager as unknown as { dirty: boolean };
     expect(s.dirty).toBe(true);
-  });
-
-  it("保存中的 flushSave 记录补存诉求，收尾后立即补存", async () => {
-    const first = gatedResponse();
-    let calls = 0;
-    mocks.saveProjectRaw.mockImplementation(() => {
-      calls++;
-      return calls === 1
-        ? first.gate.then(() => ({ ok: true, status: 200 }))
-        : Promise.resolve({ ok: true, status: 200 });
-    });
-
-    saveManager.markDirty();
-    const p1 = priv.save(false);
-    await vi.waitFor(() => expect(calls).toBe(1));
-
-    saveManager.markDirty();
-    saveManager.flushSave(); // 页面仍存活：不能双发，但收尾后要立即补存
-    expect(calls).toBe(1);
-
-    first.release();
-    await p1;
-    await vi.waitFor(() => expect(calls).toBe(2));
   });
 
   it("保存按内容所有者寻址：job / revision 回写均用 canvasProjectId", async () => {

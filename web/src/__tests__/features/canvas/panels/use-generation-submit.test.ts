@@ -29,7 +29,6 @@ vi.mock("@/features/project/save-manager", () => ({
     markDirtyImmediate: vi.fn(),
     markDirtyUndo: vi.fn(),
     flushAndWait: mocks.flushAndWait,
-    flushSave: vi.fn(),
     resetForProjectSwitch: vi.fn(),
   },
 }));
