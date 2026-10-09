@@ -9,7 +9,7 @@ import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CloseOutlined, UndoOutlined } from "@/components/ui/AppIcon";
+import { CloseOutlined, ReloadOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
@@ -288,7 +288,7 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
 
         {/* Reset */}
         <Tooltip><TooltipTrigger asChild>
-            <Button size="icon" variant="ghost" onClick={handleReset} ><UndoOutlined /></Button>
+            <Button size="icon" variant="ghost" onClick={handleReset} aria-label={t("crop.reset")} ><ReloadOutlined /></Button>
           </TooltipTrigger><TooltipContent>{t("crop.reset")}</TooltipContent></Tooltip>
 
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />
