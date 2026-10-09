@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import IconActionButton from "@/components/ui/IconActionButton";
-import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
+import { ParamSummary } from "@/components/ui/ParamFields";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -29,6 +29,7 @@ import { generationApi } from "@/features/canvas/api/generation-api";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import ModelParamFields from "@/features/model/components/ModelParamFields";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import i18n from "@/lib/i18n/config";
@@ -482,7 +483,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
               </Button>
             </PopoverTrigger>
             <PopoverContent side="bottom" align="start" className="w-[360px] max-w-[calc(100vw-2rem)] p-3">
-              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
+              <ModelParamFields hasModel={Boolean(modelKey)} fields={modelParams ? fieldViews : null} values={fieldValues} onChange={setField} />
             </PopoverContent>
           </Popover>
           <div className="flex-1" />

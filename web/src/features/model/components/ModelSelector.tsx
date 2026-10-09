@@ -1,6 +1,7 @@
 "use client";
 
 import type { ComponentProps } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function ModelSelector({
   className,
   disabled = false,
 }: ModelSelectorProps) {
+  const { t } = useTranslation();
   const selectedModel = models.find((model) => model.value === value);
 
   return (
@@ -66,6 +68,11 @@ export function ModelSelector({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={side} align={align}>
+        {models.length === 0 ? (
+          <DropdownMenuItem disabled className="justify-center text-muted-foreground">
+            {t("modelConfig.emptyModels")}
+          </DropdownMenuItem>
+        ) : null}
         {models.map((model) => (
           <DropdownMenuItem
             key={model.value}

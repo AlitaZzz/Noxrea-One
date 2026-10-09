@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const { writeGenSettings } = vi.hoisted(() => ({ writeGenSettings: vi.fn() }));
+const { writeGenSettings, modelState } = vi.hoisted(() => ({
+  writeGenSettings: vi.fn(),
+  modelState: { hasModels: true, paramsAvailable: true },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -16,15 +19,15 @@ vi.mock("@/lib/i18n/config", () => ({
 
 vi.mock("@/lib/model-store", () => ({
   useModelStore: (selector: (state: unknown) => unknown) => selector({
-    providers: [{
+    providers: modelState.hasModels ? [{
       id: "provider",
       name: "Provider",
       models: [{ id: "video-model", name: "video-model", capabilities: ["video"] }],
-    }],
-    findModelParams: () => ({
+    }] : [],
+    findModelParams: () => modelState.paramsAvailable ? ({
       fields: [],
       capabilities: { refMode: { options: ["text", "full"] } },
-    }),
+    }) : null,
     modelParamsCache: {},
   }),
 }));
@@ -37,7 +40,7 @@ vi.mock("@/features/canvas/shared/ref-order", () => ({
 }));
 
 vi.mock("@/features/canvas/shared/last-model", () => ({
-  resolveModelKey: () => "provider/video-model",
+  resolveModelKey: (_value: unknown, _capability: unknown, models: { value: string }[]) => models[0]?.value ?? "",
   recordLastModel: vi.fn(),
 }));
 
@@ -113,6 +116,27 @@ import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel"
 afterEach(() => {
   cleanup();
   writeGenSettings.mockClear();
+  modelState.hasModels = true;
+  modelState.paramsAvailable = true;
+});
+
+describe("VideoGenerationPanel parameter availability", () => {
+  it.each([
+    { hasModels: false, paramsAvailable: true, message: "modelConfig.selectModelForParams" },
+    { hasModels: true, paramsAvailable: false, message: "modelConfig.paramsUnavailable" },
+    { hasModels: true, paramsAvailable: true, message: "modelConfig.emptyParams" },
+  ])("shows $message for the actual model and configuration state", ({ hasModels, paramsAvailable, message }) => {
+    Object.assign(modelState, { hasModels, paramsAvailable });
+    const { container } = render(
+      <TooltipProvider>
+        <VideoGenerationPanel nodeId="video-node" />
+      </TooltipProvider>,
+    );
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
+    fireEvent.click(trigger);
+    expect(screen.getByRole("status")).toHaveTextContent(message);
+    expect(writeGenSettings).not.toHaveBeenCalled();
+  });
 });
 
 describe("VideoGenerationPanel reference mode menu", () => {

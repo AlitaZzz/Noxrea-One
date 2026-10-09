@@ -15,7 +15,7 @@ import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
-import ParamFields, { ParamSummary } from "@/components/ui/ParamFields";
+import { ParamSummary } from "@/components/ui/ParamFields";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -26,6 +26,7 @@ import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
+import ModelParamFields from "@/features/model/components/ModelParamFields";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
@@ -401,7 +402,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
               </Button>
             </PopoverTrigger>
             <PopoverContent side="bottom" align="start" className="w-[360px] max-w-[calc(100vw-2rem)] p-3">
-              <ParamFields fields={fieldViews} values={fieldValues} onChange={setField} />
+              <ModelParamFields hasModel={Boolean(modelKey)} fields={modelParams ? fieldViews : null} values={fieldValues} onChange={setField} />
             </PopoverContent>
           </Popover>
           <Separator orientation="vertical" className="h-7 self-center" />
