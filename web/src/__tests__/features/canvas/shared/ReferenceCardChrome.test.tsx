@@ -32,7 +32,7 @@ describe("ReferenceCardChrome", () => {
     expect(screen.getByText("Preview")).toBeInTheDocument();
     expect(screen.getByText("Image 1")).toHaveClass("bg-black/55", "text-white");
     const removeButton = screen.getByRole("button", { name: "Remove" });
-    expect(removeButton).toHaveClass("bg-transparent", "text-white", "hover:bg-white/15");
+    expect(removeButton).toHaveClass("size-4", "bg-popover", "text-popover-foreground", "border-border", "hover:bg-accent", "dark:hover:bg-accent", "focus-visible:opacity-100");
     fireEvent.click(removeButton);
     expect(onRemove).toHaveBeenCalledOnce();
   });

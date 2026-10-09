@@ -48,7 +48,7 @@ afterEach(() => {
 describe("TextRefChip", () => {
   it("keeps the full-text preview open when moving from the trigger into the content", async () => {
     renderChip();
-    const trigger = screen.getByRole("button", { name: "node.text" });
+    const trigger = screen.getByRole("img", { name: "node.text" });
     fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
     await act(() => vi.advanceTimersByTimeAsync(700));
 
@@ -69,7 +69,7 @@ describe("TextRefChip", () => {
 
   it("opens on focus and dismisses on Escape", async () => {
     renderChip();
-    fireEvent.focus(screen.getByRole("button", { name: "node.text" }));
+    fireEvent.focus(screen.getByRole("img", { name: "node.text" }));
     await act(() => vi.advanceTimersByTimeAsync(700));
     expect(document.querySelector("[data-slot='hover-card-content']")).toBeInTheDocument();
 
@@ -79,7 +79,7 @@ describe("TextRefChip", () => {
 
   it("reveals the source on double click and disconnects only the current reference", () => {
     renderChip();
-    const trigger = screen.getByRole("button", { name: "node.text" });
+    const trigger = screen.getByRole("img", { name: "node.text" });
     const remove = screen.getByRole("button", { name: "common.delete" });
     expect(trigger.contains(remove)).toBe(false);
 
@@ -91,5 +91,15 @@ describe("TextRefChip", () => {
     fireEvent.doubleClick(remove);
     expect(removeEdges).toHaveBeenCalledExactlyOnceWith(["reference"]);
     expect(reveal).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared reference badge and compact remove control without a full-card button", () => {
+    renderChip();
+    const trigger = screen.getByRole("img", { name: "node.text" });
+    expect(trigger.tagName).toBe("DIV");
+    expect(trigger).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("node.text")).toHaveClass("bg-black/55", "text-white");
+    expect(screen.getByRole("button", { name: "common.delete" })).toHaveClass("size-4", "bg-popover", "focus-visible:opacity-100");
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 });

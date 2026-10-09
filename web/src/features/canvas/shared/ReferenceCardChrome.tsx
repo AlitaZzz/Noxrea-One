@@ -64,10 +64,10 @@ export function ReferenceRemoveButton({ ariaLabel, onRemove }: { ariaLabel: stri
       size="icon-xs"
       variant="ghost"
       aria-label={ariaLabel}
-      className="absolute -top-1.5 -right-1.5 rounded-full bg-transparent p-0 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-white/15 hover:text-white"
+      className="absolute -top-1 -right-1 size-4 rounded-full border-border bg-popover p-0 text-popover-foreground shadow-sm opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent dark:hover:bg-accent"
       onClick={onRemove}
     >
-      <CloseOutlined className="size-3" />
+      <CloseOutlined className="size-2.5" />
     </Button>
   );
 }

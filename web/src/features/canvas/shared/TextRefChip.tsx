@@ -9,13 +9,12 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CloseOutlined, TextIcon } from "@/components/ui/AppIcon";
-import { Button } from "@/components/ui/button";
+import { TextIcon } from "@/components/ui/AppIcon";
 import { Card } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
+import { ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { useRevealCanvasNode } from "./reveal-node";
 
 export interface TextRefChipProps {
@@ -35,48 +34,37 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
     <Card className="group relative flex size-14 shrink-0 flex-row items-center justify-center gap-0 rounded-md border-border bg-accent p-0 shadow-none">
       <HoverCard>
         <HoverCardTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
+          <div
+            role="img"
+            tabIndex={0}
             aria-label={t("node.text")}
-            className="size-full"
+            className="flex size-full items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onDoubleClick={() => {
               const n = useCanvasStore.getState().nodes.find((x) => x.id === id);
               if (n) reveal(n);
             }}
           >
             <TextIcon className="size-4" />
-          </Button>
+          </div>
         </HoverCardTrigger>
         <HoverCardContent
           side="top"
           align="start"
           collisionPadding={16}
-          className="nodrag nopan nowheel w-96 max-w-[calc(100vw-2rem)] max-h-[min(20rem,var(--radix-hover-card-content-available-height))] overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm"
+          className="nodrag nopan nowheel scrollbar-ui w-96 max-w-[calc(100vw-2rem)] max-h-[min(20rem,var(--radix-hover-card-content-available-height))] overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm"
         >
           {content}
         </HoverCardContent>
       </HoverCard>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            size="icon-xs"
-            variant="ghost"
-            aria-label={t("common.delete")}
-            className="absolute -top-1.5 -right-1.5 rounded-full bg-background text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-            onClick={() => {
-              const store = useCanvasStore.getState();
-              const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
-              if (edge) store.removeEdges([edge.id]);
-            }}
-          >
-            <CloseOutlined className="size-3" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{t("common.delete")}</TooltipContent>
-      </Tooltip>
+      <ReferenceIndexBadge>{t("node.text")}</ReferenceIndexBadge>
+      <ReferenceRemoveButton
+        ariaLabel={t("common.delete")}
+        onRemove={() => {
+          const store = useCanvasStore.getState();
+          const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
+          if (edge) store.removeEdges([edge.id]);
+        }}
+      />
     </Card>
   );
 }
