@@ -136,8 +136,8 @@ function GridPicker({ nodeId, onSelect }: { nodeId: string; onSelect: () => void
       </div>
       <div className="space-y-2 rounded-lg border border-border/70 bg-muted/30 p-2.5">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-medium">{t("node.gridCustom")}</span>
-          <span className="rounded-md bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+          <span className="text-sm font-medium">{t("node.gridCustom")}</span>
+          <span className="inline-flex h-6 w-36 shrink-0 items-center justify-center rounded-md bg-background px-2 text-sm font-medium tabular-nums text-foreground">
             {hover.rows > 0 && hover.cols > 0 ? `${hover.rows}×${hover.cols}` : t("node.gridSelect")}
           </span>
         </div>
