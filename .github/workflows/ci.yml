@@ -10,6 +10,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # server 配置在 import 链上校验必填项（loadConfig），CI 无 gitignore 的 .env；
+      # 这里注入仅用于单元测试的占位密钥（非生产凭据，schema 仅要求非空且非 change-me 占位符）
+      JWT_SECRET_KEY: ci-unit-test-secret
     steps:
       - name: Checkout
         uses: actions/checkout@v4

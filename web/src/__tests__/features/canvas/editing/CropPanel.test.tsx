@@ -2,8 +2,8 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import CropPanel from "@/features/canvas/editing/CropPanel";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import CropPanel from "@/features/canvas/editing/CropPanel";
 
 vi.mock("@xyflow/react", () => ({
   NodeToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
