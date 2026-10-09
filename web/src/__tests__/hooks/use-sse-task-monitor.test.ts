@@ -102,8 +102,8 @@ afterEach(() => {
 });
 
 describe("useSseTaskMonitor", () => {
-  it("SSE 图像终态：回填 src/fileSize、清除 taskBinding、异步补尺寸、成功通知一次", async () => {
-    addWatchedNode("n1", "t1");
+  it.each([undefined, "Lighting", "Multi-angle", "My renamed image"])("SSE 图像终态：回填内容和尺寸，保留标题 %s", async (label) => {
+    addWatchedNode("n1", "t1", { label });
     mocks.streamGenerationTask.mockResolvedValue(
       sseResponse(terminalFrame({
         taskId: "t1", status: "completed",
@@ -118,12 +118,14 @@ describe("useSseTaskMonitor", () => {
       expect(data.src).toBe("/api/files/1/aa/x.png");
       expect(data.taskBinding).toBeUndefined();
       expect(data.fileSize).toBe(123);
+      expect(data.label).toBe(label);
     });
     // 异步尺寸回填（loadMediaDimensions mock 100x50）
     await waitFor(() => {
       const data = useCanvasStore.getState().nodes[0].data as Record<string, unknown>;
       expect(data.naturalWidth).toBe(100);
       expect(data.naturalHeight).toBe(50);
+      expect(data.label).toBe(label);
     });
     await waitFor(() => expect(notif.success).toHaveBeenCalledTimes(1));
     expect(notif.success).toHaveBeenCalledWith(expect.objectContaining({ key: "generation-result-n1-t1" }));

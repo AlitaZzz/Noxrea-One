@@ -105,7 +105,9 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
         notification.error({ title: t("angle.generateFailed"), placement: "bottomRight", duration: 6, key: `angle-failed-${nodeId}` });
         return;
       }
-      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
+      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState(), {
+        label: t("angle.editor"),
+      });
       if (!node) return;
       markDirtyImmediate();
       onClose();

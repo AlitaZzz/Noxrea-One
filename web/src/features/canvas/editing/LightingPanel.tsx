@@ -144,7 +144,9 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
         notification.error({ title: t("lighting.generateFailed"), placement: "bottomRight", duration: 6, key: `lighting-failed-${nodeId}` });
         return;
       }
-      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState());
+      const node = spawnPromptDerivedNode(nodeId, template, createImageNode, useCanvasStore.getState(), {
+        label: t("lighting.title"),
+      });
       if (!node) return;
       markDirtyImmediate();
       onClose();
