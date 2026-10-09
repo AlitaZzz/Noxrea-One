@@ -51,7 +51,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# ffmpeg：视频抽帧；ca-certificates：出网访问上游 API
+# ffmpeg 包含 ffprobe：媒体处理与帧探测；ca-certificates：出网访问上游 API
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*

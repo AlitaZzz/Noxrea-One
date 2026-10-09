@@ -1,0 +1,4 @@
+/* Only the content participates in hit testing, including while media resizes. */
+[data-radix-popper-content-wrapper]:has(> [data-media-preview]) {
+  pointer-events: none;
+}

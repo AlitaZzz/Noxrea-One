@@ -6,11 +6,15 @@
 
 import path from "path";
 import fs from "fs/promises";
+import { z } from "zod";
+import type { FrameSelection } from "@noxrea/shared";
 import { logEvent } from "@server/core/logger/utils";
-import { runFfmpeg } from "./ffmpeg";
+import { runFfmpeg, runFfprobe, scanFfprobe } from "./ffmpeg";
 
 /** ffmpeg 抽帧超时：子进程若挂起会持续持有视频文件句柄，必须兜底杀掉 */
 const FFMPEG_TIMEOUT_MS = 30_000;
+/** Timeline, packet indexing, corrupt-tail traversal and image output share one deadline. */
+const FRAME_CAPTURE_BUDGET_MS = 90_000;
 
 /** 代理转码超时：整段重编码比抽一帧慢得多，给足时间但仍要兜底 */
 const FFMPEG_PROXY_TIMEOUT_MS = 60_000;
@@ -21,6 +25,51 @@ const FFMPEG_SPRITE_TIMEOUT_MS = 60_000;
 /** 探测不到帧率时的 GOP 回退值（帧）：按 25fps 估算，约合 1 秒 */
 const FALLBACK_FPS = 25;
 
+const videoTimelineSchema = z.object({
+  streams: z.array(z.object({ time_base: z.string().regex(/^\d+\/[1-9]\d*$/) })),
+  format: z.object({ start_time: z.coerce.number().finite().default(0) }),
+});
+const frameProbeSchema = z.object({ best_effort_timestamp: z.number().int().nullish() });
+const packetProbeSchema = z.object({ pts: z.number().int().optional(), flags: z.string() });
+
+async function lastVideoFrame(videoPath: string, remaining: () => number, signal?: AbortSignal) {
+  const probeArgs = ["-v", "error", "-select_streams", "v:0", "-of", "json"];
+  // Demux packet headers without decoding the video, then decode only the final GOP.
+  const index = videoTimelineSchema.parse(await runFfprobe([
+    ...probeArgs, "-show_entries", "stream=time_base:format=start_time", videoPath,
+  ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), { signal, stage: "capture_timeline" }));
+  const keyframes: number[] = [];
+  await scanFfprobe([
+    ...probeArgs, "-show_packets", "-show_entries", "packet=pts,flags", videoPath,
+  ], Math.min(FFMPEG_SPRITE_TIMEOUT_MS, remaining()), {
+    signal, stage: "capture_keyframes", section: "packets",
+    onEntry: (entry) => {
+      const packet = packetProbeSchema.parse(entry);
+      if (packet.pts !== undefined && packet.flags.includes("K")) keyframes.push(packet.pts);
+    },
+  });
+  const stream = index.streams[0];
+  if (!keyframes.length || !stream) throw new Error("No decoded video frame available");
+  const [numerator, denominator] = stream.time_base.split("/").map(Number);
+  const timeBase = numerator / denominator;
+  for (let i = keyframes.length - 1; i >= 0; i--) {
+    let lastTimestamp: number | undefined;
+    await scanFfprobe([
+      ...probeArgs, "-show_frames", "-read_intervals", `${Math.floor(keyframes[i] * timeBase * 1e6) / 1e6}%`,
+      "-show_entries", "frame=best_effort_timestamp", videoPath,
+    ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), {
+      signal, stage: "capture_tail", section: "frames",
+      onEntry: (entry) => {
+        const frame = frameProbeSchema.parse(entry);
+        if (typeof frame.best_effort_timestamp === "number") lastTimestamp = frame.best_effort_timestamp;
+      },
+    });
+    if (lastTimestamp !== undefined) return { pts: lastTimestamp, time: lastTimestamp * timeBase - index.format.start_time };
+    // An indexed key packet may be truncated. Search the preceding GOP only if no frame decoded.
+  }
+  throw new Error("No decoded video frame available");
+}
+
 /**
  * 视频截帧（spawn ffmpeg）
  * 基于 subprocess 调用 ffmpeg
@@ -28,22 +77,37 @@ const FALLBACK_FPS = 25;
 export async function captureVideoFrame(
   videoPath: string,
   outputPath: string,
-  timeSeconds = 1,
+  selection: FrameSelection = { kind: "time", seconds: 1 },
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<number> {
+  const deadline = performance.now() + FRAME_CAPTURE_BUDGET_MS;
+  const remaining = () => {
+    signal?.throwIfAborted();
+    const timeLeft = deadline - performance.now();
+    if (timeLeft <= 0) throw new Error("Video frame capture timed out");
+    return timeLeft;
+  };
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const logFields = { video: path.basename(videoPath) };
+  const lastFrame = selection.kind === "last" ? await lastVideoFrame(videoPath, remaining, signal) : null;
+  const time = lastFrame ? lastFrame.time : selection.kind === "time" ? selection.seconds : 0;
+  // FFmpeg seeks in microseconds. Round down to keep the selected frame within the seek range.
+  const seekTime = lastFrame ? Math.max(0, Math.floor(time * 1e6) / 1e6) : time;
   const { code, stderr } = await runFfmpeg(
     [
-      "-ss", String(timeSeconds),
+      "-nostdin", "-nostats",
+      ...lastFrame ? ["-copyts"] : [],
+      "-ss", String(seekTime),
       "-i", videoPath,
-      "-vframes", "1",
+      "-map", "0:v:0", "-an",
+      ...lastFrame ? ["-vf", `select=eq(pts\\,${lastFrame.pts})`] : [],
+      "-frames:v", "1", "-fps_mode", "passthrough",
       "-q:v", "2",
       "-y",
       outputPath,
     ],
-    FFMPEG_TIMEOUT_MS,
+    Math.min(FFMPEG_TIMEOUT_MS, remaining()),
     { signal, stage: "capture_frame", logFields }
   );
   if (code !== 0) {
@@ -57,6 +121,7 @@ export async function captureVideoFrame(
   }
 
   logEvent("media", { stage: "capture_frame", ...logFields });
+  return time;
 }
 
 export interface FrameSpriteOptions {

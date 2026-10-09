@@ -52,7 +52,8 @@ function ImageRefCard({
   return (
     <ReferenceHoverPreview
       disabled={dragging || Boolean(dragActive) || dragOver}
-      preview={<img src={preview} alt="" className="block max-h-[240px] max-w-[240px] object-contain" />}
+      src={preview}
+      mediaType="image"
     >
       <Card
         className={`group relative h-14 w-14 rounded-md border-border bg-accent p-0 shadow-none ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}

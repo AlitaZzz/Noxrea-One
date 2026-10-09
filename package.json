@@ -33,6 +33,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.12",
     "@prisma/client": "6.19.3",
+    "@streamparser/json": "^0.0.26",
     "bcryptjs": "^2.4.3",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.33",

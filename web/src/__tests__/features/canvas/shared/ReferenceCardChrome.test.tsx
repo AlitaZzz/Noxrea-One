@@ -18,7 +18,7 @@ describe("ReferenceCardChrome", () => {
     const onRemove = vi.fn();
 
     render(
-      <ReferenceHoverPreview preview={<span>Preview</span>}>
+      <ReferenceHoverPreview src="/preview.png" mediaType="image">
         <button type="button">Reference</button>
       </ReferenceHoverPreview>,
     );
@@ -29,7 +29,7 @@ describe("ReferenceCardChrome", () => {
     fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
     await act(() => vi.advanceTimersByTimeAsync(160));
 
-    expect(screen.getByText("Preview")).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="hover-card-content"] img')).toHaveAttribute("src", "/preview.png");
     expect(screen.getByText("Image 1")).toHaveClass("bg-black/55", "text-white");
     const removeButton = screen.getByRole("button", { name: "Remove" });
     expect(removeButton).toHaveClass("size-4", "bg-popover", "text-popover-foreground", "border-border", "hover:bg-accent", "dark:hover:bg-accent", "focus-visible:opacity-100");
@@ -39,13 +39,13 @@ describe("ReferenceCardChrome", () => {
 
   it("does not open a preview while disabled", async () => {
     render(
-      <ReferenceHoverPreview disabled preview={<span>Preview</span>}>
+      <ReferenceHoverPreview disabled src="/preview.png" mediaType="image">
         <button type="button">Reference</button>
       </ReferenceHoverPreview>,
     );
 
     fireEvent.pointerEnter(screen.getByRole("button", { name: "Reference" }), { pointerType: "mouse" });
     await act(() => vi.advanceTimersByTimeAsync(200));
-    expect(screen.queryByText("Preview")).toBeNull();
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
   });
 });

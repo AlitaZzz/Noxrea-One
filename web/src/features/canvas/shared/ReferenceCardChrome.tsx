@@ -4,15 +4,16 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { HoverCard, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 interface ReferenceHoverPreviewProps {
   children: ReactNode;
-  preview: ReactNode;
+  src: string;
+  mediaType: "image" | "video";
   disabled?: boolean;
 }
 
-export function ReferenceHoverPreview({ children, preview, disabled = false }: ReferenceHoverPreviewProps) {
+export function ReferenceHoverPreview({ children, src, mediaType, disabled = false }: ReferenceHoverPreviewProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -36,15 +37,16 @@ export function ReferenceHoverPreview({ children, preview, disabled = false }: R
       <HoverCardTrigger asChild>
         <div className="inline-flex">{children}</div>
       </HoverCardTrigger>
-      <HoverCardContent
+      <HoverCardMediaContent
+        src={src}
+        mediaType={mediaType}
         side="top"
         align="center"
         sideOffset={8}
         collisionPadding={8}
         className="pointer-events-none w-auto overflow-hidden rounded-xl border-border bg-black p-0 shadow-2xl"
-      >
-        {preview}
-      </HoverCardContent>
+        mediaClassName="block max-h-[240px] max-w-[240px] object-contain"
+      />
     </HoverCard>
   );
 }

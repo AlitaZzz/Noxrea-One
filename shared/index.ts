@@ -8,6 +8,12 @@
  */
 import { z } from "zod";
 
+export const frameSelectionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("last") }).strict(),
+  z.object({ kind: z.literal("time"), seconds: z.number().finite().min(0) }).strict(),
+]);
+export type FrameSelection = z.infer<typeof frameSelectionSchema>;
+
 // ── 生成任务状态 ──
 // zod schema 为唯一来源，状态全集与类型均由它派生
 

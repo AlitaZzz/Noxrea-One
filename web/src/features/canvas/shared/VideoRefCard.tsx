@@ -46,7 +46,8 @@ function VideoRefCard({
   return (
     <ReferenceHoverPreview
       disabled={dragging || Boolean(dragActive) || dragOver}
-      preview={<video src={src} className="block max-h-[240px] max-w-[240px] object-contain" autoPlay muted loop playsInline />}
+      src={src}
+      mediaType="video"
     >
       <Card
         className={`group relative flex h-14 w-14 flex-row cursor-grab rounded-md border-border bg-accent p-0 shadow-none transition-shadow active:cursor-grabbing ${dragOver ? "ring-2 ring-white shadow-lg" : ""}`}

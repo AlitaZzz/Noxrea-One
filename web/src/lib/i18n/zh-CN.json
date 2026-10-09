@@ -57,6 +57,14 @@
     "processing": "处理中...",
     "statusFailed": "失败"
   },
+  "media": {
+    "loading": "正在加载视频...",
+    "loadFailed": "视频加载失败",
+    "previewLoadFailed": "预览加载失败",
+    "loadTimedOut": "视频加载超时",
+    "playFailed": "视频无法播放",
+    "retry": "重试"
+  },
   "param": {
     "quality": "质量",
     "ratio": "比例",

@@ -55,6 +55,14 @@
     "processing": "Processing...",
     "statusFailed": "Failed"
   },
+  "media": {
+    "loading": "Loading video...",
+    "loadFailed": "Video failed to load",
+    "previewLoadFailed": "Preview failed to load",
+    "loadTimedOut": "Video loading timed out",
+    "playFailed": "Video could not be played",
+    "retry": "Retry"
+  },
   "param": {
     "quality": "Quality",
     "ratio": "Ratio",

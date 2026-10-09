@@ -83,6 +83,7 @@ import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel"
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
 import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
+import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
 import {
   buildGroupHitIndex,
@@ -1034,6 +1035,7 @@ export default function InfiniteCanvas() {
       <AlignmentGuides guides={alignmentGuides} />
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <BatchConnectContext.Provider value={batchConnectHandlers}>
+      <CanvasMediaLoadingProvider key={activeProjectId}>
       <ReactFlow
         data-interaction={canvasInteraction.mode}
         data-multiselect={selectionFrame ? "true" : undefined}
@@ -1381,6 +1383,7 @@ export default function InfiniteCanvas() {
             />
           ))}
       </ReactFlow>
+      </CanvasMediaLoadingProvider>
       </BatchConnectContext.Provider>
       </EdgeHighlightContext.Provider>
 

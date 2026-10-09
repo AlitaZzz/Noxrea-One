@@ -10,7 +10,7 @@ afterEach(() => {
 });
 
 describe("AssetHoverPreview", () => {
-  it("uses HoverCard delay and keeps video autoplay behavior", () => {
+  it("uses HoverCard delay and keeps video autoplay behavior", async () => {
     vi.useFakeTimers();
 
     render(
@@ -23,15 +23,49 @@ describe("AssetHoverPreview", () => {
 
     const trigger = screen.getByRole("button", { name: "Asset" });
     fireEvent.focus(trigger);
-    act(() => vi.advanceTimersByTime(599));
+    await act(() => vi.advanceTimersByTimeAsync(599));
     expect(document.querySelector("video")).toBeNull();
 
-    act(() => vi.advanceTimersByTime(1));
+    await act(() => vi.advanceTimersByTimeAsync(1));
     const preview = document.querySelector("video");
     expect(preview).toBeTruthy();
     expect(preview).toHaveAttribute("src", "/clip.mp4");
     expect(preview).toHaveProperty("autoplay", true);
     expect(preview).toHaveProperty("muted", true);
+    const content = document.querySelector('[data-slot="hover-card-content"]');
+    expect(content).not.toBeVisible();
+    Object.defineProperties(preview, {
+      readyState: { value: 2 },
+      videoWidth: { value: 1280 },
+      videoHeight: { value: 720 },
+    });
+    fireEvent.loadedMetadata(preview!);
+    expect(content).not.toBeVisible();
+    fireEvent.loadedData(preview!);
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect(content).toBeVisible();
+  });
+
+  it("keeps image previews hidden until decoding has completed", async () => {
+    vi.useFakeTimers();
+    render(
+      <AssetHoverPreview asset={{ name: "portrait", mediaType: "image", sourceUrl: "/portrait.png" }}>
+        <button type="button">Image</button>
+      </AssetHoverPreview>,
+    );
+    fireEvent.focus(screen.getByRole("button", { name: "Image" }));
+    await act(() => vi.advanceTimersByTimeAsync(600));
+    const image = document.querySelector("img")!;
+    const content = document.querySelector('[data-slot="hover-card-content"]');
+    Object.defineProperties(image, {
+      naturalWidth: { value: 800 },
+      naturalHeight: { value: 1200 },
+      decode: { value: vi.fn().mockResolvedValue(undefined) },
+    });
+    expect(content).not.toBeVisible();
+    await act(async () => fireEvent.load(image));
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect(content).toBeVisible();
   });
 
   it("does not create a hover card for audio assets", () => {

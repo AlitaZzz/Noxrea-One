@@ -90,7 +90,7 @@ const configSchema = z.object({
     .transform((v) => v === "true" || v === "1")
     .default("true"),
 
-  // FFmpeg (video frame capture) - 目录路径，代码自动拼接 ffmpeg / ffmpeg.exe
+  // FFmpeg distribution directory: contains ffmpeg and ffprobe (with .exe on Windows).
   FFMPEG_PATH: z.string().default("bin"),
 
   // Proxy (for accessing upstream APIs behind firewall)

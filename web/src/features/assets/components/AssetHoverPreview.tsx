@@ -8,7 +8,7 @@
 
 import type { ReactElement } from "react";
 
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { AssetItem } from "@/features/assets/types";
 
 const PREVIEW_MAX_WIDTH = 400;
@@ -44,36 +44,31 @@ export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
   return (
     <HoverCard openDelay={HOVER_OPEN_DELAY} closeDelay={HOVER_CLOSE_DELAY}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={12}
-        collisionPadding={8}
-        className="nodrag nopan nowheel w-fit max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border-border bg-black p-0 shadow-2xl"
-      >
-        {isText ? (
+      {isText ? (
+        <HoverCardContent
+          side="right"
+          align="start"
+          sideOffset={12}
+          collisionPadding={8}
+          className="nodrag nopan nowheel w-fit max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border-border bg-black p-0 shadow-2xl"
+        >
           <div className="max-h-[min(340px,70vh)] min-w-48 max-w-[min(400px,calc(100vw-1rem))] overflow-y-auto whitespace-pre-wrap break-words bg-popover px-4 py-3 text-sm leading-6 text-popover-foreground">
             {asset.plainText}
           </div>
-        ) : isVideo ? (
-          <video
-            src={sourceUrl}
-            poster={bigUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="block max-h-[min(340px,70vh)] max-w-[min(400px,calc(100vw-1rem))] bg-black object-contain"
-          />
-        ) : (
-          <img
-            src={bigUrl}
-            alt={asset.name}
-            draggable={false}
-            className="block max-h-[min(340px,70vh)] max-w-[min(400px,calc(100vw-1rem))] object-contain"
-          />
-        )}
-      </HoverCardContent>
+        </HoverCardContent>
+      ) : (
+        <HoverCardMediaContent
+          mediaType={isVideo ? "video" : "image"}
+          src={(isVideo ? sourceUrl : bigUrl)!}
+          alt={asset.name}
+          side="right"
+          align="start"
+          sideOffset={12}
+          collisionPadding={8}
+          className="nodrag nopan nowheel w-fit max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border-border bg-black p-0 shadow-2xl"
+          mediaClassName="block max-h-[min(340px,70vh)] max-w-[min(400px,calc(100vw-1rem))] object-contain"
+        />
+      )}
     </HoverCard>
   );
 }

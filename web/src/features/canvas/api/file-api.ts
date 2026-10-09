@@ -1,6 +1,8 @@
 /**
  * 文件（Files）相关 API 封装：上传约束、抽帧、音视频分离等媒体处理接口。
  */
+import type { FrameSelection } from "@noxrea/shared";
+
 import { apiRaw } from "@/lib/api/client";
 
 /** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
@@ -9,15 +11,23 @@ export function toFileKey(url: string): string {
   return url.replace(/^\/api\/files\//, "").split("?")[0];
 }
 
-/** 从视频指定时间抽帧，返回原始 Response（调用方解析 data.url）。 */
+/** 响应包含图片 URL、尺寸和抽帧时间。 */
+export interface CapturedFrameInfo {
+  frame_key: string;
+  url: string;
+  time: number;
+  width: number;
+  height: number;
+}
+
 export async function captureFrame(
   videoKey: string,
-  time: number,
+  selection: FrameSelection,
   signal?: AbortSignal,
 ): Promise<Response> {
   return apiRaw("/api/files/capture-frame", {
     method: "POST",
-    body: JSON.stringify({ video_key: videoKey, time }),
+    body: JSON.stringify({ video_key: videoKey, selection }),
     signal,
   });
 }

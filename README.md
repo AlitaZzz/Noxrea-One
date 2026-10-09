@@ -70,7 +70,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
    - Node.js 20 或更高版本
    - npm
-   - FFmpeg；默认在项目根目录的 `bin` 下查找 `ffmpeg` 或 `ffmpeg.exe`
+   - FFmpeg 完整发行包（包含 `ffmpeg` 和 `ffprobe`）；默认在项目根目录的 `bin` 下查找这两个可执行文件，Windows 使用 `.exe` 后缀
 
 2. 安装依赖
 
@@ -150,7 +150,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `ALLOW_REGISTRATION` | 是否允许新用户注册，默认 `true` |
 | `UPLOAD_DIR` | 上传文件目录，默认 `uploads` |
 | `PUBLIC_URL` | 对外访问地址；设置后参考素材可以上游可访问的 URL 提供给模型 |
-| `FFMPEG_PATH` | FFmpeg 所在目录，默认 `bin` |
+| `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
 | `MAX_UPLOAD_SIZE_MB` | 单个上传文件大小上限，默认 `30` |
 | `LOG_LEVEL` | 日志级别，可选 `DEBUG`、`INFO`、`WARN`、`ERROR` |

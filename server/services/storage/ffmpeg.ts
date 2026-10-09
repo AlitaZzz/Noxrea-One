@@ -3,24 +3,26 @@
  *
  * 所有 ffmpeg 调用共用同一套进程生命周期管理：超时兜底 SIGKILL（残留子进程
  * 会一直持有视频文件句柄，Windows 上表现为该文件后续无法被覆盖写入）、客户端
- * 中断（signal）回收、只结算一次。两个变体：
+ * 中断（signal）回收、只结算一次。四个入口：
  * - runFfmpeg   ：严格语义，超时 / 中断 / 进程错误一律 reject，产出类调用使用；
  * - probeFfmpeg ：宽松语义，超时不算失败（stderr 已收集的部分仍可用于解析），
  *   探测类调用使用，由调用方根据 killed / spawnFailed 决定兜底值。
+ * - runFfprobe ：严格语义，读取有大小上限的 JSON 元数据。
+ * - scanFfprobe：流式读取包或帧条目，不累计完整索引。
  */
 
 import path from "path";
 import { spawn } from "child_process";
+import { JSONParser } from "@streamparser/json";
 import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
 
-/** 解析 ffmpeg 可执行文件路径：FFMPEG_PATH 为目录，根据 OS 拼接 ffmpeg / ffmpeg.exe */
-export function resolveFfmpegPath(configDir: string): string {
+function resolveMediaToolPath(configDir: string, tool: "ffmpeg" | "ffprobe"): string {
   const dir = path.isAbsolute(configDir)
     ? configDir
     : resolveFromRoot(configDir);
-  const exe = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+  const exe = process.platform === "win32" ? `${tool}.exe` : tool;
   return path.join(dir, exe);
 }
 
@@ -32,68 +34,123 @@ export interface FfmpegRunOptions {
   logFields?: Record<string, unknown>;
 }
 
-function ffmpegBin(): string {
-  const bin = resolveFfmpegPath(getConfig().FFMPEG_PATH);
-  return bin;
+const DIAGNOSTIC_TAIL_CHARS = 64 * 1024;
+const PROBE_OUTPUT_LIMIT_BYTES = 16 * 1024 * 1024;
+
+interface ProcessOutcome {
+  code: number;
+  stderr: string;
+  stdout: string;
+  killed: boolean;
+  spawnError?: Error;
 }
 
-export function runFfmpeg(
+function executeMediaTool(
   args: string[],
   timeoutMs: number,
-  opts: FfmpegRunOptions = {}
-): Promise<{ code: number; stderr: string }> {
+  opts: FfmpegRunOptions & { stage: string },
+  diagnosticLimit?: number,
+  tool: "ffmpeg" | "ffprobe" = "ffmpeg",
+  consumeOutput?: (chunk: Buffer) => void,
+): Promise<ProcessOutcome> {
   return new Promise((resolve, reject) => {
-    const bin = ffmpegBin();
-    const ffmpeg = spawn(bin, args);
+    if (opts.signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const bin = resolveMediaToolPath(getConfig().FFMPEG_PATH, tool);
+    const ffmpeg = spawn(bin, args, { stdio: ["ignore", tool === "ffprobe" ? "pipe" : "ignore", "pipe"] });
     let stderr = "";
     let settled = false;
+    let killed = false;
+    let abortError: DOMException | undefined;
+    let spawnError: Error | undefined;
+    let stdout = "";
+    let stdoutBytes = 0;
+    let outputError: Error | undefined;
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      ffmpeg.kill("SIGKILL");
-      logEvent("media", {
-        stage: `${opts.stage ?? "ffmpeg"}_timeout`,
-        timeoutMs,
-        ...opts.logFields,
-      });
-      reject(new Error(`ffmpeg timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onAbort);
+    };
 
     /** 统一收口：只结算一次，并清理定时器与信号监听 */
     const settle = (fn: () => void) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
-      if (opts.signal) opts.signal.removeEventListener("abort", onAbort);
+      cleanup();
       fn();
     };
 
     const onAbort = () => {
+      if (settled || killed || abortError) return;
+      abortError = new DOMException("Aborted", "AbortError");
+      cleanup();
       ffmpeg.kill("SIGKILL");
-      settle(() => reject(new DOMException("Aborted", "AbortError")));
     };
-    if (opts.signal) {
-      if (opts.signal.aborted) { onAbort(); return; }
-      opts.signal.addEventListener("abort", onAbort, { once: true });
-    }
 
-    ffmpeg.stderr.on("data", (chunk: Buffer) => {
+    const timer = setTimeout(() => {
+      if (settled || abortError) return;
+      killed = true;
+      cleanup();
+      ffmpeg.kill("SIGKILL");
+      logEvent("media", {
+        stage: `${opts.stage}_timeout`, timeoutMs, ...opts.logFields,
+      });
+    }, timeoutMs);
+
+    ffmpeg.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
+      if (diagnosticLimit) stderr = stderr.slice(-diagnosticLimit);
+    });
+    ffmpeg.stdout?.on("data", (chunk: Buffer) => {
+      if (outputError || abortError || killed) return;
+      try {
+        if (consumeOutput) consumeOutput(chunk);
+        else {
+          stdoutBytes += chunk.length;
+          if (stdoutBytes > PROBE_OUTPUT_LIMIT_BYTES) throw new Error("ffprobe output exceeded the 16 MiB metadata budget");
+          stdout += chunk.toString();
+        }
+      } catch (error) {
+        outputError = error instanceof Error ? error : new Error(String(error));
+        clearTimeout(timer);
+        ffmpeg.kill("SIGKILL");
+      }
     });
 
-    ffmpeg.on("close", (code) => settle(() => resolve({ code: code ?? -1, stderr })));
+    // close follows stdio closure: callers can now remove temporary files safely on Windows.
+    ffmpeg.on("close", (code) => settle(() => {
+      if (abortError) reject(abortError);
+      else if (outputError) reject(outputError);
+      else resolve({ code: code ?? -1, stderr, stdout, killed, spawnError });
+    }));
 
     ffmpeg.on("error", (err) => {
+      spawnError = err;
+      if (abortError) return;
       logEvent("media", {
-        stage: `${opts.stage ?? "ffmpeg"}_spawn_failed`,
+        stage: `${opts.stage}_spawn_failed`,
         error: err.message,
         ffmpegBin: bin,
         ...opts.logFields,
       });
-      settle(() => reject(err));
     });
+
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    if (opts.signal?.aborted) onAbort();
   });
+}
+
+export async function runFfmpeg(
+  args: string[],
+  timeoutMs: number,
+  opts: FfmpegRunOptions = {},
+): Promise<{ code: number; stderr: string }> {
+  const outcome = await executeMediaTool(args, timeoutMs, { ...opts, stage: opts.stage ?? "ffmpeg" }, DIAGNOSTIC_TAIL_CHARS);
+  if (outcome.killed) throw new Error(`ffmpeg timed out after ${timeoutMs}ms`);
+  if (outcome.spawnError) throw outcome.spawnError;
+  return { code: outcome.code, stderr: outcome.stderr };
 }
 
 export interface FfmpegProbeOutcome {
@@ -104,50 +161,37 @@ export interface FfmpegProbeOutcome {
   spawnFailed: boolean;
 }
 
-export function probeFfmpeg(
+export async function probeFfmpeg(
   args: string[],
   timeoutMs: number,
   opts: FfmpegRunOptions = {}
 ): Promise<FfmpegProbeOutcome> {
-  return new Promise((resolve) => {
-    const bin = ffmpegBin();
-    const ffmpeg = spawn(bin, args);
-    let stderr = "";
-    let settled = false;
+  const outcome = await executeMediaTool(args, timeoutMs, { ...opts, stage: opts.stage ?? "ffmpeg_probe" });
+  return { stderr: outcome.stderr, killed: outcome.killed, spawnFailed: !!outcome.spawnError };
+}
 
-    const settle = (outcome: Partial<FfmpegProbeOutcome>) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve({ stderr, killed: false, spawnFailed: false, ...outcome });
-    };
+export async function runFfprobe(args: string[], timeoutMs: number, opts: FfmpegRunOptions = {}): Promise<unknown> {
+  const outcome = await executeMediaTool(args, timeoutMs, { ...opts, stage: opts.stage ?? "ffprobe" }, DIAGNOSTIC_TAIL_CHARS, "ffprobe");
+  assertProbeSuccess(outcome, timeoutMs);
+  return JSON.parse(outcome.stdout) as unknown;
+}
 
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      ffmpeg.kill("SIGKILL");
-      logEvent("media", {
-        stage: `${opts.stage ?? "ffmpeg_probe"}_timeout`,
-        timeoutMs,
-        ...opts.logFields,
-      });
-      settle({ killed: true });
-    }, timeoutMs);
+function assertProbeSuccess(outcome: ProcessOutcome, timeoutMs: number) {
+  if (outcome.killed) throw new Error(`ffprobe timed out after ${timeoutMs}ms`);
+  if (outcome.spawnError) throw outcome.spawnError;
+  if (outcome.code !== 0) throw new Error(`ffprobe exited with code ${outcome.code}: ${outcome.stderr.slice(-200)}`);
+}
 
-    ffmpeg.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
+interface FfprobeScanOptions extends FfmpegRunOptions {
+  section: "packets" | "frames";
+  onEntry: (value: unknown) => void;
+}
 
-    ffmpeg.on("close", () => settle({}));
-
-    ffmpeg.on("error", (err) => {
-      logEvent("media", {
-        stage: `${opts.stage ?? "ffmpeg_probe"}_spawn_failed`,
-        error: err.message,
-        ffmpegBin: bin,
-        ...opts.logFields,
-      });
-      settle({ spawnFailed: true });
-    });
-  });
+/** Emit one structured entry at a time, releasing each parsed sibling immediately. */
+export async function scanFfprobe(args: string[], timeoutMs: number, opts: FfprobeScanOptions): Promise<void> {
+  const parser = new JSONParser({ paths: [`$.${opts.section}.*`], keepStack: false });
+  parser.onValue = ({ value }) => opts.onEntry(value);
+  const outcome = await executeMediaTool(args, timeoutMs, { ...opts, stage: opts.stage ?? "ffprobe_scan" }, DIAGNOSTIC_TAIL_CHARS, "ffprobe", (chunk) => parser.write(chunk));
+  assertProbeSuccess(outcome, timeoutMs);
+  if (!parser.isEnded) parser.end();
 }

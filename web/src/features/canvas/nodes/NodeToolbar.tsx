@@ -455,10 +455,10 @@ function NodeToolbar({
               <DropdownMenuItem onSelect={() => onOpenFrameStrip(nodeId)}>
                 <FrameCaptureIcon />{t("capture.currentFrame")}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { time: 0 })}>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { selection: { kind: "time", seconds: 0 } })}>
                 <StepBackwardOutlined />{t("capture.firstFrame")}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { time: -1 })}>
+              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "capture-frame", { selection: { kind: "last" } })}>
                 <StepForwardOutlined />{t("capture.lastFrame")}
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -25,7 +25,9 @@ import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
+import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
+import { imagePlacementStyle, layoutMultiImages } from "@/features/canvas/shared/image-visibility";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
 import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -34,7 +36,7 @@ import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/feature
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
-import { canvasToBlob, computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
+import { canvasToBlob, computeNodeSize } from "@/lib/utils/image-utils";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
@@ -42,32 +44,6 @@ import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
 const PanoramaPanel = dynamic(() => import("@/features/canvas/editing/PanoramaPanel"), { ssr: false });
-
-/**
- * 多图展开网格布局：主图固定在 (0,0,z=0)，其余结果图沿「向右成列、向上扇出」的
- * 2 列网格排布，溢出节点边界之上方与右侧。抽成纯函数便于单独测试与阅读。
- */
-interface MultiCardLayout { left: string; top: string; z: number }
-function layoutMultiCards(urls: string[], mainUrl: string): MultiCardLayout[] {
-  const GAP = 8;
-  const layouts: MultiCardLayout[] = [];
-  let remainingIdx = 0;
-  for (const url of urls) {
-    if (url === mainUrl) {
-      layouts.push({ left: "0px", top: "0px", z: 0 });
-    } else {
-      const ri = remainingIdx++;
-      const col = (ri + 1) % 2;
-      const row = -Math.floor((ri + 1) / 2);
-      layouts.push({
-        left: col > 0 ? `calc(100% + ${GAP}px)` : "0px",
-        top: `calc(${row * 100}% + ${row * GAP}px)`,
-        z: -1,
-      });
-    }
-  }
-  return layouts;
-}
 
 function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const { t, i18n } = useTranslation();
@@ -137,7 +113,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
 
   // 展开网格的卡片布局（纯函数计算，仅在多图+展开时有效）
   const multiExpandedLayouts = useMemo(
-    () => (expanded && isMulti && data.multiResultUrls ? layoutMultiCards(data.multiResultUrls, src) : []),
+    () => (expanded && isMulti && data.multiResultUrls ? layoutMultiImages(data.multiResultUrls, src) : []),
     [expanded, isMulti, data.multiResultUrls, src]
   );
 
@@ -196,23 +172,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const handleSetMain = useCallback((url: string) => {
     if (!url) return;
     const store = useCanvasStore.getState();
-    store.updateNodeData(id, { src: url }, undefined, { skipHistory: true });
-    markDirtyImmediate();
     const node = store.nodes.find((n) => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
     const { width, height } = computeNodeSize(d?.naturalWidth || 1024, d?.naturalHeight || 1024);
-    store.updateNodeData(id, {}, { width, height }, { skipHistory: true });
+    store.updateNodeData(id, { src: url, pendingNaturalSize: { width, height } }, { width, height }, { skipHistory: true });
     markDirtyImmediate();
     setExpanded(false);
-    loadMediaDimensions(url, false).then((dims) => {
-      if (dims.w > 0) {
-        const s = useCanvasStore.getState();
-        s.updateNodeData(id, { naturalWidth: dims.w, naturalHeight: dims.h }, undefined, { skipHistory: true });
-        const { width: w2, height: h2 } = computeNodeSize(dims.w, dims.h);
-        s.updateNodeData(id, {}, { width: w2, height: h2 }, { skipHistory: true });
-        markDirtyImmediate();
-      }
-    });
   }, [id, setExpanded]);
 
   /** 主图加载完成：校正历史坏记录节点（资产记录缺宽高、以默认尺寸落位并被置
@@ -223,6 +188,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
     const img = e.currentTarget;
     if (!img.naturalWidth || !img.naturalHeight) return;
     const node = useCanvasStore.getState().nodes.find((n) => n.id === id);
+    if ((node?.data as ImageNodeData | undefined)?.src !== src) return;
     const pending = (node?.data as ImageNodeData | undefined)?.pendingNaturalSize;
     if (!node || !pending) return;
     const st = node.style as { width?: number; height?: number } | undefined;
@@ -239,7 +205,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       { skipHistory: true },
     );
     markDirtyImmediate();
-  }, [id]);
+  }, [id, src]);
 
   /** 多图模式：展开/收起——浮层展示，节点尺寸不变 */
   const toggleExpand = useCallback(() => {
@@ -413,7 +379,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           {data.upload?.uploading ? (
             <div className="absolute inset-0 rounded-lg overflow-hidden">
               {data.upload?.previewUrl && (
-                <img src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
+                <CanvasImage nodeId={id} src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 px-8">
                 {uploadProgress != null ? (
@@ -437,26 +403,25 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             <GeneratingOverlay absolute startedAt={data.taskBinding?.startedAt} />
           ) : isMulti && hasImage ? (
               expanded ? (
-                // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界（布局由 layoutMultiCards 计算）
+                // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界。
                 <div className="absolute inset-0 overflow-visible">
                   {data.multiResultUrls!.map((url, i) => {
                     const isMain = url === src;
-                    const { left, top, z } = multiExpandedLayouts[i] ?? { left: "0px", top: "0px", z: 0 };
+                    const placement = multiExpandedLayouts[i] ?? {};
                     return (
                       <div
                         key={i}
                         className="absolute rounded-lg overflow-hidden shadow-xl"
                         style={{
-                          left,
-                          top,
+                          ...imagePlacementStyle(placement),
                           width: "100%",
                           height: "100%",
-                          zIndex: z,
+                          zIndex: isMain ? 0 : -1,
                           background: "var(--card)",
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <img src={url} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} />
+                        <CanvasImage nodeId={id} src={url} placement={placement} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} onLoad={isMain ? handleMainImgLoad : undefined} />
                         {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
                         <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
                           <Tooltip><TooltipTrigger asChild>
@@ -506,27 +471,21 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 <div className="relative w-full h-full overflow-visible rounded-lg">
                   {data.multiResultUrls!.filter((u) => u !== src).slice(0, 3).map((url, i) => {
                     const depth = i + 1;
-                    const left = depth * 12;
-                    const top = depth * 4;
-                    const scale = 1 - depth * 0.035;
-                    const rotate = depth * 2.5;
+                    const placement = { stackDepth: depth };
                     return (
                       <div
                         key={i}
                         className="absolute rounded-lg overflow-hidden shadow-xl"
                         style={{
-                          left: `${left}px`,
-                          top: `${top}px`,
+                          ...imagePlacementStyle(placement),
                           width: "100%",
                           height: "100%",
-                          transform: `scale(${scale}) rotate(${rotate}deg)`,
-                          transformOrigin: "center center",
                           zIndex: -depth,
                           background: "var(--card)",
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <img src={url} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
+                        <CanvasImage nodeId={id} src={url} placement={placement} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
                       </div>
                     );
                   })}
@@ -542,13 +501,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                       zIndex: 0,
                     }}
                   >
-                    <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} />
+                    <CanvasImage nodeId={id} src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
                   </div>
                 </div>
               )
             )
           : hasImage ? (
-            <img src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+            <CanvasImage nodeId={id} src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
               <PictureOutlined className="text-5xl" />

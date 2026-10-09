@@ -237,7 +237,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     const time = Math.max(0, Math.min(currentTime, duration - SEEK_MARGIN_S));
     // 不在这里关面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、播放
     // 位置原样保留可重试；抽帧被接受后节点会清除 frameCaptureNodeId 关闭面板
-    dispatchNodeAction(nodeId, "capture-frame", { time });
+    dispatchNodeAction(nodeId, "capture-frame", { selection: { kind: "time", seconds: time } });
   }, [ready, currentTime, duration, nodeId]);
 
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
