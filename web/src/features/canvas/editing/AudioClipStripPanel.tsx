@@ -412,13 +412,14 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       {/* 波形轨道：wavesurfer 与选区叠层共用同一坐标系（轨道全宽） */}
       <div
         ref={trackRef}
-        className="relative cursor-ew-resize touch-none overflow-visible rounded-lg bg-black"
+        className="relative cursor-ew-resize touch-none overflow-visible"
         style={{ width: FRAME_TRACK_WIDTH, height: PANEL_WAVE_HEIGHT + 16 }}
         onPointerDown={operable ? (e) => clipStartDrag("track", e) : undefined}
       >
-        {/* 视觉层统一裁剪进容器圆角：波形/压暗/选区不得溢出圆角；
+        {/* 视觉层统一裁剪进轨道圆角：背景/波形/压暗/选区不得溢出圆角；
             overflow-visible 留给端帽与面板浮层 */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+          <div className="absolute inset-0 bg-black" />
           <div
             ref={containerRef}
             className="audio-waveform-panel absolute inset-x-0 top-2"
