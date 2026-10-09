@@ -236,6 +236,7 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 - 交互控件的颜色、边框、焦点和悬停状态优先使用主题 token（如 `bg-background`、`bg-popover`、`text-foreground`、`border-input`、`ring-ring`）；业务组件不得用硬编码颜色覆盖基础组件的主题契约。
 - Checkbox 的状态样式必须匹配 Radix 的 `data-state="checked"` / `data-state="indeterminate"`，选中和半选背景、边框及图标颜色统一走主题 token。
 - 媒体缩略图底部的信息条统一使用黑色半透明背景和白色文字（与资产卡片一致），明暗主题保持相同，确保覆盖在不同内容上时有稳定对比度。
+- 视频播放器覆盖控件（图标、进度条、遮罩）的配色与明暗主题解耦：白色前景 + 黑色渐变遮罩 + 固定品牌色进度（`--brand-lime`，实现于 `globals.css` 的 `.video-controls-bar` 及 `.video-control-btn` 规则），悬停/聚焦反馈同为固定色（白 15%），不使用 muted/accent 主题 token，保证任意画面与主题下对比度一致。音频波形属画布领域组件，继续按「颜色从当前主题计算并在切换时更新」规则执行。
 - 媒体内容内的局部遮罩统一使用 Tailwind `bg-black/xx` 与 `text-white` 写法，禁止在业务组件中以内联 `rgba` 重复实现固定遮罩颜色；全屏交互遮罩（如媒体预览、文件拖放）统一使用 `bg-card/55 backdrop-blur-md`，控件前景使用主题 token。
 - 媒体卡片右上角的删除角标与资产卡片的 `+` 操作统一使用透明背景、白色图标，悬停或聚焦时使用 `bg-white/15`；保留 `focus-visible` 可见状态，不使用红色作为默认删除角标颜色。
 - 图片、视频等媒体悬浮预览统一由 `HoverCardContent` 提供外层边框、圆角、背景和裁剪；媒体元素本身不得重复添加边框、圆角或背景，避免出现双层边框。

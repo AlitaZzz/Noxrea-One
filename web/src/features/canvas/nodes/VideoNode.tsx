@@ -153,7 +153,7 @@ const VideoControls = memo(function VideoControls({
             onClick={(event) => { event.stopPropagation(); toggleMute(); }}
             aria-label={volume === 0 ? "unmute" : "mute"}
           >
-            {volume === 0 ? <VolumeMuteIcon /> : <VolumeUpIcon />}
+            {volume === 0 ? <VolumeMuteIcon className="text-xl" /> : <VolumeUpIcon className="text-xl" />}
           </Button>
           <Slider
             min={0}

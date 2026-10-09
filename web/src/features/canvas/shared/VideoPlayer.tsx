@@ -154,8 +154,8 @@ export default function VideoPlayer({ src, className, autoPlay = true, loop = tr
               aria-label={volume === 0 ? "unmute" : "mute"}
             >
               {volume === 0
-                ? <VolumeMuteIcon />
-                : <VolumeUpIcon />}
+                ? <VolumeMuteIcon className="text-xl" />
+                : <VolumeUpIcon className="text-xl" />}
             </Button>
             <Slider
               min={0}
