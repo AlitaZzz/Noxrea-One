@@ -212,7 +212,7 @@ export default function ProjectListPage() {
               className="group relative flex h-full flex-col gap-0 overflow-hidden border-border bg-card p-0"
             >
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图）；跳转由整卡 stretched-link 承担 */}
-              <div className="relative flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground">
+              <div className="flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground">
                 {p.thumbnail ? (
                   <img src={projectThumbnailUrl(p.thumbnail)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
                 ) : (

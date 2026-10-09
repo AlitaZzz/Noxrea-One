@@ -154,6 +154,10 @@ huggingface/
 .claude/cache/
 .claude/
 
+# Skills CLI（个人技能，不随仓库共享）
+.agents/
+skills-lock.json
+
 
 # =====================================================
 # IDE
