@@ -61,7 +61,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
         </div>
       </div>
 
-      <ConnectionSideRail side="right" type="source" zIndex={10} />
+      <ConnectionSideRail side="right" type="source" />
     </div>
   );
 }

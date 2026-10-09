@@ -208,8 +208,8 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       style={{ width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }}
     >
       {/* 拖入连接点 */}
-      <ConnectionSideRail side="left" type="target" zIndex={10} />
-      <ConnectionSideRail side="right" type="source" zIndex={10} />
+      <ConnectionSideRail side="left" type="target" />
+      <ConnectionSideRail side="right" type="source" />
 
       <NodeTitle
         nodeId={id}

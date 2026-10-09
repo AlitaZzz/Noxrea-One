@@ -138,6 +138,10 @@ export const RAIL_WIDTH = 80;
 export const RAIL_DOT = 20;
 export const RAIL_FOLLOW_LIMIT = 30;
 export const RAIL_REST_OFFSET = 25;
+/** 轨道在节点层叠上下文内的固定 z 值：高于节点内一切覆盖层（最高为
+ *  BusyOverlay 的 z-30），保证处理中/上传中/展开态下边缘连线始终可用；
+ *  与节点间的层叠无关（那由 React Flow 的节点级 zIndex 决定）。 */
+export const RAIL_Z_INDEX = 40;
 /** 圆点静止位与节点边缘的净距（轨道中心离边缘 RAIL_WIDTH/2，圆点从中心向
  *  边缘偏 RAIL_REST_OFFSET，净距为二者之差）。轨道因组边界夹窄时，静止偏移
  *  随中心前移等量收缩以保持此净距不变（见 use-rail-dot-follow） */

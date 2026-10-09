@@ -587,8 +587,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         </div>
 
         {/* 输入轨渲染与否用连线判定的同一能力口径（acceptsInput），避免轨道与可连性分叉 */}
-        {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" zIndex={999} />}
-        <ConnectionSideRail side="right" type="source" zIndex={999} />
+        {acceptsInput(NODE_TYPE.IMAGE, data.source) && <ConnectionSideRail side="left" type="target" />}
+        <ConnectionSideRail side="right" type="source" />
       </div>
       <MediaPreviewOverlay
         open={previewOpen}

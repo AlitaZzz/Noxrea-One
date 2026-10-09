@@ -21,17 +21,16 @@ import type { CSSProperties } from "react";
 
 import { canvasRailKey, getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { RAIL_WIDTH } from "@/lib/constants";
+import { RAIL_WIDTH, RAIL_Z_INDEX } from "@/lib/constants";
 
 import { type RailSide, useRailDotFollow } from "./use-rail-dot-follow";
 
 interface Props {
   side: RailSide;
   type: "source" | "target";
-  zIndex?: number;
 }
 
-export default function ConnectionSideRail({ side, type, zIndex }: Props) {
+export default function ConnectionSideRail({ side, type }: Props) {
   // 宽度来自 canvas store 的一次性几何投影；每个轨道只做 Map 读取。
   const id = useNodeId();
   const width = useCanvasStore((s) => {
@@ -43,8 +42,8 @@ export default function ConnectionSideRail({ side, type, zIndex }: Props) {
 
   const style = {
     top: "50%",
+    zIndex: RAIL_Z_INDEX,
     "--rail-width": `${width}px`,
-    ...(zIndex != null ? { zIndex } : {}),
   } as CSSProperties;
 
   return (
