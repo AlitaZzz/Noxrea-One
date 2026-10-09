@@ -62,7 +62,6 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
         className="max-h-[300px] w-[220px] overflow-x-hidden p-1"
         focusOnOpen={false}
         restoreFocus={false}
-        preserveFocusOutsideSelector=".mention-editable"
       >
       {items.map((item, i) => (
         <Button

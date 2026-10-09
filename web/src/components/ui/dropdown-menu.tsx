@@ -9,9 +9,10 @@ import * as React from "react"
 import { useLayerZIndex } from "@/components/ui/modal/layer-context"
 
 function DropdownMenu({
+  modal = false,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" modal={modal} {...props} />
 }
 
 function DropdownMenuPortal({
@@ -48,8 +49,6 @@ function DropdownMenuContent({
   style,
   ...props
 }: DropdownMenuContentProps) {
-  // Radix restores the trigger on keyboard and item selection; outside pointer actions keep the browser's focus.
-  const pointerInteractionRef = React.useRef(false)
   const layerZIndex = useLayerZIndex()
 
   return (
@@ -59,16 +58,8 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         align={align}
         className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) space-y-px overflow-x-hidden overflow-y-auto rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
-        onInteractOutside={(event) => {
-          if (event.detail.originalEvent.type !== "pointerdown") return
-          pointerInteractionRef.current = true
-          const activeElement = document.activeElement
-          if (activeElement instanceof HTMLElement) activeElement.blur()
-        }}
         onCloseAutoFocus={(event) => {
-          const pointerInteraction = pointerInteractionRef.current
-          pointerInteractionRef.current = false
-          if ((pointerInteraction || !restoreFocus) && !event.defaultPrevented) event.preventDefault()
+          if (!restoreFocus) event.preventDefault()
         }}
         style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}

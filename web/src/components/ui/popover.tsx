@@ -34,7 +34,6 @@ type PopoverContentProps = Omit<
 > & {
   focusOnOpen?: boolean
   restoreFocus?: boolean
-  preserveFocusOutsideSelector?: string
 }
 
 function PopoverContent({
@@ -43,12 +42,9 @@ function PopoverContent({
   sideOffset = 4,
   focusOnOpen = true,
   restoreFocus = true,
-  preserveFocusOutsideSelector,
   style,
   ...props
 }: PopoverContentProps) {
-  // Radix restores the trigger on keyboard and internal actions; outside pointer actions keep the browser's focus.
-  const pointerInteractionRef = React.useRef(false)
   const layerZIndex = useLayerZIndex()
 
   return (
@@ -62,25 +58,10 @@ function PopoverContent({
           className,
         )}
         onOpenAutoFocus={(event) => {
-          pointerInteractionRef.current = false
           if (!focusOnOpen) event.preventDefault()
         }}
-        onInteractOutside={(event) => {
-          if (event.detail.originalEvent.type !== "pointerdown") return
-          pointerInteractionRef.current = true
-          const target = event.target
-          const preserveFocus =
-            preserveFocusOutsideSelector &&
-            target instanceof Element &&
-            target.closest(preserveFocusOutsideSelector)
-          if (preserveFocus) return
-          const activeElement = document.activeElement
-          if (activeElement instanceof HTMLElement) activeElement.blur()
-        }}
         onCloseAutoFocus={(event) => {
-          const pointerInteraction = pointerInteractionRef.current
-          pointerInteractionRef.current = false
-          if ((pointerInteraction || !restoreFocus) && !event.defaultPrevented) event.preventDefault()
+          if (!restoreFocus) event.preventDefault()
         }}
         style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}

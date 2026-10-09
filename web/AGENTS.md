@@ -185,9 +185,9 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 - 简单控件可以继续使用原生元素和项目主题；只有存在真实的交互、无障碍或浮层管理价值时才引入对应 Radix primitive。
 - `SheetContent` 统一采用容器优先的初始焦点策略，打开侧栏时不会把焦点自动落到新建、历史或关闭等导航动作上；关闭时由 Radix 恢复到打开前的触发元素。
 - `DialogContent` 统一按“`data-autofocus` 标记、可编辑表单控件、对话框容器”的顺序确定初始焦点，动作按钮不作为默认焦点；业务组件不得为规避默认焦点在每个 Dialog 或 Sheet 上重复实现 `onOpenAutoFocus`。
-- `DropdownMenuContent` 在鼠标点击外部时保留外部交互的焦点结果，不让 Radix 把焦点强制恢复到触发器；键盘关闭和菜单项选择继续使用标准触发器回焦行为。
+- `DropdownMenu` 默认采用非模态行为，允许一次点击切换并列菜单、打开其他控件或聚焦输入框；确实需要阻断外部交互的调用方显式传递 `modal={true}`。非模态菜单的外部关闭、焦点保留、键盘关闭和菜单项选择回焦由 Radix 原生行为管理，禁止手动 blur 或转发点击。
 - `DropdownMenuContent` 的特殊关闭场景只能通过 `restoreFocus` 表达；业务组件不得传递 `onCloseAutoFocus`、`onInteractOutside` 或 `onPointerDown` 等 Radix 原始回调。
-- `PopoverContent` 的焦点策略只能通过 `focusOnOpen`、`restoreFocus` 和 `preserveFocusOutsideSelector` 表达；业务组件不得直接消费 Popover 的 Radix 事件对象。焦点例外必须覆盖鼠标关闭、键盘关闭和触发器回焦测试。
+- `PopoverContent` 的焦点策略只能通过 `focusOnOpen` 和 `restoreFocus` 表达；非模态浮层的外部点击和焦点保留由 Radix 原生行为管理，禁止手动 blur、选择器例外或转发点击。业务组件不得直接消费 Popover 的 Radix 事件对象。焦点例外必须覆盖鼠标关闭、键盘关闭和触发器回焦测试。
 - 虚拟锚点需要脱离画布变换上下文时，业务组件使用 `PopoverAnchorPortal` 并保留官方 body-level Portal；不得自行调用 `createPortal`、传入自定义 Portal 容器或增加 z-index 兜底。
 - Radix 的浮层组件继续使用官方 body-level Portal；Portal 挂载、焦点和定位由 Radix 管理，跨 Dialog / Sheet / 确认框的 z-index 只由 `components/ui/modal/layer-context.ts` 统一计算和传递。业务组件不得为单个菜单、Select、Popover 或 Tooltip 新增 z-index、Portal 容器或层级兜底，也不得传递显式 `zIndex` 覆盖共享层级。
 - 迁移完成后删除遗留的通用 `App*` 适配器和不再使用的旧通用 CSS；项目级 Provider、图标出口和反馈出口如果承担明确的基础设施职责，可以保留在 `components/ui`。画布、节点、Director、登录页等领域样式继续由对应领域负责。
