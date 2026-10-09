@@ -252,3 +252,4 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 
 - 节点之间连线的动态流光统一使用 `EDGE_FLOW_COLOR`（`#c7f43d`）；已建立连线、拖拽连线预览和待创建连线预览共用该常量。
 - 连线管道本体继续使用 `EDGE_BASE_COLOR` 的主题中性色，不能用流光色覆盖本体，以保留流动方向和强调层次。
+- 节点边缘连接轨道（ConnectionSideRail）的层叠由组件内固定常量 `RAIL_Z_INDEX` 统一提供（高于节点内一切覆盖层，与浮层 layer-context 体系无关）；调用方不得按节点类型传递其他 zIndex。
