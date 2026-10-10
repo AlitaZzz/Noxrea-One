@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   setUserPassword: vi.fn(),
   touchLastLogin: vi.fn(),
   toPublicUser: vi.fn(),
+  isUsernameTakenError: vi.fn(),
   createAccessToken: vi.fn(),
   hashPassword: vi.fn(),
   verifyPassword: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@server/crud/user", () => ({
   setUserPassword: mocks.setUserPassword,
   touchLastLogin: mocks.touchLastLogin,
   toPublicUser: mocks.toPublicUser,
+  isUsernameTakenError: mocks.isUsernameTakenError,
 }));
 vi.mock("@server/core/auth", () => ({
   createAccessToken: mocks.createAccessToken,
@@ -100,6 +102,41 @@ describe("认证限流 IP 解析", () => {
     });
 
     expect(mocks.loginCheck).toHaveBeenCalledWith("login:198.51.100.10");
+  });
+});
+
+describe("注册并发重名", () => {
+  const register = () => router.request("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ username: "alice", password: "secret123" }),
+  });
+
+  beforeEach(() => {
+    mocks.getRegisterRateLimiter.mockReturnValue({ check: () => true });
+    mocks.hashPassword.mockResolvedValue("hashed");
+  });
+
+  it("查重后创建时撞用户名唯一约束，与串行重名一致返回 409", async () => {
+    const raceError = new Error("Unique constraint failed on the fields: (`username`)");
+    mocks.createUser.mockRejectedValue(raceError);
+    mocks.isUsernameTakenError.mockReturnValue(true);
+
+    const response = await register();
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: "auth.username_taken" });
+    expect(mocks.isUsernameTakenError).toHaveBeenCalledWith(raceError);
+    expect(mocks.setAuthCookie).not.toHaveBeenCalled();
+  });
+
+  it("其他创建错误不被吞成 409，继续向上抛出", async () => {
+    mocks.createUser.mockRejectedValue(new Error("disk I/O error"));
+    mocks.isUsernameTakenError.mockReturnValue(false);
+
+    const response = await register();
+
+    expect(response.status).toBe(500);
+    expect(mocks.setAuthCookie).not.toHaveBeenCalled();
   });
 });
 

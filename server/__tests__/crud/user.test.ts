@@ -1,7 +1,7 @@
 /**
  * 用户表升级（specs/user-table-upgrade.md）的真实库回归测试。
- * 锁定：首个注册用户自动 admin、后续 user、lastLoginAt 写入、email 唯一约束、
- * 多个 NULL email 共存、toPublicUser 的 displayName 展示回退。
+ * 锁定：首个注册用户自动 admin、并发首注册只有一个 admin、重名唯一约束识别、
+ * lastLoginAt 写入、email 唯一约束、多个 NULL email 共存、toPublicUser 的 displayName 展示回退。
  */
 import { execSync } from "child_process";
 import fs from "fs";
@@ -16,6 +16,7 @@ const dbUrl = "file:" + dbPath.replace(/\\/g, "/");
 
 let prisma: import("@prisma/client").PrismaClient | null = null;
 let createUser: typeof import("@server/crud/user").createUser = null!;
+let isUsernameTakenError: typeof import("@server/crud/user").isUsernameTakenError = null!;
 let touchLastLogin: typeof import("@server/crud/user").touchLastLogin = null!;
 let toPublicUser: typeof import("@server/crud/user").toPublicUser = null!;
 let savedEnv: Record<string, string | undefined> = {};
@@ -29,6 +30,7 @@ beforeAll(async () => {
   const crud = await import("@server/crud/user");
   prisma = client.prisma;
   createUser = crud.createUser;
+  isUsernameTakenError = crud.isUsernameTakenError;
   touchLastLogin = crud.touchLastLogin;
   toPublicUser = crud.toPublicUser;
 
@@ -58,6 +60,35 @@ describe("用户表升级（真实 SQLite 库）", () => {
 
     expect(first.role).toBe("admin");
     expect(second.role).toBe("user");
+  });
+
+  it("并发首注册全部成功且只产生一个 admin", async () => {
+    // 清空用户表还原"首注册"前提；本文件其余用例不依赖已有用户
+    await prisma!.user.deleteMany();
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, (_, i) => createUser({ username: `race-${i}`, hashedPassword: "h" })),
+    );
+
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
+    expect(await prisma!.user.count()).toBe(8);
+    expect(await prisma!.user.count({ where: { role: "admin" } })).toBe(1);
+  }, 60_000);
+
+  it("重名注册撞用户名唯一约束，isUsernameTakenError 能识别；其他错误不误判", async () => {
+    await createUser({ username: "dup-user", hashedPassword: "h" });
+
+    // 用户名统一小写存储：大小写不同的同名同样冲突
+    const error = await createUser({ username: "DUP-user", hashedPassword: "h" }).catch((e: unknown) => e);
+
+    expect(isUsernameTakenError(error)).toBe(true);
+    expect(isUsernameTakenError(new Error("boom"))).toBe(false);
+    // email 唯一冲突不是用户名冲突
+    await prisma!.user.update({ where: { username: "dup-user" }, data: { email: "dup@example.com" } });
+    const emailError = await prisma!.user.create({
+      data: { username: "other-name", hashedPassword: "h", email: "dup@example.com" },
+    }).catch((e: unknown) => e);
+    expect(isUsernameTakenError(emailError)).toBe(false);
   });
 
   it("email 唯一约束拒绝重复，多个 NULL email 共存", async () => {

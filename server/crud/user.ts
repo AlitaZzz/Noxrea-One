@@ -3,7 +3,7 @@
  * 按 ID 与用户名查询用户信息，用户名匹配大小写不敏感。
  */
 import { prisma } from "@server/core/database/client";
-import type { User } from "@prisma/client";
+import { Prisma, type User } from "@prisma/client";
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -14,12 +14,22 @@ export async function getUserByUsername(username: string) {
   return prisma.user.findUnique({ where: { username: username.toLowerCase() } });
 }
 
+/** 判断唯一约束冲突是否来自用户名：注册查重在事务外，并发同名注册的败方会撞到该约束。 */
+export function isUsernameTakenError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+  const target = error.meta?.target;
+  const targetText = Array.isArray(target) ? target.join(":") : String(target ?? "");
+  return targetText.includes("username");
+}
+
 export async function createUser(data: {
   username: string;
   hashedPassword: string;
 }) {
   // 首个注册用户自动 admin：判定在创建事务内（语义为"注册时无其他用户"）。
-  // 并发首注册的最坏情形是一方 SQLITE_BUSY 瞬时失败后重试，不会产生双 admin。
+  // SQLite 写入经 Prisma 连接串行化，并发首注册不会产生双 admin（user.test.ts 并发用例锁定）。
   return prisma.$transaction(async (tx) => {
     const role = (await tx.user.count()) === 0 ? "admin" : "user";
     return tx.user.create({

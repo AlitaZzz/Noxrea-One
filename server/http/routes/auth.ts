@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
-import { getUserByUsername, getUserById, updateUser, createUser, setUserPassword, touchLastLogin, toPublicUser } from "@server/crud/user";
+import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getConfig } from "@server/core/config";
@@ -115,8 +115,14 @@ router.post("/api/auth/register", async (c) => {
   // 哈希密码
   const hashed = await hashPassword(password);
 
-  // 创建用户
-  const user = await createUser({ username, hashedPassword: hashed });
+  // 创建用户：上方查重与此处创建之间存在竞态，败方撞用户名唯一约束时与串行重名一致返回 409
+  let user;
+  try {
+    user = await createUser({ username, hashedPassword: hashed });
+  } catch (err) {
+    if (isUsernameTakenError(err)) return failCode(409, "auth.username_taken");
+    throw err;
+  }
 
   // 签发 JWT 并下发 httpOnly cookie（同登录）
   const token = await createAccessToken(user.id, user.username, user.tokenVersion);
