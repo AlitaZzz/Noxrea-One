@@ -1,11 +1,11 @@
 # User Table Upgrade
 
-状态：待确认
+状态：已确认
 
 决策记录：
 
 - 2026-10-10 用户确认全部业务规则（含 displayName 展示回退约定），并确认 OAuth 另行立项。
-- 2026-10-11 代码审查后用户确认修复方案。实测并发首注册（8 并发、真实 SQLite）全部成功且仅 1 个 admin，同进程内 SQLITE_BUSY 不可复现，故不新增 503/`auth.register_busy`，改以实测结论取代原"败方遇 SQLITE_BUSY 由客户端重试"的假设；重名注册竞态映射为 409。cookie 缓存改为在数据入口转换 + 读端严格校验。因业务规则表述变更，状态回退为待确认，需用户重新确认。
+- 2026-10-11 代码审查后用户确认修复方案。实测并发首注册（8 并发、真实 SQLite）全部成功且仅 1 个 admin，同进程内 SQLITE_BUSY 不可复现，故不新增 503/`auth.register_busy`，改以实测结论取代原"败方遇 SQLITE_BUSY 由客户端重试"的假设；重名注册竞态映射为 409。cookie 缓存改为在数据入口转换 + 读端严格校验。因业务规则表述变更，状态曾回退为待确认；同日用户重新确认，状态恢复为已确认。
 
 历史说明：`role` 列并非首次出现——迁移 `20260926120000_drop_user_role_superuser`（提交 78ff68f2）曾因"用户体系实际未使用角色/超管位（单一用户群）"删除过 `role` 与 `is_superuser`。本次重新引入 `role` 是因为目标变为多用户运营与未来管理后台（需要区分 admin / user）；`is_superuser` 不恢复，角色统一由 `role` 表达。
 
@@ -56,5 +56,5 @@
 
 ## 当前状态
 
-- 已实施：schema、migration（已应用 dev.db）、注册/登录最小改动与回归测试均完成；2026-10-11 审查修复（并发首注册回归、重名竞态 409、cookie 入口转换与严格校验）已按本版 Spec 实施并通过 typecheck、lint、全量 server 测试；待用户重新确认 Spec。
+- 已实施：schema、migration（已应用 dev.db）、注册/登录最小改动与回归测试均完成；2026-10-11 审查修复（并发首注册回归、重名竞态 409、cookie 入口转换与严格校验）已按本版 Spec 实施并通过 typecheck、lint、全量 server 测试。
 - 迁移时点既有用户的 role 均落默认 'user'。开发库（dev.db）后续已清理其他测试账户，仅余 `noxrea`，并已按兜底手段提权为 admin；其他环境部署后需 admin 时同样按兜底手段手动 UPDATE（或等管理后台立项）。部署其他环境需执行 `prisma migrate deploy`。
