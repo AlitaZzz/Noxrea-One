@@ -114,8 +114,8 @@ export async function removeSourceFileRefs(
  * 批量移除同一类型下的多个来源引用。
  * 引用回收用集合运算：先按 hash 聚合各来源的引用总量并一次递减聚合计数，再删除账本行。
  * 万级来源下逐 hash 循环会触发 Prisma 交互式事务 5s 默认超时（实测 5 万资产 P2028）；
- * 集合运算实测 <1s。IN 列表按 FILE_REF_SOURCE_CHUNK_SIZE 分片；各分片来源互不相交，
- * 同一 hash 的递减按片累加，因此每片可"先递减再删账本行"。
+ * 集合运算实测 <1s。IN 列表按 FILE_REF_SOURCE_CHUNK_SIZE 分片，每片先递减聚合再删账本行：
+ * 同一 hash 的递减按片累加；sourceIds 含重复 id 时，后一片已无行可匹配，不会重复递减。
  */
 export async function removeSourceFileRefsBatch(
   tx: Prisma.TransactionClient,

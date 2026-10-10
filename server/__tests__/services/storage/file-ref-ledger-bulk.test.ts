@@ -104,6 +104,23 @@ describe("removeSourceFileRefsBatch（真实 SQLite 库）", () => {
       .toMatchObject({ refCount: 0 });
   });
 
+  it("sourceIds 含跨分片的重复 id 时只递减一次，不产生负计数", async () => {
+    await prisma!.fileObject.create({ data: { userId: 5, hash: "dup", refCount: 1, size: 1 } });
+    await prisma!.fileRef.create({
+      data: { userId: 5, sourceType: "asset_item", sourceId: "dup-src", hash: "dup", count: 1 },
+    });
+    // "dup-src" 出现在第一片与第二片（5000 个填充 id 把它挤到分片边界之后）
+    const sourceIds = ["dup-src", ...Array.from({ length: 5000 }, (_, i) => `filler-${i}`), "dup-src"];
+
+    await prisma!.$transaction((tx: Prisma.TransactionClient) =>
+      removeSourceFileRefsBatch(tx, { userId: 5, sourceType: "asset_item", sourceIds }),
+    );
+
+    expect(await prisma!.fileRef.count({ where: { userId: 5 } })).toBe(0);
+    expect(await prisma!.fileObject.findUnique({ where: { userId_hash: { userId: 5, hash: "dup" } } }))
+      .toMatchObject({ refCount: 0 });
+  });
+
   it("5 万来源在默认 5s 事务预算内完成（逐 hash 循环在此规模曾 P2028 回滚）", async () => {
     const N = 50_000;
     for (let offset = 0; offset < N; offset += 5000) {

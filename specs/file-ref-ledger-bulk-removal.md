@@ -31,7 +31,7 @@
 ## 技术方案
 
 - 将"逐 hash 循环 `adjustFileRefCount`"改写为聚合 `UPDATE ... FROM (SELECT hash, SUM(count) ... GROUP BY hash)` + `DELETE`，使用 Prisma `$executeRaw`（SQLite 3.33+ 支持 UPDATE...FROM，Prisma 内置引擎满足）。
-- `IN` 列表按分片提交（每片 5000 个来源 id）；每片先 UPDATE 再 DELETE。各分片来源互不相交，同一 hash 的聚合递减可按片累加，结果与"全部 UPDATE 后再全部 DELETE"等价。分片大小从 500 上调至 5000（实测 892ms vs 3817ms）；参数上限由 5 万来源回归测试（10 个分片）实际覆盖。
+- `IN` 列表按分片提交（每片 5000 个来源 id）；每片先 UPDATE 再 DELETE。同一 hash 的聚合递减按片累加；`sourceIds` 含重复 id 时，后一片已无账本行可匹配，不会重复递减（"全部 UPDATE 后再全部 DELETE"的顺序反而会对跨分片的重复 id 重复递减）。分片大小从 500 上调至 5000（实测 892ms vs 3817ms）；参数上限由 5 万来源回归测试（10 个分片）实际覆盖。
 - 推荐方案 A（保持 `sourceIds` 签名 + IN 分片），不采用耦合 `asset_items` 表的子查询变体（实测 558ms，收益不足以抵消账本模块的解耦破坏）。
 
 ## Web 批量提交分片契约
