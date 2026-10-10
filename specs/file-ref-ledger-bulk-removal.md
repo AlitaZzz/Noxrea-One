@@ -38,7 +38,7 @@
 
 ## 验收标准
 
-- 既有 `file-ref-ledger.test.ts` 中除批量移除外的用例（replace/remove 单来源语义）不改动即通过。
+- 既有 `file-ref-ledger.test.ts` 中除批量移除外的用例（replace/remove 单来源语义）不改动即通过；支撑性 mock 基建随接缝迁移调整（makeTx 补 `$executeRaw`、清理失去消费者的 `{ in }` 查询分支），用例断言本身未变。
 - 批量移除的语义测试从 mock 接缝迁至真实 SQLite 库接缝（`$executeRaw` 无法在内存 mock 上验证，mock 接缝随本次重构消失）：混合存在与缺失的 `file_objects` 行、同一 hash 多来源合并、空列表。
 - 新增 5 万来源的大规模回归（随 CI 常跑）：在 Prisma 默认 5s 事务预算内完成，`ref_count` 无负值、无残留账本行。
 - 全量 server/web 测试、typecheck、lint 通过。
