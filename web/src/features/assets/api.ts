@@ -3,7 +3,7 @@
  */
 import { api } from "@/lib/api/client";
 
-/** 与服务端 assetBatchCreateSchema 对齐的单批上限；超出时由 store 分片提交。 */
+/** 与服务端各批量 schema（创建 / 更新 / 删除）对齐的单批上限；超出时由 store 分片提交。 */
 export const ASSET_BATCH_LIMIT = 200;
 
 /** 与服务端 assetCreateSchema 对齐的素材名称长度上限。 */

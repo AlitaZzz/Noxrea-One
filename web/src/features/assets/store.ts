@@ -54,6 +54,45 @@ function toIntId(id: string): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
+/** 把本次操作涉及的来源 URL 从本地已知集合移除（删除/取消收藏后同步收藏状态）。 */
+function removeKnownAssetUrls(sourceUrls: string[]): void {
+  if (sourceUrls.length === 0) return;
+  const removed = new Set(sourceUrls);
+  useAssetsStore.setState((state) => ({
+    knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
+  }));
+}
+
+/**
+ * 按服务端单批上限（ASSET_BATCH_LIMIT）分片顺序提交一批按 id 的操作，避免整批 422。
+ * 每个成功分片即时应用计数快照并失效资产视图（打开中的列表会重拉，已删条目即时消失）；
+ * 某分片失败时保留已完成分片的进度（total 为最后成功快照）并上报，调用方返回 { ok: false, total }。
+ */
+async function submitIdBatches(
+  session: ReturnType<typeof captureSession>,
+  ids: number[],
+  failureKey: "asset.delete_failed" | "asset.update_failed",
+  submit: (chunk: number[]) => Promise<{ counters: AssetCountersDto; sourceUrls?: string[] }>,
+): Promise<{ ok: boolean; total?: number }> {
+  let total: number | undefined;
+  for (let offset = 0; offset < ids.length; offset += ASSET_BATCH_LIMIT) {
+    const chunk = ids.slice(offset, offset + ASSET_BATCH_LIMIT);
+    let data: { counters: AssetCountersDto; sourceUrls?: string[] };
+    try {
+      data = await session.run(() => submit(chunk));
+      session.assertCurrent();
+    } catch (e) {
+      notifyFailure(e, failureKey);
+      return { ok: false, total };
+    }
+    useAssetsStore.getState().applyCounters(data.counters);
+    total = data.counters.total;
+    useAssetsStore.getState().noteLibraryChanged();
+    if (data.sourceUrls) removeKnownAssetUrls(data.sourceUrls);
+  }
+  return { ok: true, total };
+}
+
 // --- Shared pagination helper ---
 export const ASSET_PAGE_SIZE = 50;
 
@@ -339,26 +378,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   removeAssetsBatch: async (ids) => {
-    const session = captureSession();
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length === 0) return { ok: false };
 
-    try {
-      const data = await session.run(() => assetApi.deleteAssetsBatch(intIds));
-      session.assertCurrent();
-      get().applyCounters(data.counters);
-      get().noteLibraryChanged();
-      if (data.sourceUrls.length > 0) {
-        const removed = new Set(data.sourceUrls);
-        set((state) => ({
-          knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
-        }));
-      }
-      return { ok: true, total: data.counters.total };
-    } catch (e) {
-      notifyFailure(e, "asset.delete_failed");
-      return { ok: false };
-    }
+    return submitIdBatches(captureSession(), intIds, "asset.delete_failed", (chunk) =>
+      assetApi.deleteAssetsBatch(chunk));
   },
 
   unsaveAssetsByUrls: async (urls) => {
@@ -369,12 +393,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
-      if (data.sourceUrls.length > 0) {
-        const removed = new Set(data.sourceUrls);
-        set((state) => ({
-          knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
-        }));
-      }
+      removeKnownAssetUrls(data.sourceUrls);
       return true;
     } catch (e) {
       notifyFailure(e, "asset.delete_failed");
@@ -383,7 +402,6 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
   },
 
   updateAssetsBatch: async (ids, updates) => {
-    const session = captureSession();
     const intIds = ids.map(toIntId).filter((n): n is number => n != null);
     if (intIds.length === 0) return { ok: false };
 
@@ -392,16 +410,8 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if ("type" in updates) body.type = updates.type;
     if (Object.keys(body).length === 0) return { ok: false };
 
-    try {
-      const data = await session.run(() => assetApi.updateAssetsBatch(intIds, body));
-      session.assertCurrent();
-      get().applyCounters(data.counters);
-      get().noteLibraryChanged();
-      return { ok: true, total: data.counters.total };
-    } catch (e) {
-      notifyFailure(e, "asset.update_failed");
-      return { ok: false };
-    }
+    return submitIdBatches(captureSession(), intIds, "asset.update_failed", (chunk) =>
+      assetApi.updateAssetsBatch(chunk, body));
   },
 
   // --- Folder CRUD ---

@@ -47,7 +47,7 @@ export const assetCreateSchema = z.object({
   scope: z.literal("personal").optional(),
 });
 
-/** 单次批量创建的素材数量上限；前端按同一上限分片提交，服务端仅作兜底校验。 */
+/** 单次批量操作（创建 / 更新 / 删除）的素材数量上限；前端按同一上限分片提交，服务端仅作兜底校验。 */
 export const ASSET_BATCH_LIMIT = 200;
 
 export const assetBatchCreateSchema = z.array(assetCreateSchema).min(1).max(ASSET_BATCH_LIMIT);
@@ -62,7 +62,7 @@ export const assetUpdateSchema = z.object({
 });
 
 export const assetBatchUpdateSchema = z.object({
-  ids: z.array(z.number().int().positive()).min(1).max(200),
+  ids: z.array(z.number().int().positive()).min(1).max(ASSET_BATCH_LIMIT),
   updates: z.object({
     folderId: z.number().int().positive().nullable().optional(),
     type: z.string().min(1).max(20).optional(),
@@ -70,7 +70,7 @@ export const assetBatchUpdateSchema = z.object({
 });
 
 export const assetBatchDeleteSchema = z.object({
-  ids: z.array(z.number().int().positive()).min(1).max(200),
+  ids: z.array(z.number().int().positive()).min(1).max(ASSET_BATCH_LIMIT),
 });
 
 /** 画布「取消收藏」：按 sourceUrl 删除个人库中的资产条目 */

@@ -40,7 +40,7 @@ interface LedgerRow {
 type FindWhere = {
   userId: number;
   sourceType: string;
-  sourceId?: string | { in: string[] };
+  sourceId?: string;
   hash?: string;
 };
 
@@ -51,8 +51,7 @@ function matches(
   if (row.userId !== where.userId || row.sourceType !== where.sourceType) return false;
   if (where.hash !== undefined && row.hash !== where.hash) return false;
   if (where.sourceId === undefined) return true;
-  if (typeof where.sourceId === "string") return row.sourceId === where.sourceId;
-  return where.sourceId.in.includes(row.sourceId);
+  return row.sourceId === where.sourceId;
 }
 
 /** 内存版 fileRef 表 + 满足 TransactionClient 形参的事务客户端 */
@@ -93,8 +92,9 @@ function makeTx() {
       }
       return { count: before - rows.length };
     }),
+    $executeRaw: vi.fn(async () => 0),
   };
-  const tx = { fileRef } as unknown as Prisma.TransactionClient;
+  const tx = { fileRef, $executeRaw: fileRef.$executeRaw } as unknown as Prisma.TransactionClient;
   return { rows, fileRef, tx };
 }
 
@@ -189,32 +189,11 @@ describe("removeSourceFileRefs", () => {
 });
 
 describe("removeSourceFileRefsBatch", () => {
-  it("多来源同 hash 合并递减后整批删行", async () => {
-    const { rows, tx } = makeTx();
-    await replaceSourceFileRefs(tx, source, new Map([["a", 2]]));
-    await replaceSourceFileRefs(tx, { ...source, sourceId: "p2" }, new Map([["a", 1], ["b", 1]]));
-    adjustCalls.calls = [];
-
-    await removeSourceFileRefsBatch(tx, { userId: 1, sourceType: "canvas", sourceIds: ["p1", "p2"] });
-
-    expect(adjustCalls.calls).toEqual([
-      { userId: 1, hash: "a", delta: -3 },
-      { userId: 1, hash: "b", delta: -1 },
-    ]);
-    expect(rows).toHaveLength(0);
-  });
-
-  it("空来源列表直接返回", async () => {
+  it("空来源列表直接返回，不触发任何 SQL", async () => {
     const { fileRef, tx } = makeTx();
     await removeSourceFileRefsBatch(tx, { userId: 1, sourceType: "canvas", sourceIds: [] });
-    expect(fileRef.findMany).not.toHaveBeenCalled();
+    expect(fileRef.$executeRaw).not.toHaveBeenCalled();
   });
-
-  it("超过分块大小（500）的来源列表分批查询与删除", async () => {
-    const { fileRef, tx } = makeTx();
-    const ids = Array.from({ length: 501 }, (_, i) => `p${i}`);
-    await removeSourceFileRefsBatch(tx, { userId: 1, sourceType: "canvas", sourceIds: ids });
-
-    expect(fileRef.findMany).toHaveBeenCalledTimes(2);
-  });
+  // 语义与规模回归在真实 SQLite 库上验证（$executeRaw 无法在内存 mock 上验证）：
+  // 见 file-ref-ledger-bulk.test.ts
 });

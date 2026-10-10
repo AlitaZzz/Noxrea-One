@@ -28,6 +28,7 @@ vi.mock("@server/crud/asset", () => ({
   getAssetLibrarySummary: vi.fn(),
 }));
 
+import { deleteAssetsBatch } from "@server/crud/asset";
 import { router } from "@server/http/routes/assets";
 
 beforeEach(() => {
@@ -58,5 +59,28 @@ describe("GET /api/assets/items limit 校验", () => {
   it("不传 limit 时 limit 字段为 undefined（CRUD 层取默认值）", async () => {
     await router.request("/api/assets/items");
     expect(mocks.getAssets).toHaveBeenCalledWith(expect.objectContaining({ limit: undefined }));
+  });
+});
+
+describe("DELETE /api/assets/items/batch 批次上限", () => {
+  /** 服务端 200 上限是兜底护栏：客户端按 ASSET_BATCH_LIMIT 分片，超量整批 422 */
+  it("201 个 id 返回 422，不进入 CRUD 层", async () => {
+    const ids = Array.from({ length: 201 }, (_, i) => i + 1);
+    const res = await router.request("/api/assets/items/batch", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it("恰好 200 个 id 通过校验进入 CRUD 层", async () => {
+    const ids = Array.from({ length: 200 }, (_, i) => i + 1);
+    const res = await router.request("/api/assets/items/batch", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    });
+    expect(res.status).toBe(200);
+    expect(deleteAssetsBatch).toHaveBeenCalledTimes(1);
+    expect(deleteAssetsBatch).toHaveBeenCalledWith(1, ids);
   });
 });

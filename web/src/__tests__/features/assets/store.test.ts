@@ -10,12 +10,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   bootstrap: vi.fn(),
+  deleteAssetsBatch: vi.fn(),
+  updateAssetsBatch: vi.fn(),
 }));
 
 vi.mock("@/features/assets/api", () => ({
   ASSET_BATCH_LIMIT: 50,
   assetApi: {
     bootstrap: (...args: unknown[]) => mocks.bootstrap(...args),
+    deleteAssetsBatch: (...args: unknown[]) => mocks.deleteAssetsBatch(...args),
+    updateAssetsBatch: (...args: unknown[]) => mocks.updateAssetsBatch(...args),
   },
 }));
 
@@ -87,5 +91,63 @@ describe("资产文件夹选择", () => {
     expect(selectChildFolders([root], "personal")).toEqual([root]);
     expect(selectChildFolders([root, added, nested], "personal")).toEqual([root, added]);
     expect(selectChildFolders([root, added, nested], "personal", "1")).toEqual([nested]);
+  });
+});
+
+describe("超限批量操作分片提交", () => {
+  const counters = { total: 0 };
+
+  beforeEach(() => {
+    mocks.deleteAssetsBatch.mockReset();
+    mocks.updateAssetsBatch.mockReset();
+  });
+
+  /** 超过 ASSET_BATCH_LIMIT 的批量删除按上限分片；单发超限会被服务端 422 拒绝 */
+  it("批量删除 120 个资产分 3 片提交并合并计数", async () => {
+    mocks.deleteAssetsBatch.mockResolvedValue({ count: 0, sourceUrls: [], counters });
+    const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
+
+    const result = await useAssetsStore.getState().removeAssetsBatch(ids);
+
+    expect(result.ok).toBe(true);
+    expect(mocks.deleteAssetsBatch).toHaveBeenCalledTimes(3);
+    expect(mocks.deleteAssetsBatch.mock.calls.map((call) => (call[0] as number[]).length))
+      .toEqual([50, 50, 20]);
+  });
+
+  it("批量移动 120 个资产同样分片提交", async () => {
+    mocks.updateAssetsBatch.mockResolvedValue({ count: 0, counters });
+    const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
+
+    const result = await useAssetsStore.getState().updateAssetsBatch(ids, { folderId: "1" });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.updateAssetsBatch).toHaveBeenCalledTimes(3);
+    expect(mocks.updateAssetsBatch.mock.calls.map((call) => (call[0] as number[]).length))
+      .toEqual([50, 50, 20]);
+  });
+
+  it("移动分片中途失败：保留已完成分片的计数并上报失败", async () => {
+    mocks.updateAssetsBatch
+      .mockResolvedValueOnce({ count: 50, counters: { total: 60 } })
+      .mockRejectedValueOnce(new Error("network down"));
+    const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
+
+    const result = await useAssetsStore.getState().updateAssetsBatch(ids, { folderId: "1" });
+
+    expect(result).toMatchObject({ ok: false, total: 60 });
+    expect(mocks.updateAssetsBatch).toHaveBeenCalledTimes(2);
+  });
+
+  it("删除分片中途失败：保留已完成分片的计数并上报失败", async () => {
+    mocks.deleteAssetsBatch
+      .mockResolvedValueOnce({ count: 50, sourceUrls: [], counters: { total: 80 } })
+      .mockRejectedValueOnce(new Error("network down"));
+    const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
+
+    const result = await useAssetsStore.getState().removeAssetsBatch(ids);
+
+    expect(result).toMatchObject({ ok: false, total: 80 });
+    expect(mocks.deleteAssetsBatch).toHaveBeenCalledTimes(2);
   });
 });
