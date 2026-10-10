@@ -1,8 +1,11 @@
 # User Table Upgrade
 
-状态：已确认
+状态：待确认
 
-决策记录：2026-10-10 用户确认全部业务规则（含 displayName 展示回退约定），并确认 OAuth 另行立项。
+决策记录：
+
+- 2026-10-10 用户确认全部业务规则（含 displayName 展示回退约定），并确认 OAuth 另行立项。
+- 2026-10-11 代码审查后用户确认修复方案。实测并发首注册（8 并发、真实 SQLite）全部成功且仅 1 个 admin，同进程内 SQLITE_BUSY 不可复现，故不新增 503/`auth.register_busy`，改以实测结论取代原"败方遇 SQLITE_BUSY 由客户端重试"的假设；重名注册竞态映射为 409。cookie 缓存改为在数据入口转换 + 读端严格校验。因业务规则表述变更，状态回退为待确认，需用户重新确认。
 
 历史说明：`role` 列并非首次出现——迁移 `20260926120000_drop_user_role_superuser`（提交 78ff68f2）曾因"用户体系实际未使用角色/超管位（单一用户群）"删除过 `role` 与 `is_superuser`。本次重新引入 `role` 是因为目标变为多用户运营与未来管理后台（需要区分 admin / user）；`is_superuser` 不恢复，角色统一由 `role` 表达。
 
@@ -17,7 +20,7 @@
 
 ## 业务规则
 
-- `role`：`"user" | "admin"`，默认 `"user"`。**首个注册用户自动为 admin**：判定在注册事务内进行——用户表当前无任何用户时注册得 admin，否则得 user（事务内检查，**不会产生双 admin**；并发首注册的败方可能遇 SQLITE_BUSY 而失败，由客户端重试，路由层不做自动重试）。
+- `role`：`"user" | "admin"`，默认 `"user"`。**首个注册用户自动为 admin**：判定在注册事务内进行——用户表当前无任何用户时注册得 admin，否则得 user（事务内检查，**不会产生双 admin**）。SQLite 写入由 Prisma 连接与 `busy_timeout` 串行化，并发首注册实测全部成功且只有一个 admin（真实库并发回归测试锁定），路由层无需也不做重试。
 - `email`：可选（nullable），唯一约束（SQLite 唯一索引允许多个 NULL 共存）。注册与现有用户**暂不强制**提供；在邮箱验证流程落地前仅作存储，不得用于登录或找回密码。
 - `emailVerifiedAt`：nullable，预留列；本次无任何流程写入。
 - `displayName`：nullable 展示名；本次仅入库，不强制提供。**展示回退约定**：`displayName` 为空时按 `username` 展示，回退在服务端用户序列化的单点实现（`toPublicUser`），消费方不做二次回退；不设数据库默认值、不在注册时回填（保留"未设置"语义，与 GitHub/Discord 的 nullable 模式一致）。
@@ -30,7 +33,7 @@
 - `prisma/schema.prisma` 的 User model + 一次 migration：SQLite 下 Prisma 采用 RedefineTables（重建表 + INSERT...SELECT 迁移数据）而非 ADD COLUMN，数据保留由 Prisma 迁移机制保证，已在 dev.db 真实数据上实测验证。
 - 注册路径（auth register）：事务内角色判定。
 - 登录路径（auth login）：写 `lastLoginAt`。
-- `toPublicUser` 序列化新增 `email`、`role` 字段（管理后台与前端消费的地基）与 `displayName` 回退。**前端 cookie 缓存随本次收口**：`user-cache.ts` 新增 `toUserInfo` 投影，持久 cookie 只落契约字段（id/username/avatarUrl/theme/language），email/role 等新增字段不进 cookie。
+- `toPublicUser` 序列化新增 `email`、`role` 字段（管理后台与前端消费的地基）与 `displayName` 回退。**前端 cookie 缓存随本次收口**：auth store 在服务端响应进入 store 的入口（`/me`、登录、注册、设置保存）经 `toUserInfo` 转换为 `UserInfo`（id/username/avatarUrl/theme/language），`state.user` 运行时即契约形状，cookie 写端直接序列化；`parseUserCookie` 作为不可信输入边界做严格校验（5 个字段类型任一不符即视为无缓存，交由 `/me` 校正），不补默认值。email/role 等新增字段因此不进 cookie。
 - 前端仅做 cookie 投影收口（`user-cache.ts` / `store.ts`），UI 不改动（`displayName` 的 UI 消费另行处理）。
 - `lastLoginAt` 为只写审计列（登录写入），本次无读取消费方。
 
@@ -38,12 +41,13 @@
 
 - 迁移对现有用户零影响：新列均为 nullable 或带默认值。
 - 已有用户存在时的新注册一律为 `user`；用户表被清空后的首个注册重新获得 admin（与"注册时无其他用户"语义一致）。
-- 重复 email 注册被唯一约束拒绝；多个未填 email（NULL）共存不冲突。
+- 重复 email 被存储层唯一约束拒绝；注册接口暂不接收 email，故该约束目前无 HTTP 入口可触发；多个未填 email（NULL）共存不冲突。
+- 并发注册同一用户名：查重在事务外，竞态败方会撞 `username` 唯一约束（P2002），路由映射为 409 `auth.username_taken`，与串行重名一致。
 
 ## 验收标准
 
 - migration 后现有用户数据完整保留，新列存在且默认值正确——已在 dev.db 真实数据上核验（时点在清库前：7 个既有用户全部保留，role 落默认 'user'；随后应用户要求清理了其他测试账户，noxrea 已提权为 admin）。
-- 测试：首个用户注册得 admin；已有用户存在时注册得 user；登录后 `lastLoginAt` 更新（写失败不阻断登录、禁用账户不写）；重复 email 被拒；多个 NULL email 共存；前端 cookie 写端只落契约字段（email/role/displayName 不落盘）、登出清 cookie、历史泄漏 cookie 读入被剥离。
+- 测试：首个用户注册得 admin；已有用户存在时注册得 user；并发首注册只产生一个 admin；登录后 `lastLoginAt` 更新（写失败不阻断登录、禁用账户不写）；重复 email 被拒（存储层）；多个 NULL email 共存；并发重名注册路由返回 409；前端 `/me`、登录、注册后 `state.user` 与 cookie 只含契约字段（设置保存入口使用同一 `toUserInfo` 转换，无专门用例）（email/role/displayName 不落盘）、登出清 cookie、结构或字段类型不符的 cookie 读入为 null、多余字段不透传。
 - 全量 server 测试、typecheck、lint 通过。
 
 ## 待确认事项
@@ -52,5 +56,5 @@
 
 ## 当前状态
 
-- 已实施：schema、migration（已应用 dev.db）、注册/登录最小改动与回归测试均完成。
+- 已实施：schema、migration（已应用 dev.db）、注册/登录最小改动与回归测试均完成；2026-10-11 审查修复（并发首注册回归、重名竞态 409、cookie 入口转换与严格校验）已按本版 Spec 实施并通过 typecheck、lint、全量 server 测试；待用户重新确认 Spec。
 - 迁移时点既有用户的 role 均落默认 'user'。开发库（dev.db）后续已清理其他测试账户，仅余 `noxrea`，并已按兜底手段提权为 admin；其他环境部署后需 admin 时同样按兜底手段手动 UPDATE（或等管理后台立项）。部署其他环境需执行 `prisma migrate deploy`。
