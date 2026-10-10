@@ -28,7 +28,7 @@ import { isPathWithinBase } from "@server/core/paths";
 import { computeFileHash } from "@server/services/storage/hash";
 import { buildFileUrl, buildStorageKey } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
-import { failCode } from "@server/core/response";
+import { failClientDisconnected, failCode } from "@server/core/response";
 import { checkUserRateLimit } from "@server/core/ratelimit";
 import { logger } from "@server/core/logger";
 import type { ErrorCode } from "@server/core/errors/codes";
@@ -83,7 +83,7 @@ export function mapMediaError(
   // 客户端断开：不记 error 级别，也无需向已断开的一端回复杂信息
   if ((err as Error).name === "AbortError") {
     logger.debug({ sourceKey: info.sourceKey }, `${info.label} aborted by client`);
-    return failCode(499, "media.cancelled");
+    return failClientDisconnected("media.cancelled");
   }
 
   logger.error({ err, sourceKey: info.sourceKey }, `${info.label} failed`);

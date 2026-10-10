@@ -152,7 +152,11 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `PUBLIC_URL` | 对外访问地址；设置后参考素材可以上游可访问的 URL 提供给模型 |
 | `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
-| `MAX_UPLOAD_SIZE_MB` | 单个上传文件大小上限，默认 `30` |
+| `MAX_UPLOAD_SIZE_MB` | 单个上传文件大小上限，默认 `100` MB |
+| `UPLOAD_BATCH_MAX_FILES` | 单次批量上传最多文件数，默认 `20` |
+| `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名） |
+| `UPLOAD_BATCH_MAX_CONCURRENT` | 单个用户同时处理的上传批次数，默认 `1` |
+| `UPLOAD_BATCH_MAX_PENDING` | 单个用户上传批次等待队列深度上限，超额返回 429，默认 `10` |
 | `LOG_LEVEL` | 日志级别，可选 `DEBUG`、`INFO`、`WARN`、`ERROR` |
 | `ALLOW_INSECURE_SECRETS` | 是否允许占位密钥启动，仅建议本地开发使用 |
 | `WORKER_*` | 生成任务 Worker 的轮询、并发、超时、重试等参数 |

@@ -1,186 +1,99 @@
-/**
- * 文件上传路由。
- * 处理 multipart 文件上传，完成哈希校验、落盘与文件对象持久化。
- */
+/** 文件上传路由：认证、请求体预检、并发租约、multipart 解析和批次约束。 */
 import { Hono } from "hono";
-import { authenticateRequest } from "@server/http/middleware/auth";
+
 import { getConfig } from "@server/core/config";
-import { computeBufferHash } from "@server/services/storage/hash";
-import { sniffMime, normalizeExt, mimeByExt } from "@server/services/storage/mime";
-import { buildStorageKey } from "@server/services/storage/service";
-import { persistFileObject } from "@server/services/storage/persist";
-import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
-import { logEvent } from "@server/core/logger/utils";
-import { localStorage } from "@server/services/storage/backends/local";
-import { ok, failCode } from "@server/core/response";
-import { checkUserRateLimit } from "@server/core/ratelimit";
-import { logger } from "@server/core/logger";
-import path from "path";
+import { ConcurrencyQueueFullError, waitForUserConcurrency } from "@server/core/ratelimit/concurrency";
+import { failCode, failClientDisconnected, ok } from "@server/core/response";
+import { authenticateRequest, type AuthUser } from "@server/http/middleware/auth";
+import { uploadBodyLimit, uploadBodyStreamLimit, UploadBodyTooLargeError } from "@server/http/middleware/body-limit";
+import { failBatchTooLarge, getUploadBatchLimits } from "@server/services/storage/upload-limits";
+import { processUploadBatch, UPLOAD_FORMATS } from "@server/services/storage/upload";
 
-const router = new Hono();
-
-/**
- * 允许的 MIME 白名单。
- * 与前端 detectMediaKind 支持的格式对齐：浏览器对 mkv / mov / avi 等容器
- * 上报的 MIME 并不统一（x-matroska、quicktime、x-msvideo…），必须一并放开。
- */
-const ALLOWED_MIME = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp",
-  "image/svg+xml", "image/avif",
-  "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
-  "video/x-matroska",
-  "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg",
-  "audio/flac", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/x-aac", "audio/webm",
-]);
-
-/** 允许的扩展名白名单（按媒体类型分组）：单一数据源，上传校验与前端格式提示共用 */
-const ALLOWED_FORMATS: Record<"image" | "video" | "audio", string[]> = {
-  image: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"],
-  video: ["mp4", "webm", "mov", "avi", "mkv"],
-  audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"],
+type UploadEnv = {
+  Variables: {
+    uploadUser: AuthUser;
+  };
 };
 
-/** 扁平白名单：MIME 缺失或不常见时（如 mkv 被上报为 octet-stream）按扩展名兜底 */
-const ALLOWED_EXT = new Set<string>(Object.values(ALLOWED_FORMATS).flat());
+const router = new Hono<UploadEnv>();
 
-/** 取文件名后缀（含点，小写）；无后缀返回空串 */
-function extOfName(name: string): string {
-  const m = name.match(/\.([a-z0-9]+)$/i);
-  return m ? `.${m[1].toLowerCase()}` : "";
-}
-
-/** 上传约束：体积上限与格式白名单，供前端上传 UI 展示说明（避免前端硬编码与服务端漂移） */
+/** 上传约束：供前端批次调度和格式提示共用，避免两端漂移。 */
 router.get("/api/files/upload-limits", async (c) => {
   const auth = await authenticateRequest(c.req.raw);
   if ("error" in auth) return auth.error;
 
-  const cfg = getConfig();
+  const limits = getUploadBatchLimits();
   return c.json(ok({
-    maxSizeMb: cfg.MAX_UPLOAD_SIZE_MB,
-    formats: ALLOWED_FORMATS,
+    maxSizeMb: getConfig().MAX_UPLOAD_SIZE_MB,
+    maxBatchFiles: limits.maxFiles,
+    maxBatchBytes: limits.maxBytes,
+    formats: UPLOAD_FORMATS,
   }));
 });
 
-router.post("/api/files/upload", async (c) => {
-  const request = c.req.raw;
-  const auth = await authenticateRequest(request);
-  if ("error" in auth) return auth.error;
+router.post(
+  "/api/files/upload",
+  async (c, next) => {
+    const auth = await authenticateRequest(c.req.raw);
+    if ("error" in auth) return auth.error;
+    c.set("uploadUser", auth.user);
+    return next();
+  },
+  // 请求体 header 预检先于并发租约；chunked 请求在租约内通过流式 middleware 限制
+  uploadBodyLimit(getUploadBatchLimits()),
+  async (c, next) => {
+    const user = c.get("uploadUser");
+    let release: (() => void) | undefined;
+    try {
+      const cfg = getConfig();
+      release = await waitForUserConcurrency(
+        "upload",
+        user.id,
+        cfg.UPLOAD_BATCH_MAX_CONCURRENT,
+        c.req.raw.signal,
+        cfg.UPLOAD_BATCH_MAX_PENDING,
+      );
+    } catch (err) {
+      // 队列满立即 429（客户端按可重试退避）；仅客户端断开按 499 收口；其他异常重新抛出
+      if (err instanceof ConcurrencyQueueFullError) {
+        return failCode(429, "upload.too_many_pending", undefined, { "Retry-After": "1" });
+      }
+      if (!c.req.raw.signal.aborted) throw err;
+      return failClientDisconnected("upload.cancelled");
+    }
+    try {
+      return await next();
+    } finally {
+      release();
+    }
+  },
+  uploadBodyStreamLimit(getUploadBatchLimits()),
+  async (c) => {
+    const user = c.get("uploadUser");
 
-  // 按用户限流：上传解析与探测开销大，拖拽批量（前端并发 3）之下单用户 30 次/分钟
-  if (!checkUserRateLimit("upload", auth.user.id, 30, 60)) {
-    return failCode(429, "common.rate_limited");
-  }
-
-  const cfg = getConfig();
-  const maxSize = cfg.MAX_UPLOAD_SIZE_MB * 1024 * 1024;
-
-  // 体积校验前置：multipart 解析会把整个请求缓冲进内存。Content-Length 已超限
-  // （含 multipart 封装开销的余量）时直接拒绝，避免恶意大文件先吃满内存再失败
-  const contentLength = Number(request.headers.get("content-length"));
-  if (Number.isInteger(contentLength) && contentLength > maxSize + 1024 * 1024) {
-    return failCode(413, "upload.file_too_large", { limit: cfg.MAX_UPLOAD_SIZE_MB });
-  }
-
-  let formData: FormData;
-  try {
-    formData = await c.req.formData();
-  } catch {
-    return failCode(400, "upload.invalid_form_data");
-  }
-
-  const file = formData.get("file") as File | null;
-  if (!file) return failCode(400, "upload.no_file");
-
-  // 体积限制
-  if (file.size > maxSize) {
-    return failCode(413, "upload.file_too_large", { limit: cfg.MAX_UPLOAD_SIZE_MB });
-  }
-
-  // 类型限制：MIME 与扩展名任一命中白名单即放行。
-  // 仅按 MIME 判定会误杀 mkv / mov 等容器（各浏览器上报不一致，甚至为 octet-stream），
-  // 仅按扩展名判定又会让伪造后缀的文件蒙混过关，故两者取「或」。
-  const nameExt = extOfName(file.name);
-  const mimeOk = Boolean(file.type) && ALLOWED_MIME.has(file.type);
-  const extOk = nameExt !== "" && ALLOWED_EXT.has(nameExt.slice(1));
-  if (!mimeOk && !extOk) {
-    return failCode(415, "upload.unsupported_type", { type: file.type || nameExt || "unknown" });
-  }
-
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const hash = await computeBufferHash(buffer);
-    const sniffed = sniffMime(buffer.subarray(0, 16));
-
-    // 优先使用浏览器提供的 MIME（已通过白名单校验），其次按扩展名定档
-    // （单一来源 mimeByExt），sniffMime 仅作兜底
-    const mime = (file.type && mimeOk ? file.type : null) ?? mimeByExt(nameExt, sniffed.mime);
-    // 扩展名同理：白名单内的后缀优先，避免 mkv 这类嗅探不出的容器被存成 .bin
-    const finalExt = extOk ? nameExt : normalizeExt(sniffed.ext);
-    const storageKey = buildStorageKey(auth.user.id, hash, finalExt);
-
-    // 写入本地
-    await localStorage.save(storageKey, buffer);
-
-    // 持久化（媒体元数据在此一次探测入库，随响应下发给前端作为尺寸权威值）
-    const source = (c.req.query("source") as "upload" | "derived") || "upload";
-    const mediaMeta = await persistFileObject({
-      userId: auth.user.id,
-      hash,
-      size: buffer.length,
-      mimeType: mime,
-      ext: finalExt,
-      source,
-    });
-
-    // 视频上传体检：截断 / 损坏文件的全量解码会在数据断点提前结束（很快），
-    // 健康文件才需要整段解码。响应只等 1.5s——赶得上就把「标称 vs 实际」
-    // 随响应下发给前端提示；赶不上则体检在后台继续跑完，结论只进日志。
-    // 体检结论会进 probeVideoIntegrity 的缓存，之后打开片段面板无需重复解码。
-    let mediaWarning: { declared: number; decodable: number } | undefined;
-    if (/\.(mp4|webm|mov|mkv|m4v|avi|mpg|mpeg)$/i.test(finalExt)) {
-      const absPath = path.resolve(localStorage.baseDir, storageKey);
-      const check = (async () => {
-        const meta = await probeVideoMetaCached(absPath);
-        if (!meta?.duration) return null;
-        const integrity = await probeVideoIntegrity(absPath, meta.duration);
-        return integrity.truncated && integrity.decodableDuration
-          ? { declared: meta.duration, decodable: integrity.decodableDuration }
-          : null;
-      })();
-      check
-        .then((verdict) => {
-          if (verdict) {
-            logEvent("media", { stage: "upload_truncated", video: storageKey, ...verdict });
-          }
-        })
-        // 探测失败（损坏文件 ffmpeg 非零退出属预期场景）记 debug，不静默
-        .catch((err: unknown) => logger.debug({ err, video: storageKey }, "upload probe failed"));
-      const raceTimer = new Promise<null>((resolve) => {
-        const t = setTimeout(() => resolve(null), 1500);
-        // race 胜出后清掉定时器，不留下悬空句柄
-        check.finally(() => clearTimeout(t)).catch(() => undefined);
-      });
-      const inlineVerdict = await Promise.race([check, raceTimer]);
-      if (inlineVerdict) mediaWarning = inlineVerdict;
+    let formData: FormData;
+    try {
+      formData = await c.req.formData();
+    } catch (err) {
+      if (err instanceof UploadBodyTooLargeError) return failBatchTooLarge();
+      return failCode(400, "upload.invalid_form_data");
     }
 
-    return c.json(
-      ok({
-        key: storageKey,
-        url: `/api/files/${storageKey}`,
-        size: buffer.length,
-        mime_type: mime,
-        hash,
-        width: mediaMeta.width,
-        height: mediaMeta.height,
-        media_warning: mediaWarning,
-      })
-    );
-  } catch (err: unknown) {
-    // 落盘/持久化的底层异常只进日志，不随响应下发
-    logger.error({ err }, "Upload failed");
-    return failCode(500, "upload.upload_failed");
-  }
-});
+    const entries = formData.getAll("file");
+    const files = entries.filter((entry): entry is File => entry instanceof File);
+    if (entries.length !== files.length) return failCode(400, "upload.invalid_form_data");
+    if (files.length === 0) return failCode(400, "upload.no_file");
+
+    const limits = getUploadBatchLimits();
+    if (files.length > limits.maxFiles) return failBatchTooLarge();
+
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > limits.maxBytes) return failBatchTooLarge();
+
+    const source = c.req.query("source") === "derived" ? "derived" : "upload";
+    const result = await processUploadBatch(files, user.id, source);
+    return c.json(ok(result));
+  },
+);
 
 export { router };

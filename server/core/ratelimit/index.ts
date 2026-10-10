@@ -1,6 +1,7 @@
 /**
  * 内存限流器。
  * 基于滑动窗口实现按标识的速率限制，防止接口被过度调用。
+ * 按用户的并发租约（FIFO 排队等待槽位）是独立机制，见同目录 concurrency.ts。
  */
 
 interface WindowEntry {

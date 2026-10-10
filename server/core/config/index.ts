@@ -53,7 +53,15 @@ const configSchema = z.object({
   ALLOWED_INTERNAL_HOSTS: z.string().default(""),
 
   // Upload
-  MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(30),
+  MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(100),
+  /** 单次批量上传最多包含的文件数。 */
+  UPLOAD_BATCH_MAX_FILES: z.coerce.number().int().positive().default(20),
+  /** 单次批量上传总字节上限，单位 MiB。 */
+  UPLOAD_BATCH_MAX_MB: z.coerce.number().int().positive().default(128),
+  /** 单个用户同时处理的上传批次数，避免 multipart 解析和媒体探测叠加占满内存。 */
+  UPLOAD_BATCH_MAX_CONCURRENT: z.coerce.number().int().positive().default(1),
+  /** 单个用户上传批次等待队列深度上限；超额立即 429，由客户端退避后重试。 */
+  UPLOAD_BATCH_MAX_PENDING: z.coerce.number().int().positive().default(10),
   // 上传文件根目录（相对项目根，或绝对路径）
   UPLOAD_DIR: z.string().default("uploads"),
   /** 存储引用 GC：引用归零后的保留宽限期（小时），覆盖撤销 / 恢复等短暂重引用场景 */

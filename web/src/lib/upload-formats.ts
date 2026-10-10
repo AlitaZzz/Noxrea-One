@@ -19,13 +19,27 @@ export interface UploadFormats {
 
 export interface UploadLimits {
   maxSizeMb: number;
+  maxBatchFiles: number;
+  maxBatchBytes: number;
   formats: UploadFormats;
 }
 
 const FALLBACK_UPLOAD_FORMATS: UploadFormats = {
-  image: ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"],
+  image: ["png", "jpg", "jpeg", "gif", "webp", "avif"],
   video: ["mp4", "webm", "mov", "avi", "mkv"],
   audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"],
+};
+
+/**
+ * 服务端限制未就绪时的兜底值（镜像当前默认配置，变更只应改服务端并同步此处）。
+ * 与 FALLBACK_UPLOAD_FORMATS 同源：所有「服务端限制拿不到时」的代码都经过这里，
+ * 不再各自散落半形状的兜底对象。
+ */
+export const FALLBACK_UPLOAD_LIMITS: UploadLimits = {
+  maxSizeMb: 100,
+  maxBatchFiles: 20,
+  maxBatchBytes: 128 * 1024 * 1024,
+  formats: FALLBACK_UPLOAD_FORMATS,
 };
 
 let cachedLimits: UploadLimits | null = null;
@@ -54,6 +68,13 @@ export function loadUploadLimits(): Promise<UploadLimits> {
     })
     .finally(() => {
       limitsInFlight = null;
+    })
+    .catch((err: unknown) => {
+      // 兜底值会让本次上传按旧限制执行，留开发期日志便于发现配置端点故障
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[upload] 拉取 upload-limits 失败，使用兜底限制", err);
+      }
+      throw err;
     });
   return limitsInFlight;
 }
@@ -80,6 +101,7 @@ function kindByExtension(ext: string): MediaCategory | null {
 /** 判定 Blob 的媒体类别：优先 MIME，缺失时按文件名扩展名兜底 */
 export function kindOfBlob(blob: { type: string }, filename?: string): MediaCategory | null {
   const type = blob.type;
+  if (type === "image/svg+xml") return null;
   if (type.startsWith("image/")) return "image";
   if (type.startsWith("video/")) return "video";
   if (type.startsWith("audio/")) return "audio";

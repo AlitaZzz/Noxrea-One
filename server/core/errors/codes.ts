@@ -154,6 +154,12 @@ export const ERROR_CODES = [
   "upload.unsupported_type",
   /** 上传处理失败（落盘或持久化异常） */
   "upload.upload_failed",
+  /** 单次批量上传超过文件数或总大小上限 */
+  "upload.batch_too_large",
+  /** 该用户上传批次等待队列已满，稍后重试 */
+  "upload.too_many_pending",
+  /** 客户端在批次排队等待期间断开，处理已中止 */
+  "upload.cancelled",
 
   // ── 文件 ──
   /** 文件路径非法 */

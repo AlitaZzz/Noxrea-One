@@ -173,12 +173,15 @@ export class UploadTransportError extends Error {
   readonly retryable: boolean;
   /** HTTP 状态码（仅 kind === "http" 时有值） */
   readonly status?: number;
+  /** 服务端要求客户端等待的重试时间（毫秒）。 */
+  readonly retryAfterMs?: number;
 
-  constructor(kind: UploadErrorKind, message: string, status?: number) {
+  constructor(kind: UploadErrorKind, message: string, status?: number, retryAfterMs?: number) {
     super(message);
     this.name = "UploadTransportError";
     this.kind = kind;
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
     this.retryable = kind === "network" || kind === "timeout" || (kind === "http" && isRetryableStatus(status));
   }
 }
@@ -188,10 +191,23 @@ function parseJsonSafe(text: string): unknown {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+/**
+ * 解析 Retry-After 头（秒数或 HTTP 日期两种官方格式），返回应等待的毫秒数。
+ * 网关 / 限流中间件可能下发任一格式；解析失败或已过期返回 undefined，由调用方退回指数退避。
+ */
+function parseRetryAfterMs(header: string | null): number | undefined {
+  if (!header?.trim()) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const at = new Date(header).getTime();
+  if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  return undefined;
+}
+
 export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number, loaded: number) => void
 ): Promise<T> {
   const session = captureSession();
   return new Promise((resolve, reject) => {
@@ -244,7 +260,7 @@ export function apiUploadWithProgress<T = unknown>(
       touch();
       if (e.lengthComputable) {
         if (e.loaded >= e.total) bodySent = true;
-        onProgress?.(Math.round((e.loaded / e.total) * 100));
+        onProgress?.(Math.round((e.loaded / e.total) * 100), e.loaded);
       }
     };
     // 请求体发完（无论是否带进度回调）→ 切换到「等待响应」超时档位
@@ -263,7 +279,8 @@ export function apiUploadWithProgress<T = unknown>(
             : xhr.status >= 500
               ? i18n.t("error.upload.server_error", { status: xhr.status })
               : i18n.t("error.upload.http_error", { status: xhr.status });
-          reject(new UploadTransportError("http", message, xhr.status));
+          const retryAfterMs = parseRetryAfterMs(xhr.getResponseHeader?.("Retry-After"));
+          reject(new UploadTransportError("http", message, xhr.status, retryAfterMs));
           return;
         }
         try { resolve(unwrapBody<T>(JSON.parse(xhr.responseText))); }

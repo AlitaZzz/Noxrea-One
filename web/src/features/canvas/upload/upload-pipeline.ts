@@ -25,6 +25,7 @@ import { absoluteNodeOf, buildNodeIndex, nodeAbsolutePosition, toAbsoluteNodes }
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
+import { resolveApiError } from "@/lib/api/error-message";
 import {
   AUDIO_NODE_HEIGHT,
   AUDIO_NODE_WIDTH,
@@ -36,18 +37,19 @@ import {
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, onSessionChange } from "@/lib/session-lifecycle";
-import { kindOfBlob } from "@/lib/upload-formats";
+import { FALLBACK_UPLOAD_LIMITS, kindOfBlob, loadUploadLimits } from "@/lib/upload-formats";
 import { stripMediaExtension } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
 import {
   classifyUploadError,
   isOffline,
-  runWithConcurrency,
-  UPLOAD_CONCURRENCY,
   UPLOAD_MAX_RETRIES,
+  uploadBatchWithRetry,
+  UploadBusinessError,
   type UploadErrorInfo,
   type UploadResult,
+  type UploadSession,
   uploadWithRetry,
 } from "@/lib/utils/upload";
 
@@ -110,6 +112,11 @@ function toFile(item: UploadItem): File {
   return new File([item.blob], item.filename, { type: item.blob.type || "image/png" });
 }
 
+/** 释放一批任务的 blob 预览 URL（previewUrl 可为空：raw sink 与音频不创建预览） */
+function releasePreviews(entries: ReadonlyArray<{ previewUrl?: string }>): void {
+  for (const entry of entries) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+}
+
 function createPlaceholderNode(kind: MediaKind, position: { x: number; y: number }): AnyNode {
   if (kind === "audio") return createAudioNode(position, "");
   if (kind === "video") return createVideoNode(position, "");
@@ -157,7 +164,10 @@ function anchorPosition(cursor: AnchorCursor, dw: number, dh: number): { x: numb
 }
 
 function emptyHandle(): UploadHandle {
-  return { nodeIds: [], settled: Promise.resolve({ succeeded: 0, failed: 0, results: [] }) };
+  return {
+    nodeIds: [],
+    settled: Promise.resolve({ succeeded: 0, failed: 0, results: [], errors: [] }),
+  };
 }
 
 function nodeKindOf(node: AnyNode): MediaKind | null {
@@ -216,7 +226,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
     if (replaceTarget && kind !== nodeKindOf(replaceTarget)) {
       // 类型与当前节点不匹配（如往音频节点里塞图片）：整批拒绝并提示。
       // 早退前必须释放本批已创建的 blob 预览，否则这些 URL 无人接管而泄漏。
-      for (const p of prepared) if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      releasePreviews(prepared);
       showGlobalMessage().error(i18n.t("file.unsupportedType"));
       return emptyHandle();
     }
@@ -229,7 +239,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
     if (needsPreview && previewUrl && !(nw > 0 && nh > 0)) {
       const dims = await loadMediaDimensions(previewUrl, kind === "video");
       if (session.signal.aborted) {
-        for (const entry of prepared) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+        releasePreviews(prepared);
         URL.revokeObjectURL(previewUrl);
         return emptyHandle();
       }
@@ -474,6 +484,62 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
   if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
 }
 
+function splitRawUploadBatches(prepared: Prepared[], maxFiles: number, maxBytes: number): Prepared[][] {
+  const batches: Prepared[][] = [];
+  let current: Prepared[] = [];
+  let currentBytes = 0;
+  for (const item of prepared) {
+    const exceedsFiles = current.length >= maxFiles;
+    const exceedsBytes = current.length > 0 && currentBytes + item.file.size > maxBytes;
+    if (exceedsFiles || exceedsBytes) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(item);
+    currentBytes += item.file.size;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+/** 把批次整体字节进度归因到单个文件：该文件在 FormData 中的区间占其自身体积的百分比 */
+function filePctOf(loaded: number, size: number, offset: number): number {
+  if (size <= 0) return 100;
+  const uploaded = Math.min(Math.max(loaded - offset, 0), size);
+  return Math.round((uploaded / size) * 100);
+}
+
+/**
+ * 上传一个批次：XHR 只报告整批字节进度，浏览器按 FormData append 顺序发送各 part，
+ * 据此按体积把进度归因到单个文件（onFileProgress 收到批内下标与该文件自己的百分比）。
+ */
+async function uploadPreparedBatch(
+  batch: Prepared[],
+  source: "upload" | "derived",
+  session: UploadSession,
+  onFileProgress: (p: Prepared, index: number, pct: number) => void,
+): Promise<PromiseSettledResult<UploadResult>[]> {
+  const offsets: number[] = [];
+  let batchBytes = 0;
+  for (const p of batch) {
+    offsets.push(batchBytes);
+    batchBytes += p.file.size;
+  }
+  return uploadBatchWithRetry(
+    batch.map((p) => p.file),
+    (_pct, loaded) => {
+      if (session.signal.aborted) return;
+      for (let i = 0; i < batch.length; i++) {
+        onFileProgress(batch[i], i, filePctOf(loaded, batch[i].file.size, offsets[i]));
+      }
+    },
+    UPLOAD_MAX_RETRIES,
+    source,
+    session,
+  );
+}
+
 async function runUploads(
   plan: UploadPlan,
   prepared: Prepared[],
@@ -482,6 +548,7 @@ async function runUploads(
   const session = captureSession();
   const sink = plan.sink;
   const summaryResults: Array<UploadResult | null | undefined> = new Array(plan.items.length);
+  const summaryErrors: Array<UploadErrorInfo | undefined> = new Array(plan.items.length);
   let succeeded = 0;
   let failed = 0;
   let reason: string | undefined;
@@ -506,7 +573,9 @@ async function runUploads(
       } else {
         failed++;
         summaryResults[p.itemIndex] = null;
-        reason = reason ?? classifyUploadError(r.reason).message;
+        const info = classifyUploadError(r.reason);
+        summaryErrors[p.itemIndex] = info;
+        reason = reason ?? info.message;
       }
       return;
     }
@@ -521,7 +590,9 @@ async function runUploads(
       } else {
         failed++;
         summaryResults[p.itemIndex] = null;
-        reason = reason ?? classifyUploadError(r.reason).message;
+        const info = classifyUploadError(r.reason);
+        summaryErrors[p.itemIndex] = info;
+        reason = reason ?? info.message;
       }
       return;
     }
@@ -582,6 +653,7 @@ async function runUploads(
     failed++;
     summaryResults[p.itemIndex] = null;
     const info = classifyUploadError(r.reason);
+    summaryErrors[p.itemIndex] = info;
     reason = reason ?? info.message;
     if (p.node) {
       // 保留占位节点并转入失败态：裁剪 / 标注等加工产物不随失败销毁，可在节点上重试
@@ -604,41 +676,74 @@ async function runUploads(
     }
   };
 
-  await runWithConcurrency(
-    prepared.map((p) => async () => {
-      const targetId = p.node?.id ?? p.replaceId;
-      const reporter = targetId ? createProgressReporter(targetId, p.version) : null;
-      if (targetId) useUploadProgressStore.getState().begin(targetId, p.version);
-      try {
-        const value = await uploadWithRetry(
-          p.file,
-          (pct) => {
-            if (session.signal.aborted) return;
-            plan.onProgress?.(p.itemIndex, pct);
-            if (!targetId || !isCurrentUpload(findNode(targetId), p.version)) return;
-            reporter?.report(pct);
-          },
-          UPLOAD_MAX_RETRIES,
-          source,
-        );
-        reporter?.flush();
-        settleOne(p, { status: "fulfilled", value });
-        return value;
-      } catch (err) {
-        reporter?.flush();
-        settleOne(p, { status: "rejected", reason: err });
-        throw err;
-      } finally {
-        reporter?.cancel();
-        if (targetId) useUploadProgressStore.getState().clear(targetId, p.version);
+  if (prepared.length > 0) {
+    const limits = await loadUploadLimits().catch(() => FALLBACK_UPLOAD_LIMITS);
+    if (session.signal.aborted) {
+      releasePreviews(prepared);
+      return {
+        succeeded: 0,
+        failed: prepared.length,
+        results: plan.items.map(() => null),
+        errors: plan.items.map(() => undefined),
+      };
+    }
+    // 单文件体积超过批次总字节上限：任何拆分都无法满足约束，直接按业务失败落库，
+    // 不发注定 413 的请求。该文件通常同时超单文件上限（默认 100MB < 批次 128MiB），
+    // 此时报告更准确的「文件体积超限」；仅批次上限低于单文件上限的配置下报批次超限
+    const singleFileLimitBytes = limits.maxSizeMb * 1024 * 1024;
+    const oversized = prepared.filter((p) => p.file.size > limits.maxBatchBytes);
+    const batchable = prepared.filter((p) => p.file.size <= limits.maxBatchBytes);
+    for (const p of oversized) {
+      settleOne(p, {
+        status: "rejected",
+        reason: new UploadBusinessError(resolveApiError(
+          p.file.size > singleFileLimitBytes
+            ? { error: "upload.file_too_large", ctx: { limit: limits.maxSizeMb } }
+            : { error: "upload.batch_too_large" },
+        )),
+      });
+    }
+    const batches = splitRawUploadBatches(batchable, limits.maxBatchFiles, limits.maxBatchBytes);
+    for (const [batchIndex, batch] of batches.entries()) {
+      if (session.signal.aborted) break;
+      if (isOffline()) {
+        // 不再发送请求，但必须逐项结算剩余文件，避免占位节点和资产卡片一直处于等待态。
+        const error = new Error(i18n.t("error.upload.offline"));
+        for (const pendingBatch of batches.slice(batchIndex)) {
+          for (const p of pendingBatch) settleOne(p, { status: "rejected", reason: error });
+        }
+        break;
       }
-    }),
-    plan.concurrency ?? UPLOAD_CONCURRENCY,
-  );
+      const reporters = batch.map((p) => {
+        const targetId = p.node?.id ?? p.replaceId;
+        const reporter = targetId ? createProgressReporter(targetId, p.version) : null;
+        if (targetId) useUploadProgressStore.getState().begin(targetId, p.version);
+        return { targetId, reporter };
+      });
+      const batchResults = await uploadPreparedBatch(batch, source, session, (p, i, pct) => {
+        plan.onProgress?.(p.itemIndex, pct);
+        const { targetId, reporter } = reporters[i];
+        if (targetId && isCurrentUpload(findNode(targetId), p.version)) reporter?.report(pct);
+      });
+      for (let i = 0; i < batch.length; i++) {
+        const { targetId, reporter } = reporters[i];
+        reporter?.flush();
+        settleOne(batch[i], batchResults[i]);
+        reporter?.cancel();
+        if (targetId) useUploadProgressStore.getState().clear(targetId, batch[i].version);
+      }
+      if (session.signal.aborted) break;
+    }
+  }
 
   if (session.signal.aborted) {
-    for (const entry of prepared) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
-    return { succeeded: 0, failed: prepared.length, results: plan.items.map(() => null) };
+    releasePreviews(prepared);
+    return {
+      succeeded: 0,
+      failed: prepared.length,
+      results: plan.items.map(() => null),
+      errors: plan.items.map(() => undefined),
+    };
   }
   markDirtyImmediate();
 
@@ -655,7 +760,7 @@ async function runUploads(
     showGlobalMessage().error(`${t("file.uploadFailed")} - ${summary}`);
   }
 
-  return { succeeded, failed, reason, results: summaryResults };
+  return { succeeded, failed, reason, results: summaryResults, errors: summaryErrors };
 }
 
 /**

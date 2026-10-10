@@ -46,10 +46,10 @@ interface UploadFile {
   previewUrl: string;
   url: string | null;
   uploadProgress: number;
+  errorMessage?: string;
   status: "ready" | "uploading" | "done" | "error";
 }
 
-const MAX_CONCURRENCY = 3;
 
 function uid() {
   return `up_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -179,7 +179,12 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     const uploadable = entries.filter((e) => kindOfBlob(e.file, e.file.name) !== null);
     const supported = new Set(uploadable);
     for (const e of entries) {
-      if (!supported.has(e)) updateFile(e.id, { status: "error" });
+      if (!supported.has(e)) {
+        updateFile(e.id, {
+          status: "error",
+          errorMessage: t("error.upload.unsupported_type"),
+        });
+      }
     }
     if (uploadable.length === 0) return;
 
@@ -195,7 +200,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
       items: uploadable.map((e) => ({ blob: e.file, filename: e.file.name })),
       sink: { kind: "raw" },
       source: "upload",
-      concurrency: MAX_CONCURRENCY,
       silent: true,
       onProgress: (index, pct) => {
         updateFile(uploadable[index].id, { status: "uploading", uploadProgress: pct });
@@ -203,12 +207,15 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     });
 
     settled
-      .then(async ({ results }) => {
+      .then(async ({ results, errors }) => {
         for (let i = 0; i < uploadable.length; i++) {
           const entry = uploadable[i];
           const result = results[i];
           if (!result?.url) {
-            updateFile(entry.id, { status: "error" });
+            updateFile(entry.id, {
+              status: "error",
+              errorMessage: errors[i]?.message ?? t("file.uploadFailed"),
+            });
             continue;
           }
           updateFile(entry.id, { url: result.url, status: "done", uploadProgress: 100 });
@@ -410,8 +417,8 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                     )}
 
                     {f.status === "error" && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-destructive-foreground">
-                        {t("file.uploadFailed")}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60 px-2 text-center text-xs text-destructive-foreground">
+                        {f.errorMessage ?? t("file.uploadFailed")}
                       </div>
                     )}
 

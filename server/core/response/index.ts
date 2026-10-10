@@ -40,12 +40,22 @@ export interface ErrorPayload {
 export function failCode(
   status: number,
   error: ErrorCode,
-  ctx?: Record<string, string | number>
+  ctx?: Record<string, string | number>,
+  headers?: Record<string, string>
 ): Response {
   const payload: ErrorPayload = { error };
   if (ctx && Object.keys(ctx).length > 0) payload.ctx = ctx;
   // 请求 ID 由中间件注入异步上下文，此处自动带上，调用方无需感知
   const requestId = getRequestContext()?.requestId;
   if (requestId) payload.requestId = requestId;
-  return Response.json(payload, { status });
+  return Response.json(payload, { status, headers });
+}
+
+/**
+ * 客户端提前断开的统一收口：499（client closed request 约定状态码）。
+ * 断开后响应通常无人接收，此处只保证日志与网关拿到结构化错误码；
+ * 各路由以 `<域>.cancelled` 命名对应错误码（如 media.cancelled / upload.cancelled）。
+ */
+export function failClientDisconnected(error: ErrorCode): Response {
+  return failCode(499, error);
 }

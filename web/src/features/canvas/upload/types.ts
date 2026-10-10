@@ -6,7 +6,7 @@
  * 共用同一条管道：调用方只描述「待上传数据」与「落库策略（sink）」，
  * 管道负责探测尺寸、建占位、并发上传、进度回写、成功落库与失败回滚。
  */
-import type { UploadResult } from "@/lib/utils/upload";
+import type { UploadErrorInfo, UploadResult } from "@/lib/utils/upload";
 
 /** 媒体类型：决定创建哪种画布节点 */
 export type MediaKind = "image" | "video" | "audio";
@@ -68,8 +68,6 @@ export interface UploadPlan {
   sink: UploadSink;
   /** 文件归属：upload = 原始素材，derived = 画布加工产物。缺省按 sink 推断 */
   source?: "upload" | "derived";
-  /** 并发数，默认 UPLOAD_CONCURRENCY */
-  concurrency?: number;
   /** 为 true 时管道不弹任何提示，由调用方自行处理 */
   silent?: boolean;
   /** 单文件进度回调（index 对应 plan.items 下标） */
@@ -83,6 +81,8 @@ export interface UploadSummary {
   reason?: string;
   /** 与 plan.items 顺序一致（被过滤掉的不支持文件为 undefined），失败项为 null */
   results: Array<UploadResult | null | undefined>;
+  /** 与 plan.items 顺序一致的逐项失败原因；成功/未处理项为 undefined */
+  errors: Array<UploadErrorInfo | undefined>;
 }
 
 export interface UploadHandle {

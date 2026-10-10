@@ -205,7 +205,8 @@ const integrityCache = new Map<string, VideoIntegrity>();
  */
 export async function probeVideoIntegrity(
   videoPath: string,
-  declaredDuration: number
+  declaredDuration: number,
+  timeoutMs: number = FFMPEG_INTEGRITY_TIMEOUT_MS,
 ): Promise<VideoIntegrity> {
   const cached = integrityCache.get(videoPath);
   if (cached) return cached;
@@ -213,28 +214,36 @@ export async function probeVideoIntegrity(
   // 只要视频流：截断影响的是帧数据，音轨解码对判定没有意义还拖慢速度
   const { stderr, killed, spawnFailed } = await probeFfmpeg(
     ["-i", videoPath, "-an", "-sn", "-dn", "-f", "null", "-"],
-    FFMPEG_INTEGRITY_TIMEOUT_MS,
+    timeoutMs,
     { stage: "video_integrity" }
   );
 
-  // 超时被杀（progress 停点不代表文件边界）或进程未启动：无法判定
-  const result: VideoIntegrity =
-    killed || spawnFailed
-      ? { decodableDuration: null, truncated: false }
-      : (() => {
-          // progress 行的 time= 是最后一个可信的解码位置；解码到断点即止的文件，
-          // 它就是实际可解码时长
-          const matches = [...stderr.matchAll(/time=(\d+):(\d+):([\d.]+)/g)];
-          const last = matches[matches.length - 1];
-          const decodable = last
-            ? Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3])
-            : null;
-          const truncated =
-            decodable !== null &&
-            Number.isFinite(declaredDuration) &&
-            declaredDuration - decodable > Math.max(1, declaredDuration * 0.01);
-          return { decodableDuration: decodable, truncated };
-        })();
+  // 超时被杀（progress 停点不代表文件边界）或进程未启动：无法判定。
+  // 短预算（上传体检）被杀不写缓存：同文件后续媒体处理仍可用完整预算重试；
+  // 全预算超时说明文件本身解码不动，按原有语义缓存，避免反复整段解码。
+  if (killed || spawnFailed) {
+    const undecidable: VideoIntegrity = { decodableDuration: null, truncated: false };
+    if (!killed || timeoutMs >= FFMPEG_INTEGRITY_TIMEOUT_MS) {
+      if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
+      integrityCache.set(videoPath, undecidable);
+    }
+    return undecidable;
+  }
+
+  const result: VideoIntegrity = (() => {
+    // progress 行的 time= 是最后一个可信的解码位置；解码到断点即止的文件，
+    // 它就是实际可解码时长
+    const matches = [...stderr.matchAll(/time=(\d+):(\d+):([\d.]+)/g)];
+    const last = matches[matches.length - 1];
+    const decodable = last
+      ? Number(last[1]) * 3600 + Number(last[2]) * 60 + Number(last[3])
+      : null;
+    const truncated =
+      decodable !== null &&
+      Number.isFinite(declaredDuration) &&
+      declaredDuration - decodable > Math.max(1, declaredDuration * 0.01);
+    return { decodableDuration: decodable, truncated };
+  })();
 
   if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
   integrityCache.set(videoPath, result);

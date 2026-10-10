@@ -8,11 +8,10 @@ import {
   type UploadErrorKind,
   UploadTransportError,
 } from "@/lib/api/client";
+import { resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, SessionChangedError } from "@/lib/session-lifecycle";
 
-/** 上传默认并发数 */
-export const UPLOAD_CONCURRENCY = 3;
 /** 单个上传失败后的最大重试次数 */
 export const UPLOAD_MAX_RETRIES = 1;
 
@@ -26,39 +25,25 @@ export interface UploadResult {
   media_warning?: { declared: number; decodable: number } | null;
 }
 
-/**
- * 限制并发执行异步任务，按 concurrency 数量分批运行。
- * 所有任务都完成后返回（类似 Promise.allSettled）。
- */
-export async function runWithConcurrency<T>(
-  tasks: (() => Promise<T>)[],
-  concurrency: number = UPLOAD_CONCURRENCY,
-): Promise<PromiseSettledResult<T>[]> {
-  const session = captureSession();
-  const results: PromiseSettledResult<T>[] = new Array(tasks.length);
-  let nextIndex = 0;
-
-  async function runWorker() {
-    while (true) {
-      const index = nextIndex++;
-      if (index >= tasks.length) break;
-      try {
-        const value = await session.run(tasks[index]);
-        session.assertCurrent();
-        results[index] = { status: "fulfilled", value };
-      } catch (reason) {
-        results[index] = { status: "rejected", reason };
-      }
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => runWorker());
-  await Promise.all(workers);
-  return results;
+interface UploadBatchResponse {
+  items: Array<
+    | { index: number; ok: true; data: UploadResult }
+    | { index: number; ok: false; error: { code: string; ctx?: Record<string, string | number> } }
+  >;
 }
 
+function isUploadResult(value: unknown): value is UploadResult {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Partial<UploadResult>;
+  return typeof result.url === "string" && result.url.length > 0
+    && typeof result.key === "string" && result.key.length > 0;
+}
+
+/** 会话句柄：捕获自 captureSession，供批次重试等异步流程归属校验复用 */
+export type UploadSession = ReturnType<typeof captureSession>;
+
 /** 业务错误：服务端返回了响应但 code !== 200，不应重试 */
-class UploadBusinessError extends Error {
+export class UploadBusinessError extends Error {
   detail?: string;
   constructor(detail?: string) {
     super(detail ?? "Upload failed");
@@ -132,51 +117,98 @@ export async function uploadWithRetry(
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
 ): Promise<UploadResult> {
-  const session = captureSession();
-  let lastErr: unknown;
+  const [result] = await uploadBatchWithRetry([file], onProgress, maxRetries, source);
+  if (result.status === "fulfilled") return result.value;
+  throw result.reason;
+}
+
+/**
+ * 上传一个批次并按文件返回 PromiseSettledResult。
+ * 传输层失败时整个批次按退避策略重试；业务层单文件失败只影响自身。
+ */
+export async function uploadBatchWithRetry(
+  files: File[],
+  onProgress?: (pct: number, loaded: number) => void,
+  maxRetries: number = UPLOAD_MAX_RETRIES,
+  source?: "upload" | "derived",
+  sessionOverride?: UploadSession,
+): Promise<PromiseSettledResult<UploadResult>[]> {
+  if (files.length === 0) return [];
+  const session = sessionOverride ?? captureSession();
   const sourceQuery = source ? `?source=${source}` : "";
+  let lastErr: unknown;
+  const rejected = (reason: unknown): PromiseSettledResult<UploadResult>[] =>
+    files.map(() => ({ status: "rejected", reason }));
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (isOffline()) {
+      return rejected(new UploadTransportError("network", i18n.t("error.upload.offline")));
+    }
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      const data = await session.run(() => apiUploadWithProgress<UploadResult>(
+      for (const file of files) formData.append("file", file);
+      const data = await session.run(() => apiUploadWithProgress<UploadBatchResponse>(
         `/api/files/upload${sourceQuery}`,
         formData,
         onProgress,
       ));
       session.assertCurrent();
 
-      if (!data?.url) {
-        // 2xx 但响应缺少 url 字段：结构异常，不重试
-        throw new UploadBusinessError(i18n.t("error.upload.upload_failed"));
+      const results: PromiseSettledResult<UploadResult>[] = files.map(() => ({
+        status: "rejected",
+        reason: new UploadBusinessError(i18n.t("error.upload.upload_failed")),
+      }));
+      for (const item of data?.items ?? []) {
+        if (item.index < 0 || item.index >= results.length) continue;
+        if (item.ok) {
+          if (isUploadResult(item.data)) results[item.index] = { status: "fulfilled", value: item.data };
+          continue;
+        }
+        results[item.index] = {
+          status: "rejected",
+          reason: new UploadBusinessError(resolveApiError(
+            { error: item.error.code, ctx: item.error.ctx },
+            undefined,
+            "upload.upload_failed",
+          )),
+        };
       }
-
-      return data;
+      return results;
     } catch (err) {
-      session.assertCurrent();
-      // 业务错误和鉴权错误不重试，直接抛出
-      if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) {
-        throw err;
+      try {
+        session.assertCurrent();
+      } catch (sessionError) {
+        return rejected(sessionError);
       }
-      // 传输错误按类别判定：网络 / 超时 / 5xx 重试，4xx 直接失败
-      if (err instanceof UploadTransportError && !err.retryable) {
-        throw err;
-      }
-      // 已确认离线：重试只是多一次无谓往返，直接以「离线」语义失败
-      if (isOffline()) {
-        throw new UploadTransportError("network", i18n.t("error.upload.offline"));
-      }
-      // 网络错误，准备重试
+      if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) return rejected(err);
+      if (err instanceof UploadTransportError && !err.retryable) return rejected(err);
+      if (isOffline()) return rejected(new UploadTransportError("network", i18n.t("error.upload.offline")));
+
       lastErr = err;
-      if (attempt < maxRetries && onProgress) {
-        onProgress(0);
+      if (attempt >= maxRetries) break;
+      onProgress?.(0, 0);
+      const retryAfter = err instanceof UploadTransportError ? err.retryAfterMs : undefined;
+      const backoff = retryAfter ?? Math.min(30_000, 1_000 * 2 ** attempt);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const onAbort = () => {
+            clearTimeout(timer);
+            session.signal.removeEventListener("abort", onAbort);
+            reject(session.signal.reason);
+          };
+          const timer = setTimeout(() => {
+            session.signal.removeEventListener("abort", onAbort);
+            resolve();
+          }, backoff);
+          session.signal.addEventListener("abort", onAbort, { once: true });
+        });
+      } catch (waitError) {
+        return rejected(waitError);
       }
     }
   }
 
-  // 所有重试用尽
-  throw lastErr instanceof Error ? lastErr : new Error(i18n.t("error.upload.upload_failed"));
+  return rejected(lastErr instanceof Error ? lastErr : new Error(i18n.t("error.upload.upload_failed")));
 }
 
 /**

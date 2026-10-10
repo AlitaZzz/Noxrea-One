@@ -946,6 +946,9 @@
     "upload": {
       "invalid_form_data": "Failed to parse the form data",
       "no_file": "No file selected",
+      "batch_too_large": "This upload batch exceeds the file count or total size limit",
+      "too_many_pending": "Too many uploads are waiting; please wait a moment and try again",
+      "cancelled": "Upload cancelled",
       "file_too_large": "File size exceeds the {{limit}}MB limit",
       "unsupported_type": "This file format is not supported, please try a common one (MP4 / MOV / PNG / MP3)",
       "upload_failed": "Upload failed, please try again later",

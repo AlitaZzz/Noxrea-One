@@ -18,6 +18,8 @@ vi.mock("@/lib/api/client", () => ({
 
 const LIMITS = {
   maxSizeMb: 20,
+  maxBatchFiles: 20,
+  maxBatchBytes: 128 * 1024 * 1024,
   formats: { image: ["png"], video: ["mp4"], audio: ["mp3"] },
 };
 
@@ -42,6 +44,12 @@ describe("upload-formats loadUploadLimits 并发去重", () => {
     await Promise.all([a, b]);
 
     expect(mocks.api).toHaveBeenCalledTimes(1);
+  });
+
+  it("SVG MIME 不再被判定为可上传图片", async () => {
+    const { kindOfBlob } = await import("@/lib/upload-formats");
+    expect(kindOfBlob({ type: "image/svg+xml" }, "vector.svg")).toBeNull();
+    expect(kindOfBlob({ type: "image/svg+xml" }, "vector.png")).toBeNull();
   });
 
   it("成功后走缓存，不再发请求", async () => {

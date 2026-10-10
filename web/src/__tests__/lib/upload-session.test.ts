@@ -7,7 +7,7 @@ vi.mock("@/lib/api/client", async (original) => ({
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key } }));
 
 import { changeSession, SessionChangedError } from "@/lib/session-lifecycle";
-import { classifyUploadError, runWithConcurrency, uploadWithRetry } from "@/lib/utils/upload";
+import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
 
 afterEach(() => { vi.clearAllMocks(); });
 
@@ -22,17 +22,5 @@ describe("upload task session ownership", () => {
     await rejected;
     expect(upload).toHaveBeenCalledTimes(1);
     expect(classifyUploadError(new SessionChangedError())).toMatchObject({ category: "abort", retryable: false });
-  });
-
-  it("does not start queued tasks after their session ends", async () => {
-    let resolve!: (value: string) => void;
-    const first = () => new Promise<string>((done) => { resolve = done; });
-    const next = vi.fn(async () => "B must not receive A's file");
-    const pending = runWithConcurrency([first, next], 1);
-    changeSession();
-    resolve("A file");
-    const results = await pending;
-    expect(next).not.toHaveBeenCalled();
-    expect(results.every((result) => result.status === "rejected" && result.reason instanceof SessionChangedError)).toBe(true);
   });
 });

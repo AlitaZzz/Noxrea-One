@@ -946,6 +946,9 @@
     "upload": {
       "invalid_form_data": "表单数据解析失败",
       "no_file": "未选择文件",
+      "batch_too_large": "本批文件数量或总大小超过上限",
+      "too_many_pending": "等待中的上传任务过多，请稍候再试",
+      "cancelled": "上传已取消",
       "file_too_large": "文件体积超过 {{limit}}MB 上限",
       "unsupported_type": "暂不支持这种文件格式，换个常见格式（如 MP4 / MOV / PNG / MP3）再试试",
       "upload_failed": "上传失败，请稍后重试",

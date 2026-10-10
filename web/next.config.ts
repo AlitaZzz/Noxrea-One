@@ -18,15 +18,21 @@ function loadRootEnv(): Record<string, string> {
 
 const rootEnv = loadRootEnv();
 
+/** 部署环境变量优先于根 .env，保证 Next 代理与 Hono 读取同一份运行时配置。 */
+function envValue(name: string): string | undefined {
+  return process.env[name] ?? rootEnv[name];
+}
+
 // 仅暴露 NEXT_PUBLIC_* + APP_NAME 给浏览器端
 const publicEnv: Record<string, string> = {};
-for (const [k, v] of Object.entries(rootEnv)) {
-  if (k.startsWith("NEXT_PUBLIC_")) publicEnv[k] = v;
+for (const [k, v] of Object.entries({ ...rootEnv, ...process.env })) {
+  if (v !== undefined && k.startsWith("NEXT_PUBLIC_")) publicEnv[k] = v;
 }
-if (rootEnv.APP_NAME) publicEnv["NEXT_PUBLIC_APP_NAME"] = rootEnv.APP_NAME;
+const appName = envValue("APP_NAME");
+if (appName) publicEnv["NEXT_PUBLIC_APP_NAME"] = appName;
 
-// proxy body 限制跟随 MAX_UPLOAD_SIZE_MB，留 5MB 余量给 multipart 开销
-const maxUploadMB = Number(rootEnv.MAX_UPLOAD_SIZE_MB) || 30;
+// proxy body 限制跟随批次总大小，留 5MB 余量给 multipart 开销
+const maxUploadMB = Number(envValue("UPLOAD_BATCH_MAX_MB")) || 128;
 
 const nextConfig: NextConfig = {
   // 保持 React 默认的双挂载检查：组件 effect 必须写成幂等（挂载两次不产生重复副作用）
@@ -52,7 +58,7 @@ const nextConfig: NextConfig = {
   // 透明代理：所有 /api/* 请求转发到后端 Hono 服务（目标由 SERVER_URL 指定）
   async rewrites() {
     // SERVER_URL 默认 http://localhost:4000（同机）；分开部署时改为远程 Hono 地址
-    const backendUrl = (rootEnv.SERVER_URL || "http://localhost:4000").replace(/\/$/, "");
+    const backendUrl = (envValue("SERVER_URL") || "http://localhost:4000").replace(/\/$/, "");
     return [
       {
         source: "/api/:path*",
