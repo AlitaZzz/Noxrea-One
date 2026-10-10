@@ -70,9 +70,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const pending = (async () => {
       set({ loading: true });
       try {
-        const user = toUserInfo(await session.run(() => authApi.me<UserInfo>()));
+        // api() 对空/无法解析的响应体返回 null：视为无登录用户，与其余入口一样先判空再转换
+        const me = await session.run(() => authApi.me<UserInfo | null>());
         session.assertCurrent();
-        set({ user, loading: false, initialized: true });
+        set({ user: me ? toUserInfo(me) : null, loading: false, initialized: true });
       } catch (e) {
         if (session.signal.aborted) return;
         set({ ...(e instanceof UnauthorizedError ? { user: null } : {}), loading: false, initialized: true });

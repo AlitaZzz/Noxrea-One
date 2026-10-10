@@ -72,6 +72,17 @@ describe("auth store initialize 并发去重", () => {
     );
   });
 
+  it("/me 返回空响应（null）时清掉缓存用户并完成初始化，不抛 TypeError", async () => {
+    useAuthStore.setState({ user: USER });
+    mocks.me.mockResolvedValue(null);
+
+    await useAuthStore.getState().initialize();
+
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(useAuthStore.getState().initialized).toBe(true);
+    expect(useAuthStore.getState().loading).toBe(false);
+  });
+
   it("访客判定（/me 401）期间并发调用也只发一次", async () => {
     mocks.me.mockRejectedValue(new Error("401"));
 
