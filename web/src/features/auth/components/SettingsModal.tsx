@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
-import { type UserInfo } from "@/features/auth/user-cache";
+import { toUserInfo, type UserInfo } from "@/features/auth/user-cache";
 import { api } from "@/lib/api/client";
 
 import AvatarCropModal from "./AvatarCropModal";
@@ -67,7 +67,7 @@ export default function SettingsModal({ open, onClose }: Props) {
       const updated = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
       // 保存失败时 api() 抛 ApiError，由外层 catch 提示且不关弹窗
       if (!updated) { message.error(t("auth.saveFailed")); return; }
-      useAuthStore.setState({ user: updated }); // immediate update, no refetch needed
+      useAuthStore.setState({ user: toUserInfo(updated) }); // immediate update, no refetch needed
       message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }

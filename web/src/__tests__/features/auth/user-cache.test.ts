@@ -1,7 +1,7 @@
 /**
  * 用户 cookie 缓存的契约收口测试。
- * 锁定 toUserInfo 投影：服务端新增字段（email/role/displayName 等）不得进入
- * 持久 cookie；历史 cookie 中已泄漏的字段在读入时被剥离。
+ * 锁定：toUserInfo 只保留契约字段（服务端新增的 email/role/displayName 不透传）；
+ * parseUserCookie 把 cookie 当作不可信输入，字段类型不符一律视为无缓存、不补默认值。
  */
 import { describe, expect, it } from "vitest";
 
@@ -9,49 +9,42 @@ import { parseUserCookie, toUserInfo } from "@/features/auth/user-cache";
 
 import { PUBLIC_USER } from "./fixtures";
 
-describe("toUserInfo 投影", () => {
-  it("只保留 cookie 契约字段，email/role/displayName 等不落入结果", () => {
+const CONTRACT = { id: 1, username: "alice", avatarUrl: "/a.png", theme: "light", language: "en" };
+const encode = (value: unknown) => encodeURIComponent(JSON.stringify(value));
+
+describe("toUserInfo 转换", () => {
+  it("只保留契约字段，email/role/displayName 等不透传", () => {
     const info = toUserInfo(PUBLIC_USER);
-    expect(info).toEqual({
-      id: 1,
-      username: "alice",
-      avatarUrl: "/a.png",
-      theme: "light",
-      language: "en",
-    });
+    expect(info).toEqual(CONTRACT);
     expect(JSON.stringify(info)).not.toContain("email");
     expect(JSON.stringify(info)).not.toContain("role");
   });
-
-  it("可选字段缺失或类型不对时补默认值（avatarUrl null / theme dark / language zh）", () => {
-    expect(toUserInfo({ id: 2, username: "bob" })).toEqual({
-      id: 2, username: "bob", avatarUrl: null, theme: "dark", language: "zh",
-    });
-    expect(toUserInfo({ id: 2, username: "bob", avatarUrl: 5, theme: 1, language: null })).toEqual({
-      id: 2, username: "bob", avatarUrl: null, theme: "dark", language: "zh",
-    });
-  });
-
-  it("结构不对（缺 id/username）、数组与非对象输入返回 null", () => {
-    expect(toUserInfo({ username: "no-id" })).toBeNull();
-    // 数组可被 typeof 判为 object 且索引访问合法：必须显式拒绝，否则产出假 UserInfo
-    expect(toUserInfo([1, "alice"])).toBeNull();
-    expect(toUserInfo(null)).toBeNull();
-    expect(toUserInfo("garbage")).toBeNull();
-  });
 });
 
-describe("parseUserCookie 收口", () => {
-  it("历史泄漏字段在解析时被剥离", () => {
-    const leaked = encodeURIComponent(JSON.stringify(PUBLIC_USER));
-    expect(parseUserCookie(leaked)).toEqual({
-      id: 1, username: "alice", avatarUrl: "/a.png", theme: "light", language: "en",
-    });
+describe("parseUserCookie 严格校验", () => {
+  it("合法 cookie 原样还原（avatarUrl 允许为 null）", () => {
+    expect(parseUserCookie(encode(CONTRACT))).toEqual(CONTRACT);
+    expect(parseUserCookie(encode({ ...CONTRACT, avatarUrl: null }))).toEqual({ ...CONTRACT, avatarUrl: null });
   });
 
-  it("非法内容返回 null", () => {
+  it("多余字段不透传", () => {
+    expect(parseUserCookie(encode(PUBLIC_USER))).toEqual(CONTRACT);
+  });
+
+  it("任一契约字段缺失或类型不符返回 null，不补默认值", () => {
+    expect(parseUserCookie(encode({ id: 2, username: "bob" }))).toBeNull();
+    expect(parseUserCookie(encode({ ...CONTRACT, id: "1" }))).toBeNull();
+    expect(parseUserCookie(encode({ ...CONTRACT, avatarUrl: 5 }))).toBeNull();
+    expect(parseUserCookie(encode({ ...CONTRACT, theme: 1 }))).toBeNull();
+    expect(parseUserCookie(encode({ ...CONTRACT, language: null }))).toBeNull();
+  });
+
+  it("空值、非 JSON、数组与非对象返回 null", () => {
     expect(parseUserCookie(undefined)).toBeNull();
+    expect(parseUserCookie("")).toBeNull();
     expect(parseUserCookie(encodeURIComponent("not-json"))).toBeNull();
-    expect(parseUserCookie(encodeURIComponent('{"username":1}'))).toBeNull();
+    expect(parseUserCookie(encode([1, "alice"]))).toBeNull();
+    expect(parseUserCookie(encode(null))).toBeNull();
+    expect(parseUserCookie(encode("garbage"))).toBeNull();
   });
 });

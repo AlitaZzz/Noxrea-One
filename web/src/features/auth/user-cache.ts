@@ -13,29 +13,38 @@ export interface UserInfo {
 }
 
 /**
- * 从服务端 user 对象投影出 cookie 契约字段。
- * toPublicUser 会返回 email/role/displayName 等字段，它们不得落入持久 cookie——
- * 写端（store cacheUser）与读端（parseUserCookie，含 SSR 根布局）都经本函数收口，
- * 历史 cookie 中已泄漏的字段在读入时同样被剥离。
+ * 把服务端用户响应收口为 UserInfo 契约字段。
+ * 服务端 toPublicUser 还会返回 email/role/displayName 等字段，它们不得进入 store 与持久 cookie；
+ * 所有服务端响应进入 store 的入口（/me、登录、注册、设置保存）都经本函数转换。
  */
-export function toUserInfo(user: unknown): UserInfo | null {
-  if (typeof user !== "object" || user === null || Array.isArray(user)) return null;
-  const u = user as Partial<UserInfo> & Record<string, unknown>;
-  if (typeof u.id !== "number" || typeof u.username !== "string") return null;
+export function toUserInfo(user: UserInfo): UserInfo {
   return {
-    id: u.id,
-    username: u.username,
-    avatarUrl: typeof u.avatarUrl === "string" ? u.avatarUrl : null,
-    theme: typeof u.theme === "string" ? u.theme : "dark",
-    language: typeof u.language === "string" ? u.language : "zh",
+    id: user.id,
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    theme: user.theme,
+    language: user.language,
   };
 }
 
-/** 解析并校验 cookie 中的用户信息（经 toUserInfo 白名单投影，历史泄漏字段被剥离），结构不对返回 null */
+function isUserInfo(value: unknown): value is UserInfo {
+  if (typeof value !== "object" || value === null) return false;
+  const u = value as Record<string, unknown>;
+  return (
+    typeof u.id === "number" &&
+    typeof u.username === "string" &&
+    (u.avatarUrl === null || typeof u.avatarUrl === "string") &&
+    typeof u.theme === "string" &&
+    typeof u.language === "string"
+  );
+}
+
+/** 解析 cookie 中的用户信息：cookie 是不可信输入，字段类型任一不符即视为无缓存（由 /me 校正）。 */
 export function parseUserCookie(raw: string | undefined): UserInfo | null {
   if (!raw) return null;
   try {
-    return toUserInfo(JSON.parse(decodeURIComponent(raw)));
+    const parsed: unknown = JSON.parse(decodeURIComponent(raw));
+    return isUserInfo(parsed) ? toUserInfo(parsed) : null;
   } catch {
     return null;
   }

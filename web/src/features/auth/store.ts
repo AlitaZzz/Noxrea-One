@@ -28,12 +28,10 @@ function readCachedUser(): UserInfo | null {
   }
 }
 
-function cacheUser(user: unknown) {
+function cacheUser(user: UserInfo | null) {
   if (typeof document === "undefined") return;
-  // 经 toUserInfo 投影：只落 cookie 契约字段，服务端新增的 email/role 等不进持久 cookie
-  const info = toUserInfo(user);
-  if (info) {
-    document.cookie = `${USER_COOKIE}=${encodeURIComponent(JSON.stringify(info))}; path=/; max-age=31536000; samesite=lax`;
+  if (user) {
+    document.cookie = `${USER_COOKIE}=${encodeURIComponent(JSON.stringify(user))}; path=/; max-age=31536000; samesite=lax`;
   } else {
     document.cookie = `${USER_COOKIE}=; path=/; max-age=0; samesite=lax`;
   }
@@ -72,7 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const pending = (async () => {
       set({ loading: true });
       try {
-        const user = await session.run(() => authApi.me<UserInfo>());
+        const user = toUserInfo(await session.run(() => authApi.me<UserInfo>()));
         session.assertCurrent();
         set({ user, loading: false, initialized: true });
       } catch (e) {
@@ -103,7 +101,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       );
     }
     if (data?.user) {
-      set({ user: data.user, loading: false, initialized: true });
+      set({ user: toUserInfo(data.user), loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.login_failed"));
     }
@@ -124,7 +122,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       );
     }
     if (data?.user) {
-      set({ user: data.user, loading: false, initialized: true });
+      set({ user: toUserInfo(data.user), loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.register_failed"));
     }

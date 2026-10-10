@@ -11,13 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   me: vi.fn(),
   login: vi.fn(),
+  register: vi.fn(),
 }));
 
 vi.mock("@/features/auth/api", () => ({
   authApi: {
     me: (...args: unknown[]) => mocks.me(...args),
     login: (...args: unknown[]) => mocks.login(...args),
-    register: vi.fn(),
+    register: (...args: unknown[]) => mocks.register(...args),
     logout: vi.fn(async () => undefined),
     updateMe: vi.fn(async () => undefined),
   },
@@ -61,6 +62,16 @@ describe("auth store initialize 并发去重", () => {
     expect(useAuthStore.getState().user).toMatchObject({ username: "u" });
   });
 
+  it("/me 返回的服务端多余字段不进入 state.user", async () => {
+    mocks.me.mockResolvedValue(PUBLIC_USER);
+
+    await useAuthStore.getState().initialize();
+
+    expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
+      ["avatarUrl", "id", "language", "theme", "username"],
+    );
+  });
+
   it("访客判定（/me 401）期间并发调用也只发一次", async () => {
     mocks.me.mockRejectedValue(new Error("401"));
 
@@ -94,18 +105,32 @@ describe("cacheUser cookie 写端收口", () => {
     useAuthStore.setState({ user: null, loading: false, initialized: false });
   });
 
-  it("登录后 cookie 载荷只含契约字段（email/role/displayName 不落盘）", async () => {
+  it("登录后 state.user 与 cookie 载荷都只含契约字段（email/role/displayName 不入 store 不落盘）", async () => {
     const doc = { cookie: "" };
     vi.stubGlobal("document", doc);
     mocks.login.mockResolvedValue({ user: PUBLIC_USER });
 
     await useAuthStore.getState().login("alice", "pw");
 
+    expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
+      ["avatarUrl", "id", "language", "theme", "username"],
+    );
     const cookie = decodeURIComponent(doc.cookie);
     expect(cookie).toContain('"username":"alice"');
     expect(cookie).not.toContain("alice@example.com");
     expect(cookie).not.toContain('"role"');
     expect(cookie).not.toContain("displayName");
+  });
+
+  it("注册后 state.user 同样只含契约字段", async () => {
+    vi.stubGlobal("document", { cookie: "" });
+    mocks.register.mockResolvedValue({ user: PUBLIC_USER });
+
+    await useAuthStore.getState().register("alice", "pw");
+
+    expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
+      ["avatarUrl", "id", "language", "theme", "username"],
+    );
   });
 
   it("登出经 cacheUser(null) 清除 cookie（max-age=0）", async () => {
