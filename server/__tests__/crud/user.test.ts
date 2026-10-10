@@ -18,9 +18,11 @@ let prisma: import("@prisma/client").PrismaClient | null = null;
 let createUser: typeof import("@server/crud/user").createUser = null!;
 let touchLastLogin: typeof import("@server/crud/user").touchLastLogin = null!;
 let toPublicUser: typeof import("@server/crud/user").toPublicUser = null!;
+let savedEnv: Record<string, string | undefined> = {};
 
 beforeAll(async () => {
-  const saved = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
+  // 保存并最终恢复被本测试改写的环境，避免污染同 worker 的后续测试文件
+  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
   process.env.DATABASE_URL = dbUrl;
   process.env.LOG_LEVEL = "ERROR";
   const client = await import("@server/core/database/client");
@@ -37,16 +39,17 @@ beforeAll(async () => {
     stdio: "pipe",
   });
   await client.applyPragmas();
-
-  afterAll(async () => {
-    await prisma?.$disconnect();
-    for (const suffix of ["", "-wal", "-shm"]) {
-      try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* Windows 句柄延迟释放 */ }
-    }
-    process.env.DATABASE_URL = saved.DATABASE_URL;
-    process.env.LOG_LEVEL = saved.LOG_LEVEL;
-  });
 }, 60_000);
+
+// afterAll 必须在顶层注册：嵌套在 beforeAll 内注册不会生效，临时库与环境变量永远不会被清理
+afterAll(async () => {
+  await prisma?.$disconnect();
+  for (const suffix of ["", "-wal", "-shm"]) {
+    try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* Windows 句柄延迟释放 */ }
+  }
+  process.env.DATABASE_URL = savedEnv.DATABASE_URL;
+  process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
+});
 
 describe("用户表升级（真实 SQLite 库）", () => {
   it("首个注册用户自动 admin，后续用户为 user", async () => {
