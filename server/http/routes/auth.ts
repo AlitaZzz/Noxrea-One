@@ -5,10 +5,11 @@
 import { Hono } from "hono";
 import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
-import { getUserByUsername, getUserById, updateUser, createUser, setUserPassword, toPublicUser } from "@server/crud/user";
+import { getUserByUsername, getUserById, updateUser, createUser, setUserPassword, touchLastLogin, toPublicUser } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getConfig } from "@server/core/config";
+import { logger } from "@server/core/logger";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { resolveRateLimitIp } from "@server/core/ratelimit/client-ip";
 import { ok, failCode } from "@server/core/response";
@@ -54,6 +55,13 @@ router.post("/api/auth/login", async (c) => {
   const valid = await verifyPassword(password, user.hashedPassword);
   if (!valid) {
     return failCode(401, "auth.invalid_credentials");
+  }
+
+  // lastLoginAt 是只写审计列：写失败只记日志，不得让凭据正确的登录整体失败
+  try {
+    await touchLastLogin(user.id);
+  } catch (err) {
+    logger.warn({ err, userId: user.id }, "Failed to record last login time");
   }
 
   // 签发 JWT 并下发 httpOnly cookie（浏览器端凭据载体；body 中的 access_token 供纯 API 客户端使用）

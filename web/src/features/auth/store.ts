@@ -12,7 +12,7 @@ import { showGlobalNotification } from "@/lib/global-notification";
 import { setAppLanguage } from "@/lib/i18n/config";
 import { captureSession, changeSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 
-import { parseUserCookie, USER_COOKIE,type UserInfo } from "./user-cache";
+import { parseUserCookie, toUserInfo, USER_COOKIE, type UserInfo } from "./user-cache";
 
 // 用户信息缓存在非 httpOnly cookie（stale-while-revalidate）：刷新后首帧
 // 服务端即可直出真实头像/用户名（根布局解析同一 cookie 注入），/me 在后台校正。
@@ -28,10 +28,12 @@ function readCachedUser(): UserInfo | null {
   }
 }
 
-function cacheUser(user: UserInfo | null) {
+function cacheUser(user: unknown) {
   if (typeof document === "undefined") return;
-  if (user) {
-    document.cookie = `${USER_COOKIE}=${encodeURIComponent(JSON.stringify(user))}; path=/; max-age=31536000; samesite=lax`;
+  // 经 toUserInfo 投影：只落 cookie 契约字段，服务端新增的 email/role 等不进持久 cookie
+  const info = toUserInfo(user);
+  if (info) {
+    document.cookie = `${USER_COOKIE}=${encodeURIComponent(JSON.stringify(info))}; path=/; max-age=31536000; samesite=lax`;
   } else {
     document.cookie = `${USER_COOKIE}=; path=/; max-age=0; samesite=lax`;
   }

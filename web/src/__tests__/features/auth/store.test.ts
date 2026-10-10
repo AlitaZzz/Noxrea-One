@@ -6,16 +6,17 @@
  * 在途 promise 去重后，并发调用必须共享同一次拉取。
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   me: vi.fn(),
+  login: vi.fn(),
 }));
 
 vi.mock("@/features/auth/api", () => ({
   authApi: {
     me: (...args: unknown[]) => mocks.me(...args),
-    login: vi.fn(),
+    login: (...args: unknown[]) => mocks.login(...args),
     register: vi.fn(),
     logout: vi.fn(async () => undefined),
     updateMe: vi.fn(async () => undefined),
@@ -32,7 +33,9 @@ vi.mock("@/lib/i18n/config", () => ({
 
 import { useAuthStore } from "@/features/auth/store";
 
-const USER = { id: "1", username: "u", avatarUrl: "", theme: "dark", language: "zh" };
+import { PUBLIC_USER } from "./fixtures";
+
+const USER = { id: 1, username: "u", avatarUrl: "", theme: "dark", language: "zh" };
 
 describe("auth store initialize 并发去重", () => {
   beforeEach(() => {
@@ -78,5 +81,42 @@ describe("auth store initialize 并发去重", () => {
     await useAuthStore.getState().initialize();
 
     expect(mocks.me).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("cacheUser cookie 写端收口", () => {
+  beforeEach(() => {
+    mocks.login.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    useAuthStore.setState({ user: null, loading: false, initialized: false });
+  });
+
+  it("登录后 cookie 载荷只含契约字段（email/role/displayName 不落盘）", async () => {
+    const doc = { cookie: "" };
+    vi.stubGlobal("document", doc);
+    mocks.login.mockResolvedValue({ user: PUBLIC_USER });
+
+    await useAuthStore.getState().login("alice", "pw");
+
+    const cookie = decodeURIComponent(doc.cookie);
+    expect(cookie).toContain('"username":"alice"');
+    expect(cookie).not.toContain("alice@example.com");
+    expect(cookie).not.toContain('"role"');
+    expect(cookie).not.toContain("displayName");
+  });
+
+  it("登出经 cacheUser(null) 清除 cookie（max-age=0）", async () => {
+    const doc = { cookie: "" };
+    vi.stubGlobal("document", doc);
+    mocks.login.mockResolvedValue({ user: PUBLIC_USER });
+    await useAuthStore.getState().login("alice", "pw");
+    expect(doc.cookie).toContain("max-age=31536000");
+
+    await useAuthStore.getState().logout();
+
+    expect(doc.cookie).toContain("max-age=0");
   });
 });

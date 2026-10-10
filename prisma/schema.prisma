@@ -18,18 +18,26 @@ datasource db {
 // 1. User
 // ──────────────────────────────────────────
 model User {
-  id             Int      @id @default(autoincrement())
-  username       String   @unique @map("username")
-  hashedPassword String   @map("password_hash")
-  avatarUrl      String?  @map("avatar")
-  theme          String   @default("dark") @map("theme")
-  language       String   @default("zh") @map("lang")
-  isActive       Boolean  @default(true) @map("is_active")
+  id              Int       @id @default(autoincrement())
+  username        String    @unique @map("username")
+  hashedPassword  String    @map("password_hash")
+  // 角色：admin | user；首个注册用户自动为 admin（判定在注册事务内）
+  role            String    @default("user") @map("role")
+  // 可选：邮箱验证流程落地前仅作存储，不用于登录或找回密码
+  email           String?   @unique @map("email")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  // 展示名：空时按 username 回退（toPublicUser 序列化单点），无数据库默认值
+  displayName     String?   @map("display_name")
+  lastLoginAt     DateTime? @map("last_login_at")
+  avatarUrl       String?   @map("avatar")
+  theme           String    @default("dark") @map("theme")
+  language        String    @default("zh") @map("lang")
+  isActive        Boolean   @default(true) @map("is_active")
   // 凭据版本号：密码修改时递增，JWT payload 携带签发时的值，
   // 与库中不一致即视为已吊销（旧 token 立即失效）
-  tokenVersion   Int      @default(0) @map("token_version")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+  tokenVersion    Int       @default(0) @map("token_version")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
 
   // 关系
   canvasProjects  CanvasProject[]
