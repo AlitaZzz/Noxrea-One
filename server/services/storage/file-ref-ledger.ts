@@ -20,7 +20,7 @@ export interface FileRefSource {
   sourceId: string;
 }
 
-/** SQLite 的绑定参数数量有限；按来源 ID 分批查询/删除，避免目录资产过多时失败。 */
+/** SQLite 的绑定参数数量有限；按来源 ID 分批回收。5 万来源回归测试（10 个分片）覆盖该分片大小。 */
 const FILE_REF_SOURCE_CHUNK_SIZE = 5_000;
 
 /** 规整期望引用：过滤空数量，并确保数量至少为 1。 */
@@ -97,30 +97,16 @@ export async function replaceSourceFileRefs(
 /**
  * 移除一个业务来源的全部引用。
  * 常用于画布删除或资产条目删除，避免级联删除绕过聚合计数。
+ * 与批量移除共用同一实现，保证"移除来源引用"只有一套规则。
  */
 export async function removeSourceFileRefs(
   tx: Prisma.TransactionClient,
   source: FileRefSource,
 ): Promise<void> {
-  const rows = await tx.fileRef.findMany({
-    where: {
-      userId: source.userId,
-      sourceType: source.sourceType,
-      sourceId: source.sourceId,
-    },
-    select: { hash: true, count: true },
-  });
-
-  for (const row of rows) {
-    await adjustFileRefCount(tx, source.userId, row.hash, -row.count);
-  }
-
-  await tx.fileRef.deleteMany({
-    where: {
-      userId: source.userId,
-      sourceType: source.sourceType,
-      sourceId: source.sourceId,
-    },
+  await removeSourceFileRefsBatch(tx, {
+    userId: source.userId,
+    sourceType: source.sourceType,
+    sourceIds: [source.sourceId],
   });
 }
 
@@ -128,7 +114,8 @@ export async function removeSourceFileRefs(
  * 批量移除同一类型下的多个来源引用。
  * 引用回收用集合运算：先按 hash 聚合各来源的引用总量并一次递减聚合计数，再删除账本行。
  * 万级来源下逐 hash 循环会触发 Prisma 交互式事务 5s 默认超时（实测 5 万资产 P2028）；
- * 集合运算实测 <1s。IN 列表按 FILE_REF_SOURCE_CHUNK_SIZE 分片，规避 SQLite 绑定参数上限。
+ * 集合运算实测 <1s。IN 列表按 FILE_REF_SOURCE_CHUNK_SIZE 分片；各分片来源互不相交，
+ * 同一 hash 的递减按片累加，因此每片可"先递减再删账本行"。
  */
 export async function removeSourceFileRefsBatch(
   tx: Prisma.TransactionClient,
@@ -152,10 +139,6 @@ export async function removeSourceFileRefsBatch(
         GROUP BY hash
       ) AS agg
       WHERE file_objects.user_id = ${params.userId} AND file_objects.hash = agg.hash`;
-  }
-
-  for (let index = 0; index < params.sourceIds.length; index += FILE_REF_SOURCE_CHUNK_SIZE) {
-    const sourceIds = params.sourceIds.slice(index, index + FILE_REF_SOURCE_CHUNK_SIZE);
     await tx.$executeRaw`
       DELETE FROM file_refs
       WHERE user_id = ${params.userId} AND source_type = ${params.sourceType}

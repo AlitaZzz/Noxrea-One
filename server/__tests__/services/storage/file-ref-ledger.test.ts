@@ -1,8 +1,9 @@
 /**
  * 文件引用账本单元测试。
  * 用内存版事务客户端锁定账本编排语义：差量整替、数量归一、行级增删、
- * 聚合计数差量（账本↔ref_count 一致性的关键不变量）、批量分块。
+ * 聚合计数差量（账本↔ref_count 一致性的关键不变量）。
  * adjustFileRefCount 被 mock 并记录调用，断言聚合计数收到正确的增减量。
+ * 移除类操作（集合运算 SQL）见 file-ref-ledger-bulk.test.ts。
  */
 import type { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,7 +24,6 @@ vi.mock("@server/crud/file", () => ({
 }));
 
 import {
-  removeSourceFileRefs,
   removeSourceFileRefsBatch,
   replaceSourceFileRefs,
 } from "@server/services/storage/file-ref-ledger";
@@ -165,35 +165,12 @@ describe("replaceSourceFileRefs", () => {
   });
 });
 
-describe("removeSourceFileRefs", () => {
-  it("按行数量负向调整并清空该来源账本", async () => {
-    const { rows, tx } = makeTx();
-    await replaceSourceFileRefs(tx, source, new Map([["a", 2], ["b", 1]]));
-    adjustCalls.calls = [];
-
-    await removeSourceFileRefs(tx, source);
-
-    expect(adjustCalls.calls).toEqual([
-      { userId: 1, hash: "a", delta: -2 },
-      { userId: 1, hash: "b", delta: -1 },
-    ]);
-    expect(rows).toHaveLength(0);
-  });
-
-  it("空来源无操作", async () => {
-    const { rows, tx } = makeTx();
-    await removeSourceFileRefs(tx, source);
-    expect(adjustCalls.calls).toEqual([]);
-    expect(rows).toHaveLength(0);
-  });
-});
-
 describe("removeSourceFileRefsBatch", () => {
   it("空来源列表直接返回，不触发任何 SQL", async () => {
     const { fileRef, tx } = makeTx();
     await removeSourceFileRefsBatch(tx, { userId: 1, sourceType: "canvas", sourceIds: [] });
     expect(fileRef.$executeRaw).not.toHaveBeenCalled();
   });
-  // 语义与规模回归在真实 SQLite 库上验证（$executeRaw 无法在内存 mock 上验证）：
+  // 单来源/批量移除的语义与规模回归在真实 SQLite 库上验证（$executeRaw 无法在内存 mock 上验证）：
   // 见 file-ref-ledger-bulk.test.ts
 });
