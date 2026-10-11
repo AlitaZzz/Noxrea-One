@@ -27,22 +27,30 @@ describe("Tooltip", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Controlled");
   });
 
-  it.each([true, false])("opens on focus only when focus-visible is %s", async (focusVisible) => {
+  // 模态判定来自 lib/focus-ring.ts 的应用侧追踪，用真实事件驱动而非 mock
+  it("opens on focus under keyboard modality", async () => {
     const onFocus = vi.fn();
     render(<TooltipProvider><Tooltip><TooltipTrigger asChild onFocus={onFocus}><button type="button">Action</button></TooltipTrigger><TooltipContent>Helpful text</TooltipContent></Tooltip></TooltipProvider>);
     const trigger = screen.getByRole("button");
-    const matches = trigger.matches.bind(trigger);
-    vi.spyOn(trigger, "matches").mockImplementation((selector) => selector === ":focus-visible" ? focusVisible : matches(selector));
+    window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
 
     fireEvent.focus(trigger);
 
     expect(onFocus).toHaveBeenCalledOnce();
-    if (focusVisible) {
-      await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("Helpful text"));
-    } else {
-      expect(screen.queryByRole("tooltip")).toBeNull();
-      fireEvent.pointerMove(trigger, { pointerType: "mouse" });
-      await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("Helpful text"));
-    }
+    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("Helpful text"));
+  });
+
+  it("suppresses focus-open under pointer modality but keeps hover open", async () => {
+    const onFocus = vi.fn();
+    render(<TooltipProvider><Tooltip><TooltipTrigger asChild onFocus={onFocus}><button type="button">Action</button></TooltipTrigger><TooltipContent>Helpful text</TooltipContent></Tooltip></TooltipProvider>);
+    const trigger = screen.getByRole("button");
+    window.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+
+    fireEvent.focus(trigger);
+
+    expect(onFocus).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.pointerMove(trigger, { pointerType: "mouse" });
+    await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("Helpful text"));
   });
 });

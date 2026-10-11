@@ -5,6 +5,7 @@ import { Tooltip as TooltipPrimitive } from "radix-ui"
 import * as React from "react"
 
 import { useLayerZIndex } from "@/components/ui/modal/layer-context"
+import { getLastInputModality } from "@/lib/focus-ring"
 
 function TooltipProvider({
   delayDuration = 0,
@@ -34,7 +35,10 @@ function TooltipTrigger({
       onFocus={(event) => {
         onFocus?.(event)
         // Pointer-driven popup focus restoration should not reopen a tooltip.
-        if (!event.currentTarget.matches(":focus-visible")) event.preventDefault()
+        // 用应用侧输入模态而非浏览器 :focus-visible 启发式：后者是文档级判定，
+        // 全新文档会把脚本还原的焦点误判为键盘模态（详见 lib/focus-ring.ts），
+        // 导致"刷新后有 tooltip、SPA 操作后没有"的不一致。
+        if (getLastInputModality() === "pointer") event.preventDefault()
       }}
     />
   )

@@ -1011,3 +1011,14 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
     @apply font-sans;
   }
 }
+
+/* ===== 焦点环抑制（浮层经指针交互关闭后还原焦点）=====
+   Radix 卸载浮层时用脚本把焦点还原到触发器，浏览器的 :focus-visible
+   文档模态启发式在全新文档上会误判为键盘模态。指针模态下由
+   lib/focus-ring.ts 给触发器打 data-focus-ring-suppressed，这里抑制
+   focus ring 样式；键盘模态不打标记，保持默认。 */
+[data-focus-ring-suppressed]:focus-visible:not([aria-invalid="true"]) {
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}

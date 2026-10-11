@@ -5,8 +5,10 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { cn } from "cn"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 import * as React from "react"
+import { useCallback } from "react"
 
 import { useLayerZIndex } from "@/components/ui/modal/layer-context"
+import { useContentFocusRingAnchor } from "@/lib/focus-ring"
 
 function DropdownMenu({
   modal = false,
@@ -47,22 +49,33 @@ function DropdownMenuContent({
   sideOffset = 4,
   restoreFocus = true,
   style,
+  ref: forwardedRef,
   ...props
 }: DropdownMenuContentProps) {
   const layerZIndex = useLayerZIndex()
+  const { handleContentRef, handleCloseAutoFocus } = useContentFocusRingAnchor(restoreFocus)
+  const setRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      handleContentRef(node)
+      if (typeof forwardedRef === "function") forwardedRef(node)
+      else if (forwardedRef) forwardedRef.current = node
+    },
+    [forwardedRef, handleContentRef],
+  )
 
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
+        ref={setRef}
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
         className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) space-y-px overflow-x-hidden overflow-y-auto rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
-        onCloseAutoFocus={(event) => {
-          if (!restoreFocus) event.preventDefault()
-        }}
         style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}
+        // 焦点仲裁由本封装拥有（类型层已 Omit，这里置于展开之后防运行时绕过），
+        // 调用方只能通过 restoreFocus 表达意图
+        onCloseAutoFocus={handleCloseAutoFocus}
       />
     </DropdownMenuPrimitive.Portal>
   )

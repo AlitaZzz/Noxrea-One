@@ -57,9 +57,8 @@ describe("NodeToolbar creation menu", () => {
 
   it("does not reopen the creation tooltip after a pointer selects a preset", async () => {
     const trigger = renderToolbar();
-    // jsdom does not track input modality for :focus-visible as a browser does.
-    const matches = trigger.matches.bind(trigger);
-    vi.spyOn(trigger, "matches").mockImplementation((selector) => selector === ":focus-visible" ? false : matches(selector));
+    // 指针模态由 lib/focus-ring.ts 的应用侧追踪判定，用真实事件驱动
+    window.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
     fireEvent.pointerMove(trigger, { pointerType: "mouse" });
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("node.creation"));
     fireEvent.pointerDown(trigger);
@@ -77,6 +76,8 @@ describe("NodeToolbar creation menu", () => {
   });
 
   it("restores keyboard focus and its tooltip after Escape closes the menu", async () => {
+    // 显式回到键盘模态（模块级追踪在同一文件内跨用例保留）
+    window.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
     const trigger = renderToolbar();
     act(() => trigger.focus());
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("node.creation"));
