@@ -29,6 +29,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
   takeCanvasSnapshot: vi.fn(),
   markDirty: vi.fn(),
   markDirtyImmediate: vi.fn(),
+  withHistoryBatch: vi.fn((fn: () => unknown) => fn()),
 }));
 
 vi.mock("@/lib/api", () => ({

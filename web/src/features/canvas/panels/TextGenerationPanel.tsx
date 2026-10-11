@@ -39,7 +39,7 @@ import { EMPTY_ORDER, mergeOrder, swapOrderItems, useGenSettings, writeGenSettin
 import type { ReferenceItem } from "../shared/reference";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
-import { useGenerationSubmit } from "./use-generation-submit";
+import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
 
 interface Props {
   nodeId: string;
@@ -292,7 +292,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
   // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
-  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
+  const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
 
   const handleGenerate = async () => {
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey || isGenerating || submitting) return;
@@ -364,10 +364,10 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
       const tid = (node?.data as TextNodeData)?.taskBinding?.taskId;
       if (tid) {
         generationApi.cancelGenerationTask(tid).catch(() => {});
+        popPreGenSnapshot(tid);
       }
       useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: undefined }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      dropPendingHistory();
     }
     setSubmitting(false);
   };

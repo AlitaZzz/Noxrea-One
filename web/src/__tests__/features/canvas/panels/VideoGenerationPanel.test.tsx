@@ -63,7 +63,6 @@ vi.mock("@/features/canvas/panels/use-generation-submit", () => ({
     isCurrent: () => true,
     invalidate: vi.fn(),
     submitWithOwner: vi.fn(),
-    dropPendingHistory: vi.fn(),
   }),
 }));
 

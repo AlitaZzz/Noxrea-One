@@ -13,6 +13,8 @@ import {
   createVideoNode,
 } from "@/features/canvas/node-defaults";
 import { absoluteNodeOf, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
+import type { HistoryPushOptions } from "@/features/canvas/stores/canvas-store";
+import { withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import type { AnyEdge, AnyNode, ImageNode, TextNode } from "@/features/canvas/types";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
@@ -30,8 +32,8 @@ export const DERIVED_BASE_GAP_Y = 24;
 export interface CanvasStoreApi {
   nodes: AnyNode[];
   edges: AnyEdge[];
-  addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
-  setEdges: (edges: AnyEdge[], options?: { skipHistory?: boolean }) => void;
+  addNodes: (nodes: AnyNode[], options?: HistoryPushOptions) => void;
+  setEdges: (edges: AnyEdge[], options?: HistoryPushOptions) => void;
 }
 
 /**
@@ -113,8 +115,11 @@ export function spawnPromptDerivedNode(
   const gen = node.data.genSettings;
   if (gen) gen.prompt = prompt;
   node.data.label = options.label;
-  storeApi.addNodes([node]);
-  storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
+  // 建节点 + 接线是同一原子操作：批量守卫合并为一条撤销（离散操作必定入栈）
+  withHistoryBatch(() => {
+    storeApi.addNodes([node]);
+    storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
+  });
   return node;
 }
 
@@ -158,8 +163,11 @@ export function createNodeFromUrl(
     size,
   });
 
-  storeApi.addNodes([node]);
-  storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
+  // 建节点 + 接线是同一原子操作：批量守卫合并为一条撤销（离散操作必定入栈）
+  withHistoryBatch(() => {
+    storeApi.addNodes([node]);
+    storeApi.setEdges([...storeApi.edges, createEdge(sourceId, node.id)]);
+  });
 
   return node;
 }

@@ -180,8 +180,10 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
   const { t } = useTranslation();
   const handlePick = useCallback(
     (key: string) => {
+      // 配色切换是离散操作：必定压栈
       useCanvasStore.getState().updateNodeVisual(nodeId, {
         data: { color: key },
+        forceHistory: true,
         immediate: true,
       });
     },

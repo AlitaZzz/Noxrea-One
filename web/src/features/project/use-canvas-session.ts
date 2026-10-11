@@ -19,6 +19,7 @@
 import { useEffect, useState } from "react";
 
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
+import { clearPreGenSnapshots } from "@/features/canvas/panels/use-generation-submit";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { apiStream } from "@/lib/api/client";
@@ -133,6 +134,9 @@ export function handleCanvasHandshake(
   saveManager.setBaselineFromCurrent(projectId);
   setCanvasLease(projectId, lease);
   useHistoryStore.getState().clear();
+  // 预生成快照注册表随撤销历史一并归零：条目引用的是旧项目栈内快照，
+  // popIfTop 按引用比对本就不会误弹新栈，清空只为收敛内存
+  clearPreGenSnapshots();
   return "adopted";
 }
 

@@ -212,7 +212,8 @@ export default function DeletableEdge(props: EdgeProps) {
             onWheel={handleWheel}
             onClick={(e) => {
               e.stopPropagation();
-              useCanvasStore.getState().removeEdges([id]);
+              // 离散删除：必定压栈
+              useCanvasStore.getState().removeEdges([id], { forceHistory: true });
             }}
             style={{
               left: buttonX,

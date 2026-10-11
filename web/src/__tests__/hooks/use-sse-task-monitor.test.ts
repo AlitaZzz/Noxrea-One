@@ -37,6 +37,7 @@ vi.mock("@/features/project/save-manager", () => ({
 }));
 
 import type { TaskStatusEvent } from "@/features/canvas/api/generation-api";
+import { registerPreGenSnapshot } from "@/features/canvas/panels/use-generation-submit";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
@@ -208,6 +209,29 @@ describe("useSseTaskMonitor", () => {
     expect(useHistoryStore.getState().undoStack.length).toBe(0);
     useCanvasStore.getState().updateNodeData("c1", { content: "x" }, undefined, { forceHistory: true });
     expect(useHistoryStore.getState().undoStack.length).toBe(1);
+  });
+
+  it("SSE 失败终态弹出预生成快照（注册表接线，Spec: canvas-undo-redo-integrity 规则 5）", async () => {
+    addWatchedNode("n1", "t1");
+    // 模拟提交收尾：绑定写入（forceHistory 压栈）+ 注册表登记
+    useCanvasStore.getState().updateNodeData("n1", { probe: "bound" }, undefined, { forceHistory: true });
+    const stack = useHistoryStore.getState().undoStack;
+    registerPreGenSnapshot("t1", stack[stack.length - 1]);
+    const depth = useHistoryStore.getState().undoStack.length;
+    expect(depth).toBe(1);
+
+    mocks.streamGenerationTask.mockResolvedValue(
+      sseResponse(terminalFrame({ taskId: "t1", status: "failed", error: "boom" })),
+    );
+
+    renderHook(() => useSseTaskMonitor(notif));
+
+    // 失败终态：预生成快照弹出，撤销栈不留无效步；绑定清除（skipHistory）
+    await waitFor(() => {
+      expect(useHistoryStore.getState().undoStack.length).toBe(depth - 1);
+    });
+    expect((useCanvasStore.getState().nodes[0].data as Record<string, unknown>).taskBinding).toBeUndefined();
+    expect(notif.error).toHaveBeenCalledTimes(1);
   });
 
   /**

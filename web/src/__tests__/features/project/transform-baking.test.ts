@@ -56,6 +56,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
   markDirty: vi.fn(),
   markDirtyImmediate: vi.fn(),
   takeCanvasSnapshot: vi.fn(),
+  withHistoryBatch: vi.fn((fn: () => unknown) => fn()),
 }));
 
 /** 模拟 CanvasStoreApi（符合 upload/derived-node 中定义的接口） */

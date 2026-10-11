@@ -46,7 +46,7 @@ import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
-import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
 import {
   createAudioNodeFromUrl,
@@ -623,14 +623,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         { write: false },
       );
 
-      // 2. 两个产物节点都直接连回原视频，节点与边同批写入
-      //    addNodes 压一条「分离前」快照，setEdges 被节流，撤销一次即整体删除
-      store.addNodes([mutedNode, audioNode]);
-      store.setEdges([
-        ...store.edges,
-        createEdge(id, mutedNode.id),
-        createEdge(id, audioNode.id),
-      ]);
+      // 2. 两个产物节点都直接连回原视频，节点与边同批写入：
+      //    批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
+      withHistoryBatch(() => {
+        store.addNodes([mutedNode, audioNode]);
+        store.setEdges([
+          ...store.edges,
+          createEdge(id, mutedNode.id),
+          createEdge(id, audioNode.id),
+        ]);
+      });
 
       commitHasAudio(true);
       markDirtyImmediate();
@@ -703,9 +705,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         { write: false },
       );
 
-      // addNodes 压一条「截取前」快照，setEdges 被节流，撤销一次即整体删除
-      store.addNodes([clipNode]);
-      store.setEdges([...store.edges, createEdge(id, clipNode.id)]);
+      // 批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
+      withHistoryBatch(() => {
+        store.addNodes([clipNode]);
+        store.setEdges([...store.edges, createEdge(id, clipNode.id)]);
+      });
 
       markDirtyImmediate();
     } catch (e) {
@@ -763,8 +767,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         { write: false },
       );
 
-      store.addNodes([cropNode]);
-      store.setEdges([...store.edges, createEdge(id, cropNode.id)]);
+      // 批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
+      withHistoryBatch(() => {
+        store.addNodes([cropNode]);
+        store.setEdges([...store.edges, createEdge(id, cropNode.id)]);
+      });
 
       markDirtyImmediate();
     } catch (e) {

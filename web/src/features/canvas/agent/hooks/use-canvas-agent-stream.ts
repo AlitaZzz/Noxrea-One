@@ -281,21 +281,34 @@ export function useCanvasAgentStream(modelId: string, projectId?: string, provid
       appendMessage({ id: placeholderId, role: "assistant", content: "", turnId });
 
       // 整个回合的画布变更合并为一次历史快照（agent 一批操作 = 用户一次撤销）。
-      // 历史栈存「改动前」状态：首次要执行画布工具时拍快照，回合结束（含中途出错）统一入栈。
-      const turn = { snapshot: null as ReturnType<typeof takeCanvasSnapshot> | null, mutated: false, pushed: false };
+      // 快照在首次要执行画布工具时拍下并「即时入栈」：入栈先于任何工具写入，
+      // 与用户回合中途的编辑入栈按时间自然交错，栈序始终单调（若回合末统一入栈，
+      // 更旧的回合快照会压到用户中途快照之上，一次撤销吞掉用户编辑、再按一次
+      // 时间倒流）。回合结束（含中途出错/停止）时若未产生任何画布变更，popIfTop
+      // 补偿弹出，不留无效撤销步。
+      const turn = {
+        snapshot: null as ReturnType<typeof takeCanvasSnapshot> | null,
+        /** 压栈时的历史版本号：回合撤销按钮以「版本未变」判定记录仍有效 */
+        pushVersion: 0,
+        mutated: false,
+      };
       const ensureTurnSnapshot = () => {
-        if (!turn.snapshot) turn.snapshot = takeCanvasSnapshot();
+        if (turn.snapshot) return;
+        turn.snapshot = takeCanvasSnapshot();
+        useHistoryStore.getState().push(turn.snapshot);
+        turn.pushVersion = useHistoryStore.getState().version;
       };
       const finishTurnHistory = () => {
-        if (turn.snapshot && turn.mutated && !turn.pushed) {
-          turn.pushed = true;
-          useHistoryStore.getState().push(turn.snapshot);
-          setLastTurnUndo({
-            turnId,
-            snapshot: turn.snapshot,
-            version: useHistoryStore.getState().version,
-          });
+        if (!turn.snapshot) return;
+        if (!turn.mutated) {
+          useHistoryStore.getState().popIfTop(turn.snapshot);
+          return;
         }
+        setLastTurnUndo({
+          turnId,
+          snapshot: turn.snapshot,
+          version: turn.pushVersion,
+        });
       };
 
       try {

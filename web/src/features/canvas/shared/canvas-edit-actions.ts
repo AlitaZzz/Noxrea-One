@@ -18,7 +18,9 @@ import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/nod
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { isGroupMember, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
-import { markDirtyImmediate, markDirtyUndo, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { CanvasState } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, markDirtyUndo, pushHistoryThrottled, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
+import { NODE_UI_STATE_KEYS } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode, MediaGenFields } from "@/features/canvas/types";
@@ -44,14 +46,19 @@ export function getSelectedEdgeIds(): string[] {
 }
 
 /**
- * 是否有媒体编辑面板打开中（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 打光 / 多视角 / 全景）。
+ * 媒体编辑面板打开状态投影（纯函数）：标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 打光 / 多视角 / 全景。
  * 键盘作用域所有权：面板打开时画布整体让出键盘——RF 的选中节点方向键移动
  * （disableKeyboardA11y）与画布全局快捷键（use-canvas-keyboard）都以此为准，
  * 各编辑面板自己的按键监听不经过此判断、始终生效。
+ * 供响应式订阅（右键菜单 disabled 派生）与命令式判断共用，清单勿在此处之外复制。
+ * 注意：不含 editingTextNodeId（文本编辑态 Ctrl+Z 必须路由到画布级撤销）与 multiExpandedNodeId。
  */
-export function isMediaEditorOpen(): boolean {
-  const s = useCanvasStore.getState();
+export function isMediaEditorOpenState(s: CanvasState): boolean {
   return !!(s.annotatingNodeId || s.croppingNodeId || s.frameCaptureNodeId || s.clipCaptureNodeId || s.audioClipNodeId || s.lightingNodeId || s.angleEditorNodeId || s.panoramaNodeId);
+}
+
+export function isMediaEditorOpen(): boolean {
+  return isMediaEditorOpenState(useCanvasStore.getState());
 }
 
 /** 复制到系统剪贴板的节点 JSON 前缀标记：粘贴时据此识别「我们复制的节点」 */
@@ -72,6 +79,8 @@ export function nudgeSelectedNodes(direction: { x: number; y: number }, factor: 
   const dy = direction.y * step * factor;
   if (dx === 0 && dy === 0) return false;
   const ids = new Set(selected.map((n) => n.id));
+  // 整段连续微调合并为一条撤销：首次微调压「微调前」快照，窗口内的后续微调并入
+  pushHistoryThrottled();
   s.setNodes(
     s.nodes.map((n) =>
       ids.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n
@@ -302,44 +311,47 @@ function pasteNodes(
     return cloned;
   });
 
-  // 先落节点再还原连线：节点表必须包含刚创建的副本（边的集内端点已重映射
-  // 为副本 id，在旧快照里查不到会被误丢）
-  const store = useCanvasStore.getState();
-  store.addNodes(newNodes);
+  // 建节点 + 还原连线是同一原子操作：批量守卫合并为一条撤销，离散操作必定入栈
+  // （先落节点再还原连线：节点表必须包含刚创建的副本（边的集内端点已重映射
+  // 为副本 id，在旧快照里查不到会被误丢））
+  withHistoryBatch(() => {
+    const store = useCanvasStore.getState();
+    store.addNodes(newNodes);
 
-  // 连线还原：集内端点重映射到副本；普通粘贴只还原两端都在剪贴板内的边
-  // （不继承与原节点的外部关系）；副本模式（includeExternalEdges）额外还原
-  // 上游外部边（集外 source → 集内副本），下游外部边不还原——副本是开新
-  // 分支，不抢占下游消费者的输入；跨画布粘贴时集外 id 不存在则丢弃该边
-  const includeExternal = options?.includeExternalEdges === true;
-  const latestNodes = useCanvasStore.getState().nodes;
-  const existingPairs = new Set(
-    useCanvasStore.getState().edges.map((e) => `${e.source}→${e.target}`),
-  );
-  const nodeById = new Map(latestNodes.map((n) => [n.id, n]));
-  const newEdges = clipEdges
-    // 集内判定必须用重映射前的原 id：idMap 的键是原节点 id，重映射后已是
-    // 副本 id（idMap 里查不到），错位判定会把所有内部边误判成外部边丢掉
-    .filter((e) => idMap.has(e.target) && (includeExternal || idMap.has(e.source)))
-    .map((e) => {
-      const source = idMap.get(e.source) ?? e.source;
-      const target = idMap.get(e.target) ?? e.target;
-      return { source, target };
-    })
-    .filter(({ source, target }) => {
-      if (!nodeById.has(source) || !nodeById.has(target)) return false;
-      // 跨画布粘贴时集外节点的类型可能与原边不匹配，按连接规则再校验一次
-      // （含节点能力：上传素材不能作为连线目标，与画布交互同一口径）
-      const srcNode = nodeById.get(source)!, tgtNode = nodeById.get(target)!;
-      if (!canConnect(srcNode.type, tgtNode.type) || !nodeAcceptsInput(tgtNode)) return false;
-      const key = `${source}→${target}`;
-      if (existingPairs.has(key)) return false;
-      existingPairs.add(key);
-      return true;
-    })
-    .map(({ source, target }) => createEdge(source, target));
+    // 连线还原：集内端点重映射到副本；普通粘贴只还原两端都在剪贴板内的边
+    // （不继承与原节点的外部关系）；副本模式（includeExternalEdges）额外还原
+    // 上游外部边（集外 source → 集内副本），下游外部边不还原——副本是开新
+    // 分支，不抢占下游消费者的输入；跨画布粘贴时集外 id 不存在则丢弃该边
+    const includeExternal = options?.includeExternalEdges === true;
+    const latestNodes = useCanvasStore.getState().nodes;
+    const existingPairs = new Set(
+      useCanvasStore.getState().edges.map((e) => `${e.source}→${e.target}`),
+    );
+    const nodeById = new Map(latestNodes.map((n) => [n.id, n]));
+    const newEdges = clipEdges
+      // 集内判定必须用重映射前的原 id：idMap 的键是原节点 id，重映射后已是
+      // 副本 id（idMap 里查不到），错位判定会把所有内部边误判成外部边丢掉
+      .filter((e) => idMap.has(e.target) && (includeExternal || idMap.has(e.source)))
+      .map((e) => {
+        const source = idMap.get(e.source) ?? e.source;
+        const target = idMap.get(e.target) ?? e.target;
+        return { source, target };
+      })
+      .filter(({ source, target }) => {
+        if (!nodeById.has(source) || !nodeById.has(target)) return false;
+        // 跨画布粘贴时集外节点的类型可能与原边不匹配，按连接规则再校验一次
+        // （含节点能力：上传素材不能作为连线目标，与画布交互同一口径）
+        const srcNode = nodeById.get(source)!, tgtNode = nodeById.get(target)!;
+        if (!canConnect(srcNode.type, tgtNode.type) || !nodeAcceptsInput(tgtNode)) return false;
+        const key = `${source}→${target}`;
+        if (existingPairs.has(key)) return false;
+        existingPairs.add(key);
+        return true;
+      })
+      .map(({ source, target }) => createEdge(source, target));
 
-  if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+    if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+  });
   // 粘贴后选中新节点，与键盘 Ctrl+V 行为保持一致
   const latest = useCanvasStore.getState();
   latest.setNodes(
@@ -358,7 +370,7 @@ export function createTextNodeWithContent(text: string, at: { x: number; y: numb
   const html = textToTiptapHtml(text);
   (node.data as { content: string; plainText: string }).content = html;
   (node.data as { content: string; plainText: string }).plainText = text;
-  useCanvasStore.getState().addNodes([node]);
+  useCanvasStore.getState().addNodes([node], { forceHistory: true });
   const latest = useCanvasStore.getState();
   latest.setNodes(latest.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
   markDirtyImmediate();
@@ -444,16 +456,31 @@ export function deleteSelection(): void {
   if (nodeIds.length === 0 && edgeIds.length === 0) return;
 
   const store = useCanvasStore.getState();
-  if (nodeIds.length > 0) store.removeNodes(nodeIds);
-  if (edgeIds.length > 0) store.removeEdges(edgeIds);
+  // 删节点 + 删边是同一原子操作：批量守卫合并为一条撤销（离散操作必定入栈，
+  // 不再依赖全局节流窗口碰运气的合并语义）
+  withHistoryBatch(() => {
+    if (nodeIds.length > 0) store.removeNodes(nodeIds, { forceHistory: true });
+    if (edgeIds.length > 0) store.removeEdges(edgeIds, { forceHistory: true });
+  });
 }
 
 /** 是否存在生成/处理中的节点（用于禁止撤销/重做，避免波及生成中节点）。
     导出给键盘层：拦截发生时给出提示，而不是静默吞掉快捷键。 */
+export function hasGeneratingNodeIn(nodes: AnyNode[]): boolean {
+  return nodes.some((n) => isGenerating((n.data as MediaGenFields).taskBinding));
+}
+
 export function hasGeneratingNode(): boolean {
-  return useCanvasStore
-    .getState()
-    .nodes.some((n) => isGenerating((n.data as MediaGenFields).taskBinding));
+  return hasGeneratingNodeIn(useCanvasStore.getState().nodes);
+}
+
+/**
+ * 画布级撤销/重做统一守卫：生成中（波及 taskBinding）或媒体编辑面板打开
+ * （面板拥有键盘与编辑现场）时不可用。键盘快捷键、右键菜单、Agent「撤销此轮」
+ * 等全部入口共用此判定，禁止单独复制条件。
+ */
+export function canUndoNow(): boolean {
+  return !hasGeneratingNode() && !isMediaEditorOpen();
 }
 
 /** 把历史快照恢复为画布当前状态（节点/边去选中，避免遗留悬空选区） */
@@ -463,14 +490,23 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
   // 撤销/重做是程序化恢复，不算用户对画布内容做的增量修改，不进动作历史
   runSuppressed(() => {
     const s = useCanvasStore.getState();
-    // 编辑态下撤销可能回退到该节点尚不存在的时刻：节点已随快照消失则退出编辑，
-    // 否则 editingTextNodeId 悬空指向不存在的节点
-    if (s.editingTextNodeId && !snapshot.nodes.some((n) => n.id === s.editingTextNodeId)) {
-      s.setEditingTextNodeId(null);
+    // 编辑态宿主已随快照消失则退出对应编辑态（否则面板悬空指向不存在的节点）；
+    // 宿主仍在则面板保留，内容随快照恢复
+    const snapshotIds = new Set(snapshot.nodes.map((n) => n.id));
+    const uiPatch: Partial<CanvasState> = {};
+    for (const key of NODE_UI_STATE_KEYS) {
+      const hostId = s[key];
+      if (hostId && !snapshotIds.has(hostId)) {
+        (uiPatch as Record<string, null>)[key] = null;
+      }
     }
+    if (Object.keys(uiPatch).length > 0) useCanvasStore.setState(uiPatch);
     s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
     s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
-    s.setViewport(snapshot.viewport);
+    // 撤销/重做不恢复视口：相机跟随用户（与 Figma 等主流画布一致）。快照中的
+    // viewport 仅服务保存链路；写回会造成 store 与 React Flow 实际视口脱节
+    // （React Flow 只在挂载与 viewportSyncCount 变化时同步），进而把旧视口落库、
+    // 视口中心类锚点计算错位
     if (snapshot.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: snapshot.minimapVisible });
     if (snapshot.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: snapshot.snapToGrid });
   });
@@ -479,9 +515,10 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
 
 /** 撤销：恢复到最近一次改动前的状态。@returns 是否实际执行了撤销 */
 export function undoAction(): boolean {
-  // 生成期间禁止撤销：undo 全局快照会波及生成中节点的 taskBinding，
-  // 导致 SSE 结果落在过期节点上或白等后 scanAndConnect 复活僵尸任务
-  if (hasGeneratingNode()) return false;
+  // 统一守卫：生成期间 undo 全局快照会波及生成中节点的 taskBinding，导致 SSE
+  // 结果落在过期节点上或白等后 scanAndConnect 复活僵尸任务；媒体编辑面板打开
+  // 时面板拥有编辑现场，画布级恢复不得穿透
+  if (!canUndoNow()) return false;
   // 先捕获现场快照（进 redoStack，供 redo 回到撤销前），再弹出恢复目标
   const prev = useHistoryStore.getState().undo(takeCanvasSnapshot());
   if (!prev) return false;
@@ -491,7 +528,7 @@ export function undoAction(): boolean {
 
 /** 重做：回到撤销前的现场状态。@returns 是否实际执行了重做 */
 export function redoAction(): boolean {
-  if (hasGeneratingNode()) return false;
+  if (!canUndoNow()) return false;
   // 先捕获现场快照（存回 undoStack，保证 redo 后还能再 undo），再弹出恢复目标
   const next = useHistoryStore.getState().redo(takeCanvasSnapshot());
   if (!next) return false;

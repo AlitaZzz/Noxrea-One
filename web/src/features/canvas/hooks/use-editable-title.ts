@@ -36,8 +36,10 @@ export function useEditableTitle(nodeId: string, currentTitle: string) {
     // trim 防止纯空格被当成有效标题（空格串是真值，显示层回退会失效）
     const next = draft.trim();
     if (next === currentTitle) return;
+    // 标题改名是离散操作：必定压栈
     useCanvasStore.getState().updateNodeVisual(nodeId, {
       data: { label: next },
+      forceHistory: true,
     });
   }, [nodeId, draft, currentTitle]);
 

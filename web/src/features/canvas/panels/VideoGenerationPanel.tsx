@@ -44,7 +44,7 @@ import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
 import { swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
-import { useGenerationSubmit } from "./use-generation-submit";
+import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
 import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
@@ -214,7 +214,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
   // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
   const { notification } = useAppFeedback();
-  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
+  const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
@@ -354,12 +354,12 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
       if (tid) {
         generationApi.cancelGenerationTask(tid).catch(() => {});
+        popPreGenSnapshot(tid);
       }
       useCanvasStore.getState().updateNodeData(nodeId, {
         taskBinding: undefined,
       }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      dropPendingHistory();
     }
     setSubmitting(false);
   };

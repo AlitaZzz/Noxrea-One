@@ -516,7 +516,8 @@ function AssetsView() {
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
-    if (node) useCanvasStore.getState().addNodes([node]);
+    // 离散插入：必定压栈
+    if (node) useCanvasStore.getState().addNodes([node], { forceHistory: true });
     message.success(t("asset.added"));
   }, [message, t]);
 

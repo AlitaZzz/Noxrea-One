@@ -20,7 +20,7 @@ import type { Edge } from "@xyflow/react";
 import { beforeEach,describe, expect, it, vi } from "vitest";
 
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
-import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
@@ -682,5 +682,60 @@ describe("updateNodeVisual（事件总线拆除后的单写通道）", () => {
     expect(() =>
       useCanvasStore.getState().updateNodeVisual("ghost", { data: { label: "x" } })
     ).not.toThrow();
+  });
+});
+
+describe("压栈通道二分与批量守卫（Spec: canvas-undo-redo-integrity）", () => {
+  function node(id: string): AnyNode {
+    return { id, type: "image-node", position: { x: 0, y: 0 }, data: { label: id } } as AnyNode;
+  }
+
+  it("forceHistory 绕过节流必定压栈（同一毫秒内连续两次都入栈）", () => {
+    useCanvasStore.getState().addNodes([node("a")], { forceHistory: true });
+    useCanvasStore.getState().updateNodeData("a", { label: "b" }, undefined, { forceHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(2);
+  });
+
+  it("skipHistory 始终跳过压栈", () => {
+    useCanvasStore.getState().addNodes([node("a")], { skipHistory: true });
+    useCanvasStore.getState().updateNodeData("a", { label: "b" }, undefined, { skipHistory: true });
+    useCanvasStore.getState().updateNodeVisual("a", { data: { label: "c" }, skipHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+  });
+
+  it("updateNodeVisual 的 forceHistory 透传到压栈判定（非 position 路径）", () => {
+    useCanvasStore.getState().addNodes([node("a")], { forceHistory: true });
+    useCanvasStore.getState().updateNodeVisual("a", { data: { label: "renamed" }, forceHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(2);
+  });
+
+  it("批量守卫：批量内多次压栈调用只让首次生效，整批一条撤销", () => {
+    useCanvasStore.getState().addNodes([node("a"), node("b")], { skipHistory: true });
+    withHistoryBatch(() => {
+      useCanvasStore.getState().removeNodes(["a"], { forceHistory: true });
+      useCanvasStore.getState().removeEdges([], { forceHistory: true });
+    });
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+  });
+
+  it("批量内全为 skipHistory 写入时不产生任何压栈", () => {
+    useCanvasStore.getState().addNodes([node("a")], { skipHistory: true });
+    withHistoryBatch(() => {
+      useCanvasStore.getState().updateNodeData("a", { label: "b" }, undefined, { skipHistory: true });
+    });
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+  });
+
+  it("批量 fn 抛错也配对退出：深度不泄漏，后续压栈不受批量影响", () => {
+    useCanvasStore.getState().addNodes([node("a")], { skipHistory: true });
+    expect(() =>
+      withHistoryBatch(() => {
+        useCanvasStore.getState().removeNodes(["a"], { forceHistory: true });
+        throw new Error("boom");
+      })
+    ).toThrow("boom");
+    // 批量已结束（finally 配对）：下一次离散写入正常独立压栈
+    useCanvasStore.getState().addNodes([node("b")], { forceHistory: true });
+    expect(useHistoryStore.getState().undoStack.length).toBe(2);
   });
 });

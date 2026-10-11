@@ -44,13 +44,19 @@ import {
   directorNode,
 } from "@/features/canvas/node-defaults";
 import {
+  canUndoNow,
   CLIPBOARD_NODE_MARKER,
   copySelection,
+  deleteSelection,
   duplicateSelection,
+  nudgeSelectedNodes,
   pasteClipboard,
   pasteFromClipboardContent,
+  redoAction,
+  undoAction,
 } from "@/features/canvas/shared/canvas-edit-actions";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
@@ -334,5 +340,185 @@ describe("场景5：多选图片A+视频A创建副本 → 集内边还原、下�
     expect(pairs).toContain(`${aCopy}→${vCopy}`);
     expect(pairs).not.toContain(`${aCopy}→imgB`);
     expect(pairs).not.toContain(`${vCopy}→textC`);
+  });
+});
+
+// ============================================================
+// 撤销/重做链路（Spec: canvas-undo-redo-integrity）
+// ============================================================
+
+/** 本组用例共用基线：撤销栈归零 + 节点编辑态清空
+ *  （文件内其余用例会累积撤销栈；守卫与悬空清理断言依赖干净基线） */
+function resetUndoBaseline(): void {
+  useHistoryStore.getState().clear();
+  useCanvasStore.setState({
+    annotatingNodeId: null,
+    croppingNodeId: null,
+    editingTextNodeId: null,
+    frameCaptureNodeId: null,
+    clipCaptureNodeId: null,
+    audioClipNodeId: null,
+    lightingNodeId: null,
+    angleEditorNodeId: null,
+    panoramaNodeId: null,
+    multiExpandedNodeId: null,
+  });
+}
+
+describe("撤销/重做不恢复视口", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  it("撤销恢复节点/连线，但 store viewport 与 _liveViewport 保持用户当前视角", () => {
+    const vpAtEdit = { x: 10, y: 20, zoom: 1.5 };
+    const vpNow = { x: -100, y: -50, zoom: 2 };
+    useCanvasStore.getState().setViewport(vpAtEdit);
+    select("vidA");
+    deleteSelection();
+    // 撤销前用户又平移缩放了画布（React Flow 实际视口经 setViewport/syncLiveViewport 同步）
+    useCanvasStore.getState().setViewport(vpNow);
+
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.some((n) => n.id === "vidA")).toBe(true);
+    expect(useCanvasStore.getState().viewport).toEqual(vpNow);
+    expect(getLiveViewport()).toEqual(vpNow);
+    expect(redoAction()).toBe(true);
+    expect(useCanvasStore.getState().viewport).toEqual(vpNow);
+    expect(getLiveViewport()).toEqual(vpNow);
+  });
+});
+
+describe("恢复快照的悬空编辑态清理", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  it("宿主随快照消失的文本编辑态被清理（文本编辑态是唯一可穿透守卫的编辑面板）", () => {
+    // 时刻一：textC 尚不存在
+    useCanvasStore.setState((s) => ({ nodes: s.nodes.filter((n) => n.id !== "textC") }));
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    // 时刻二：textC 出现并进入文本编辑态（编辑面板打开不拦截画布级撤销，
+    // Ctrl+Z 路由到画布撤销——撤销后宿主随快照消失，编辑态必须一并退出）
+    useCanvasStore.setState((s) => ({
+      nodes: [...s.nodes, makeNode("textC", NODE_TYPE.TEXT, 200, 200)],
+      editingTextNodeId: "textC",
+    }));
+    expect(canUndoNow()).toBe(true);
+
+    expect(undoAction()).toBe(true);
+    const s = useCanvasStore.getState();
+    expect(s.nodes.some((n) => n.id === "textC")).toBe(false);
+    expect(s.editingTextNodeId).toBeNull();
+  });
+
+  it("宿主仍在的编辑态随撤销保留", () => {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    useCanvasStore.setState({ editingTextNodeId: "textC" });
+
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.some((n) => n.id === "textC")).toBe(true);
+    expect(useCanvasStore.getState().editingTextNodeId).toBe("textC");
+  });
+});
+
+describe("画布级撤销/重做统一守卫（canUndoNow）", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  it("生成中不可撤销/重做", () => {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    expect(canUndoNow()).toBe(true);
+    useCanvasStore.setState((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === "imgA"
+          ? ({ ...n, data: { ...n.data, taskBinding: { taskId: "t1", status: "pending", startedAt: 1 } } } as AnyNode)
+          : n
+      ),
+    }));
+    expect(canUndoNow()).toBe(false);
+    expect(undoAction()).toBe(false);
+  });
+
+  it("媒体编辑面板打开时不可撤销/重做；文本编辑态不拦截（Ctrl+Z 路由到画布撤销）", () => {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    useCanvasStore.setState({ annotatingNodeId: "imgA" });
+    expect(canUndoNow()).toBe(false);
+    expect(undoAction()).toBe(false);
+
+    useCanvasStore.setState({ annotatingNodeId: null, editingTextNodeId: "textC" });
+    expect(canUndoNow()).toBe(true);
+  });
+});
+
+describe("离散操作压栈（批量守卫 + forceHistory）", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  it("删除（节点+边）批量合并为一条撤销，一次恢复全部", () => {
+    select("vidA");
+    deleteSelection();
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.some((n) => n.id === "vidA")).toBe(true);
+    expect(edgePairs()).toContain("imgA→vidA");
+    expect(edgePairs()).toContain("vidA→textC");
+  });
+
+  it("节流窗口内的离散删除仍产生独立撤销步，两次撤销逐级回退", () => {
+    // 改名（forceHistory 必定压栈）后紧接删除：删除必须有自己的撤销步
+    useCanvasStore.getState().updateNodeVisual("imgA", { data: { label: "renamed" }, forceHistory: true });
+    select("imgB");
+    deleteSelection();
+    expect(useHistoryStore.getState().undoStack.length).toBe(2);
+
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.some((n) => n.id === "imgB")).toBe(true);
+    expect((useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.data as { label?: string }).label).toBe("renamed");
+
+    expect(undoAction()).toBe(true);
+    expect((useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.data as { label?: string }).label).toBe("imgA");
+  });
+
+  it("粘贴（节点+连线）批量合并为一条撤销", () => {
+    select("imgA", "vidA");
+    expect(copySelection()).toBe(true);
+    const depth = useHistoryStore.getState().undoStack.length;
+    expect(pasteClipboard({ x: 1000, y: 1000 })).toBe(true);
+    expect(useHistoryStore.getState().undoStack.length).toBe(depth + 1);
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.filter((n) => n.position.x === 1000)).toHaveLength(0);
+    expect(edgePairs()).toEqual(["imgA→imgB", "imgA→vidA", "vidA→textC"]);
+  });
+});
+
+describe("方向键微调入栈", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("连续微调合并为一条撤销，一次整段回退", () => {
+    vi.useFakeTimers();
+    // 快进到节流窗口之外：文件内先前用例的真实时间戳压栈不影响本例的确定性
+    vi.setSystemTime(Date.now() + 60_000);
+    select("imgA");
+    const before = useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position;
+
+    expect(nudgeSelectedNodes({ x: 1, y: 0 }, 1)).toBe(true);
+    vi.advanceTimersByTime(100);
+    expect(nudgeSelectedNodes({ x: 1, y: 0 }, 1)).toBe(true);
+
+    const after = useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position;
+    expect(after).toEqual({ x: before.x + 10, y: before.y });
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+
+    expect(undoAction()).toBe(true);
+    expect(useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position).toEqual(before);
   });
 });

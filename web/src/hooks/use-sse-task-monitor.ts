@@ -11,6 +11,7 @@ import { createElement, useEffect, useRef } from "react";
 import TaskErrorDetail from "@/components/ui/TaskErrorDetail";
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
+import { discardPreGenSnapshot, popPreGenSnapshot } from "@/features/canvas/panels/use-generation-submit";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields } from "@/features/canvas/types";
@@ -73,6 +74,13 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
      * 节点已删除或绑定已换绑（重新生成）时静默忽略。
      */
     const handleTerminal = (nodeId: string, taskId: string, evt: TaskStatusEvent) => {
+      // 预生成快照生命周期（注册表见 use-generation-submit）：失败/取消弹出，
+      // 撤销不再出现「恢复到上传/提交瞬态」的无效步；成功保留在撤销栈（撤销一次
+      // = 移除生成结果），仅丢弃条目。放在节点守卫之前：节点已删除/换绑时条目
+      // 同样要收敛（此时 popIfTop 按引用比对天然不误弹）
+      if (evt.status === "cancelled" || evt.status === "failed") popPreGenSnapshot(taskId);
+      else discardPreGenSnapshot(taskId);
+
       const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
       const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
       if (!cur || curBinding?.taskId !== taskId) return;

@@ -104,7 +104,7 @@ function VideoRefCard({
               const srcNode = store.nodes.find((n) => n.id === e.source);
               return srcNode && srcNode.type === NODE_TYPE.VIDEO && (srcNode.data as { src?: string }).src === src;
             });
-            if (edge) store.removeEdges([edge.id]);
+            if (edge) store.removeEdges([edge.id], { forceHistory: true });
           }}
         />
       </Card>

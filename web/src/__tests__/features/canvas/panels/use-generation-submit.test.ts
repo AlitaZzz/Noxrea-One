@@ -33,7 +33,14 @@ vi.mock("@/features/project/save-manager", () => ({
   },
 }));
 
-import { type GenerationSubmitOutcome,useGenerationSubmit } from "@/features/canvas/panels/use-generation-submit";
+import {
+  clearPreGenSnapshots,
+  discardPreGenSnapshot,
+  type GenerationSubmitOutcome,
+  popPreGenSnapshot,
+  registerPreGenSnapshot,
+  useGenerationSubmit,
+} from "@/features/canvas/panels/use-generation-submit";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
@@ -271,5 +278,62 @@ describe("useGenerationSubmit owner 失效（GEN-01 竞态）", () => {
     expect(mocks.cancelGenerationTask).toHaveBeenCalledWith("task-old");
     // 旧任务不覆盖新一轮的绑定
     expect(bindingOf("n1")?.taskId).toBe("task-2");
+  });
+});
+
+describe("预生成快照注册表（Spec: canvas-undo-redo-integrity）", () => {
+  it("提交登记 → 失败终态弹出（栈深回退），重复弹出幂等", async () => {
+    mocks.submitGenerationTask.mockResolvedValue(okResponse("task-1"));
+    const { result } = renderHook(() => useGenerationSubmit());
+    await act(async () => {
+      const runId = result.current.beginRun();
+      await result.current.submitWithOwner({ runId, nodeId: "n1", request: () => mocks.submitGenerationTask() });
+    });
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+
+    popPreGenSnapshot("task-1");
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+    // 条目已弃：再弹无变化
+    popPreGenSnapshot("task-1");
+    expect(useHistoryStore.getState().undoStack.length).toBe(0);
+  });
+
+  it("成功终态：快照保留在撤销栈（撤销一次 = 移除生成结果），仅弃条目", async () => {
+    mocks.submitGenerationTask.mockResolvedValue(okResponse("task-1"));
+    const { result } = renderHook(() => useGenerationSubmit());
+    await act(async () => {
+      const runId = result.current.beginRun();
+      await result.current.submitWithOwner({ runId, nodeId: "n1", request: () => mocks.submitGenerationTask() });
+    });
+    discardPreGenSnapshot("task-1");
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+
+    // 栈顶 = 预绑定快照：其节点不含 taskBinding（撤销即回退到生成前）
+    const stack = useHistoryStore.getState().undoStack;
+    const boundNode = stack[stack.length - 1].nodes.find((n) => n.id === "n1");
+    expect((boundNode!.data as { taskBinding?: unknown }).taskBinding).toBeUndefined();
+  });
+
+  it("非栈顶（提交后另有操作入栈）时放弃弹出，栈序不受影响", () => {
+    const depth = useHistoryStore.getState().undoStack.length;
+    useCanvasStore.getState().updateNodeData("n1", { probe: "a" }, undefined, { forceHistory: true });
+    const stack = useHistoryStore.getState().undoStack;
+    registerPreGenSnapshot("task-x", stack[stack.length - 1]);
+    // 又一次操作入栈：注册的快照不再位于栈顶
+    useCanvasStore.getState().updateNodeData("n1", { probe: "b" }, undefined, { forceHistory: true });
+
+    popPreGenSnapshot("task-x");
+    expect(useHistoryStore.getState().undoStack.length).toBe(depth + 2);
+  });
+
+  it("clearPreGenSnapshots 清空注册表：pop 不再产生任何效果", () => {
+    useCanvasStore.getState().updateNodeData("n1", { probe: "a" }, undefined, { forceHistory: true });
+    const stack = useHistoryStore.getState().undoStack;
+    registerPreGenSnapshot("task-x", stack[stack.length - 1]);
+
+    clearPreGenSnapshots();
+    const depth = useHistoryStore.getState().undoStack.length;
+    popPreGenSnapshot("task-x");
+    expect(useHistoryStore.getState().undoStack.length).toBe(depth);
   });
 });

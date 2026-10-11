@@ -155,7 +155,8 @@ function AudioRefCard({
         onRemove={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === audio.id);
-          if (edge) store.removeEdges([edge.id]);
+          // 断开参考是离散操作：必定压栈
+          if (edge) store.removeEdges([edge.id], { forceHistory: true });
         }}
       />
       <audio

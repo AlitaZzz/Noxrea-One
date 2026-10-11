@@ -11,6 +11,8 @@
  * 关键约定：
  * - 占位节点与连线同批写入，只产生一条撤销记录；进度回写、结果替换、
  *   失败移除全部 skipHistory，避免一次操作留下多条撤销记录。
+ * - replace sink 在写入上传瞬态「之前」压入替换前快照（离散用户操作的独立
+ *   撤销步），失败回滚后弹出补偿；瞬态与结果写入始终 skipHistory。
  * - 每个占位带 version，异步回调前校验 version 与节点是否仍存在，
  *   不匹配说明节点已被撤销 / 删除，直接放弃写入。
  * - 所有 blob: 预览 URL 由管道统一释放，无论成功、失败还是节点被移除。
@@ -22,9 +24,11 @@
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { createAudioNode, createEdge, createImageNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { absoluteNodeOf, buildNodeIndex, nodeAbsolutePosition, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
-import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
+import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
+import type { HistorySnapshot } from "@/features/project/types";
 import { resolveApiError } from "@/lib/api/error-message";
 import {
   AUDIO_NODE_HEIGHT,
@@ -140,6 +144,8 @@ interface Prepared {
   /** replace sink 的目标节点 ID 与上传前快照 */
   replaceId?: string;
   snapshot?: { data: Record<string, unknown>; style?: Record<string, unknown> };
+  /** replace sink 压入的「替换前」撤销快照：失败回滚后按引用弹出补偿 */
+  preUploadHistory?: HistorySnapshot;
 }
 
 /** 锚点落位游标：多个节点沿锚点一侧依次排开 */
@@ -312,6 +318,12 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
           continue;
         }
         p.snapshot = { data: { ...target.data }, style: { ...(target.style ?? {}) } };
+        // 更换内容是离散用户操作，必须有自己的撤销步：在写入上传瞬态「之前」压入
+        // 替换前快照（此刻节点仍是旧内容/空态，未被瞬态污染）。此后的瞬态写入与
+        // 成功回填全部 skipHistory——僵尸进度条态永不入栈；撤销一次即回到替换前
+        // 内容，节点保留。失败回滚后由 popIfTop 弹出补偿（见失败分支）。
+        p.preUploadHistory = takeCanvasSnapshot();
+        useHistoryStore.getState().push(p.preUploadHistory);
         const data: Record<string, unknown> = { upload, source };
         if (p.kind !== "audio") {
           data.naturalWidth = p.nw;
@@ -366,9 +378,12 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       }
     }
 
-    // 占位节点与连线同批写入，只产生一条历史记录
-    if (newNodes.length > 0) store.addNodes(newNodes);
-    if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+    // 占位节点与连线是同一原子操作（用户拖放创建）：批量守卫合并为一条撤销，
+    // 离散操作必定入栈，不再依赖节流窗口碰运气
+    withHistoryBatch(() => {
+      if (newNodes.length > 0) store.addNodes(newNodes);
+      if (newEdges.length > 0) store.setEdges([...useCanvasStore.getState().edges, ...newEdges]);
+    });
   });
 
   // ── 3) 并发上传（失败自动重试，业务错误不重试）──
@@ -635,13 +650,16 @@ async function runUploads(
           data.naturalWidth = nw;
           data.naturalHeight = nh;
         }
-        // runSuppressed 同步包裹 store 写入：上传回填不进用户操作历史
+        // runSuppressed 抑制的是 Agent 动作感知，不抑制撤销历史——回填必须显式
+        // skipHistory：「上传中」瞬态一旦入栈，撤销就会回到僵尸进度条态。
+        // 撤销目标（替换前内容）是 replace 分支在上传开始时压入的 preUploadHistory 快照
         runSuppressed(() =>
           useCanvasStore.getState().updateNodeVisual(targetId, {
             data,
             style: p.kind === "audio"
               ? { width: AUDIO_NODE_WIDTH, height: AUDIO_NODE_HEIGHT }
               : computeNodeSize(nw, nh),
+            skipHistory: true,
             immediate: true,
           }),
         );
@@ -670,6 +688,9 @@ async function runUploads(
         snapshot.style,
         { skipHistory: true },
       ));
+      // 回滚已把节点还原为替换前内容：上传开始时压入的「替换前」快照成了冗余
+      // 撤销步，弹出补偿（上传期间用户另有操作入栈时放弃弹出，保持栈序单调）
+      if (p.preUploadHistory) useHistoryStore.getState().popIfTop(p.preUploadHistory);
       releasePreview();
     } else {
       releasePreview();

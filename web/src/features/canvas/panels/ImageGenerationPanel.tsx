@@ -49,7 +49,7 @@ import { EMPTY_ORDER, mergeOrder, swapOrderItems, useGenSettings, writeGenSettin
 import type { ReferenceItem } from "../shared/reference";
 import TextRefChip from "../shared/TextRefChip";
 import { spawnPromptDerivedNode } from "../upload/derived-node";
-import { useGenerationSubmit } from "./use-generation-submit";
+import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
 
 interface Props { nodeId: string; }
 
@@ -206,7 +206,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
   // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
   const { notification } = useAppFeedback();
-  const { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory } = useGenerationSubmit();
+  const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
 
   /** 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId);
@@ -284,12 +284,12 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
       const tid = (node?.data as MediaGenFields)?.taskBinding?.taskId;
       if (tid) {
         generationApi.cancelGenerationTask(tid).catch(() => {});
+        popPreGenSnapshot(tid);
       }
       useCanvasStore.getState().updateNodeData(nodeId, {
         taskBinding: undefined,
       }, undefined, { skipHistory: true });
       markDirtyImmediate();
-      dropPendingHistory();
     }
     setSubmitting(false);
   };

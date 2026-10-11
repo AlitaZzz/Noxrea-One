@@ -28,6 +28,67 @@ const HISTORY_THROTTLE = 300;
 let _lastHistoryTime = 0;
 
 /**
+ * 同步批量守卫：批量内的压栈调用只让首次生效。
+ * 用于同一原子操作内的多步写入（如删除选中=删节点+删边、粘贴=建节点+建边），
+ * 保证一次 Ctrl+Z 精确回退整步。批量是同步语义（同一 JS 任务内 begin/end），
+ * 异步间隙的独立操作不会被并吞。
+ */
+let _historyBatchDepth = 0;
+let _historyBatchPushed = false;
+
+function beginHistoryBatch(): void {
+  if (_historyBatchDepth === 0) _historyBatchPushed = false;
+  _historyBatchDepth += 1;
+}
+
+function endHistoryBatch(): void {
+  _historyBatchDepth = Math.max(0, _historyBatchDepth - 1);
+}
+
+/**
+ * 同步批量守卫入口：fn 内的压栈调用只让首次生效，整批一条撤销。
+ * try/finally 保证 fn 抛错也配对退出，批量深度不会泄漏。
+ */
+export function withHistoryBatch<T>(fn: () => T): T {
+  beginHistoryBatch();
+  try {
+    return fn();
+  } finally {
+    endHistoryBatch();
+  }
+}
+
+/**
+ * 压栈通道二分：
+ * - forceHistory（离散操作：删除/粘贴/连线/改名等）绕过节流必定压栈；
+ * - 其余走 300ms 节流（连续写入：打字、方向键微调）；
+ * - 批量期间仅首次压栈生效（批量本身保证原子操作必有一条记录）。
+ */
+function maybePushHistory(options?: { skipHistory?: boolean; forceHistory?: boolean }) {
+  if (options?.skipHistory) return;
+  if (_historyBatchDepth > 0) {
+    if (_historyBatchPushed) return;
+    _historyBatchPushed = true;
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    _lastHistoryTime = Date.now();
+    return;
+  }
+  const now = Date.now();
+  if (options?.forceHistory || now - _lastHistoryTime > HISTORY_THROTTLE) {
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    _lastHistoryTime = now;
+  }
+}
+
+/**
+ * 节流压栈出口：供不经 store 压栈动作的连续写入使用（方向键微调直接写
+ * setNodes，无压栈语义，需在写入前显式走节流通道，使整段微调合并为一条撤销）。
+ */
+export function pushHistoryThrottled(): void {
+  maybePushHistory();
+}
+
+/**
  * 模块级 viewport 跟踪变量。
  * onViewportChange 高频触发时只更新此变量（不触发 Zustand set），
  * 避免 useSyncExternalStore 同步重渲染 -> React Flow 再次 emit onViewportChange 的无限循环。
@@ -86,17 +147,13 @@ export function flushAndWait(): Promise<void> {
   return saveManager.flushAndWait();
 }
 
-/** 自动压栈 throttle 辅助函数 */
-function maybePushHistory(options?: { skipHistory?: boolean; forceHistory?: boolean }) {
-  if (options?.skipHistory) return;
-  const now = Date.now();
-  if (options?.forceHistory || now - _lastHistoryTime > HISTORY_THROTTLE) {
-    useHistoryStore.getState().push(takeCanvasSnapshot());
-    _lastHistoryTime = now;
-  }
+/** 压栈选项：skipHistory 跳过；forceHistory 离散操作绕过节流必定压栈 */
+export interface HistoryPushOptions {
+  skipHistory?: boolean;
+  forceHistory?: boolean;
 }
 
-interface CanvasState {
+export interface CanvasState {
   // Viewport
   viewport: ViewportState;
   setViewport: (viewport: ViewportState) => void;
@@ -107,9 +164,9 @@ interface CanvasState {
   setNodes: (nodes: AnyNode[]) => void;
   /** 读取当前最新节点列表。异步回调中应通过它取数，避免持有过期快照 */
   getNodes: () => AnyNode[];
-  setEdges: (edges: Edge[], options?: { skipHistory?: boolean }) => void;
-  addNodes: (nodes: AnyNode[], options?: { skipHistory?: boolean }) => void;
-  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: { skipHistory?: boolean; forceHistory?: boolean }) => void;
+  setEdges: (edges: Edge[], options?: HistoryPushOptions) => void;
+  addNodes: (nodes: AnyNode[], options?: HistoryPushOptions) => void;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>, style?: Record<string, unknown>, options?: HistoryPushOptions) => void;
   /**
    * 节点视觉态单写通道（position/style/data 一次性合并写入）。position 存在时
    * 单次 setNodes 合并（分两次 set 触发两轮全画布重渲染，缩放逐帧操作下掉帧），
@@ -123,12 +180,14 @@ interface CanvasState {
       position?: { x: number; y: number };
       /** 透传 updateNodeData 的历史压栈选项（仅非 position 路径） */
       skipHistory?: boolean;
+      /** 离散操作绕过节流必定压栈（仅非 position 路径） */
+      forceHistory?: boolean;
       /** 写入后额外 markDirtyImmediate（上传回填、配色即时生效等场景） */
       immediate?: boolean;
     },
   ) => void;
-  removeNodes: (nodeIds: string[], options?: { skipHistory?: boolean }) => void;
-  removeEdges: (edgeIds: string[], options?: { skipHistory?: boolean }) => void;
+  removeNodes: (nodeIds: string[], options?: HistoryPushOptions) => void;
+  removeEdges: (edgeIds: string[], options?: HistoryPushOptions) => void;
 
   // Minimap visibility
   minimapVisible: boolean;
@@ -365,7 +424,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     saveManager.markDirty();
   },
   updateNodeVisual: (nodeId, patch) => {
-    const { data, style, position, skipHistory, immediate } = patch;
+    const { data, style, position, skipHistory, forceHistory, immediate } = patch;
     if (position) {
       // 位置、尺寸、数据同批写入一次：分两次 set 会触发两轮全画布重渲染，
       // 缩放这类逐帧操作下掉帧会直接表现为「框不跟手」（原事件总线合并写语义）
@@ -386,7 +445,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       if (immediate) saveManager.markDirtyImmediate();
       return;
     }
-    get().updateNodeData(nodeId, data ?? {}, style, { skipHistory });
+    get().updateNodeData(nodeId, data ?? {}, style, { skipHistory, forceHistory });
     if (immediate) saveManager.markDirtyImmediate();
   },
   removeNodes: (nodeIds, options) => {

@@ -89,7 +89,8 @@ describe("TextRefChip", () => {
 
     fireEvent.click(remove);
     fireEvent.doubleClick(remove);
-    expect(removeEdges).toHaveBeenCalledExactlyOnceWith(["reference"]);
+    // 断开参考是离散操作：必定压栈（forceHistory）
+    expect(removeEdges).toHaveBeenCalledExactlyOnceWith(["reference"], { forceHistory: true });
     expect(reveal).not.toHaveBeenCalled();
   });
 

@@ -28,12 +28,15 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   copyImageSrcToClipboard,
   copySelection,
   deleteSelection,
   duplicateSelection,
+  hasGeneratingNodeIn,
+  isMediaEditorOpenState,
   pasteClipboard,
   pasteFromClipboardContent,
   readSystemClipboard,
@@ -63,7 +66,7 @@ interface Props {
 
 type CanvasMenuItem =
   | { type: "divider"; key?: string }
-  | { key: string; label?: ReactNode; icon?: ReactNode; extra?: ReactNode; disabled?: boolean; danger?: boolean; children?: CanvasMenuItem[]; type?: "group" };
+  | { key: string; label?: ReactNode; icon?: ReactNode; extra?: ReactNode; disabled?: boolean; danger?: boolean; children?: CanvasMenuItem[]; type?: "group"; title?: string };
 
 /** 菜单项右侧的快捷键由 shadcn DropdownMenuShortcut 统一渲染。 */
 function renderMenuItems(items: CanvasMenuItem[], onSelect: (key: string) => void): ReactNode {
@@ -79,9 +82,12 @@ function renderMenuItems(items: CanvasMenuItem[], onSelect: (key: string) => voi
         </DropdownMenuGroup>
       );
     }
-    return (
+    // 置灰项带 data-disabled:pointer-events-none，原生 title 悬停不生效：
+    // 以可接收悬停的块级包裹层作为 Tooltip 触发器，禁用项的提示才能显示；
+    // 悬停同样落在包裹层上，禁用时由包裹层给出 not-allowed 光标传达禁用语义。
+    // item.title 只经 Tooltip 通道渲染，不在菜单项上重复挂原生 title
+    const itemNode = (
       <DropdownMenuItem
-        key={item.key}
         disabled={item.disabled}
         variant={item.danger ? "destructive" : "default"}
         onSelect={() => onSelect(item.key)}
@@ -90,6 +96,16 @@ function renderMenuItems(items: CanvasMenuItem[], onSelect: (key: string) => voi
         <span className="min-w-0 flex-1">{item.label}</span>
         {item.extra && <DropdownMenuShortcut>{item.extra}</DropdownMenuShortcut>}
       </DropdownMenuItem>
+    );
+    const wrapperClass = item.disabled ? "block w-full cursor-not-allowed" : "block w-full";
+    if (!item.title) return <span key={item.key} className={wrapperClass}>{itemNode}</span>;
+    return (
+      <Tooltip key={item.key}>
+        <TooltipTrigger asChild>
+          <span className={wrapperClass}>{itemNode}</span>
+        </TooltipTrigger>
+        <TooltipContent side="left">{item.title}</TooltipContent>
+      </Tooltip>
     );
   });
 }
@@ -107,6 +123,11 @@ export default function CanvasContextMenu(props: Props) {
   const hasNodes = useCanvasStore((s) => s.nodes.length > 0);
   const canUndo = useHistoryStore((s) => s.undoStack.length > 0);
   const canRedo = useHistoryStore((s) => s.redoStack.length > 0);
+  // 撤销/重做统一守卫的响应式投影（canUndoNow 为命令式判定，此处订阅同源状态
+  // 派生置灰）：生成中或媒体编辑面板打开时不可用，悬停提示复用键盘路径文案
+  const undoBlocked = useCanvasStore(
+    (s) => hasGeneratingNodeIn(s.nodes) || isMediaEditorOpenState(s)
+  );
   // 单选图片节点时的 src：右键菜单据此显示「复制图片」（位图进系统剪贴板）。
   // 空 src（新建未生成的占位节点）视为无图，不显示该项
   const singleImageSrc = useCanvasStore((s) => {
@@ -176,8 +197,8 @@ export default function CanvasContextMenu(props: Props) {
             { key: "selectAll", icon: <SelectOutlined />, label: t("common.selectAll"), extra: modKey("A"), disabled: !hasNodes },
             ...canvasActions,
             { type: "divider" },
-            { key: "undo", icon: <UndoOutlined />, label: t("common.undo"), extra: modKey("Z"), disabled: !canUndo },
-            { key: "redo", icon: <RedoOutlined />, label: t("common.redo"), extra: modKey("Shift+Z"), disabled: !canRedo },
+            { key: "undo", icon: <UndoOutlined />, label: t("common.undo"), extra: modKey("Z"), disabled: !canUndo || undoBlocked, title: undoBlocked ? t("shortcuts.undoBlocked") : undefined },
+            { key: "redo", icon: <RedoOutlined />, label: t("common.redo"), extra: modKey("Shift+Z"), disabled: !canRedo || undoBlocked, title: undoBlocked ? t("shortcuts.undoBlocked") : undefined },
           ]
         : [
             { key: "copy", icon: <CopyOutlined />, label: t("common.copyNode"), extra: modKey("C"), disabled: !hasSelection },

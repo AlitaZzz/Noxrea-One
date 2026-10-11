@@ -62,7 +62,8 @@ function TextRefChip({ id, content, nodeId }: TextRefChipProps) {
         onRemove={() => {
           const store = useCanvasStore.getState();
           const edge = store.edges.find((e) => e.target === nodeId && e.source === id);
-          if (edge) store.removeEdges([edge.id]);
+          // 断开参考是离散操作：必定压栈
+          if (edge) store.removeEdges([edge.id], { forceHistory: true });
         }}
       />
     </Card>

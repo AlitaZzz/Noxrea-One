@@ -33,13 +33,42 @@ export type GenerationSubmitOutcome =
   | { status: "stale" }
   | { status: "failed"; error: string };
 
+/**
+ * 预生成快照注册表：taskId → 提交时压入的「预绑定」快照。
+ * - 成功终态：快照保留在撤销栈（撤销一次 = 移除生成结果），注册表条目随即丢弃；
+ * - 失败 / 取消终态：popIfTop 弹出（非栈顶则放弃弹出，保持栈序单调），条目丢弃；
+ * - 项目采纳清历史时整体清空。
+ * 条目持有撤销栈同款结构化共享引用，量级为页面生命周期内的提交次数，有界。
+ */
+const preGenSnapshots = new Map<string, HistorySnapshot>();
+
+export function registerPreGenSnapshot(taskId: string, snapshot: HistorySnapshot): void {
+  preGenSnapshots.set(taskId, snapshot);
+}
+
+/** 任务到达失败 / 取消终态：弹出对应预生成快照（若仍是栈顶），避免撤销出现无效步 */
+export function popPreGenSnapshot(taskId: string): void {
+  const snapshot = preGenSnapshots.get(taskId);
+  if (!snapshot) return;
+  preGenSnapshots.delete(taskId);
+  useHistoryStore.getState().popIfTop(snapshot);
+}
+
+/** 任务到达成功终态：快照保留在撤销栈，仅丢弃注册表条目 */
+export function discardPreGenSnapshot(taskId: string): void {
+  preGenSnapshots.delete(taskId);
+}
+
+/** 项目采纳（撤销历史归零）时清空注册表，避免跨项目残留 */
+export function clearPreGenSnapshots(): void {
+  preGenSnapshots.clear();
+}
+
 export function useGenerationSubmit() {
   /** 当前提交世代：每次 beginRun / invalidate / unmount 递增 */
   const runRef = useRef(0);
   /** 组件是否仍挂载：unmount 后闭包仍存活，runRef 无法区分「存活但未变」与「已卸载」 */
   const aliveRef = useRef(true);
-  /** handleGenerate 压入的「预生成快照」，供失败 / 取消时精确回滚 */
-  const pushedSnapshotRef = useRef<HistorySnapshot | null>(null);
 
   useEffect(() => {
     // StrictMode 双挂载：cleanup 使首次挂载的在途 run 全部失效后，
@@ -64,17 +93,6 @@ export function useGenerationSubmit() {
   /** 失效所有在途 run（用户主动取消） */
   const invalidate = useCallback(() => {
     runRef.current += 1;
-  }, []);
-
-  /**
-   * 回滚 handleGenerate 压入的预生成快照。
-   * 按引用比对、只在它仍是栈顶时弹出：提交期间若有别的操作入栈，
-   * 说明它已不是栈顶，此时放弃弹出，避免误删无关快照导致撤销行为错乱。
-   */
-  const dropPendingHistory = useCallback(() => {
-    const pushed = pushedSnapshotRef.current;
-    pushedSnapshotRef.current = null;
-    if (pushed) useHistoryStore.getState().popIfTop(pushed);
   }, []);
 
   /**
@@ -115,11 +133,13 @@ export function useGenerationSubmit() {
         }
 
         // 拿到 taskId 才写绑定：taskId 与状态同步落地，不存在「空 taskId 落库」中间态。
-        // forceHistory 先压入不含绑定的干净快照，取消 / 失败时按引用精确回滚（见 dropPendingHistory）。
+        // forceHistory 先压入不含绑定的干净快照并按 taskId 登记，取消 / 失败终态
+        // 经注册表按引用精确回滚（popIfTop，见 preGenSnapshots）；成功终态保留
+        // 快照（撤销一次 = 移除生成结果）。
         const depthBefore = useHistoryStore.getState().undoStack.length;
         useCanvasStore.getState().updateNodeData(nodeId, { taskBinding: { taskId, status: "pending", startedAt: Date.now() } }, undefined, { forceHistory: true });
         const stack = useHistoryStore.getState().undoStack;
-        pushedSnapshotRef.current = stack.length > depthBefore ? stack[stack.length - 1] : null;
+        if (stack.length > depthBefore) registerPreGenSnapshot(taskId, stack[stack.length - 1]);
         await flushAndWait();
         return { status: "submitted" };
       } catch (e: unknown) {
@@ -129,5 +149,5 @@ export function useGenerationSubmit() {
     [isCurrent]
   );
 
-  return { beginRun, isCurrent, invalidate, submitWithOwner, dropPendingHistory };
+  return { beginRun, isCurrent, invalidate, submitWithOwner };
 }

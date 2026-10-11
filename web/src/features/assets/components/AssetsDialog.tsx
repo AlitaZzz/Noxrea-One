@@ -352,7 +352,8 @@ export default function AssetsDialog({ open, onClose }: Props) {
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
     const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
-    if (node) useCanvasStore.getState().addNodes([node]);
+    // 离散插入：必定压栈
+    if (node) useCanvasStore.getState().addNodes([node], { forceHistory: true });
     message.success(t("asset.added"));
   }, [message, t]);
 
@@ -367,7 +368,8 @@ export default function AssetsDialog({ open, onClose }: Props) {
         findFreePosition,
       ))
       .filter((node): node is NonNullable<typeof node> => !!node);
-    if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes);
+    // 批量插入是同一原子操作：必定压栈为一条撤销
+    if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes, { forceHistory: true });
     message.success(t("asset.addedCount", { count: assets.length }));
   }, [message, t]);
 

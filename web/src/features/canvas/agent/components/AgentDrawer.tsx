@@ -80,6 +80,8 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   );
 
   const handleUndoTurn = useCallback(() => {
+    // 生成中给出与键盘一致的提示；媒体编辑面板打开时由 undoAction 内的统一守卫
+    // （canUndoNow）静默拦截，此处不再重复扫描
     if (hasGeneratingNode()) {
       message.info(i18n.t("shortcuts.undoBlocked"));
       return;

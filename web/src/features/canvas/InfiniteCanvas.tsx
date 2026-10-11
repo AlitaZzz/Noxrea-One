@@ -98,7 +98,7 @@ import {
 import { selectCanvasStateChanges } from "@/features/canvas/shared/node-changes";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
-import { findFreePosition, flushAndWait, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
@@ -537,7 +537,8 @@ export default function InfiniteCanvas() {
         .filter((p) => !existing.has(`${p.source}->${p.target}`))
         .map((p) => createEdge(p.source, p.target));
       if (fresh.length === 0) return;
-      setEdges([...state.edges, ...fresh]);
+      // 连线是离散操作：必定压栈（不再依赖节流窗口）
+      setEdges([...state.edges, ...fresh], { forceHistory: true });
       bumpRefOrderToTail(fresh);
       markDirtyImmediate();
     },
@@ -700,24 +701,26 @@ export default function InfiniteCanvas() {
         }
       }
 
-      addNodes([newNode]);
-      // 组框随新成员只扩不缩（与拖入加入路径同一 refitGroupRects）；
-      // addNodes 已压入创建前快照，撤销一并回滚归组与扩框
-      if (joinedGroupId) {
-        setNodes(refitGroupRects(useCanvasStore.getState().nodes, [joinedGroupId]));
-        markDirtyImmediate();
-      }
-      // 批量接线与菜单门控同口径（全有或全无，connection-rules）：
-      // 输出方向 buildFanoutPairs（各选中 → 新节点），输入方向 buildFanInPairs（新节点 → 各选中）
-      const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
-      const participants = sourceNodeIds
-        .map((id) => nodeById.get(id))
-        .filter((n): n is AnyNode => !!n);
-      const pairs =
-        direction === "output"
-          ? buildFanoutPairs(participants, newNode)
-          : buildFanInPairs(newNode, participants);
-      batchConnect(pairs);
+      // 建节点 + 归组扩框 + 批量接线是同一原子操作：批量守卫合并为一条撤销
+      //（addNodes 压入创建前快照，撤销一并回滚归组、扩框与接线）
+      withHistoryBatch(() => {
+        addNodes([newNode]);
+        if (joinedGroupId) {
+          setNodes(refitGroupRects(useCanvasStore.getState().nodes, [joinedGroupId]));
+          markDirtyImmediate();
+        }
+        // 批量接线与菜单门控同口径（全有或全无，connection-rules）：
+        // 输出方向 buildFanoutPairs（各选中 → 新节点），输入方向 buildFanInPairs（新节点 → 各选中）
+        const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n]));
+        const participants = sourceNodeIds
+          .map((id) => nodeById.get(id))
+          .filter((n): n is AnyNode => !!n);
+        const pairs =
+          direction === "output"
+            ? buildFanoutPairs(participants, newNode)
+            : buildFanInPairs(newNode, participants);
+        batchConnect(pairs);
+      });
     },
     [pendingConnectionCreate, addNodes, batchConnect, setNodes]
   );
@@ -985,7 +988,7 @@ export default function InfiniteCanvas() {
     if (!data || typeof data !== "object") return;
     const asset = data as AssetItem;
     const node = createAssetNode(asset, pos, findFreePosition);
-    if (node) addNodes([node]);
+    if (node) addNodes([node], { forceHistory: true });
     message.success(t("asset.added"));
   }, [addNodes, message, t]);
 

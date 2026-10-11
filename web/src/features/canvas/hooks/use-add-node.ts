@@ -66,7 +66,8 @@ export function useAddNode() {
       const h = (node.style?.height as number) ?? 200;
       node.position = findFreePosition({ width: w, height: h }, at);
 
-      addNodes([node]);
+      // 菜单/双击创建是离散操作：必定压栈，不受节流窗口影响
+      addNodes([node], { forceHistory: true });
     },
     [addNodes],
   );
