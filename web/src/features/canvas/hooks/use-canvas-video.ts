@@ -1,58 +1,46 @@
 "use client";
 
-import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { useCanvasMediaPriority } from "@/features/canvas/hooks/use-canvas-media-priority";
-import type { VideoLoadLease, VideoLoadStatus } from "@/features/canvas/services/video-load-scheduler";
-import { VIDEO_INTERACTION_PRIORITY } from "@/features/canvas/services/video-load-scheduler";
-import { CanvasVideoLoadingContext } from "@/features/canvas/shared/CanvasMediaLoadingProvider";
+type VideoSessionStatus = "idle" | "loading" | "ready" | "failed";
 
-type LoadDemand = { lease: VideoLoadLease; priority: Parameters<VideoLoadLease["setPriority"]>[0]; demands: Set<symbol> };
-function applyPriority(current: LoadDemand) {
-  current.lease.setPriority(current.demands.size ? VIDEO_INTERACTION_PRIORITY : current.priority);
-}
-
-export function useCanvasVideo(nodeId: string, src: string, active: boolean) {
-  const scheduler = useContext(CanvasVideoLoadingContext);
-  if (!scheduler) throw new Error("Canvas videos require a loading provider");
-  const viewportPriority = useCanvasMediaPriority(nodeId);
-  const priority = active ? VIDEO_INTERACTION_PRIORITY : viewportPriority;
+/**
+ * 视频会话元素状态 hook（poster-first 架构）。
+ * <video> 仅在会话激活（播放 / 编辑面板 / 忙状态）时由 VideoNode 条件渲染挂载，
+ * 本 hook 登记元素并跟踪其加载状态，供裁剪面板就绪门控与失败重试遮罩消费。
+ *
+ * 状态判定只认「元素当前 src === 会话 src」：帧序列面板打开期间播放器会被
+ * swapVideoSource 临时切到代理视频，代理的错误不得计入会话状态。
+ * 就绪度由可重复触发的 loadeddata/canplay 驱动——数据被浏览器逐出后再次就绪
+ * 时状态自愈；初值与换源重挂由 ref 回调按真实 readyState 归位（src 变化会
+ * 连带 key 重挂），失败不粘滞，没有一次性定时器下永久结论。
+ */
+export function useCanvasVideo(src: string, active: boolean) {
   const [element, setElement] = useState<HTMLVideoElement | null>(null);
-  const leaseRef = useRef<LoadDemand | null>(null);
-  const [loaded, setLoaded] = useState<{ src: string; element: HTMLVideoElement; scheduler: typeof scheduler; status: VideoLoadStatus } | null>(null);
+  const [status, setStatus] = useState<VideoSessionStatus>("idle");
 
   useEffect(() => {
-    if (!element || !src) return;
+    const video = element;
+    if (!video || !active || !src) return;
     let current = true;
-    const lease = scheduler.acquire(element, src, (status) => {
-      if (current) setLoaded((prev) => prev?.src === src && prev.element === element && prev.scheduler === scheduler && prev.status === status ? prev : { src, element, scheduler, status });
-    });
-    leaseRef.current = { lease, priority: null, demands: new Set() };
+    const isOwnSource = () => video.getAttribute("src") === src;
+    const onReady = () => { if (current && isOwnSource()) setStatus("ready"); };
+    const onError = () => { if (current && isOwnSource()) setStatus("failed"); };
+    video.addEventListener("loadeddata", onReady);
+    video.addEventListener("canplay", onReady);
+    video.addEventListener("error", onError);
     return () => {
       current = false;
-      lease.release();
-      leaseRef.current = null;
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("error", onError);
     };
-  }, [element, scheduler, src]);
+  }, [element, src, active]);
 
-  useEffect(() => {
-    const current = leaseRef.current;
-    if (!current) return;
-    current.priority = priority;
-    applyPriority(current);
-  }, [element, scheduler, src, priority]);
-  const requestLoad = useCallback(() => {
-    const current = leaseRef.current;
-    if (!current) return () => {};
-    const demand = Symbol();
-    current.demands.add(demand);
-    applyPriority(current);
-    return () => {
-      if (leaseRef.current !== current || !current.demands.delete(demand)) return;
-      applyPriority(current);
-    };
+  const setVideoElement = useCallback((el: HTMLVideoElement | null) => {
+    setElement(el);
+    setStatus(el ? (el.readyState >= 2 ? "ready" : "loading") : "idle");
   }, []);
-  const retry = useCallback(() => leaseRef.current?.lease.retry(), []);
-  const status = loaded?.src === src && loaded.element === element && loaded.scheduler === scheduler ? loaded.status : "idle";
-  return { setElement, requestLoad, retry, status };
+
+  return { element, setElement: setVideoElement, status };
 }

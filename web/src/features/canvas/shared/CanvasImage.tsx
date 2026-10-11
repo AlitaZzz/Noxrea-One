@@ -1,6 +1,6 @@
 "use client";
 
-import type { ImgHTMLAttributes } from "react";
+import type { ComponentType, ImgHTMLAttributes } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ExclamationCircleOutlined, PictureOutlined, ReloadOutlined } from "@/components/ui/AppIcon";
@@ -14,16 +14,19 @@ type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "loading"> & {
   nodeId: string;
   src: string;
   placement?: ImagePlacement;
+  /** 加载中/失败占位图标：图片场景默认 PictureOutlined，视频海报等场景可覆盖 */
+  placeholderIcon?: ComponentType<{ className?: string }>;
 };
 
-export default function CanvasImage({ nodeId, src, placement = {}, alt = "", className, style, ...props }: Props) {
+export default function CanvasImage({ nodeId, src, placement = {}, alt = "", className, style, placeholderIcon: PlaceholderIcon, ...props }: Props) {
   const { t } = useTranslation();
   const { result, retry } = useCanvasImage(nodeId, src, placement);
+  const Icon = PlaceholderIcon ?? PictureOutlined;
   if (result?.status === "ready") return <img {...props} className={className} style={style} src={src} alt={alt} decoding="async" />;
   const failed = result?.status === "failed";
   return (
     <span className={cn("absolute inset-0 flex items-center justify-center gap-2 bg-card text-muted-foreground", className)} style={style} role={failed ? "group" : "img"} aria-label={alt} data-image-status={result?.status ?? "pending"}>
-      {failed ? <ExclamationCircleOutlined className="size-6 text-destructive" /> : <PictureOutlined className="size-6" />}
+      {failed ? <ExclamationCircleOutlined className="size-6 text-destructive" /> : <Icon className="size-6" />}
       {failed && <Tooltip><TooltipTrigger asChild>
         <Button type="button" size="icon-sm" variant="secondary" className="nodrag nopan" aria-label={t("media.retry")} onClick={(event) => { event.stopPropagation(); retry(); }}>
           <ReloadOutlined />
