@@ -55,3 +55,14 @@ export const AUDIO_DECISION_MIN_TIME = 0.2;
  * 刻意不在加载时判定——为拿到 Chrome 的解码计数而播放一小段，会让刷新页面时
  * 每个视频节点都先动一下再停回去。
  */
+
+/**
+ * 媒体宽高比（宽/高），仅当宽高均为正数时返回，否则 undefined（未知比例）。
+ * 供加载骨架按真实比例定形等场景使用；历史坏记录可能是 0 或 undefined。
+ */
+export function mediaAspect(
+  width: number | undefined,
+  height: number | undefined,
+): number | undefined {
+  return width && width > 0 && height && height > 0 ? width / height : undefined;
+}

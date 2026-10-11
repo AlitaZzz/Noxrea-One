@@ -24,6 +24,13 @@ class BrowserImage {
   constructor() { BrowserImage.instances.push(this); }
 }
 
+// jsdom 未实现 Blob object URL：fetch 桩把原始 src 挂到 Blob 上，
+// createObjectURL 桩据此建立 objectURL → 原始 src 的映射，供断言回查
+const objectSources = new Map<string, string>();
+function sourceOf(url: string | null | undefined): string | undefined {
+  return url ? objectSources.get(url) : undefined;
+}
+
 let flowStore: ReturnType<typeof useStoreApi>;
 function node(id: string, x: number, y = 0): InternalNode {
   const userNode: Node = { id, position: { x, y }, data: {}, measured: { width: 400, height: 328 } };
@@ -40,7 +47,7 @@ function StoreBridge({ children }: { children: ReactNode }) {
   return children;
 }
 
-type Item = { nodeId: string; src: string; alt: string; placement?: ImagePlacement; onLoad?: () => void; className?: string; style?: React.CSSProperties };
+type Item = { nodeId: string; src: string; alt: string; placement?: ImagePlacement; onLoad?: () => void; className?: string; style?: React.CSSProperties; aspect?: number };
 function Scene({ items, project = "first" }: { items: Item[]; project?: string }) {
   return (
     <ReactFlowProvider>
@@ -58,8 +65,28 @@ async function loaded(image: BrowserImage) {
   await act(async () => { image.onload?.(); for (let i = 0; i < 12; i++) await Promise.resolve(); });
 }
 
-beforeEach(() => { BrowserImage.instances = []; vi.stubGlobal("Image", BrowserImage); });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  BrowserImage.instances = [];
+  objectSources.clear();
+  vi.stubGlobal("Image", BrowserImage);
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const src = String(input);
+    return Promise.resolve({ ok: true, blob: () => Promise.resolve(Object.assign(new Blob(["img"]), { source: src })) });
+  }));
+  let counter = 0;
+  (URL as unknown as Record<string, unknown>).createObjectURL = vi.fn((blob: Blob & { source?: string }) => {
+    const url = `blob:img-${++counter}`;
+    objectSources.set(url, blob.source ?? "");
+    return url;
+  });
+  (URL as unknown as Record<string, unknown>).revokeObjectURL = vi.fn((url: string) => { objectSources.delete(url); });
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  delete (URL as unknown as Record<string, unknown>).createObjectURL;
+  delete (URL as unknown as Record<string, unknown>).revokeObjectURL;
+});
 
 describe("CanvasImage", () => {
   it("retries a failed shared source once and recovers every consumer without changing the URL", async () => {
@@ -74,8 +101,8 @@ describe("CanvasImage", () => {
     expect(BrowserImage.instances).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "media.retry" })).toBeNull();
     await loaded(BrowserImage.instances[1]);
-    expect(screen.getByRole("img", { name: "first" })).toHaveAttribute("src", "/shared.png");
-    expect(screen.getByRole("img", { name: "second" })).toHaveAttribute("src", "/shared.png");
+    expect(sourceOf(screen.getByRole("img", { name: "first" }).getAttribute("src"))).toBe("/shared.png");
+    expect(sourceOf(screen.getByRole("img", { name: "second" }).getAttribute("src"))).toBe("/shared.png");
   });
 
   it("preserves presentation while an upload preview is loading or fails", async () => {
@@ -95,12 +122,12 @@ describe("CanvasImage", () => {
     expect(screen.getByRole("img", { name: "far" }).tagName).toBe("SPAN");
     act(() => flowStore.setState({ transform: [-5000, 0, 1] }));
     await flush();
-    expect(BrowserImage.instances[0].src).toBe("/far.png");
+    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/far.png");
     await loaded(BrowserImage.instances[0]);
-    expect(screen.getByRole("img", { name: "far" })).toHaveAttribute("src", "/far.png");
+    expect(sourceOf(screen.getByRole("img", { name: "far" }).getAttribute("src"))).toBe("/far.png");
     act(() => flowStore.setState({ transform: [0, 0, 1] }));
     await flush();
-    expect(screen.getByRole("img", { name: "far" })).toHaveAttribute("src", "/far.png");
+    expect(sourceOf(screen.getByRole("img", { name: "far" }).getAttribute("src"))).toBe("/far.png");
     expect(BrowserImage.instances).toHaveLength(1);
   });
 
@@ -113,14 +140,14 @@ describe("CanvasImage", () => {
     expect(BrowserImage.instances).toHaveLength(0);
     act(() => flowStore.setState({ nodeLookup: new Map([["far", { ...child, internals: { ...child.internals, positionAbsolute: { x: 10, y: 10 } } }]]) }));
     await flush();
-    expect(BrowserImage.instances[0].src).toBe("/child.png");
+    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/child.png");
   });
 
   it("loads an expanded card visible above a distant main node", async () => {
     render(<Scene items={[{ nodeId: "far", src: "/expanded.png", alt: "expanded", placement: { row: -6 } }]} />);
     act(() => flowStore.setState({ nodeLookup: new Map([["far", node("far", 100, 2000)]]) }));
     await flush();
-    expect(BrowserImage.instances[0].src).toBe("/expanded.png");
+    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/expanded.png");
   });
 
   it("shares preparations and keeps the request alive when one of two consumers unmounts", async () => {
@@ -133,7 +160,7 @@ describe("CanvasImage", () => {
     await flush();
     expect(BrowserImage.instances[0].removeAttribute).not.toHaveBeenCalled();
     await loaded(BrowserImage.instances[0]);
-    expect(screen.getByRole("img", { name: "second" })).toHaveAttribute("src", "/shared.png");
+    expect(sourceOf(screen.getByRole("img", { name: "second" }).getAttribute("src"))).toBe("/shared.png");
   });
 
   it("aborts unfinished loading after leaving the prefetch range and restarts on return", async () => {
@@ -147,7 +174,7 @@ describe("CanvasImage", () => {
     await flush();
     expect(BrowserImage.instances).toHaveLength(2);
     await loaded(BrowserImage.instances[1]);
-    expect(screen.getByRole("img", { name: "near" })).toHaveAttribute("src", "/near.png");
+    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).toBe("/near.png");
   });
 
   it("ignores stale decoding results after the node source changes", async () => {
@@ -160,9 +187,9 @@ describe("CanvasImage", () => {
     view.rerender(<Scene items={[{ nodeId: "near", src: "/new.png", alt: "near" }]} />);
     await flush();
     await act(async () => completeDecode());
-    expect(screen.getByRole("img", { name: "near" })).not.toHaveAttribute("src", "/old.png");
+    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).not.toBe("/old.png");
     await loaded(BrowserImage.instances.at(-1)!);
-    expect(screen.getByRole("img", { name: "near" })).toHaveAttribute("src", "/new.png");
+    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).toBe("/new.png");
   });
 
   it("clears pending work when the project changes and releases it on unmount", async () => {
@@ -198,5 +225,37 @@ describe("CanvasImage", () => {
     act(() => flowStore.setState({ transform: [1, 0, 1] }));
     await flush();
     expect(BrowserImage.instances).toHaveLength(1);
+  });
+
+  it("renders a delayed skeleton with the content-type icon while pending and drops it once ready", async () => {
+    render(<Scene items={[{ nodeId: "near", src: "/slow.png", alt: "slow" }]} />);
+    await flush();
+    const placeholder = screen.getByRole("img", { name: "slow" });
+    expect(placeholder).toHaveAttribute("data-image-status", "pending");
+    // 骨架（官方动画工具类延迟淡入 + animate-pulse 块）与内容类型图标在 pending 期存在
+    const reveal = placeholder.querySelector(".animate-in")!;
+    expect(reveal).toHaveClass("fade-in", "delay-150", "fill-mode-both");
+    expect(reveal.querySelector(".animate-pulse")).not.toBeNull();
+    expect(reveal.querySelector("svg")).not.toBeNull();
+    await loaded(BrowserImage.instances[0]);
+    // ready 后骨架整体卸载，由 img 接管
+    expect(screen.getByRole("img", { name: "slow" }).tagName).toBe("IMG");
+    expect(document.querySelector(".animate-in")).toBeNull();
+  });
+
+  it("shapes the skeleton to the known media aspect ratio and falls back to full bleed", async () => {
+    render(<Scene items={[
+      { nodeId: "near", src: "/shaped.png", alt: "shaped", aspect: 1.6 },
+      { nodeId: "second", src: "/plain.png", alt: "plain" },
+    ]} />);
+    await flush();
+    // 已知宽高比：骨架为按比例定形的居中块（容器查询单位做完美 contain），图标居中叠加
+    const shaped = screen.getByRole("img", { name: "shaped" }).querySelector(".animate-pulse") as HTMLElement;
+    expect(shaped).toHaveStyle({ aspectRatio: "1.6" });
+    expect(shaped.style.width).toBe("min(100cqw, 160cqh)");
+    expect(shaped).toHaveClass("rounded-md");
+    // 未知宽高比：满铺
+    const plain = screen.getByRole("img", { name: "plain" }).querySelector(".animate-pulse") as HTMLElement;
+    expect(plain).toHaveClass("absolute", "inset-0");
   });
 });

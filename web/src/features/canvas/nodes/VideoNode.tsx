@@ -60,7 +60,7 @@ import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/
 import { withManagedFileWidth } from "@/lib/file-url";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
-import { AUDIO_DECISION_MIN_TIME, detectAudioTrack } from "@/lib/utils/media-utils";
+import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, mediaAspect } from "@/lib/utils/media-utils";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import BusyOverlay from "./BusyOverlay";
@@ -868,6 +868,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const hasVideo = src && src.length > 0;
   // 海报：内容寻址派生品，非托管地址（外链导入等）无海报，显示图标占位
   const posterUrl = hasVideo ? withManagedFileWidth(src, 480) : undefined;
+  const posterAspect = mediaAspect(data.naturalWidth, data.naturalHeight);
   // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
   // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，
   // 与播放位置无关），避免在 effect 里同步 setState 造成级联渲染
@@ -969,6 +970,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               <CanvasImage
                 nodeId={id}
                 src={posterUrl}
+                aspect={posterAspect}
                 alt={data.label || t("node.video")}
                 className="absolute inset-0 size-full object-contain"
                 draggable={false}
@@ -1021,6 +1023,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               <CanvasImage
                 nodeId={id}
                 src={posterUrl}
+                aspect={posterAspect}
                 alt={data.label || t("node.video")}
                 className="size-full object-contain"
                 draggable={false}

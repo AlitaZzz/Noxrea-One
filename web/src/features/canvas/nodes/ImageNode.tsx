@@ -37,6 +37,7 @@ import { useUploadProgress } from "@/features/canvas/upload/upload-progress-stor
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { sanitizeFileName } from "@/lib/utils/file-name";
 import { canvasToBlob, computeNodeSize } from "@/lib/utils/image-utils";
+import { mediaAspect } from "@/lib/utils/media-utils";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
@@ -107,6 +108,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   // 多图模式约定（写侧保证）：src 必为 multiResultUrls 的成员；
   // 撤销会把整个 data 快照替换，故无需额外同步。
   const src = data.src || "";
+  const mainAspect = mediaAspect(data.naturalWidth, data.naturalHeight);
 
   // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
   const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
@@ -501,13 +503,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                       zIndex: 0,
                     }}
                   >
-                    <CanvasImage nodeId={id} src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+                    <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
                   </div>
                 </div>
               )
             )
           : hasImage ? (
-            <CanvasImage nodeId={id} src={src} alt={data.label || ""} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+            <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
               <PictureOutlined className="text-5xl" />
