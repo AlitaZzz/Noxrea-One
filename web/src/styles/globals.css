@@ -1022,3 +1022,196 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   box-shadow: none;
   outline: none;
 }
+
+/* ===== Canvas Loading 页面（画布门页加载态） =====
+   设计 B：满屏网格 + Agent 骨架居中 + 四角内容节点 + SVG 贝塞尔曲线。
+   配色全部走 shadcn token（--background/--card/--border/--brand-lime/--muted-foreground），
+   明暗主题自动适配。 */
+@keyframes canvas-loader-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes canvas-loader-dashmove {
+  to { stroke-dashoffset: -200; }
+}
+@keyframes canvas-loader-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes canvas-loader-typedot {
+  0%, 100% { opacity: .3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes canvas-loader-status-blink {
+  0%, 100% { opacity: .5; }
+  50% { opacity: 1; }
+}
+
+.canvas-loader-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--foreground) 3%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: canvas-loader-fadein .3s ease-out both;
+  pointer-events: none;
+}
+
+.canvas-loader-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+}
+.canvas-loader-svg path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brand-lime) 22%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  animation: canvas-loader-dashmove 12s linear infinite;
+}
+
+.canvas-loader-node {
+  position: absolute;
+  z-index: 2;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+  padding: 10px;
+  animation: canvas-loader-fadein .3s ease-out both;
+}
+.canvas-loader-node .cl-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  margin-bottom: 6px;
+}
+.canvas-loader-node .cl-bar:last-child { margin-bottom: 0; }
+.canvas-loader-node .cl-thumb {
+  width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-lime) 10%, transparent), color-mix(in srgb, var(--foreground) 4%, transparent));
+  margin-bottom: 6px;
+}
+.canvas-loader-node-1 { top: 5%; left: 2%; width: 130px; }
+.canvas-loader-node-1 .cl-thumb { height: 70px; }
+.canvas-loader-node-2 { top: 10%; right: 2%; width: 120px; }
+.canvas-loader-node-3 { bottom: 6%; left: 3%; width: 150px; }
+.canvas-loader-node-3 .cl-thumb { height: 60px; }
+.canvas-loader-node-4 { bottom: 8%; right: 3%; width: 125px; }
+
+.canvas-loader-agent-stack {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 4;
+  animation: canvas-loader-fadein .3s ease-out both;
+}
+.canvas-loader-agent {
+  width: 190px;
+  background: color-mix(in srgb, var(--brand-lime) 10%, var(--background));
+  border: 1px solid color-mix(in srgb, var(--brand-lime) 30%, transparent);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .45), 0 0 40px color-mix(in srgb, var(--brand-lime) 10%, transparent);
+}
+.canvas-loader-agent-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.canvas-loader-agent-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-lime) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.canvas-loader-agent-icon svg { width: 13px; height: 13px; color: var(--brand-lime); }
+.canvas-loader-agent-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-lime);
+  letter-spacing: .3px;
+}
+.canvas-loader-agent-status {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin-left: auto;
+  animation: canvas-loader-status-blink 2s ease-in-out infinite;
+}
+.canvas-loader-agent-body { display: flex; flex-direction: column; gap: 6px; }
+.canvas-loader-agent-line {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 25%,
+    color-mix(in srgb, var(--brand-lime) 14%, transparent) 50%,
+    color-mix(in srgb, var(--foreground) 6%, transparent) 75%);
+  background-size: 200% 100%;
+  animation: canvas-loader-shimmer 1.8s ease-in-out infinite;
+}
+.canvas-loader-agent-line:nth-child(1) { width: 85%; }
+.canvas-loader-agent-line:nth-child(2) { width: 100%; animation-delay: .15s; }
+.canvas-loader-agent-line:nth-child(3) { width: 60%; animation-delay: .3s; }
+.canvas-loader-agent-dots { display: flex; gap: 4px; margin-top: 8px; align-items: center; }
+.canvas-loader-agent-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--brand-lime);
+  opacity: .4;
+  animation: canvas-loader-typedot 1.2s ease-in-out infinite;
+}
+.canvas-loader-agent-dots i:nth-child(2) { animation-delay: .2s; }
+.canvas-loader-agent-dots i:nth-child(3) { animation-delay: .4s; }
+.canvas-loader-agent-dots .cl-label { font-size: 10px; color: var(--muted-foreground); margin-left: 4px; }
+
+.canvas-loader-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.canvas-loader-center .cl-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--foreground);
+  letter-spacing: .03em;
+}
+.canvas-loader-center .cl-sub {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-top: 5px;
+  letter-spacing: .03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-loader-grid,
+  .canvas-loader-svg path,
+  .canvas-loader-node,
+  .canvas-loader-agent-stack,
+  .canvas-loader-agent-line,
+  .canvas-loader-agent-dots i,
+  .canvas-loader-agent-status {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+

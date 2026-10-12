@@ -128,7 +128,11 @@
     "tidy": "整理画布",
     "loadFailed": "设置加载失败，请检查网络",
     "retry": "重试",
-    "presetRemoved": "预设已移除"
+    "presetRemoved": "预设已移除",
+    "entering": "正在进入画布",
+    "enteringSub": "建立会话 · 恢复内容 · 同步模型",
+    "agentThinking": "thinking",
+    "agentRestoring": "restoring canvas…"
   },
   "node": {
     "add": "添加节点",
@@ -1056,3 +1060,4 @@
     }
   }
 }
+

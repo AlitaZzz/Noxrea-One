@@ -126,7 +126,11 @@
     "tidy": "Tidy Canvas",
     "loadFailed": "Failed to load settings, please check your network",
     "retry": "Retry",
-    "presetRemoved": "Preset removed"
+    "presetRemoved": "Preset removed",
+    "entering": "Entering canvas",
+    "enteringSub": "Establishing session · Restoring content · Syncing models",
+    "agentThinking": "thinking",
+    "agentRestoring": "restoring canvas…"
   },
   "node": {
     "add": "Add Node",
@@ -1056,3 +1060,4 @@
     }
   }
 }
+
