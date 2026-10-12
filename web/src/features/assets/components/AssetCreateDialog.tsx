@@ -118,7 +118,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
   // 弹窗关闭（destroyOnHidden 会卸载）或组件卸载时兜底回收
   useEffect(() => () => releaseUrls(), [releaseUrls]);
 
-  // 格式/体积说明的数据源在服务端（白名单 + MAX_UPLOAD_SIZE_MB），弹窗打开时拉取；
+  // 格式/体积说明的数据源在服务端（白名单 + upload.max_file_mb），弹窗打开时拉取；
   // 拉取失败只是隐藏说明，不影响上传功能
   useEffect(() => {
     if (!open) return;

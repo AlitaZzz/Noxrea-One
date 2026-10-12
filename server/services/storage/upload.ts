@@ -5,7 +5,7 @@
  */
 import path from "path";
 
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import type { ErrorCode } from "@server/core/errors/codes";
 import { logEvent } from "@server/core/logger/utils";
 import { computeBufferHash } from "./hash";
@@ -193,8 +193,8 @@ export async function processUploadBatch(
   userId: number,
   source: "upload" | "derived",
 ): Promise<UploadBatchResult> {
-  // 配置启动期缓存，批次处理入口读取一次下传，逐文件不再各自访问
-  const maxSizeMb = getConfig().MAX_UPLOAD_SIZE_MB;
+  // 批次处理入口读取一次下传，逐文件不再各自访问
+  const maxSizeMb = getSetting("upload.max_file_mb");
   const results: UploadItemResult[] = [];
   for (let start = 0; start < files.length; start += FILE_PROCESS_CONCURRENCY) {
     const chunk = files.slice(start, start + FILE_PROCESS_CONCURRENCY);

@@ -1,9 +1,10 @@
 /**
  * 上传批次限制的轻量单一来源。
- * 只依赖 config 与 response，供 body-limit 中间件与上传路由共用，
+ * 只依赖 config、settings 与 response，供 body-limit 中间件与上传路由共用，
  * 避免中间件为取限制值引入整个批次处理服务的传递依赖（hash / probe / persist 等）。
  */
 import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { failCode } from "@server/core/response";
 
 /** 上传批次限制：单批文件数、单批总字节（由配置的 MiB 值换算）。 */
@@ -15,11 +16,11 @@ export interface UploadBatchLimits {
 
 /** 读取当前配置的批次上限，供路由校验、body-limit 中间件和 upload-limits 端点共用。 */
 export function getUploadBatchLimits(): UploadBatchLimits {
-  const cfg = getConfig();
+  const maxMb = getConfig().UPLOAD_BATCH_MAX_MB;
   return {
-    maxFiles: cfg.UPLOAD_BATCH_MAX_FILES,
-    maxMb: cfg.UPLOAD_BATCH_MAX_MB,
-    maxBytes: cfg.UPLOAD_BATCH_MAX_MB * 1024 * 1024,
+    maxFiles: getSetting("upload.batch_max_files"),
+    maxMb,
+    maxBytes: maxMb * 1024 * 1024,
   };
 }
 

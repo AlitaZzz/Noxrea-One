@@ -116,7 +116,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
    - Web：<http://localhost:3000>
    - API：<http://localhost:4000>
 
-首次使用时在登录页注册账号。如果需要关闭注册，将 `.env` 中的 `ALLOW_REGISTRATION` 设置为 `false` 后重启服务。
+首次使用时在登录页注册账号。如果需要关闭注册，将数据库 `system_settings` 表中 `auth.registration_enabled` 的值改为 `false` 后重启服务（见下方「系统设置」）。
 
 ## 常用命令
 
@@ -137,34 +137,43 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 ## 环境变量
 
-完整模板见 `.env.example`。以下是最常用配置：
+完整模板见 `.env.example`，变量按读取方分为后端、前后端共用、前端（`WEB_` 前缀）三区。以下是最常用配置：
 
 | 变量 | 说明 |
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
 | `DATABASE_URL` | SQLite 连接串，默认 `file:./dev.db` |
-| `SERVER_HOST` / `SERVER_PORT` | Hono 服务监听地址与端口，默认 `0.0.0.0:4000` |
-| `SERVER_URL` | Next.js 转发 `/api/*` 的目标地址，默认 `http://localhost:4000` |
-| `AUTH_GATE_MODE` | 路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
-| `TRUSTED_PROXY_CIDRS` | 可信反向代理网段（逗号分隔 IP/CIDR）；留空时登录/注册限流使用 socket peer，不信任 `X-Forwarded-For` |
-| `ALLOW_REGISTRATION` | 是否允许新用户注册，默认 `true` |
+| `API_HOST` / `API_PORT` | 后端（Hono）监听地址与端口，默认 `0.0.0.0:4000` |
+| `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
+| `WEB_AUTH_GATE_MODE` | 前端路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
+| `WEB_APP_NAME` | 浏览器端显示的应用名（构建期固化） |
 | `UPLOAD_DIR` | 上传文件目录，默认 `uploads` |
-| `PUBLIC_URL` | 对外访问地址；设置后参考素材可以上游可访问的 URL 提供给模型 |
+| `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名；Next 代理层共用，故保留在 env） |
 | `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
-| `MAX_UPLOAD_SIZE_MB` | 单个上传文件大小上限，默认 `100` MB |
-| `UPLOAD_BATCH_MAX_FILES` | 单次批量上传最多文件数，默认 `20` |
-| `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名） |
-| `UPLOAD_BATCH_MAX_CONCURRENT` | 单个用户同时处理的上传批次数，默认 `1` |
-| `UPLOAD_BATCH_MAX_PENDING` | 单个用户上传批次等待队列深度上限，超额返回 429，默认 `10` |
 | `LOG_LEVEL` | 日志级别，可选 `DEBUG`、`INFO`、`WARN`、`ERROR` |
 | `ALLOW_INSECURE_SECRETS` | 是否允许占位密钥启动，仅建议本地开发使用 |
-| `WORKER_*` | 生成任务 Worker 的轮询、并发、超时、重试等参数 |
-| `HTTP_TIMEOUT_*` | 下载、轮询、API 与异步请求超时 |
-| `ALLOWED_INTERNAL_HOSTS` | 允许访问的内网主机；默认禁止访问内网 |
-| `USE_SYSTEM_PROXY` / `PROXY_URL` | 访问上游模型 API 时的出网代理 |
 
 生产环境务必使用随机 `JWT_SECRET_KEY`，不要开启 `ALLOW_INSECURE_SECRETS`。
+
+### 系统设置
+
+运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面，可用 `npm run prisma:studio` 或 `sqlite3` 修改）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
+
+| 前缀 | 内容 |
+| --- | --- |
+| `auth.*` | 注册开关 `registration_enabled`、登录态有效期 `token_ttl_minutes` |
+| `network.*` | 可信代理网段、SSRF 内网白名单、出网代理、对外访问地址 `public_base_url` |
+| `upload.*` | 单文件大小、单批文件数、单用户并发批次数与排队深度 |
+| `worker.*` | 生成任务 Worker 的轮询、并发、超时、重试等 |
+| `http.*` | 下载、轮询、API 请求超时，响应体空闲与下载总时长 |
+| `storage.*` | 存储引用 GC 宽限期与试运行开关 |
+
+例如关闭注册：
+
+```sql
+UPDATE system_settings SET value = 'false' WHERE key = 'auth.registration_enabled';
+```
 
 ## Docker 部署
 
@@ -209,6 +218,27 @@ docker build -t noxrea-one .
 
 如需替换 NAS compose 中的镜像名，可将 `image` 字段改为本地构建的镜像名称。
 
+容器内后端固定监听 `0.0.0.0:4000`，与构建期固化的前端 `/api` 代理目标一致，不读取 `API_HOST` / `API_PORT`。前后端分开部署时，用构建参数 `--build-arg WEB_API_ORIGIN=http://backend-host:4000` 指定后端地址；应用名用 `--build-arg WEB_APP_NAME=...`。
+
+### 升级旧版数据库
+
+数据库迁移历史已合并为单个 baseline（`20261012100000_baseline`）。**早于该版本创建的数据库**（`_prisma_migrations` 里记录着旧迁移）升级前需执行一次迁移历史重置，否则容器启动时的 `prisma migrate deploy` 会因表已存在而失败；旧库还没有 `system_settings` 表，需要一并补建。表结构与已有数据不受影响，建议先备份 `/data` 下的数据库文件。
+
+先拉取新镜像，再用一次性容器执行（容器启动脚本会在迁移失败时退出，所以不能用 `exec` 进入原容器）：
+
+```bash
+docker compose -f docker-compose.nas.yml pull
+docker compose -f docker-compose.nas.yml run --rm --entrypoint sh noxrea -c '
+set -e
+set -a; . /data/.env; set +a
+echo "DELETE FROM _prisma_migrations;" | npx prisma db execute --stdin --schema prisma/schema.prisma
+npx prisma db push --skip-generate
+npx prisma migrate resolve --applied 20261012100000_baseline
+'
+```
+
+三步依次是：清空旧迁移记录、补建缺失的表（已有的表不动）、把 baseline 标记为已应用。本地开发库同理：在 `.env` 已配置 `DATABASE_URL` 的前提下，去掉 `docker compose` 外壳，直接在项目根目录执行这三条 `npx prisma` 命令。全新部署无需此步骤。
+
 ## 数据与持久化
 
 Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初始化以下路径：
@@ -246,7 +276,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 - `agent`：Agent 会话、消息、技能与工具结果
 - `capture-frame`、`detach-audio`、`video-proxy`、`frame-sprite`：媒体处理能力
 
-接口需要 JWT 认证；注册开放策略由 `ALLOW_REGISTRATION` 控制。
+接口需要 JWT 认证；注册开放策略由系统设置 `auth.registration_enabled` 控制。
 
 ## 开发约定
 

@@ -1,7 +1,7 @@
 /** 文件上传路由：认证、请求体预检、并发租约、multipart 解析和批次约束。 */
 import { Hono } from "hono";
 
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { ConcurrencyQueueFullError, waitForUserConcurrency } from "@server/core/ratelimit/concurrency";
 import { failCode, failClientDisconnected, ok } from "@server/core/response";
 import { authenticateRequest, type AuthUser } from "@server/http/middleware/auth";
@@ -24,7 +24,7 @@ router.get("/api/files/upload-limits", async (c) => {
 
   const limits = getUploadBatchLimits();
   return c.json(ok({
-    maxSizeMb: getConfig().MAX_UPLOAD_SIZE_MB,
+    maxSizeMb: getSetting("upload.max_file_mb"),
     maxBatchFiles: limits.maxFiles,
     maxBatchBytes: limits.maxBytes,
     formats: UPLOAD_FORMATS,
@@ -40,18 +40,17 @@ router.post(
     return next();
   },
   // 请求体 header 预检先于并发租约；chunked 请求在租约内通过流式 middleware 限制
-  uploadBodyLimit(getUploadBatchLimits()),
+  uploadBodyLimit(),
   async (c, next) => {
     const user = c.get("uploadUser");
     let release: (() => void) | undefined;
     try {
-      const cfg = getConfig();
       release = await waitForUserConcurrency(
         "upload",
         user.id,
-        cfg.UPLOAD_BATCH_MAX_CONCURRENT,
+        getSetting("upload.batch_max_concurrent"),
         c.req.raw.signal,
-        cfg.UPLOAD_BATCH_MAX_PENDING,
+        getSetting("upload.batch_max_pending"),
       );
     } catch (err) {
       // 队列满立即 429（客户端按可重试退避）；仅客户端断开按 499 收口；其他异常重新抛出
@@ -67,7 +66,7 @@ router.post(
       release();
     }
   },
-  uploadBodyStreamLimit(getUploadBatchLimits()),
+  uploadBodyStreamLimit(),
   async (c) => {
     const user = c.get("uploadUser");
 

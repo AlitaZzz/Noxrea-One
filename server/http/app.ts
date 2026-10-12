@@ -34,7 +34,7 @@ app.use("*", requestId());
 
 // JSON 请求体分级上限：画布与 Agent 携带整份画布快照（10MB），资产批量次之（2MB），
 // 模型配置/生成任务最小（1MB），认证请求体很小（64KB）。
-// /api/files/* 不设全局上限：上传走 multipart 且有 MAX_UPLOAD_SIZE_MB 专用校验。
+// /api/files/* 不设全局上限：上传走 multipart 且有 upload.max_file_mb 专用校验。
 app.use("/api/canvas/*", jsonBodyLimit(10 * 1024 * 1024));
 app.use("/api/agent/*", jsonBodyLimit(10 * 1024 * 1024));
 app.use("/api/assets/*", jsonBodyLimit(2 * 1024 * 1024));

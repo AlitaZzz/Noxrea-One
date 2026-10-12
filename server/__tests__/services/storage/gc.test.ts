@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   fileObjectDelete: vi.fn(),
   stat: vi.fn(),
   del: vi.fn(),
-  getConfig: vi.fn().mockReturnValue({ LOG_LEVEL: "silent", GC_GRACE_HOURS: 48, GC_DRY_RUN: true }),
+  getConfig: vi.fn().mockReturnValue({ LOG_LEVEL: "silent" }),
 }));
 
 vi.mock("@server/core/database/client", () => ({
@@ -26,6 +26,7 @@ vi.mock("@server/core/database/client", () => ({
 }));
 
 vi.mock("@server/core/config", () => ({ getConfig: mocks.getConfig }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/services/storage/backends/local", () => ({
   localStorage: {
     delete: mocks.del,
@@ -34,6 +35,7 @@ vi.mock("@server/services/storage/backends/local", () => ({
 }));
 
 import { runStorageGc } from "@server/services/storage/gc";
+import { resetTestSettings } from "../../helpers/settings";
 
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
@@ -49,7 +51,8 @@ const candidate = (hash: string, overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue({ LOG_LEVEL: "silent", GC_GRACE_HOURS: 48, GC_DRY_RUN: true });
+  mocks.getConfig.mockReturnValue({ LOG_LEVEL: "silent" });
+  resetTestSettings({ "storage.gc_dry_run": true });
   mocks.fileObjectFindMany.mockResolvedValue([]);
   mocks.fileRefFindMany.mockResolvedValue([]);
   mocks.queryRaw.mockResolvedValue([{ n: 0 }]);
@@ -106,7 +109,7 @@ describe("runStorageGc 扫描与护栏", () => {
 
 describe("runStorageGc 实删", () => {
   beforeEach(() => {
-    mocks.getConfig.mockReturnValue({ LOG_LEVEL: "silent", GC_GRACE_HOURS: 48, GC_DRY_RUN: false });
+    resetTestSettings({ "storage.gc_dry_run": false });
   });
 
   it("终检通过：删行后删文件，计入回收", async () => {

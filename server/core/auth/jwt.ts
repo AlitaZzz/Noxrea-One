@@ -4,6 +4,7 @@
  */
 import * as jose from "jose";
 import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 
 export interface TokenPayload {
   sub: string; // user_id as string
@@ -34,7 +35,7 @@ export async function createAccessToken(
   })
     .setProtectedHeader({ alg: cfg.JWT_ALGORITHM })
     .setIssuedAt()
-    .setExpirationTime(`${cfg.JWT_EXPIRE_MINUTES}m`)
+    .setExpirationTime(`${getSetting("auth.token_ttl_minutes")}m`)
     .sign(secret);
 
   return token;

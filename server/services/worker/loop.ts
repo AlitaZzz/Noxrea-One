@@ -11,7 +11,7 @@ import {
 import type { HydratedGenerationTask } from "@server/crud/task";
 import { executeTask } from "./executor";
 import { resumeAsyncPolling } from "./resume-polling";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import pLimit from "p-limit";
@@ -57,8 +57,9 @@ export function sleepWithStopSignal(
  * Worker 主循环：轮询领取 → p-limit 并发 → 僵尸清理 → 优雅停机
  */
 export async function workerLoop(stopSignal: StopSignal): Promise<void> {
-  const cfg = getConfig();
-  const limit = pLimit(cfg.WORKER_MAX_CONCURRENCY);
+  const maxConcurrency = getSetting("worker.max_concurrency");
+  const pollIntervalSeconds = getSetting("worker.poll_interval_seconds");
+  const limit = pLimit(maxConcurrency);
   const inFlight = new Set<Promise<void>>();
   let lastZombieCheck = Date.now();
 
@@ -91,7 +92,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
   };
 
   // 0. 启动时处理未完成任务。恢复轮询与新任务共用同一调度器，
-  // 避免启动恢复绕过 WORKER_MAX_CONCURRENCY。
+  // 避免启动恢复绕过 worker.max_concurrency。
   // 同步任务在恢复时直接判失败（中断的同步任务不重新提交，见 recoverProcessingTasks）
   const { interrupted, asyncTasks } = await recoverProcessingTasks();
   if (interrupted > 0) {
@@ -107,16 +108,16 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
 
   logEvent("worker.loop", {
     stage: "started",
-    pollInterval: cfg.WORKER_POLL_INTERVAL,
-    maxConcurrency: cfg.WORKER_MAX_CONCURRENCY,
+    pollInterval: pollIntervalSeconds,
+    maxConcurrency,
   });
 
   while (!stopSignal.stopped) {
     try {
       // 1. 僵尸任务清理
       const now = Date.now();
-      if (now - lastZombieCheck > cfg.WORKER_ZOMBIE_INTERVAL * 1000) {
-        const count = await cleanupZombieTasks(cfg.WORKER_STUCK_TIMEOUT, cfg.WORKER_MAX_RETRIES);
+      if (now - lastZombieCheck > getSetting("worker.zombie_scan_interval_seconds") * 1000) {
+        const count = await cleanupZombieTasks(getSetting("worker.stuck_timeout_minutes"), getSetting("worker.max_retries"));
         if (count > 0) {
           logEvent("worker.loop", { stage: "zombie_cleanup", count });
         }
@@ -125,7 +126,7 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
 
       // 2. 只认领当前空闲槽位。inFlight 包含运行中和 p-limit 队列中的任务，
       // 否则任务会先被标成 processing 再长时间排队，表现为“卡住”。
-      const availableSlots = cfg.WORKER_MAX_CONCURRENCY - inFlight.size;
+      const availableSlots = maxConcurrency - inFlight.size;
       if (availableSlots > 0) {
         const tasks = await claimPendingTasks(availableSlots);
 
@@ -147,18 +148,18 @@ export async function workerLoop(stopSignal: StopSignal): Promise<void> {
     }
 
     await sleepWithStopSignal(
-      cfg.WORKER_POLL_INTERVAL * 1000,
-      cfg.WORKER_POLL_CHECK_INTERVAL,
+      pollIntervalSeconds * 1000,
+      getSetting("worker.poll_check_interval_ms"),
       stopSignal,
     );
   }
 
-  // 优雅停机：先礼后兵——先等在途任务排空（至多 WORKER_DRAIN_TIMEOUT），
+  // 优雅停机：先礼后兵——先等在途任务排空（至多 worker.drain_timeout_seconds），
   // 未排空则 abort 在途上游请求/轮询强制收尾，再给一次有界窗口让 Promise 落定
   logEvent("worker.loop", { stage: "draining", inFlight: inFlight.size });
 
   if (inFlight.size > 0) {
-    const drainMs = cfg.WORKER_DRAIN_TIMEOUT * 1000;
+    const drainMs = getSetting("worker.drain_timeout_seconds") * 1000;
     const drained = Promise.allSettled([...inFlight]);
     let timedOut = false;
     let timer: ReturnType<typeof setTimeout> | undefined;

@@ -8,13 +8,11 @@ const mocks = vi.hoisted(() => ({
   probeMeta: vi.fn(),
 }));
 
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
+
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
-    MAX_UPLOAD_SIZE_MB: 1,
-    UPLOAD_BATCH_MAX_FILES: 20,
     UPLOAD_BATCH_MAX_MB: 2,
-    UPLOAD_BATCH_MAX_CONCURRENT: 1,
-    UPLOAD_BATCH_MAX_PENDING: 2,
     UPLOAD_DIR: "uploads",
     LOG_LEVEL: "silent",
     ALLOW_INSECURE_SECRETS: true,
@@ -39,11 +37,18 @@ vi.mock("@server/services/storage/media-probe", () => ({
 }));
 
 import { router } from "@server/http/routes/upload";
+import { resetTestSettings } from "../../helpers/settings";
 
 const MB = 1024 * 1024;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetTestSettings({
+    "upload.max_file_mb": 1,
+    "upload.batch_max_files": 20,
+    "upload.batch_max_concurrent": 1,
+    "upload.batch_max_pending": 2,
+  });
   mocks.authenticate.mockResolvedValue({ user: { id: 1 } });
   mocks.persist.mockResolvedValue({ width: null, height: null, duration: null });
 });
@@ -190,7 +195,7 @@ describe("POST /api/files/upload 体积校验", () => {
       f.append("file", new File([new Uint8Array([byte])], `${byte}.png`, { type: "image/png" }));
       return f;
     };
-    // 并发 1：first 占用槽位，second/third 排队（UPLOAD_BATCH_MAX_PENDING=2），fourth 超额
+    // 并发 1：first 占用槽位，second/third 排队（upload.batch_max_pending=2），fourth 超额
     const first = router.request("/api/files/upload", { method: "POST", body: formOf(1) });
     await saveStarted;
     const second = router.request("/api/files/upload", { method: "POST", body: formOf(2) });

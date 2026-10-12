@@ -5,7 +5,7 @@
 
 import { MANAGED_FILE_PATH, stripTrailingSlash } from "@noxrea/shared/url";
 import { logEvent } from "@server/core/logger/utils";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
 import path from "path";
@@ -58,7 +58,7 @@ async function readSelfFile(relPath: string): Promise<string> {
 /**
  * 参考素材通用解析（对齐 Python resolve_refs 三档策略）：
  * 1) data: URL → 直接透传
- * 2) 同源 URL（/api/files/ 或纯存储路径） → 配置 PUBLIC_URL 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
+ * 2) 同源 URL（/api/files/ 或纯存储路径） → 配置 network.public_base_url 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
  * 3) 外链 URL → 透传原串
  * 本地素材读取失败时抛 GenerationFailureError，外链透传不涉及读取、不会失败。
  *
@@ -78,10 +78,10 @@ async function resolveRefList(urls: string[]): Promise<string[]> {
     }
 
     // 同源 URL（/api/files/ 或纯存储路径）：
-    // 配置了 PUBLIC_URL → 拼公网 URL 透传（上游按 URL 拉取）；未配置 → 回退读盘转 base64
+    // 配置了 network.public_base_url → 拼公网 URL 透传（上游按 URL 拉取）；未配置 → 回退读盘转 base64
     if (url.startsWith(MANAGED_FILE_PATH) || (!url.startsWith("http://") && !url.startsWith("https://"))) {
       const relPath = url.startsWith(MANAGED_FILE_PATH) ? url.slice(MANAGED_FILE_PATH.length) : url;
-      const publicUrl = stripTrailingSlash(getConfig().PUBLIC_URL);
+      const publicUrl = stripTrailingSlash(getSetting("network.public_base_url"));
       if (publicUrl) {
         resolved.push(`${publicUrl}${MANAGED_FILE_PATH}${relPath}`);
         continue;

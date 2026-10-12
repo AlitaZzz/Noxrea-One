@@ -3,7 +3,7 @@
  * 提交生成任务并优先同步等待，超时则转为异步轮询兜底。
  */
 
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { logEvent, errText } from "@server/core/logger/utils";
 import {
   fetchUpstream,
@@ -68,7 +68,6 @@ export interface SubmitAndWaitInput {
  * 4. 都没有 → 失败
  */
 export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAndWaitResult> {
-  const cfg = getConfig();
   const {
     taskId,
     protocol,
@@ -77,9 +76,9 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     apiKey,
     channelConfig,
     signal,
-    pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL,
-    maxPollAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS,
-    initialDelay = cfg.WORKER_ASYNC_POLL_INITIAL_DELAY,
+    pollInterval = getSetting("worker.async_poll_interval_seconds"),
+    maxPollAttempts = getSetting("worker.async_poll_max_attempts"),
+    initialDelay = getSetting("worker.async_poll_initial_delay_seconds"),
   } = input;
 
   // 1. 提交上游请求
@@ -228,7 +227,6 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     taskId, startedAt, protocol, capability, baseUrl, apiKey,
     upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay, signal,
   } = input;
-  const cfg = getConfig();
 
   // 若协议完全不支持轮询，直接失败，避免无限 pending
   if (!protocol.buildPollUrl && !protocol.parsePollResponse) {
@@ -377,7 +375,7 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
     case "exhausted": {
       // 预算耗尽 ≠ 上游失败：任务重置 pending 重新认领后走恢复轮询
       //（upstreamTaskId 已固化，天然不重提上游），retryCount 预算封顶。
-      const requeued = await requeueProcessingAsyncTask(taskId, startedAt, cfg.WORKER_MAX_RETRIES);
+      const requeued = await requeueProcessingAsyncTask(taskId, startedAt, getSetting("worker.max_retries"));
       if (requeued) {
         logEvent("taskmgr", {
           stage: "poll_exhausted_requeued",

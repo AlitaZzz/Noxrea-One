@@ -2,7 +2,7 @@
  * Server 进程入口：HTTP 服务 + Worker 循环（同进程）
  *
  * 替代旧架构中 web（Next.js API）+ worker（独立进程）的双进程模型。
- * - HTTP 由 Hono 提供，监听 SERVER_PORT（默认 4000）
+ * - HTTP 由 Hono 提供，监听 API_PORT（默认 4000）
  * - Worker 循环异步运行（p-limit 并发，不阻塞事件循环）
  */
 import { bootstrap } from "@server/core/bootstrap";
@@ -11,7 +11,7 @@ import { prisma } from "@server/core/database/client";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { startServer, stopServer } from "@server/http/server";
 
 async function main(): Promise<void> {
@@ -50,9 +50,9 @@ async function main(): Promise<void> {
     taskWatcher.dispose();
 
     // 4c. 等 Worker 排空在途任务。排空超时的强制收尾由 workerLoop 内部完成：
-    //     abort 在途上游请求/轮询后再等一个窗口让 Promise 落定（约 2×WORKER_DRAIN_TIMEOUT），
+    //     abort 在途上游请求/轮询后再等一个窗口让 Promise 落定（约 2×worker.drain_timeout_seconds），
     //     这里只设更大的进程退出兜底时限
-    const exitBound = getConfig().WORKER_DRAIN_TIMEOUT * 1000 * 3;
+    const exitBound = getSetting("worker.drain_timeout_seconds") * 1000 * 3;
     await Promise.race([
       workerPromise,
       new Promise<void>((r) => setTimeout(r, exitBound)),

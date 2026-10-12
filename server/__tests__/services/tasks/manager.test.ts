@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   fetchUpstream: vi.fn(),
   httpUpstreamFailure: vi.fn(),
   noUpstreamResult: vi.fn(),
-  getConfig: vi.fn(),
   logEvent: vi.fn(),
   errText: vi.fn((e: unknown) => String(e)),
   markTaskProcessing: vi.fn(),
@@ -25,7 +24,7 @@ vi.mock("@server/services/tasks/sync-fetch", () => ({
   httpUpstreamFailure: mocks.httpUpstreamFailure,
   noUpstreamResult: mocks.noUpstreamResult,
 }));
-vi.mock("@server/core/config", () => ({ getConfig: mocks.getConfig }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/logger/utils", () => ({
   logEvent: mocks.logEvent,
   errText: mocks.errText,
@@ -41,6 +40,7 @@ vi.mock("@server/services/tasks/poll-loop", () => ({
 }));
 
 import { submitAndWait } from "@server/services/tasks/manager";
+import { resetTestSettings } from "../../helpers/settings";
 
 const protocol = {
   name: "test",
@@ -73,11 +73,11 @@ function makeInput(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue({
-    WORKER_ASYNC_POLL_INTERVAL: 1,
-    WORKER_ASYNC_POLL_MAX_ATTEMPTS: 3,
-    WORKER_ASYNC_POLL_INITIAL_DELAY: 0,
-    WORKER_MAX_RETRIES: 2,
+  resetTestSettings({
+    "worker.async_poll_interval_seconds": 1,
+    "worker.async_poll_max_attempts": 3,
+    "worker.async_poll_initial_delay_seconds": 0,
+    "worker.max_retries": 2,
   });
   mocks.isTaskCancelled.mockResolvedValue(false);
   mocks.markTaskProcessing.mockResolvedValue(true);
@@ -259,7 +259,7 @@ describe("submitAndWait", () => {
     const result = await submitAndWait(makeInput());
 
     expect(result).toEqual({ status: "requeued", urls: [] });
-    // 守卫参数：所有权令牌 startedAt + retryCount 预算（WORKER_MAX_RETRIES）
+    // 守卫参数：所有权令牌 startedAt + retryCount 预算（worker.max_retries）
     expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
   });
 

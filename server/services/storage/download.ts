@@ -7,7 +7,7 @@ import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { buildStorageKey } from "./service";
 import { computeBufferHash } from "./hash";
 import { sniffMime, normalizeExt } from "./mime";
@@ -40,8 +40,7 @@ export async function downloadAndSave(
   userId: number,
   taskId: string = ""
 ): Promise<string | null> {
-  const cfg = getConfig();
-  const maxSize = cfg.MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+  const maxSize = getSetting("upload.max_file_mb") * 1024 * 1024;
   try {
     let buffer: Buffer;
 
@@ -80,9 +79,9 @@ export async function downloadAndSave(
           const response = await fetchWithTimeout(cdnUrl, {
             scene: "dl",
             connectTimeoutMs: CONNECT_TIMEOUT_MS,
-            // body idle：传输停摆及时终止；overall：防慢滴漏长期占用（上限仍受 MAX_UPLOAD_SIZE_MB 约束）
+            // body idle：传输停摆及时终止；overall：防慢滴漏长期占用（上限仍受 upload.max_file_mb 约束）
             bodyIdleTimeoutMs: DOWNLOAD_BODY_IDLE_MS,
-            overallTimeoutMs: cfg.DOWNLOAD_TOTAL_TIMEOUT * 1000,
+            overallTimeoutMs: getSetting("http.download_total_timeout_seconds") * 1000,
           });
 
           // 4xx（非 429）属于确定性失败，不重试

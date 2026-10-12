@@ -27,8 +27,8 @@ export function startServer(): Promise<void> {
     server = serve(
       {
         fetch: app.fetch,
-        port: cfg.SERVER_PORT,
-        hostname: cfg.SERVER_HOST,
+        port: cfg.API_PORT,
+        hostname: cfg.API_HOST,
       },
       (info) => {
         logEvent("http.server", {

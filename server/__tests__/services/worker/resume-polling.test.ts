@@ -6,7 +6,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getConfig: vi.fn(),
   getProvider: vi.fn(),
   getProtocol: vi.fn(),
   resolveProviderEndpoints: vi.fn(),
@@ -20,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   loggerError: vi.fn(),
 }));
 
-vi.mock("@server/core/config", () => ({ getConfig: mocks.getConfig }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/crud/model-config", () => ({ getProvider: mocks.getProvider }));
 vi.mock("@server/services/protocols/base", () => ({ getProtocol: mocks.getProtocol }));
 vi.mock("@server/services/model-config", () => ({
@@ -41,6 +40,7 @@ vi.mock("@server/core/logger", () => ({ logger: { error: mocks.loggerError } }))
 import { resumeAsyncPolling } from "@server/services/worker/resume-polling";
 import type { StopSignal } from "@server/services/worker/loop";
 import type { HydratedGenerationTask } from "@server/crud/task";
+import { resetTestSettings } from "../../helpers/settings";
 
 const STARTED_AT = new Date("2026-01-01T00:00:00.000Z");
 
@@ -69,10 +69,10 @@ const protocol = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue({
-    WORKER_ASYNC_POLL_MAX_ATTEMPTS: 3,
-    WORKER_ASYNC_POLL_INTERVAL: 1,
-    WORKER_MAX_RETRIES: 2,
+  resetTestSettings({
+    "worker.async_poll_max_attempts": 3,
+    "worker.async_poll_interval_seconds": 1,
+    "worker.max_retries": 2,
   });
   mocks.getProvider.mockResolvedValue({ baseUrl: "http://upstream.test/", apiKey: "key", protocol: "openai" });
   mocks.getProtocol.mockReturnValue(protocol);
@@ -143,7 +143,7 @@ describe("resumeAsyncPolling", () => {
 
     await resumeAsyncPolling(makeTask(), makeStopSignal());
 
-    // 守卫参数：所有权令牌 startedAt + retryCount 预算（WORKER_MAX_RETRIES）
+    // 守卫参数：所有权令牌 startedAt + retryCount 预算（worker.max_retries）
     expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
     expect(mocks.safeFailTask).not.toHaveBeenCalled();
     expect(mocks.finalizeGeneratedResult).not.toHaveBeenCalled();

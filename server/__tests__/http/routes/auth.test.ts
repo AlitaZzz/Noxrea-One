@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   verifyPassword: vi.fn(),
   getLoginRateLimiter: vi.fn(),
   getRegisterRateLimiter: vi.fn(),
-  getConfig: vi.fn(),
   getConnInfo: vi.fn(),
   loginCheck: vi.fn(),
   loggerWarn: vi.fn(),
@@ -45,9 +44,7 @@ vi.mock("@server/core/ratelimit", () => ({
   getLoginRateLimiter: mocks.getLoginRateLimiter,
   getRegisterRateLimiter: mocks.getRegisterRateLimiter,
 }));
-vi.mock("@server/core/config", () => ({
-  getConfig: mocks.getConfig,
-}));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@hono/node-server/conninfo", () => ({
   getConnInfo: mocks.getConnInfo,
 }));
@@ -57,16 +54,14 @@ vi.mock("@server/core/logger", () => ({
 
 import { router } from "@server/http/routes/auth";
 import { makeUser } from "../../helpers/user-fixture";
+import { resetTestSettings } from "../../helpers/settings";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getLoginRateLimiter.mockReturnValue({ check: mocks.loginCheck });
   mocks.loginCheck.mockReturnValue(true);
   mocks.getConnInfo.mockReturnValue({ remote: { address: "203.0.113.10" } });
-  mocks.getConfig.mockReturnValue({
-    ALLOW_REGISTRATION: true,
-    TRUSTED_PROXY_CIDRS: "",
-  });
+  resetTestSettings();
   mocks.getUserByUsername.mockResolvedValue(null);
 });
 
@@ -86,10 +81,7 @@ describe("认证限流 IP 解析", () => {
   });
 
   it("可信代理存在时解析 XFF 中最右侧的非可信客户端", async () => {
-    mocks.getConfig.mockReturnValue({
-      ALLOW_REGISTRATION: true,
-      TRUSTED_PROXY_CIDRS: "10.0.0.0/8",
-    });
+    resetTestSettings({ "network.trusted_proxy_cidrs": "10.0.0.0/8" });
     mocks.getConnInfo.mockReturnValue({ remote: { address: "10.0.0.1" } });
 
     await router.request("/api/auth/login", {

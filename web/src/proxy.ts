@@ -9,9 +9,9 @@ import { type NextRequest,NextResponse } from "next/server";
  *    这是「跳 /login 又被弹回 /project」死循环的唯一出口（JS 清不掉 httpOnly cookie）。
  * 2. 向后端 /api/auth/me 转发 cookie 实测——吊销（改密码递增 tokenVersion、封禁）
  *    立即生效，而非等到 JWT 自然过期。请求经同源 /api 走 next.config rewrites
- *    代理到 SERVER_URL，后端异地部署时无需任何额外配置。
+ *    代理到 WEB_API_ORIGIN，后端异地部署时无需任何额外配置。
  *
- * 后端不可达/超时的放行策略由 AUTH_GATE_MODE 决定（默认 fail-open 放行，
+ * 后端不可达/超时的放行策略由 WEB_AUTH_GATE_MODE 决定（默认 fail-open 放行，
  * 本地签名校验真实性仍由 API 401 拦截器兜底）：自托管 NAS 场景可用性优先于即时吊销。
  * 设为 fail-closed 则后端不可达按未登录处理（安全优先，后端故障期间页面不可用）。
  * 签名校验本身仍在后端逐请求进行。
@@ -22,7 +22,7 @@ const TOKEN_COOKIE = "noxrea-auth-token";
 const BACKEND_CHECK_TIMEOUT_MS = 2000;
 
 /** 后端不可达时的放行策略：fail-open（可用性优先）/ fail-closed（安全优先） */
-const FAIL_CLOSED = process.env.AUTH_GATE_MODE === "fail-closed";
+const FAIL_CLOSED = process.env.WEB_AUTH_GATE_MODE === "fail-closed";
 
 /** 无验证解码 JWT payload 的 exp（秒）。结构损坏或已过期返回 true */
 function tokenExpired(token: string): boolean {
@@ -36,7 +36,7 @@ function tokenExpired(token: string): boolean {
   }
 }
 
-/** 向后端实测 token。返回 null 表示后端不可达（放行策略见 AUTH_GATE_MODE） */
+/** 向后端实测 token。返回 null 表示后端不可达（放行策略见 WEB_AUTH_GATE_MODE） */
 async function backendVerdict(token: string, origin: string): Promise<"valid" | "revoked" | null> {
   try {
     const res = await fetch(new URL("/api/auth/me", origin), {

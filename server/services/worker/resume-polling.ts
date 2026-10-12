@@ -5,7 +5,7 @@
 
 import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { getProvider } from "@server/crud/model-config";
 import { getProtocol } from "@server/services/protocols/base";
 import { stripTrailingSlash } from "@noxrea/shared/url";
@@ -53,8 +53,6 @@ async function _doResumePoll(
 ): Promise<void> {
   const taskId = task.id;
   const upstreamTaskId = task.upstreamTaskId!;
-  const cfg = getConfig();
-
   // 获取供应商信息
   let pollUrl: string;
   let apiKey: string;
@@ -88,8 +86,8 @@ async function _doResumePoll(
   // try 内已对 buildPollUrl 做过守卫，运行时不可达；仅为类型收窄
   if (!protocol) return;
 
-  const maxAttempts = cfg.WORKER_ASYNC_POLL_MAX_ATTEMPTS;
-  const pollInterval = cfg.WORKER_ASYNC_POLL_INTERVAL;
+  const maxAttempts = getSetting("worker.async_poll_max_attempts");
+  const pollInterval = getSetting("worker.async_poll_interval_seconds");
 
   logEvent("resume_poll", {
     stage: "polling",
@@ -143,7 +141,7 @@ async function _doResumePoll(
   if (outcome.kind === "exhausted") {
     // 预算耗尽 ≠ 上游失败：重置 pending 重新认领后继续恢复轮询（不重提上游）；
     // retryCount 预算烧完时 requeue 返回 false，才落 poll_timeout 终态
-    const requeued = await requeueProcessingAsyncTask(taskId, task.startedAt, cfg.WORKER_MAX_RETRIES);
+    const requeued = await requeueProcessingAsyncTask(taskId, task.startedAt, getSetting("worker.max_retries"));
     if (requeued) {
       logEvent("resume_poll", { stage: "poll_exhausted_requeued", taskId, upstreamTaskId });
       return;

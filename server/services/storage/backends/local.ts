@@ -162,7 +162,7 @@ export class LocalStorageBackend implements StorageBackend {
     }
   }
 
-  /** 返回相对路径（不再使用 PUBLIC_URL 硬编码） */
+  /** 返回相对路径（不再使用 network.public_base_url 硬编码） */
   publicUrl(key: string): string {
     return `/api/files/${key}`;
   }

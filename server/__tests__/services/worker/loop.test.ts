@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   recoverProcessingTasks: vi.fn(),
   executeTask: vi.fn(),
   resumeAsyncPolling: vi.fn(),
-  getConfig: vi.fn(),
   logEvent: vi.fn(),
   loggerError: vi.fn(),
 }));
@@ -18,13 +17,14 @@ vi.mock("@server/crud/task", () => ({
 }));
 vi.mock("@server/services/worker/executor", () => ({ executeTask: mocks.executeTask }));
 vi.mock("@server/services/worker/resume-polling", () => ({ resumeAsyncPolling: mocks.resumeAsyncPolling }));
-vi.mock("@server/core/config", () => ({ getConfig: mocks.getConfig }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/logger/utils", () => ({ logEvent: mocks.logEvent }));
 vi.mock("@server/core/logger", () => ({ logger: { error: mocks.loggerError } }));
 
 import { sleepWithStopSignal, workerLoop } from "@server/services/worker/loop";
 import type { StopSignal } from "@server/services/worker/loop";
 import type { HydratedGenerationTask } from "@server/crud/task";
+import { resetTestSettings } from "../../helpers/settings";
 
 function task(id: string): HydratedGenerationTask {
   return { id } as HydratedGenerationTask;
@@ -40,23 +40,22 @@ function makeStopSignal(): StopSignal {
   };
 }
 
-function config(overrides: Record<string, number> = {}) {
-  return {
-    WORKER_MAX_CONCURRENCY: 2,
-    WORKER_POLL_INTERVAL: 0.01,
-    WORKER_POLL_CHECK_INTERVAL: 1,
-    WORKER_ZOMBIE_INTERVAL: 60,
-    WORKER_STUCK_TIMEOUT: 15,
-    WORKER_MAX_RETRIES: 2,
-    WORKER_DRAIN_TIMEOUT: 0.01,
-    ...overrides,
-  };
+function useWorkerSettings(maxConcurrency = 2) {
+  resetTestSettings({
+    "worker.max_concurrency": maxConcurrency,
+    "worker.poll_interval_seconds": 0.01,
+    "worker.poll_check_interval_ms": 1,
+    "worker.zombie_scan_interval_seconds": 60,
+    "worker.stuck_timeout_minutes": 15,
+    "worker.max_retries": 2,
+    "worker.drain_timeout_seconds": 0.01,
+  });
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue(config());
+  useWorkerSettings();
   mocks.recoverProcessingTasks.mockResolvedValue({ interrupted: 0, asyncTasks: [] });
   mocks.cleanupZombieTasks.mockResolvedValue(0);
   mocks.claimPendingTasks.mockResolvedValue([]);
@@ -117,7 +116,7 @@ describe("workerLoop", () => {
   });
 
   it("启动恢复的异步轮询也进入同一个 p-limit 调度器", async () => {
-    mocks.getConfig.mockReturnValue(config({ WORKER_MAX_CONCURRENCY: 1 }));
+    useWorkerSettings(1);
     const stopSignal = makeStopSignal();
     const resumptions: Array<() => void> = [];
     mocks.recoverProcessingTasks.mockResolvedValue({
@@ -172,7 +171,7 @@ describe("workerLoop", () => {
   });
 
   it("abort 后不再启动排队的任务，保持 processing 交重启恢复", async () => {
-    mocks.getConfig.mockReturnValue(config({ WORKER_MAX_CONCURRENCY: 1 }));
+    useWorkerSettings(1);
     const stopSignal = makeStopSignal();
     // 单并发槽：task-1 在途，task-2 排队；任务挂到 abort 才落定（模拟长上游请求）
     mocks.claimPendingTasks.mockResolvedValueOnce([task("task-1"), task("task-2")]);

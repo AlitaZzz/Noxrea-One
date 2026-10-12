@@ -1,29 +1,28 @@
 /**
  * 场景化 HTTP 客户端。
- * 按下载、轮询、接口、异步等场景提供差异化的超时与请求封装。
+ * 按下载、轮询、接口等场景提供差异化的超时与请求封装。
  *
  * 超时语义分三段，均汇入同一个 AbortController：
  *   - headers timeout（timeoutMs / scene）：DNS/TCP/TLS + 等待响应头
- *   - body idle timeout（bodyIdleTimeoutMs，默认 HTTP_BODY_IDLE_TIMEOUT）：响应体内相邻数据块的最大空闲
+ *   - body idle timeout（bodyIdleTimeoutMs，默认 http.body_idle_timeout_seconds）：响应体内相邻数据块的最大空闲
  *   - overall timeout（overallTimeoutMs，可选）：请求发起到 body 读完的总时长上限
  *
  * 此前超时 timer 在 fetch() 返回 Response 后即清除，body 读取完全无保护
  * （仅在 undici 默认 bodyTimeout 的隐式兜底下不出大事），慢滴漏响应可无限占用调用方。
  */
 import { ProxyAgent } from "undici";
-import { getConfig, isProxyRoutingEnabled } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
+import { isProxyRoutingEnabled } from "@server/core/settings/proxy";
 import { getSsrfAgent } from "@server/core/ssrf";
 
-export type HttpTimeoutScene = "dl" | "poll" | "api" | "async";
+export type HttpTimeoutScene = "dl" | "poll" | "api";
 
 /** 按场景获取超时（毫秒） */
 export function getSceneTimeout(scene: HttpTimeoutScene): number {
-  const cfg = getConfig();
   switch (scene) {
-    case "dl":    return cfg.HTTP_TIMEOUT_DL    * 1000;
-    case "poll":  return cfg.HTTP_TIMEOUT_POLL  * 1000;
-    case "api":   return cfg.HTTP_TIMEOUT_API   * 1000;
-    case "async": return cfg.HTTP_TIMEOUT_ASYNC * 1000;
+    case "dl":   return getSetting("http.download_timeout_seconds") * 1000;
+    case "poll": return getSetting("http.poll_timeout_seconds") * 1000;
+    case "api":  return getSetting("http.api_timeout_seconds") * 1000;
   }
 }
 
@@ -40,22 +39,14 @@ export class HttpTimeoutError extends Error {
   }
 }
 
-/** 代理 dispatcher 单例：按 PROXY_URL 值缓存，配置变化时重建。
-    此前每次请求 new ProxyAgent 且不复用不 close，keep-alive 连接池随 GC 才释放 */
-let cachedProxyUrl: string | null = null;
-let cachedProxyAgent: ProxyAgent | null = null;
+/** 代理 dispatcher 单例：系统设置在进程内不可变，首次使用时创建并复用，保留 keep-alive 连接池 */
+let proxyAgent: ProxyAgent | null = null;
 
-/** 获取代理 dispatcher（仅在配置了系统代理时生效） */
+/** 获取代理 dispatcher（仅在配置了出网代理时生效） */
 export function getProxyDispatcher(): unknown {
   if (!isProxyRoutingEnabled()) return undefined;
-
-  const proxyUrl = getConfig().PROXY_URL;
-  if (cachedProxyUrl !== proxyUrl || !cachedProxyAgent) {
-    cachedProxyAgent?.close().catch(() => {});
-    cachedProxyAgent = new ProxyAgent(proxyUrl);
-    cachedProxyUrl = proxyUrl;
-  }
-  return cachedProxyAgent;
+  proxyAgent ??= new ProxyAgent(getSetting("network.outbound_proxy_url"));
+  return proxyAgent;
 }
 
 /** 给响应体套上 idle/overall 超时看门狗：数据到达重置 idle，到期经 controller.abort 中止上游连接。
@@ -124,7 +115,7 @@ export async function fetchWithTimeout(
     dispatcher?: unknown;
     /** 仅影响 TCP 建连阶段的超时（毫秒），绕过 undici 默认的 10s 连接超时 */
     connectTimeoutMs?: number;
-    /** body 相邻数据块的最大空闲（毫秒）；缺省取 HTTP_BODY_IDLE_TIMEOUT，0 = 关闭 body 看门狗 */
+    /** body 相邻数据块的最大空闲（毫秒）；缺省取 http.body_idle_timeout_seconds，0 = 关闭 body 看门狗 */
     bodyIdleTimeoutMs?: number;
     /** 请求发起到 body 读完的总时长上限（毫秒）；不设则不限 */
     overallTimeoutMs?: number;
@@ -136,7 +127,7 @@ export async function fetchWithTimeout(
   } = options;
 
   const headersTimeoutMs = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
-  const bodyIdleMs = bodyIdleTimeoutMs ?? getConfig().HTTP_BODY_IDLE_TIMEOUT * 1000;
+  const bodyIdleMs = bodyIdleTimeoutMs ?? getSetting("http.body_idle_timeout_seconds") * 1000;
 
   // 代理模式：DNS 由代理解析，SSRF 预检降级为告警（见 core/ssrf）；
   // 直连模式：默认走 SSRF 校验型 Agent，建连 lookup 阶段校验并 pinning 校验通过的 IP，
@@ -215,7 +206,7 @@ export async function fetchWithTimeout(
   }
 }
 
-/** Worker API 超时（对应 WORKER_API_TIMEOUT） */
+/** Worker API 超时（worker.api_timeout_seconds） */
 export function getWorkerApiTimeout(): number {
-  return getConfig().WORKER_API_TIMEOUT * 1000;
+  return getSetting("worker.api_timeout_seconds") * 1000;
 }

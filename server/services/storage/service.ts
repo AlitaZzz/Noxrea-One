@@ -31,7 +31,7 @@ export function buildStorageKey(
   return `${userId}/${sub}/${hash}${ext}`;
 }
 
-/** 构建前端可访问的 URL（对齐 Python settings.PUBLIC_URL + /api/files/...） */
+/** 构建前端可访问的 URL（/api/files/<storageKey>） */
 export function buildFileUrl(storageKey: string): string {
   return `/api/files/${storageKey}`;
 }

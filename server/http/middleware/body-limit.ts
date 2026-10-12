@@ -2,7 +2,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { MiddlewareHandler } from "hono";
 
 import { failCode } from "@server/core/response";
-import { failBatchTooLarge, type UploadBatchLimits } from "@server/services/storage/upload-limits";
+import { failBatchTooLarge, getUploadBatchLimits } from "@server/services/storage/upload-limits";
 
 /** 受限请求体超过上限时由流包装器抛出，路由将其映射为结构化 413。 */
 export class UploadBodyTooLargeError extends Error {
@@ -23,9 +23,9 @@ export function jsonBodyLimit(maxSize: number) {
  * multipart 上传的 header 预检。它必须放在并发租约之前，避免已知超限请求占用队列。
  * 无长度的 chunked body 由 uploadBodyStreamLimit 在租约内边读边限流。
  */
-export function uploadBodyLimit(limits: UploadBatchLimits): MiddlewareHandler {
-  const maxBodyBytes = limits.maxBytes + 1024 * 1024;
+export function uploadBodyLimit(): MiddlewareHandler {
   return async (c, next) => {
+    const maxBodyBytes = getUploadBatchLimits().maxBytes + 1024 * 1024;
     const request = c.req.raw;
     const contentLength = request.headers.get("content-length");
     if (!request.headers.has("transfer-encoding") && contentLength !== null) {
@@ -40,9 +40,9 @@ export function uploadBodyLimit(limits: UploadBatchLimits): MiddlewareHandler {
  * 在并发租约内包装 chunked 请求体，超过上限的第一个 chunk 立即终止读取。
  * 不收集 chunks，避免 Hono bodyLimit 的完整缓冲；formData() 收到 sentinel 后由路由映射 413。
  */
-export function uploadBodyStreamLimit(limits: UploadBatchLimits): MiddlewareHandler {
-  const maxBodyBytes = limits.maxBytes + 1024 * 1024;
+export function uploadBodyStreamLimit(): MiddlewareHandler {
   return async (c, next) => {
+    const maxBodyBytes = getUploadBatchLimits().maxBytes + 1024 * 1024;
     const body = c.req.raw.body;
     if (!body) return next();
 

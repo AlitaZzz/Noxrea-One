@@ -9,7 +9,7 @@ import { type Context } from "hono";
 import { setCookie } from "hono/cookie";
 
 import { prisma } from "@server/core/database/client";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { decodeAccessToken } from "@server/core/auth/jwt";
 import { failCode } from "@server/core/response";
 import type { User } from "@prisma/client";
@@ -20,10 +20,10 @@ export const AUTH_COOKIE = "noxrea-auth-token";
 /**
  * cookie 有效期与 JWT 过期时长保持一致：cookie 只是 JWT 的载体，
  * 若 cookie 比 JWT 寿命长，token 过期后 middleware 仍会凭 cookie 放行整页加载。
- * 每次签发时读取（而非模块导入时冻结），配置热更新/测试注入才能生效。
+ * 每次签发时读取，而非模块导入时冻结：导入时系统设置尚未初始化。
  */
 function authCookieMaxAgeS() {
-  return getConfig().JWT_EXPIRE_MINUTES * 60;
+  return getSetting("auth.token_ttl_minutes") * 60;
 }
 
 const AUTH_COOKIE_OPTS = { path: "/", httpOnly: true, sameSite: "Lax" } as const;

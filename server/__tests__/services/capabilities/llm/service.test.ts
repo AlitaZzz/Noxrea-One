@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@server/core/settings", async () => (await import("../../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/services/protocols/base", () => ({
   getProtocol: vi.fn(),
 }));
@@ -16,6 +17,7 @@ import "@server/services/capabilities/llm/service";
 import { getCapability } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
 import { GenerationFailureError } from "@server/services/tasks/failure";
+import { resetTestSettings } from "../../../helpers/settings";
 
 const fakeProtocol = {
   name: "openai-test",
@@ -47,6 +49,7 @@ function stubFetch(handler: () => Promise<Response>): void {
 }
 
 beforeEach(() => {
+  resetTestSettings();
   vi.mocked(getProtocol).mockReturnValue(fakeProtocol as never);
 });
 

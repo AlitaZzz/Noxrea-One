@@ -23,12 +23,12 @@ function envValue(name: string): string | undefined {
   return process.env[name] ?? rootEnv[name];
 }
 
-// 仅暴露 NEXT_PUBLIC_* + APP_NAME 给浏览器端
+// 仅暴露 NEXT_PUBLIC_* + WEB_APP_NAME 给浏览器端
 const publicEnv: Record<string, string> = {};
 for (const [k, v] of Object.entries({ ...rootEnv, ...process.env })) {
   if (v !== undefined && k.startsWith("NEXT_PUBLIC_")) publicEnv[k] = v;
 }
-const appName = envValue("APP_NAME");
+const appName = envValue("WEB_APP_NAME");
 if (appName) publicEnv["NEXT_PUBLIC_APP_NAME"] = appName;
 
 // proxy body 限制跟随批次总大小，留 5MB 余量给 multipart 开销
@@ -55,10 +55,12 @@ const nextConfig: NextConfig = {
       { source: "/canvas", destination: "/project", permanent: false },
     ];
   },
-  // 透明代理：所有 /api/* 请求转发到后端 Hono 服务（目标由 SERVER_URL 指定）
+  // 透明代理：所有 /api/* 请求转发到后端 Hono 服务。
+  // 目标在 `next build` 时固化进 routes-manifest：默认随后端端口 API_PORT 推导（同机），
+  // 分开部署时用 WEB_API_ORIGIN 指向远程 Hono 地址
   async rewrites() {
-    // SERVER_URL 默认 http://localhost:4000（同机）；分开部署时改为远程 Hono 地址
-    const backendUrl = (envValue("SERVER_URL") || "http://localhost:4000").replace(/\/$/, "");
+    const apiPort = envValue("API_PORT") || "4000";
+    const backendUrl = (envValue("WEB_API_ORIGIN") || `http://localhost:${apiPort}`).replace(/\/$/, "");
     return [
       {
         source: "/api/:path*",

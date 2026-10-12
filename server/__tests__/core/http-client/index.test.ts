@@ -8,19 +8,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  getConfig: vi.fn(),
-}));
-
-vi.mock("@server/core/config", () => ({
-  getConfig: mocks.getConfig,
-  isProxyRoutingEnabled: vi.fn(() => false),
-}));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/ssrf", () => ({
   getSsrfAgent: vi.fn(() => ({})),
 }));
 
 import { fetchWithTimeout, HttpTimeoutError } from "@server/core/http-client/index";
+import { resetTestSettings } from "../../helpers/settings";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -68,7 +62,7 @@ function makeFetch(mode: "stalled" | "hang" | "chunks", chunks: Uint8Array[] = [
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
-  mocks.getConfig.mockReturnValue({ HTTP_BODY_IDLE_TIMEOUT: 60 });
+  resetTestSettings();
 });
 
 afterEach(() => {

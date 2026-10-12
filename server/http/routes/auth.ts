@@ -8,7 +8,7 @@ import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@serv
 import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { logger } from "@server/core/logger";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { resolveRateLimitIp } from "@server/core/ratelimit/client-ip";
@@ -20,11 +20,10 @@ router.post("/api/auth/login", async (c) => {
   const request = c.req.raw;
 
   // 限流：X-Forwarded-For 可伪造，默认使用 socket peer；只有可信代理链才解析该头。
-  const cfg = getConfig();
   const ip = resolveRateLimitIp({
     remoteAddress: getConnInfo(c).remote.address,
     forwardedFor: request.headers.get("x-forwarded-for"),
-    trustedProxyCidrs: cfg.TRUSTED_PROXY_CIDRS,
+    trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
   });
   if (!getLoginRateLimiter().check(`login:${ip}`)) {
     return failCode(429, "auth.login_rate_limited");
@@ -76,8 +75,7 @@ router.post("/api/auth/register", async (c) => {
   const request = c.req.raw;
 
   // 注册开关
-  const cfg = getConfig();
-  if (!cfg.ALLOW_REGISTRATION) {
+  if (!getSetting("auth.registration_enabled")) {
     return failCode(403, "auth.registration_disabled");
   }
 
@@ -85,7 +83,7 @@ router.post("/api/auth/register", async (c) => {
   const ip = resolveRateLimitIp({
     remoteAddress: getConnInfo(c).remote.address,
     forwardedFor: request.headers.get("x-forwarded-for"),
-    trustedProxyCidrs: cfg.TRUSTED_PROXY_CIDRS,
+    trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
   });
   if (!getRegisterRateLimiter().check(`register:${ip}`)) {
     return failCode(429, "auth.register_rate_limited");

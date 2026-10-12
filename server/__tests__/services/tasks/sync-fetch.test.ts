@@ -3,13 +3,16 @@
  * 锁定：2xx/非 2xx/超时/网络四分支、错误体读取、
  * HTTP 翻译与空结果判失败的上游文案优先规则。
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
 import {
   fetchUpstream,
   httpUpstreamFailure,
   noUpstreamResult,
 } from "@server/services/tasks/sync-fetch";
+import { resetTestSettings } from "../../helpers/settings";
 
 const req = {
   url: "http://upstream.test/v1/x",
@@ -21,6 +24,10 @@ const req = {
 function stubFetch(handler: () => Promise<Response>): void {
   vi.stubGlobal("fetch", vi.fn(handler));
 }
+
+beforeEach(() => {
+  resetTestSettings();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();

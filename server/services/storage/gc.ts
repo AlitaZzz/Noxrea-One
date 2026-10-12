@@ -13,13 +13,13 @@
  *   回到，事务终检会放弃回收。残余竞态（引用恰好在删行与删文件之间回来）窗口为
  *   毫秒级，远小于 48h 宽限期语义，此时最多留下一个无账本行的孤儿磁盘文件，
  *   不影响任何引用的完整性。
- * - GC_DRY_RUN：首版默认只报告不删除，观察扫描结果后再切换实删。
+ * - storage.gc_dry_run：首版默认只报告不删除，观察扫描结果后再切换实删。
  *
  * 启动后延迟首跑 + 每日一次（进程内 interval），由 bootstrap 挂载，幂等。
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@server/core/database/client";
-import { getConfig } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
 import { buildStorageKey } from "./service";
 import { localStorage } from "./backends/local";
 import { logEvent } from "@server/core/logger/utils";
@@ -57,8 +57,8 @@ async function isAgentReferenced(hash: string): Promise<boolean> {
 }
 
 export async function runStorageGc(): Promise<StorageGcReport> {
-  const cfg = getConfig();
-  const cutoff = new Date(Date.now() - cfg.GC_GRACE_HOURS * 3_600_000);
+  const dryRun = getSetting("storage.gc_dry_run");
+  const cutoff = new Date(Date.now() - getSetting("storage.gc_grace_hours") * 3_600_000);
 
   const candidates = await prisma.fileObject.findMany({
     where: { refCount: { lte: 0 }, updatedAt: { lt: cutoff } },
@@ -66,7 +66,7 @@ export async function runStorageGc(): Promise<StorageGcReport> {
   });
 
   const report: StorageGcReport = {
-    dryRun: cfg.GC_DRY_RUN,
+    dryRun,
     scannedAt: new Date().toISOString(),
     candidates: candidates.length,
     ledgerProtected: 0,

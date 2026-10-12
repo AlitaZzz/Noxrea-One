@@ -298,3 +298,15 @@ model AgentMessage {
   @@index([sessionId, createdAt])
   @@map("agent_messages")
 }
+
+// ──────────────────────────────────────────
+// 12. SystemSetting（运行期系统设置，键集合与类型由 server/core/settings 注册表定义）
+// ──────────────────────────────────────────
+model SystemSetting {
+  key       String   @id @map("key")
+  value     String   @map("value") // 规范化文本，由注册表按类型解析
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}

@@ -2,7 +2,7 @@
  * 路由门（proxy.ts）行为测试：
  * - 本地 exp 校验：过期/损坏 token 按未登录处理，不触发后端实测
  * - 后端实测 revoked：清 cookie 并跳 /login
- * - 后端不可达：AUTH_GATE_MODE=fail-open（默认）放行 / fail-closed 按未登录处理
+ * - 后端不可达：WEB_AUTH_GATE_MODE=fail-open（默认）放行 / fail-closed 按未登录处理
  */
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,8 +34,8 @@ function req(pathname: string, token?: string): NextRequest {
 
 async function loadProxy(mode?: string) {
   vi.resetModules();
-  if (mode) process.env.AUTH_GATE_MODE = mode;
-  else delete process.env.AUTH_GATE_MODE;
+  if (mode) process.env.WEB_AUTH_GATE_MODE = mode;
+  else delete process.env.WEB_AUTH_GATE_MODE;
   return import("@/proxy");
 }
 
@@ -77,7 +77,7 @@ describe("路由门两级校验", () => {
   });
 });
 
-describe("AUTH_GATE_MODE 放行策略", () => {
+describe("WEB_AUTH_GATE_MODE 放行策略", () => {
   it("fail-open（默认）：后端不可达时放行，且 /login 跳 /project", async () => {
     fetchMock.mockRejectedValue(new Error("backend down"));
     const { proxy } = await loadProxy();

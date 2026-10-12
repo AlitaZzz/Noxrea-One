@@ -14,15 +14,17 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# 前端反向代理目标（单容器部署固定为 localhost:4000）
-ARG SERVER_URL=http://localhost:4000
-ARG APP_NAME=Noxrea One
+# 前端 /api 反向代理目标：留空则取 http://localhost:4000（单容器部署）；
+# 前端、后端分开部署时在构建期传入远程后端地址（next build 时固化）
+ARG WEB_API_ORIGIN=
+ARG WEB_APP_NAME=Noxrea One
 
 # 先复制全部源码：postinstall 的 prisma generate 需要 prisma/schema.prisma
 COPY . .
 
-# 生成 .env（next.config.ts 在构建期读取 SERVER_URL / NEXT_PUBLIC_*）
-RUN printf 'SERVER_URL=%s\nAPP_NAME=%s\nNEXT_PUBLIC_APP_NAME=%s\n' "$SERVER_URL" "$APP_NAME" "$APP_NAME" > .env
+# 生成 .env（next.config.ts 在构建期读取 WEB_APP_NAME / WEB_API_ORIGIN）
+RUN printf 'WEB_APP_NAME=%s\n' "$WEB_APP_NAME" > .env \
+    && if [ -n "$WEB_API_ORIGIN" ]; then printf 'WEB_API_ORIGIN=%s\n' "$WEB_API_ORIGIN" >> .env; fi
 
 # 安装依赖（postinstall 自动执行 prisma generate）
 # 注意：本地 Windows 生成的 package-lock.json 缺少以下 Linux 原生包的实体

@@ -177,7 +177,6 @@ export async function runCompletionStream(args: {
       method: built.method,
       headers: built.headers,
       body: JSON.stringify(built.body),
-      scene: "async",
       timeoutMs: getWorkerApiTimeout(),
       ...(args.signal ? { signal: args.signal } : {}),
     });

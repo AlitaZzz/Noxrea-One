@@ -3,12 +3,16 @@ CREATE TABLE "users" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "username" TEXT NOT NULL,
     "password_hash" TEXT NOT NULL,
-    "avatar" TEXT,
     "role" TEXT NOT NULL DEFAULT 'user',
+    "email" TEXT,
+    "email_verified_at" DATETIME,
+    "display_name" TEXT,
+    "last_login_at" DATETIME,
+    "avatar" TEXT,
     "theme" TEXT NOT NULL DEFAULT 'dark',
     "lang" TEXT NOT NULL DEFAULT 'zh',
     "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "is_superuser" BOOLEAN NOT NULL DEFAULT false,
+    "token_version" INTEGER NOT NULL DEFAULT 0,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,7 +50,10 @@ CREATE TABLE "canvas_projects" (
     "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "canvas_data" TEXT NOT NULL DEFAULT '{}',
+    "cover_url" TEXT,
     "revision" INTEGER NOT NULL DEFAULT 1,
+    "node_count" INTEGER NOT NULL DEFAULT 0,
+    "thumbnail_src" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "canvas_projects_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -55,7 +62,7 @@ CREATE TABLE "canvas_projects" (
 -- CreateTable
 CREATE TABLE "model_providers" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "user_id" INTEGER,
+    "user_id" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "base_url" TEXT NOT NULL,
     "api_key" TEXT NOT NULL DEFAULT '',
@@ -100,11 +107,9 @@ CREATE TABLE "asset_items" (
     "name" TEXT NOT NULL DEFAULT 'Untitled',
     "type" TEXT NOT NULL DEFAULT 'other',
     "media_type" TEXT NOT NULL DEFAULT '',
-    "width" INTEGER NOT NULL DEFAULT 0,
-    "height" INTEGER NOT NULL DEFAULT 0,
     "description" TEXT NOT NULL DEFAULT '',
     "tags" TEXT NOT NULL DEFAULT '[]',
-    "extra_data" TEXT NOT NULL DEFAULT '{}',
+    "prompt" TEXT NOT NULL DEFAULT '',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "asset_items_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
@@ -119,6 +124,9 @@ CREATE TABLE "file_objects" (
     "mime_type" TEXT NOT NULL DEFAULT '',
     "ext" TEXT NOT NULL DEFAULT '',
     "source" TEXT NOT NULL DEFAULT 'unknown',
+    "width" INTEGER,
+    "height" INTEGER,
+    "duration" REAL,
     "ref_count" INTEGER NOT NULL DEFAULT 0,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -144,11 +152,10 @@ CREATE TABLE "agent_sessions" (
     "user_id" INTEGER NOT NULL,
     "project_id" TEXT,
     "title" TEXT NOT NULL DEFAULT 'New Chat',
-    "active_skill" TEXT,
-    "skill_status" TEXT NOT NULL DEFAULT 'idle',
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "agent_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "agent_sessions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "agent_sessions_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "canvas_projects" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -159,13 +166,25 @@ CREATE TABLE "agent_messages" (
     "content" TEXT NOT NULL DEFAULT '',
     "tool_call_id" TEXT,
     "tool_name" TEXT,
+    "tool_calls" TEXT,
     "ref_images" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "agent_messages_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "agent_sessions" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "system_settings" (
+    "key" TEXT NOT NULL PRIMARY KEY,
+    "value" TEXT NOT NULL,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_username_key" ON "users"("username");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
 CREATE INDEX "generation_tasks_user_id_created_at_idx" ON "generation_tasks"("user_id", "created_at");
@@ -214,3 +233,4 @@ CREATE INDEX "agent_sessions_user_id_project_id_idx" ON "agent_sessions"("user_i
 
 -- CreateIndex
 CREATE INDEX "agent_messages_session_id_created_at_idx" ON "agent_messages"("session_id", "created_at");
+

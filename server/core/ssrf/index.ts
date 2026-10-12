@@ -8,7 +8,7 @@
  * 只要存在可用地址即可建连（避免 AAAA 落在特殊段时连有效的 A 记录一起被否决），
  * 全部地址被拒才视为违规。
  *
- * 代理模式（USE_SYSTEM_PROXY + PROXY_URL）下出站 DNS 由代理解析，本地解析结果
+ * 代理模式（network.outbound_proxy_enabled + network.outbound_proxy_url）下出站 DNS 由代理解析，本地解析结果
  * 与实际连接路径无关，预检（resolveAndValidate）降级为日志告警、不作为失败依据；
  * 强制校验只存在于直连模式的建连 pinning。
  */
@@ -18,11 +18,12 @@ import type { LookupAddress } from "node:dns";
 import type { LookupFunction } from "node:net";
 import ipaddr from "ipaddr.js";
 import { Agent } from "undici";
-import { getConfig, isProxyRoutingEnabled } from "@server/core/config";
+import { getSetting } from "@server/core/settings";
+import { isProxyRoutingEnabled } from "@server/core/settings/proxy";
 import { logger } from "@server/core/logger";
 
 function getAllowedInternalHosts(): string[] {
-  const raw = getConfig().ALLOWED_INTERNAL_HOSTS;
+  const raw = getSetting("network.ssrf_allowed_internal_hosts");
   if (!raw) return [];
   return raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
 }

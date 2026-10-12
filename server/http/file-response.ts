@@ -1,7 +1,7 @@
 /**
  * 文件响应头契约。
  *
- * `/api/files/*` 保持公开访问（上游通过 PUBLIC_URL 直接读取），
+ * `/api/files/*` 保持公开访问（上游通过 network.public_base_url 直接读取），
  * 但 SVG 可包含脚本，必须以独立的安全响应头隔离直接导航场景。
  */
 import { mimeByExt } from "@server/services/storage/mime";

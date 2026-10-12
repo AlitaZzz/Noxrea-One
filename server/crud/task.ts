@@ -285,7 +285,7 @@ export async function cleanupZombieTasks(
   return deadCount + retried.count + interruptedCount;
 }
 
-/** 心跳间隔（ms）：轮询期间推进 updatedAt 的频率，须远小于 WORKER_STUCK_TIMEOUT */
+/** 心跳间隔（ms）：轮询期间推进 updatedAt 的频率，须远小于 worker.stuck_timeout_minutes */
 export const TASK_HEARTBEAT_INTERVAL_MS = 30_000;
 
 /**

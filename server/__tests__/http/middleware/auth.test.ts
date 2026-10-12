@@ -3,7 +3,6 @@ import { Hono } from "hono";
 
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
-    JWT_EXPIRE_MINUTES: 30,
     LOG_LEVEL: "silent",
     ALLOW_INSECURE_SECRETS: true,
   }),
@@ -12,8 +11,10 @@ vi.mock("@server/core/config", () => ({
 vi.mock("@server/core/database/client", () => ({
   prisma: {},
 }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
 import { setAuthCookie } from "@server/http/middleware/auth";
+import { resetTestSettings } from "../../helpers/settings";
 
 function buildApp() {
   const app = new Hono();
@@ -27,7 +28,10 @@ function buildApp() {
 const cookieOf = (res: Response): string | null => res.headers.get("set-cookie")?.toLowerCase() ?? null;
 
 describe("setAuthCookie secure 属性", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetTestSettings({ "auth.token_ttl_minutes": 30 });
+  });
 
   it("HTTPS 请求（X-Forwarded-Proto）下发 Secure cookie，maxAge 与 JWT 过期一致", async () => {
     const res = await buildApp().request("/set", {
@@ -36,7 +40,7 @@ describe("setAuthCookie secure 属性", () => {
     const cookie = cookieOf(res);
     expect(cookie).toContain("secure");
     expect(cookie).toContain("httponly");
-    // JWT_EXPIRE_MINUTES=30 → 1800s
+    // auth.token_ttl_minutes=30 → 1800s
     expect(cookie).toContain("max-age=1800");
   });
 

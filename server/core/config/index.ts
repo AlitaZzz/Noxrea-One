@@ -1,90 +1,32 @@
 /**
- * 全局配置加载与校验。
- * 从环境变量读取服务配置，经 zod 校验并提供带默认值的强类型访问。
+ * 引导期配置加载与校验（env）。
+ * 只含后端进程的引导 / 部署拓扑 / 密钥类配置（前端变量以 WEB_ 开头，由 Next 读取）；运行期业务参数见 core/settings（system_settings 表）。
  */
 import { z } from "zod";
-import { isValidTrustedProxyCidrs } from "@server/core/ratelimit/client-ip";
 
 // 占位符密钥
 const PLACEHOLDER_SECRETS: Record<string, string> = {
   JWT_SECRET_KEY: "change-me-to-a-random-secret",
 };
 
+// DATABASE_URL / DB_TIMEOUT 由 Prisma 与 core/database/client 直接读取 process.env，不经此处
 const configSchema = z.object({
-  // Database
-  DATABASE_URL: z.string().default("file:./dev.db"),
-  DB_TIMEOUT: z.coerce.number().int().positive().default(30),
-
-  // JWT
+  // JWT（密钥与算法属引导配置；有效期在 system_settings）
   JWT_SECRET_KEY: z.string().min(1, "JWT_SECRET_KEY is required"),
   JWT_ALGORITHM: z.string().default("HS256"),
-  JWT_EXPIRE_MINUTES: z.coerce.number().int().positive().default(1440),
 
-  // App
-  APP_NAME: z.string().default("Noxrea One"),
   LOG_LEVEL: z.string().default("INFO"),
 
-  // HTTP Server
-  SERVER_PORT: z.coerce.number().int().positive().default(4000),
-  SERVER_HOST: z.string().default("0.0.0.0"),
-  /** 可信反向代理网段（逗号分隔 IP/CIDR）。只有直连 peer 命中该网段时才解析 X-Forwarded-For。 */
-  TRUSTED_PROXY_CIDRS: z
-    .string()
-    .default("")
-    .refine(isValidTrustedProxyCidrs, "TRUSTED_PROXY_CIDRS must be comma-separated IP/CIDR values"),
+  // HTTP Server（Hono 监听地址；前端代理目标见 web/next.config.ts 的 WEB_API_ORIGIN）
+  API_PORT: z.coerce.number().int().positive().default(4000),
+  API_HOST: z.string().default("0.0.0.0"),
 
-  // Worker
-  WORKER_POLL_INTERVAL: z.coerce.number().int().positive().default(1),
-  WORKER_MAX_CONCURRENCY: z.coerce.number().int().positive().default(10),
-  WORKER_API_TIMEOUT: z.coerce.number().int().positive().default(240),
-  /** 僵尸判定阈值（分钟）：轮询期间有心跳持续推进 updatedAt，这里只需兜住「轮询线程真的挂了」，取 15 给长视频生成留余量 */
-  WORKER_STUCK_TIMEOUT: z.coerce.number().int().positive().default(15),
-  WORKER_ZOMBIE_INTERVAL: z.coerce.number().int().positive().default(60),
-  WORKER_MAX_RETRIES: z.coerce.number().int().nonnegative().default(2),
-  WORKER_DRAIN_TIMEOUT: z.coerce.number().int().positive().default(15),
-  WORKER_POLL_CHECK_INTERVAL: z.coerce.number().int().positive().default(200),
-
-  // Async polling
-  WORKER_ASYNC_POLL_INTERVAL: z.coerce.number().positive().default(3.0),
-  WORKER_ASYNC_POLL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(120),
-  WORKER_ASYNC_POLL_INITIAL_DELAY: z.coerce.number().positive().default(0.5),
-
-  // SSRF
-  ALLOWED_INTERNAL_HOSTS: z.string().default(""),
-
-  // Upload
-  MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(100),
-  /** 单次批量上传最多包含的文件数。 */
-  UPLOAD_BATCH_MAX_FILES: z.coerce.number().int().positive().default(20),
-  /** 单次批量上传总字节上限，单位 MiB。 */
+  // Upload：批次总大小上限与 Next 代理层（proxyClientMaxBodySize）共用同一 env 来源，故不入库
   UPLOAD_BATCH_MAX_MB: z.coerce.number().int().positive().default(128),
-  /** 单个用户同时处理的上传批次数，避免 multipart 解析和媒体探测叠加占满内存。 */
-  UPLOAD_BATCH_MAX_CONCURRENT: z.coerce.number().int().positive().default(1),
-  /** 单个用户上传批次等待队列深度上限；超额立即 429，由客户端退避后重试。 */
-  UPLOAD_BATCH_MAX_PENDING: z.coerce.number().int().positive().default(10),
   // 上传文件根目录（相对项目根，或绝对路径）
   UPLOAD_DIR: z.string().default("uploads"),
-  /** 存储引用 GC：引用归零后的保留宽限期（小时），覆盖撤销 / 恢复等短暂重引用场景 */
-  GC_GRACE_HOURS: z.coerce.number().int().positive().default(48),
-  /** 存储引用 GC：试运行模式，只扫描报告不删除。确认扫描结果无误后再关闭 */
-  GC_DRY_RUN: z
-    .enum(["true", "false", "1", "0"])
-    .transform((v) => v === "true" || v === "1")
-    .default("true"),
-  /** 对外可访问的服务根地址（如 https://canvas.example.com）。配置后参考素材以 URL 发给上游，留空则回退 base64。 */
-  PUBLIC_URL: z.string().default(""),
   /** 资源目录（模型配置等 JSON 资源根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
   RESOURCES_DIR: z.string().default("server/resources"),
-
-  // HTTP timeouts - scene-based（单位：秒）
-  HTTP_TIMEOUT_DL: z.coerce.number().positive().default(45),
-  HTTP_TIMEOUT_POLL: z.coerce.number().positive().default(15),
-  HTTP_TIMEOUT_API: z.coerce.number().positive().default(120),
-  HTTP_TIMEOUT_ASYNC: z.coerce.number().positive().default(30),
-  /** fetchWithTimeout 的默认 body idle 超时（秒）：响应体内相邻数据块的最大空闲 */
-  HTTP_BODY_IDLE_TIMEOUT: z.coerce.number().positive().default(60),
-  /** 单次结果下载总时长上限（秒）：防慢滴漏响应长期占用下载与 Worker 槽位 */
-  DOWNLOAD_TOTAL_TIMEOUT: z.coerce.number().positive().default(600),
 
   // Dev escape
   ALLOW_INSECURE_SECRETS: z
@@ -92,21 +34,8 @@ const configSchema = z.object({
     .transform((v) => v === "true" || v === "1")
     .default("false"),
 
-  // Registration
-  ALLOW_REGISTRATION: z
-    .enum(["true", "false", "1", "0"])
-    .transform((v) => v === "true" || v === "1")
-    .default("true"),
-
   // FFmpeg distribution directory: contains ffmpeg and ffprobe (with .exe on Windows).
   FFMPEG_PATH: z.string().default("bin"),
-
-  // Proxy (for accessing upstream APIs behind firewall)
-  USE_SYSTEM_PROXY: z
-    .enum(["true", "false", "1", "0"])
-    .transform((v) => v === "true" || v === "1")
-    .default("false"),
-  PROXY_URL: z.string().default(""),
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -166,13 +95,4 @@ export function getConfig(): Config {
     return loadConfig();
   }
   return _config;
-}
-
-/**
- * 出站 HTTP 是否走配置的代理。代理模式下出站 DNS 由代理解析，
- * 本地解析结果与实际连接路径无关（SSRF 预检随之降级，见 core/ssrf）。
- */
-export function isProxyRoutingEnabled(): boolean {
-  const cfg = getConfig();
-  return cfg.USE_SYSTEM_PROXY && cfg.PROXY_URL !== "";
 }

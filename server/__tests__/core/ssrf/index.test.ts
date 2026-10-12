@@ -7,18 +7,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getConfig, isProxyRoutingEnabled, lookup, logger } = vi.hoisted(() => ({
-  getConfig: vi.fn(),
-  isProxyRoutingEnabled: vi.fn(),
+const { lookup, logger } = vi.hoisted(() => ({
   lookup: vi.fn(),
   logger: { debug: vi.fn(), warn: vi.fn() },
 }));
 
-vi.mock("@server/core/config", () => ({ getConfig, isProxyRoutingEnabled }));
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/logger", () => ({ logger }));
 vi.mock("dns/promises", () => ({ default: { lookup } }));
 
 import { resolveAndValidate } from "@server/core/ssrf/index";
+import { resetTestSettings } from "../../helpers/settings";
 
 function resolvesTo(...addresses: Array<{ address: string; family: number }>) {
   lookup.mockResolvedValue(addresses);
@@ -26,8 +25,7 @@ function resolvesTo(...addresses: Array<{ address: string; family: number }>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getConfig.mockReturnValue({ ALLOWED_INTERNAL_HOSTS: "" });
-  isProxyRoutingEnabled.mockReturnValue(false);
+  resetTestSettings();
 });
 
 describe("direct-mode precheck (resolveAndValidate)", () => {
@@ -54,7 +52,7 @@ describe("direct-mode precheck (resolveAndValidate)", () => {
   });
 
   it("returns all records unfiltered for whitelisted hosts", async () => {
-    getConfig.mockReturnValue({ ALLOWED_INTERNAL_HOSTS: "intranet.local, 10.0.0.5" });
+    resetTestSettings({ "network.ssrf_allowed_internal_hosts": "intranet.local, 10.0.0.5" });
     resolvesTo({ address: "10.0.0.5", family: 4 }, { address: "fd00::1", family: 6 });
     await expect(resolveAndValidate("intranet.local")).resolves.toEqual(["10.0.0.5", "fd00::1"]);
   });
@@ -82,7 +80,10 @@ describe("direct-mode precheck (resolveAndValidate)", () => {
 
 describe("proxy-mode precheck", () => {
   beforeEach(() => {
-    isProxyRoutingEnabled.mockReturnValue(true);
+    resetTestSettings({
+      "network.outbound_proxy_enabled": true,
+      "network.outbound_proxy_url": "http://127.0.0.1:7890",
+    });
   });
 
   it("does not fail the task when local resolution lands entirely in the fake-IP range", async () => {
