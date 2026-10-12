@@ -24,13 +24,6 @@ class BrowserImage {
   constructor() { BrowserImage.instances.push(this); }
 }
 
-// jsdom 未实现 Blob object URL：fetch 桩把原始 src 挂到 Blob 上，
-// createObjectURL 桩据此建立 objectURL → 原始 src 的映射，供断言回查
-const objectSources = new Map<string, string>();
-function sourceOf(url: string | null | undefined): string | undefined {
-  return url ? objectSources.get(url) : undefined;
-}
-
 let flowStore: ReturnType<typeof useStoreApi>;
 function node(id: string, x: number, y = 0): InternalNode {
   const userNode: Node = { id, position: { x, y }, data: {}, measured: { width: 400, height: 328 } };
@@ -67,25 +60,11 @@ async function loaded(image: BrowserImage) {
 
 beforeEach(() => {
   BrowserImage.instances = [];
-  objectSources.clear();
   vi.stubGlobal("Image", BrowserImage);
-  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
-    const src = String(input);
-    return Promise.resolve({ ok: true, blob: () => Promise.resolve(Object.assign(new Blob(["img"]), { source: src })) });
-  }));
-  let counter = 0;
-  (URL as unknown as Record<string, unknown>).createObjectURL = vi.fn((blob: Blob & { source?: string }) => {
-    const url = `blob:img-${++counter}`;
-    objectSources.set(url, blob.source ?? "");
-    return url;
-  });
-  (URL as unknown as Record<string, unknown>).revokeObjectURL = vi.fn((url: string) => { objectSources.delete(url); });
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  delete (URL as unknown as Record<string, unknown>).createObjectURL;
-  delete (URL as unknown as Record<string, unknown>).revokeObjectURL;
 });
 
 describe("CanvasImage", () => {
@@ -101,8 +80,8 @@ describe("CanvasImage", () => {
     expect(BrowserImage.instances).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "media.retry" })).toBeNull();
     await loaded(BrowserImage.instances[1]);
-    expect(sourceOf(screen.getByRole("img", { name: "first" }).getAttribute("src"))).toBe("/shared.png");
-    expect(sourceOf(screen.getByRole("img", { name: "second" }).getAttribute("src"))).toBe("/shared.png");
+    expect(screen.getByRole("img", { name: "first" }).getAttribute("src")).toBe("/shared.png");
+    expect(screen.getByRole("img", { name: "second" }).getAttribute("src")).toBe("/shared.png");
   });
 
   it("preserves presentation while an upload preview is loading or fails", async () => {
@@ -122,12 +101,12 @@ describe("CanvasImage", () => {
     expect(screen.getByRole("img", { name: "far" }).tagName).toBe("SPAN");
     act(() => flowStore.setState({ transform: [-5000, 0, 1] }));
     await flush();
-    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/far.png");
+    expect(BrowserImage.instances[0].src).toBe("/far.png");
     await loaded(BrowserImage.instances[0]);
-    expect(sourceOf(screen.getByRole("img", { name: "far" }).getAttribute("src"))).toBe("/far.png");
+    expect(screen.getByRole("img", { name: "far" }).getAttribute("src")).toBe("/far.png");
     act(() => flowStore.setState({ transform: [0, 0, 1] }));
     await flush();
-    expect(sourceOf(screen.getByRole("img", { name: "far" }).getAttribute("src"))).toBe("/far.png");
+    expect(screen.getByRole("img", { name: "far" }).getAttribute("src")).toBe("/far.png");
     expect(BrowserImage.instances).toHaveLength(1);
   });
 
@@ -140,14 +119,14 @@ describe("CanvasImage", () => {
     expect(BrowserImage.instances).toHaveLength(0);
     act(() => flowStore.setState({ nodeLookup: new Map([["far", { ...child, internals: { ...child.internals, positionAbsolute: { x: 10, y: 10 } } }]]) }));
     await flush();
-    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/child.png");
+    expect(BrowserImage.instances[0].src).toBe("/child.png");
   });
 
   it("loads an expanded card visible above a distant main node", async () => {
     render(<Scene items={[{ nodeId: "far", src: "/expanded.png", alt: "expanded", placement: { row: -6 } }]} />);
     act(() => flowStore.setState({ nodeLookup: new Map([["far", node("far", 100, 2000)]]) }));
     await flush();
-    expect(sourceOf(BrowserImage.instances[0].src)).toBe("/expanded.png");
+    expect(BrowserImage.instances[0].src).toBe("/expanded.png");
   });
 
   it("shares preparations and keeps the request alive when one of two consumers unmounts", async () => {
@@ -160,7 +139,7 @@ describe("CanvasImage", () => {
     await flush();
     expect(BrowserImage.instances[0].removeAttribute).not.toHaveBeenCalled();
     await loaded(BrowserImage.instances[0]);
-    expect(sourceOf(screen.getByRole("img", { name: "second" }).getAttribute("src"))).toBe("/shared.png");
+    expect(screen.getByRole("img", { name: "second" }).getAttribute("src")).toBe("/shared.png");
   });
 
   it("aborts unfinished loading after leaving the prefetch range and restarts on return", async () => {
@@ -174,7 +153,7 @@ describe("CanvasImage", () => {
     await flush();
     expect(BrowserImage.instances).toHaveLength(2);
     await loaded(BrowserImage.instances[1]);
-    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).toBe("/near.png");
+    expect(screen.getByRole("img", { name: "near" }).getAttribute("src")).toBe("/near.png");
   });
 
   it("ignores stale decoding results after the node source changes", async () => {
@@ -187,9 +166,9 @@ describe("CanvasImage", () => {
     view.rerender(<Scene items={[{ nodeId: "near", src: "/new.png", alt: "near" }]} />);
     await flush();
     await act(async () => completeDecode());
-    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).not.toBe("/old.png");
+    expect(screen.getByRole("img", { name: "near" }).getAttribute("src")).not.toBe("/old.png");
     await loaded(BrowserImage.instances.at(-1)!);
-    expect(sourceOf(screen.getByRole("img", { name: "near" }).getAttribute("src"))).toBe("/new.png");
+    expect(screen.getByRole("img", { name: "near" }).getAttribute("src")).toBe("/new.png");
   });
 
   it("clears pending work when the project changes and releases it on unmount", async () => {

@@ -4,7 +4,7 @@ export type ImageLoadResult =
   | { status: "pending" }
   | { status: "ready"; url: string; width: number; height: number }
   | { status: "failed" };
-/** 已下载并解码完成的本地媒体资源：url 为 object URL，供 <img> 直接渲染（字节零二次下载） */
+/** 预热完成、可上屏的图片资源：url 即待渲染的 src（HTTP URL / blob: 预览透传），字节由浏览器 HTTP 缓存或上传管道持有 */
 export type PreparedImage = { url: string; width: number; height: number };
 type ImageLoader = (src: string, signal: AbortSignal) => Promise<PreparedImage>;
 type Consumer = { priority: MediaLoadPriority; notify: (result: ImageLoadResult) => void };
@@ -16,10 +16,6 @@ type Job = {
   controller?: AbortController;
 };
 
-function revokeReadyUrl(result: ImageLoadResult | undefined) {
-  if (result?.status === "ready") URL.revokeObjectURL(result.url);
-}
-
 export type ImageLoadLease = {
   setPriority: (priority: MediaLoadPriority) => void;
   release: () => void;
@@ -29,11 +25,11 @@ export type ImageLoadLease = {
 const IMAGE_LOAD_TIMEOUT_MS = 60_000;
 
 /**
- * 下载并解码一张图片：fetch → Blob → object URL → 探测 <img> 解码出宽高。
- * ready 时字节已在内存（object URL 随结果移交调用方，由调度器负责撤销），
- * 渲染 <img src={url}> 不再发起第二次网络请求，与 HTTP 缓存行为彻底解耦。
- * fetch 挂内部 controller 的 signal：外部 abort、60s 超时或任意失败路径
- * 都会先中止残余传输，再就地撤销 URL。
+ * 预热一张图片：探测 <img> 加载 HTTP URL 并解码出宽高，结果直接携带原 URL。
+ * ready 不代表字节在应用侧——字节交给浏览器 HTTP 缓存（服务端 immutable 长缓存），
+ * 渲染 <img src={同一 URL}> 命中缓存，不发第二次网络请求。
+ * 探测挂外部 signal：外部 abort 或 60s 超时都会摘除 handler 并 removeAttribute("src")
+ * 取消在途请求。
  */
 export function prepareImage(src: string, signal: AbortSignal): Promise<PreparedImage> {
   return new Promise((resolve, reject) => {
@@ -41,9 +37,7 @@ export function prepareImage(src: string, signal: AbortSignal): Promise<Prepared
       reject(new DOMException("Image load cancelled", "AbortError"));
       return;
     }
-    const controller = new AbortController();
     let settled = false;
-    let objectUrl: string | null = null;
     let probe: HTMLImageElement | null = null;
     const finish = (error?: unknown) => {
       if (settled) return;
@@ -55,32 +49,22 @@ export function prepareImage(src: string, signal: AbortSignal): Promise<Prepared
         probe.onerror = null;
       }
       if (error) {
-        // 失败即取消任何残余传输（fetch/blob 阶段被超时或错误打断时不再空跑）
-        controller.abort();
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        // 失败即取消任何残余传输（加载阶段被超时或错误打断时不再空跑）
         probe?.removeAttribute("src");
         reject(error);
       } else {
-        resolve({ url: objectUrl!, width: probe!.naturalWidth, height: probe!.naturalHeight });
+        resolve({ url: src, width: probe!.naturalWidth, height: probe!.naturalHeight });
       }
     };
     const abort = () => finish(new DOMException("Image load cancelled", "AbortError"));
-    const timeout = setTimeout(() => finish(new Error("Image load timed out")), IMAGE_LOAD_TIMEOUT_MS);
     signal.addEventListener("abort", abort, { once: true });
+    const timeout = setTimeout(() => finish(new Error("Image load timed out")), IMAGE_LOAD_TIMEOUT_MS);
 
-    void (async () => {
-      const response = await fetch(src, { signal: controller.signal });
-      if (settled) return;
-      if (!response.ok) throw new Error(`Image load failed (${response.status})`);
-      const blob = await response.blob();
-      if (settled) return;
-      objectUrl = URL.createObjectURL(blob);
-      probe = new Image();
-      probe.decoding = "async";
-      probe.onload = () => { void probe!.decode().then(() => finish(), finish); };
-      probe.onerror = () => finish(new Error("Image load failed"));
-      probe.src = objectUrl;
-    })().catch(finish);
+    probe = new Image();
+    probe.decoding = "async";
+    probe.onload = () => { void probe!.decode().then(() => finish(), finish); };
+    probe.onerror = () => finish(new Error("Image load failed"));
+    probe.src = src;
   });
 }
 
@@ -121,7 +105,6 @@ export class ImageLoadScheduler {
         queueMicrotask(() => {
           if (!target.consumers.size && this.jobs.get(src) === target) {
             this.jobs.delete(src);
-            revokeReadyUrl(target.result);
           }
         });
       },
@@ -139,7 +122,6 @@ export class ImageLoadScheduler {
     for (const job of this.jobs.values()) {
       job.consumers.clear();
       job.controller?.abort();
-      revokeReadyUrl(job.result);
     }
     this.jobs.clear();
   }
@@ -198,8 +180,7 @@ export class ImageLoadScheduler {
 
   private complete(job: Job, controller: AbortController, result: ImageLoadResult) {
     if (controller.signal.aborted || job.controller !== controller || this.jobs.get(job.src) !== job) {
-      // 结果被守卫丢弃（job 已被替换/删除/中止）时，其 object URL 无人接管，就地撤销
-      revokeReadyUrl(result);
+      // 结果被守卫丢弃（job 已被替换/删除/中止）时直接放弃通知，结果本身不含需回收的资源
       return;
     }
     job.controller = undefined;

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageLoadScheduler, type PreparedImage, prepareImage } from "@/features/canvas/services/image-load-scheduler";
 
-const image = { url: "blob:test", width: 1600, height: 900 } satisfies PreparedImage;
+const image = { url: "/img-1600x900", width: 1600, height: 900 } satisfies PreparedImage;
 async function flush() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 function controlledLoader() {
   const calls: Array<{ src: string; signal: AbortSignal; resolve: (image: PreparedImage) => void; reject: (error: Error) => void }> = [];
@@ -13,16 +13,7 @@ function controlledLoader() {
   return { calls, load };
 }
 
-let revokedUrls: string[];
-beforeEach(() => {
-  revokedUrls = [];
-  // jsdom 未实现 Blob object URL：以可控静态方法替代， revoke 调用转为可断言记录
-  (URL as unknown as Record<string, unknown>).createObjectURL = vi.fn(() => `blob:img-${Math.random()}`);
-  (URL as unknown as Record<string, unknown>).revokeObjectURL = vi.fn((url: string) => { revokedUrls.push(url); });
-});
 afterEach(() => {
-  delete (URL as unknown as Record<string, unknown>).createObjectURL;
-  delete (URL as unknown as Record<string, unknown>).revokeObjectURL;
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -140,9 +131,9 @@ describe("ImageLoadScheduler", () => {
     expect(calls).toHaveLength(1);
     calls[0].resolve(image);
     await flush();
+    // complete 守卫丢弃被中止 job 的结果：不通知
     expect(notify).not.toHaveBeenCalled();
-    // load 在中止后才结算：complete 守卫丢弃的 ready 结果须就地撤销
-    expect(revokedUrls).toEqual([image.url]);
+    // loader 结算后腾出并发槽，排队中的 "new" 随即启动
     expect(calls[1].src).toBe("new");
     scheduler.clear();
   });
@@ -197,30 +188,7 @@ describe("ImageLoadScheduler", () => {
     scheduler.clear();
   });
 
-  it("revokes the ready object URL when the job is dropped and on clear", async () => {
-    const { calls, load } = controlledLoader();
-    const scheduler = new ImageLoadScheduler(load, 1);
-    const notify = vi.fn();
-    const lease = scheduler.acquire("dropped", notify);
-    lease.setPriority(0);
-    await flush();
-    calls[0].resolve(image);
-    await flush();
-    expect(notify).toHaveBeenCalledWith({ status: "ready", ...image });
-    lease.release();
-    await flush();
-    expect(revokedUrls).toEqual([image.url]);
-
-    const kept = scheduler.acquire("kept", vi.fn());
-    kept.setPriority(0);
-    await flush();
-    calls[1].resolve({ ...image, url: "blob:kept" });
-    await flush();
-    scheduler.clear();
-    expect(revokedUrls).toEqual([image.url, "blob:kept"]);
-  });
-
-  it("keeps the object URL alive while the job survives a same-turn re-acquire", async () => {
+  it("keeps the job alive across a same-turn re-acquire and reloads only after the job is dropped", async () => {
     const { calls, load } = controlledLoader();
     const scheduler = new ImageLoadScheduler(load, 1);
     const lease = scheduler.acquire("shared", vi.fn());
@@ -229,12 +197,18 @@ describe("ImageLoadScheduler", () => {
     calls[0].resolve(image);
     await flush();
     lease.release();
-    // 同一轮重新认领：job 复活，URL 不得被撤销
+    // 同一轮重新认领：job 复活，不重新加载
     scheduler.acquire("shared", vi.fn());
     await flush();
-    expect(revokedUrls).toEqual([]);
+    expect(calls).toHaveLength(1);
     scheduler.clear();
-    expect(revokedUrls).toEqual([image.url]);
+    const reloaded = scheduler.acquire("shared", vi.fn());
+    reloaded.setPriority(0);
+    await flush();
+    expect(calls).toHaveLength(2);
+    calls[1].resolve(image);
+    await flush();
+    scheduler.clear();
   });
 });
 
@@ -252,43 +226,19 @@ describe("prepareImage", () => {
     constructor() { FakeImage.instances.push(this); }
   }
 
-  function stubFetchedResponse(response: { ok: boolean; status?: number } = { ok: true }) {
-    const fetched: string[] = [];
-    const signals: AbortSignal[] = [];
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      fetched.push(String(input));
-      if (init?.signal) signals.push(init.signal);
-      return Promise.resolve({
-        ok: response.ok,
-        status: response.status ?? (response.ok ? 200 : 404),
-        blob: () => Promise.resolve(Object.assign(new Blob(["data"]), { source: String(input) })),
-      });
-    }));
-    return { fetched, signals };
-  }
-
-  function stubHangingFetch() {
-    const signals: AbortSignal[] = [];
-    vi.stubGlobal("fetch", vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.signal) signals.push(init.signal);
-      return new Promise<never>(() => {});
-    }));
-    return signals;
-  }
-
   beforeEach(() => {
     FakeImage.instances = [];
     vi.stubGlobal("Image", FakeImage);
   });
 
-  it("waits for decode before declaring the image ready and hands out the object URL", async () => {
-    stubFetchedResponse();
+  it("waits for decode before declaring ready and resolves the original URL unchanged", async () => {
     const controller = new AbortController();
     let decodeDone!: () => void;
     const promise = prepareImage("/img.png", controller.signal);
     await flush();
     const probe = FakeImage.instances.at(-1)!;
-    expect(probe.src).toMatch(/^blob:/);
+    expect(probe.src).toBe("/img.png");
+    expect(probe.decoding).toBe("async");
     probe.decode.mockImplementation(() => new Promise<void>((resolve) => { decodeDone = resolve; }));
     const ready = vi.fn();
     void promise.then(ready);
@@ -296,13 +246,19 @@ describe("prepareImage", () => {
     await flush();
     expect(ready).not.toHaveBeenCalled();
     decodeDone();
-    await expect(promise).resolves.toEqual({ url: probe.src, width: image.width, height: image.height });
+    await expect(promise).resolves.toEqual({ url: "/img.png", width: image.width, height: image.height });
     expect(probe.onload).toBeNull();
     expect(probe.onerror).toBeNull();
   });
 
-  it("aborts during the probe phase and revokes the object URL", async () => {
-    const { signals } = stubFetchedResponse();
+  it("rejects immediately without creating a probe when the signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(prepareImage("/img.png", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    expect(FakeImage.instances).toHaveLength(0);
+  });
+
+  it("cancels the in-flight request when aborted during the probe", async () => {
     const controller = new AbortController();
     const promise = prepareImage("/img.png", controller.signal);
     await flush();
@@ -310,79 +266,48 @@ describe("prepareImage", () => {
     const rejection = expect(promise).rejects.toMatchObject({ name: "AbortError" });
     controller.abort();
     await rejection;
-    expect(revokedUrls).toHaveLength(1);
-    // 外部 abort 级联到内部 controller，传输同步取消
-    expect(signals[0].aborted).toBe(true);
     expect(probe.removeAttribute).toHaveBeenCalledWith("src");
     expect(probe.onload).toBeNull();
     expect(probe.onerror).toBeNull();
   });
 
-  it("aborts before the fetch resolves without creating or revoking any URL", async () => {
-    const { signals } = stubFetchedResponse();
-    const controller = new AbortController();
-    const promise = prepareImage("/img.png", controller.signal);
-    const rejection = expect(promise).rejects.toMatchObject({ name: "AbortError" });
-    controller.abort();
-    await rejection;
-    await flush();
-    expect(revokedUrls).toEqual([]);
-    expect(FakeImage.instances).toHaveLength(0);
-    expect(signals[0].aborted).toBe(true);
-  });
-
-  it("revokes the object URL when the probe fails to load the resource", async () => {
-    stubFetchedResponse();
+  it("cancels the in-flight request when the probe fails to load the resource", async () => {
     const promise = prepareImage("/corrupt.png", new AbortController().signal);
     await flush();
     FakeImage.instances.at(-1)!.onerror!();
     await expect(promise).rejects.toThrow("Image load failed");
-    expect(revokedUrls).toHaveLength(1);
+    expect(FakeImage.instances.at(-1)!.removeAttribute).toHaveBeenCalledWith("src");
     expect(FakeImage.instances.at(-1)!.onload).toBeNull();
   });
 
-  it("revokes the object URL when decoding fails after load", async () => {
-    stubFetchedResponse();
+  it("fails when decoding fails after load", async () => {
     const promise = prepareImage("/undecodable.png", new AbortController().signal);
     await flush();
     const probe = FakeImage.instances.at(-1)!;
     probe.decode.mockReturnValue(Promise.reject(new Error("decoding failed")));
     probe.onload!();
     await expect(promise).rejects.toThrow("decoding failed");
-    expect(revokedUrls).toHaveLength(1);
+    expect(probe.removeAttribute).toHaveBeenCalledWith("src");
     expect(probe.onerror).toBeNull();
   });
 
-  it("reports failure without creating a URL for non-2xx responses", async () => {
-    stubFetchedResponse({ ok: false, status: 404 });
-    const promise = prepareImage("/missing.png", new AbortController().signal);
-    await expect(promise).rejects.toThrow("failed (404)");
-    expect(revokedUrls).toEqual([]);
-    expect(FakeImage.instances).toHaveLength(0);
-  });
-
-  it("times out a stalled transfer, cancelling the in-flight fetch", async () => {
-    const signals = stubHangingFetch();
+  it("times out a stalled probe and cancels the in-flight request", async () => {
     vi.useFakeTimers();
     const promise = prepareImage("stalled", new AbortController().signal);
     const rejection = expect(promise).rejects.toThrow("timed out");
     await vi.advanceTimersByTimeAsync(60_000);
     await rejection;
-    // fetch 阶段超时：object URL 尚未创建、探测元素未挂载
-    expect(revokedUrls).toEqual([]);
-    expect(FakeImage.instances).toHaveLength(0);
-    // 传输挂起中触发超时：fetch 的 signal 必须被中止，不得继续空跑剩余字节
-    expect(signals[0].aborted).toBe(true);
+    expect(FakeImage.instances.at(-1)!.removeAttribute).toHaveBeenCalledWith("src");
+    expect(FakeImage.instances.at(-1)!.onload).toBeNull();
   });
 
-  it("times out a stalled probe after the transfer and revokes the object URL", async () => {
-    stubFetchedResponse();
-    vi.useFakeTimers();
-    const promise = prepareImage("stalled-probe", new AbortController().signal);
-    const rejection = expect(promise).rejects.toThrow("timed out");
-    await vi.advanceTimersByTimeAsync(60_000);
-    await rejection;
-    expect(revokedUrls).toHaveLength(1);
-    expect(FakeImage.instances.at(-1)!.removeAttribute).toHaveBeenCalledWith("src");
+  it("passes blob preview URLs through without fetching or transforming them", async () => {
+    const promise = prepareImage("blob:upload-preview", new AbortController().signal);
+    await flush();
+    const probe = FakeImage.instances.at(-1)!;
+    expect(probe.src).toBe("blob:upload-preview");
+    probe.onload!();
+    await flush();
+    await expect(promise).resolves.toEqual({ url: "blob:upload-preview", width: image.width, height: image.height });
   });
 });
