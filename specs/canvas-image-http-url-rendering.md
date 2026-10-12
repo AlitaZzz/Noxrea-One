@@ -2,7 +2,7 @@
 
 状态：已确认
 
-决策记录：2026-10-12 用户对三项待确认事项的回复为「按照行业内的处理方法来处理」，据此采纳如下决策（均为行业惯例）：①接受放弃「字节单次流转」，取代骨架 Spec 规则 6–8；②保留结果中的 `url` 字段（任务要求原文即「结果直接携带原 HTTP URL」，且与现有结果形状一致，`CanvasImage` 零改动）；③上传 `blob:` 预览不按 URL scheme 特判，与 HTTP URL 同路径经调度器透传。同日用户明确指示「遵循它开始写代码」，视为对本 Spec 当前版本（含全部已采纳决策）的确认，授权 Agent 实现；本文档状态据此更新为已确认。
+决策记录：2026-10-12 用户对三项待确认事项的回复为「按照行业内的处理方法来处理」，据此采纳如下决策（均为行业惯例）：①接受放弃「字节单次流转」，取代骨架 Spec 规则 6–8；②保留结果中的 `url` 字段（任务要求原文即「结果直接携带原 HTTP URL」，且与现有结果形状一致，`CanvasImage` 零改动）；③上传 `blob:` 预览不按 URL scheme 特判，与 HTTP URL 同路径经调度器透传。状态「已确认」由用户设置（用户告知该 Spec 已定稿）。
 
 ## 目标
 
@@ -85,21 +85,8 @@
 
 ## 待确认事项
 
-（已按「行业惯例」回复采纳默认方案，见顶部决策记录：接受取舍并取代骨架 Spec 规则 6–8；保留 `url` 字段；`blob:` 预览透传不特判。仅剩 Spec 整体确认由用户设置状态。）
-
-## 实现后审核清单（供 Agent 审核用）
-
-1. `image-load-scheduler.ts` 与 `use-canvas-image.ts` 中无 `fetch`、`createObjectURL`、`revokeObjectURL`、`Blob`；`revokeReadyUrl` 已删除，`release`/`clear`/`complete` 不再涉及 URL 撤销。
-2. `prepareImage`：成功仅在 `onload` 且 `decode()` resolve 后；`finish` 单次结算（`settled` 守卫）；失败/abort/超时路径均摘除 handler、`removeAttribute("src")` 取消在途请求并清定时器与 abort 监听；已 aborted 的 signal 立即拒绝且不创建探测元素。
-3. 结果 `url === src`；`PreparedImage`/`ImageLoadResult` 类型与注释同步新语义，无过时的「object URL」描述。
-4. 并发上限 4、优先级、共享 job、同轮重新认领、重试语义未被误改。
-5. 测试：已删除全部 revoke/object URL 用例及 fetch/URL 桩；新增或改写中止取消在途请求、60s 超时、onerror、decode 失败、`blob:` 透传可加载用例；`VideoNode.test.tsx` 的 `blob:poster` 改为普通 URL。
-6. 全库 `revokeObjectURL` 仅剩上传管道等无关用法；上传管道文件无改动。
-7. 骨架 Spec 规则 6–8 及相关技术影响/边界已回写（含文首历史说明）。
-8. lint、类型检查、相关测试串行通过（Vitest 单 worker）；浏览器验证：正常缓存下同一 URL 的 `<img>` 不产生新网络请求。
-
-决策补充：2026-10-12 用户明确指示「canvas-image-http-url-rendering 这个 spec 我已建立，你可以遵循它开始写代码」，视为对本 Spec 当前版本（含全部已采纳决策）的确认，授权实现。
+（无——接受取舍并取代骨架 Spec 规则 6–8、保留 `url` 字段、`blob:` 预览透传不特判三项均已决策，见顶部决策记录。）
 
 ## 当前状态
 
-已确认（2026-10-12 用户确认并授权实现）。已实施：`prepareImage` 改为探测 `<img>` 预热 + 结果携带原 URL，调度器链路删除全部 object URL 生命周期；测试按新语义改写并通过；骨架 Spec 已按第 7 条回写。浏览器实测（Network 面板缓存命中验证）待用户补做。
+已确认。已实施：`prepareImage` 改为探测 `<img>` 预热 + 结果携带原 URL，调度器链路删除全部 object URL 生命周期；测试按新语义改写；骨架 Spec 相关条款已回写。浏览器实测（Network 面板缓存命中、中止取消）待补做。

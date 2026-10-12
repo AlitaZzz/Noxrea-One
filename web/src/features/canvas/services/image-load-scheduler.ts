@@ -180,7 +180,6 @@ export class ImageLoadScheduler {
 
   private complete(job: Job, controller: AbortController, result: ImageLoadResult) {
     if (controller.signal.aborted || job.controller !== controller || this.jobs.get(job.src) !== job) {
-      // 结果被守卫丢弃（job 已被替换/删除/中止）时直接放弃通知，结果本身不含需回收的资源
       return;
     }
     job.controller = undefined;
