@@ -20,7 +20,7 @@ import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fetchVideoProxy, toFileKey } from "@/features/canvas/api/file-api";
+import { fetchVideoProxy, type MediaRequestError,readMediaError, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
@@ -29,6 +29,7 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
+import { MediaRetryNotice } from "./MediaRetryNotice";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
 
@@ -43,7 +44,8 @@ interface ClipStripPanelProps {
 
 function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const { t } = useTranslation();
-  // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道
+  // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道；
+  // spriteError 带失败原因（限流 / 繁忙 / 生成失败），在轨道上提示并由用户手动重试
   const {
     url: spriteUrl,
     spriteWidth,
@@ -57,13 +59,20 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     truncated,
     declaredDuration,
     status,
+    error: spriteError,
+    retry: retrySprite,
   } = useFrameSprite(videoSrc);
   // 代理地址单独留存：它同时也是拖动时节点播放器的临时播放源
   const [proxyUrl, setProxyUrl] = useState<string | null>(null);
   // 代理生命周期：pending = 转码中 / ready = 已挂到节点上 / failed = 生成失败（面板禁用）
   const [proxyState, setProxyState] = useState<"pending" | "ready" | "failed">("pending");
+  // 代理请求的失败原因（服务端错误码）：区分「服务端拒绝（可重试）」与「代理解不出来（重开面板）」
+  const [proxyError, setProxyError] = useState<MediaRequestError | null>(null);
   // 代理文件的真实时长（服务端转码完探测，随响应返回）
   const [proxyDuration, setProxyDuration] = useState<number | null>(null);
+  // 手动重试的触发计数：入参不变时也要重新发起代理请求
+  const [proxyAttempt, setProxyAttempt] = useState(0);
+  const retryProxy = useCallback(() => setProxyAttempt((a) => a + 1), []);
   // 代理缓冲就绪（canplay）：首次打开时代理刚生成、浏览器缓存全冷，立即拖动
   // 会触发一串 Range 拉取 + 解码跟不上指针（重开时代理已入缓存故无此问题），
   // 因此缓冲就绪前保持禁用，拖动发生时数据必在本地
@@ -119,31 +128,48 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   // 取预览代理：拖动时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
   // 不做「超时就放弃」的竞速：转码完成后自动切过去，swapVideoSource 会把当前
   // 时间点写回，切换不跳位（与 FrameStripPanel 一致）。
+  // 面板卸载 / 换视频 / 手动重试都会中止在途请求：开发模式双挂载与快速开关面板
+  // 不再白白发请求（服务端对被中止的搭车请求只退出等待，不影响仍在等待的生成）。
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
     const videoKey = toFileKey(videoSrc);
-    // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub
-    const request = videoKey
-      ? fetchVideoProxy(videoKey)
-          .then(async (res) => {
-            if (!res.ok) return null;
+    // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub；
+    // 请求失败只有两种：本组件中止（忽略），或真实网络失败（进入失败态，可重试）
+    type ProxyOutcome = { url: string; duration: number | null } | { error: MediaRequestError | null };
+    const request: Promise<ProxyOutcome | undefined> = videoKey
+      ? fetchVideoProxy(videoKey, controller.signal)
+          .then(async (res): Promise<ProxyOutcome> => {
+            if (!res.ok) return { error: await readMediaError(res) };
             const json = (await res.json()) as { data?: { url?: string; duration?: number } };
             return json.data?.url
               ? { url: json.data.url, duration: json.data.duration ?? null }
-              : null;
+              : { error: null };
           })
-          .catch(() => null)
-      : Promise.resolve<{ url: string; duration: number | null } | null>(null);
-    void request.then((result) => {
-      if (cancelled) return;
-      setProxyUrl(result?.url ?? null);
-      setProxyDuration(result?.duration ?? null);
-      setProxyState(result ? "ready" : "failed");
+          .catch((): ProxyOutcome | undefined => {
+            if (controller.signal.aborted) return undefined;
+            return { error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() } };
+          })
+      : Promise.resolve<ProxyOutcome>({ error: null });
+    void request.then((outcome) => {
+      if (cancelled || outcome === undefined) return;
+      if ("error" in outcome) {
+        setProxyUrl(null);
+        setProxyDuration(null);
+        setProxyState("failed");
+        setProxyError(outcome.error);
+        return;
+      }
+      setProxyUrl(outcome.url);
+      setProxyDuration(outcome.duration);
+      setProxyState("ready");
+      setProxyError(null);
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [videoSrc]);
+  }, [videoSrc, proxyAttempt]);
 
   // 选帧期间暂停节点播放，避免 hover 播放干扰视觉判断
   useEffect(() => {
@@ -684,7 +710,6 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
           {/* 格子/压暗/选区/手柄共用同一坐标系（轨道全宽），雪碧图贴满轨道两端 */}
           <div className="absolute inset-0 bg-black" />
           <div className="absolute inset-0 flex overflow-hidden">{trackCells}</div>
-
           {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
           {bandRange && (
             <>
@@ -741,18 +766,42 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
           </div>
         )}
 
-        {/* 代理未就绪/缓冲中/失败的面板级提示：可操作前提是雪碧图 + 代理 + 缓冲都就绪 */}
+        {/* 雪碧图失败原因 + 手动重试：轨道保留「无缩略图但可定位」的兜底能力，
+            不做静默失败（限流 / 繁忙时带 Retry-After 倒计时） */}
+        {spriteError && (
+          <div className="absolute bottom-1.5 left-1/2 z-40 -translate-x-1/2">
+            <MediaRetryNotice error={spriteError} onRetry={retrySprite} />
+          </div>
+        )}
+
+        {/* 代理未就绪/缓冲中/失败的面板级提示：可操作前提是雪碧图 + 代理 + 缓冲都就绪。
+            服务端拒绝（限流 / 繁忙）时显示原因与重试；代理解不出来（重开重试）时
+            保留原提示——重试拉到的是同一份缓存产物，不会成功 */}
         {ready && !operable && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-            <span
-              className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-            >
-              {proxyState === "failed"
-                ? t("clip.proxyFailed")
-                : proxyState === "pending"
-                  ? t("clip.proxyLoading")
-                  : t("clip.buffering")}
-            </span>
+            {proxyState === "failed" ? (
+              proxyError ? (
+                <MediaRetryNotice error={proxyError} onRetry={retryProxy} />
+              ) : (
+                <span
+                  className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
+                >
+                  {t("clip.proxyFailed")}
+                </span>
+              )
+            ) : proxyState === "pending" ? (
+              <span
+                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
+              >
+                {t("clip.proxyLoading")}
+              </span>
+            ) : (
+              <span
+                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
+              >
+                {t("clip.buffering")}
+              </span>
+            )}
           </div>
         )}
 

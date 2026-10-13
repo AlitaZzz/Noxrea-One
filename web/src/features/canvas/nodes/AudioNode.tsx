@@ -18,6 +18,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
   extractAudioClip as extractAudioClipApi,
+  retryAfterOf,
   toFileKey,
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
@@ -112,8 +113,9 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         const json = await res.json();
 
         if (!res.ok || !json?.data) {
-          // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
-          notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id);
+          // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案；
+          // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
+          notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id, retryAfterOf(res));
           return;
         }
 
@@ -154,7 +156,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         const json = await res.json();
 
         if (!res.ok || !json?.data) {
-          notifyActionFailed(notification, t, json?.error as string | undefined, "error.speed.failed", id);
+          notifyActionFailed(notification, t, json?.error as string | undefined, "error.speed.failed", id, retryAfterOf(res));
           return;
         }
 

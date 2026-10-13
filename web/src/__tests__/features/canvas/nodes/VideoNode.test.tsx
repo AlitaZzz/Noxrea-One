@@ -93,7 +93,7 @@ describe("VideoNode poster-first", () => {
     expect(view.container.querySelector("video")).toBeNull();
     const poster = view.container.querySelector("img")!;
     expect(poster).toHaveAttribute("src", "/api/files/poster.webp");
-    expect(posterRequests).toContain("/api/files/test.mp4?w=480");
+    expect(posterRequests).toContain("/api/files/test.mp4?w=1280");
     expect(screen.queryByRole("button", { name: "play" })).toBeNull();
   });
 
@@ -113,7 +113,7 @@ describe("VideoNode poster-first", () => {
     await flush();
     expect(view.container.querySelector("video")).toBeNull();
     expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
-    expect(posterRequests).toContain("/api/files/test.mp4?w=480");
+    expect(posterRequests).toContain("/api/files/test.mp4?w=1280");
     vi.useRealTimers();
   });
 
@@ -139,7 +139,7 @@ describe("VideoNode poster-first", () => {
     await startHoverPlay(view);
     expect(view.container.querySelector("video")).toBeNull();
     expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
-    expect(posterRequests).toContain("/api/files/test.mp4?w=480");
+    expect(posterRequests).toContain("/api/files/test.mp4?w=1280");
     expect(playbackError).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
@@ -266,7 +266,7 @@ describe("VideoNode poster-first", () => {
     await flush();
     expect(view.container.querySelector("video")).toBeNull();
     expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
-    expect(posterRequests).toContain("/api/files/test.mp4?w=480");
+    expect(posterRequests).toContain("/api/files/test.mp4?w=1280");
     await startHoverPlay(view);
     expect(view.container.querySelector("video")).not.toBeNull();
     vi.useRealTimers();
@@ -317,7 +317,7 @@ describe("VideoNode poster-first", () => {
     await flush();
     expect(view.container.querySelector("video")).toBeNull();
     expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
-    expect(posterRequests).toContain("/api/files/test.mp4?w=480");
+    expect(posterRequests).toContain("/api/files/test.mp4?w=1280");
   });
 });
 

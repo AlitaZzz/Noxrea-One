@@ -35,6 +35,7 @@ import {
   detachAudio as detachAudioApi,
   type DetachAudioResult,
   extractClip as extractClipApi,
+  retryAfterOf,
   toFileKey,
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
@@ -525,10 +526,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const res = await captureFrameApi(videoKey, selection, controller.signal);
       if (controller.signal.aborted) return;
       if (!res.ok) {
-        // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案
+        // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案；
+        // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
         const errJson = await res.json().catch(() => null);
         if (controller.signal.aborted) return;
-        notifyActionFailed(notification, t, errJson?.error as string | undefined, "error.capture_frame.capture_failed", id);
+        notifyActionFailed(notification, t, errJson?.error as string | undefined, "error.capture_frame.capture_failed", id, retryAfterOf(res));
         return;
       }
       const json = await res.json() as { data?: CapturedFrameInfo };
@@ -578,9 +580,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
-        // 后端按错误码给出确定结论（无音轨 / 组件缺失等），优先用其本地化文案
+        // 后端按错误码给出确定结论（无音轨 / 组件缺失等），优先用其本地化文案；
+        // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
         const code = json?.error as string | undefined;
-        notifyActionFailed(notification, t, code, "detach.failed", id);
+        notifyActionFailed(notification, t, code, "detach.failed", id, retryAfterOf(res));
         // 确认无音轨后同步禁用入口，避免用户反复点击撞同一个错误
         if (code === "detach_audio.no_audio_track") commitHasAudio(false);
         return;
@@ -680,8 +683,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
-        // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案
-        notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id);
+        // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案；
+        // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
+        notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id, retryAfterOf(res));
         return;
       }
 
@@ -746,7 +750,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       const json = await res.json();
 
       if (!res.ok || !json?.data) {
-        notifyActionFailed(notification, t, json?.error as string | undefined, "error.crop.failed", id);
+        notifyActionFailed(notification, t, json?.error as string | undefined, "error.crop.failed", id, retryAfterOf(res));
         return;
       }
 
@@ -867,7 +871,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
 
   const hasVideo = src && src.length > 0;
   // 海报：内容寻址派生品，非托管地址（外链导入等）无海报，显示图标占位
-  const posterUrl = hasVideo ? withManagedFileWidth(src, 480) : undefined;
+  const posterUrl = hasVideo ? withManagedFileWidth(src, 1280) : undefined;
   const posterAspect = mediaAspect(data.naturalWidth, data.naturalHeight);
   // 画面裁剪面板：由 croppingNodeId 驱动（与图片裁剪共用状态，互斥天然成立）。
   // 抓帧动作以回调形式交给面板，在其挂载时自取当前帧（裁剪是空间操作，

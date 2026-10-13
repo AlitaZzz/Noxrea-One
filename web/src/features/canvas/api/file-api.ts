@@ -46,10 +46,11 @@ export interface DetachedMedia {
  * 获取（必要时生成）预览代理视频，用于拖动播放头时的 scrub 预览。
  * 代理是低分辨率短 GOP 副本，seek 最多解码 1 秒画面；失败时调用方回退原视频即可。
  */
-export async function fetchVideoProxy(videoKey: string): Promise<Response> {
+export async function fetchVideoProxy(videoKey: string, signal?: AbortSignal): Promise<Response> {
   return apiRaw("/api/files/video-proxy", {
     method: "POST",
     body: JSON.stringify({ video_key: videoKey }),
+    signal,
   });
 }
 
@@ -75,11 +76,39 @@ export interface FrameSpriteInfo {
  * 服务端一次解码后等间隔采样并拼成一张图，前端按格取图渲染整条轨道；
  * 失败时调用方退化为「无缩略图但可定位」的轨道即可。
  */
-export async function fetchFrameSprite(videoKey: string): Promise<Response> {
+export async function fetchFrameSprite(videoKey: string, signal?: AbortSignal): Promise<Response> {
   return apiRaw("/api/files/frame-sprite", {
     method: "POST",
     body: JSON.stringify({ video_key: videoKey }),
+    signal,
   });
+}
+
+/** 媒体请求的可重试失败：限流（common.rate_limited）、个人名额（media.user_busy）、
+    全站繁忙（media.busy）与各路由失败码都走同一个形状 */
+export interface MediaRequestError {
+  /** 服务端错误码（error.<code> 本地化） */
+  code: string;
+  /** Retry-After 提示的可重试秒数；响应未带时为 null（仍可手动重试，不倒计时） */
+  retryAfterSeconds: number | null;
+  /** 失败到达时刻（epoch ms）：Retry-After 倒计时以此为基准，组件渲染期不读时钟 */
+  receivedAt: number;
+}
+
+/** 读取 Retry-After（秒）；缺失或非法时为 null */
+export function retryAfterOf(res: Response): number | null {
+  const seconds = Number(res.headers.get("Retry-After"));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+/** 从失败响应中读出错误码与 Retry-After：429 / 503 / 路由失败码共用 */
+export async function readMediaError(res: Response): Promise<MediaRequestError> {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null;
+  return {
+    code: body?.error ?? "common.internal_error",
+    retryAfterSeconds: retryAfterOf(res),
+    receivedAt: Date.now(),
+  };
 }
 
 /** 音轨分离结果：独立音轨 + 静音视频 */

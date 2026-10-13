@@ -11,9 +11,9 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { fetchFrameSprite, type FrameSpriteInfo, toFileKey } from "@/features/canvas/api/file-api";
+import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError, toFileKey } from "@/features/canvas/api/file-api";
 import { isManagedFilePath } from "@/lib/file-url";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
@@ -49,6 +49,8 @@ export interface FrameSpriteState {
   truncated: boolean;
   declaredDuration: number | null;
   status: FrameStripStatus;
+  /** 服务端失败原因（限流 / 繁忙 / 生成失败）：轨道保留兜底能力，面板据此提示并重试 */
+  error: MediaRequestError | null;
 }
 
 const INITIAL: FrameSpriteState = {
@@ -64,6 +66,7 @@ const INITIAL: FrameSpriteState = {
   truncated: false,
   declaredDuration: null,
   status: "loading",
+  error: null,
 };
 
 /**
@@ -122,18 +125,23 @@ function loadSpriteSize(url: string): Promise<{ width: number; height: number } 
 
 /**
  * 按给定视频地址加载帧序列雪碧图。
- * 组件卸载或地址变化时会中断未完成的加载。
+ * 组件卸载或地址变化时会中止未完成的加载；失败时轨道退化为「无缩略图但可定位」，
+ * 同时带出失败原因与 retry——面板据此提示并由用户手动重试（不做自动重试）。
  */
-export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
+export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { retry: () => void } {
   // 结果连同它所属的视频地址一起存：地址切换后旧结果即失效，靠这个标记区分，
   // 不必在 effect 里同步 setState 重置（那会引发级联渲染）
   const [entry, setEntry] = useState<{ src: string; sprite: FrameSpriteState }>({
     src: "",
     sprite: INITIAL,
   });
+  // 手动重试的触发计数：入参不变时也要重新发起请求
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((a) => a + 1), []);
 
   useEffect(() => {
     if (!videoSrc) return;
+    const controller = new AbortController();
     let cancelled = false;
     const apply = (sprite: FrameSpriteState) => {
       if (cancelled) return;
@@ -145,15 +153,24 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
       // 本地预览地址（blob 等）没有对应键，直接走兜底读时长
       const videoKey = toFileKey(videoSrc);
       const managed = isManagedFilePath(videoSrc) && videoKey.length > 0;
+      let fetchError: MediaRequestError | null = null;
 
       if (managed) {
-        const info = await fetchFrameSprite(videoKey)
+        const info = await fetchFrameSprite(videoKey, controller.signal)
           .then(async (res) => {
-            if (!res.ok) return null;
+            if (!res.ok) {
+              fetchError = await readMediaError(res);
+              return null;
+            }
             const json = (await res.json()) as { data?: FrameSpriteInfo };
             return json.data ?? null;
           })
-          .catch(() => null);
+          .catch(() => {
+            // 请求失败只有两种：本组件中止（忽略），或真实网络失败（带原因走兜底与重试）
+            if (controller.signal.aborted) return null;
+            fetchError = { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() };
+            return null;
+          });
         if (cancelled) return;
 
         if (info?.url) {
@@ -175,6 +192,7 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
               truncated: info.truncated ?? false,
               declaredDuration: info.declared_duration ?? null,
               status: "ready",
+              error: null,
             });
             return;
           }
@@ -183,20 +201,22 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState {
 
       // 兜底：拿不到雪碧图也要拿到时长，否则播放头无从定位、面板等同于不可用。
       // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
-      // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴
+      // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴；
+      // 服务端失败原因（fetchError）随状态带出，面板据此提示并重试
       const duration = await probeDuration(videoSrc);
       apply(
         duration
-          ? { ...INITIAL, duration, durationSource: "fallback", status: "ready" }
-          : { ...INITIAL, status: "error" },
+          ? { ...INITIAL, duration, durationSource: "fallback", status: "ready", error: fetchError }
+          : { ...INITIAL, status: "error", error: fetchError },
       );
     })();
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [videoSrc]);
+  }, [videoSrc, attempt]);
 
   // 地址已切换但新结果还没回来时返回初始态，避免短暂沿用上一条视频的缩略图
-  return entry.src === videoSrc ? entry.sprite : INITIAL;
+  return entry.src === videoSrc ? { ...entry.sprite, retry } : { ...INITIAL, retry };
 }

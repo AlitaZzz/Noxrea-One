@@ -62,7 +62,8 @@
     "loadFailed": "视频加载失败",
     "previewLoadFailed": "预览加载失败",
     "playFailed": "视频无法播放",
-    "retry": "重试"
+    "retry": "重试",
+    "retryIn": "约 {{seconds}} 秒后可重试"
   },
   "param": {
     "quality": "质量",
@@ -885,6 +886,7 @@
     "session_expired": "登录已过期",
     "session_expired_desc": "请重新登录",
     "withRequestId": "{{message}}（错误 ID：{{id}}）",
+    "withRetryAfter": "{{message}}（约 {{seconds}} 秒后可重试）",
     "withStatus": "{{message}}（HTTP {{status}}）",
     "common": {
       "invalid_json": "请求体不是合法的 JSON",
@@ -970,7 +972,9 @@
       "source_not_found": "源文件不存在或已被删除",
       "cancelled": "处理已中止",
       "ffmpeg_missing": "服务器未安装 ffmpeg，无法处理媒体",
-      "timeout": "处理超时，请稍后重试"
+      "timeout": "处理超时，请稍后重试",
+      "busy": "媒体处理繁忙，请稍后重试",
+      "user_busy": "你已有媒体处理任务在进行，请等待完成后再试"
     },
     "capture_frame": {
       "capture_failed": "抽帧失败，请稍后重试"

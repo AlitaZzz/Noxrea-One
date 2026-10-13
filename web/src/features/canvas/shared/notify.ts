@@ -26,6 +26,7 @@ export function notifyNodeBusy(
 
 /** 操作失败提示：后端按错误码给出确定结论时优先用其本地化文案
     （error.<code>，带 fallbackKey 兜底），否则直接回落 fallbackKey。
+    retryAfterSeconds：响应带 Retry-After 时文案附带可重试秒数（error.withRetryAfter）。
     key 按节点区分（与 notifyNodeBusy 同款）：同节点重试去重替换，跨节点互不顶替 */
 export function notifyActionFailed(
   notification: NotificationApi,
@@ -33,10 +34,14 @@ export function notifyActionFailed(
   code: string | undefined,
   fallbackKey: string,
   nodeId: string,
+  retryAfterSeconds?: number | null,
 ): void {
   const fallback = t(fallbackKey);
+  const base = code ? t(`error.${code}`, { defaultValue: fallback }) : fallback;
   notification.error({
-    title: code ? t(`error.${code}`, { defaultValue: fallback }) : fallback,
+    title: retryAfterSeconds
+      ? t("error.withRetryAfter", { message: base, seconds: retryAfterSeconds, defaultValue: base })
+      : base,
     placement: "bottomRight",
     duration: 6,
     key: `clip-failed-${nodeId}`,
