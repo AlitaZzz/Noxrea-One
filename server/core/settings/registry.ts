@@ -20,23 +20,37 @@ const bool = (value: boolean): SettingDef<boolean> => ({
 const INT_TEXT = /^\d+$/;
 const DECIMAL_TEXT = /^\d+(\.\d+)?$/;
 
-const int = (value: number, min = 1): SettingDef<number> => ({
+const int = (value: number, min = 1, max = Number.MAX_SAFE_INTEGER): SettingDef<number> => ({
   schema: z
     .string()
     .regex(INT_TEXT, "must be an integer written as plain digits")
     .transform(Number)
-    .pipe(z.number().int().safe().min(min)),
+    .pipe(z.number().int().safe().min(min).max(max)),
   default: value,
 });
 
-const positive = (value: number): SettingDef<number> => ({
+const positive = (value: number, max: number): SettingDef<number> => ({
   schema: z
     .string()
     .regex(DECIMAL_TEXT, "must be a number written as plain digits with an optional fraction")
     .transform(Number)
-    .pipe(z.number().finite().positive()),
+    .pipe(z.number().finite().positive().max(max)),
   default: value,
 });
+
+/**
+ * 换算成定时器延迟的时长上限：1 天。系统内的超时、轮询间隔、等待时限都远低于此；
+ * 同时保证代码里的倍数换算（如排空时限 ×3、轮询退避 ×2）仍远小于 Node 定时器上限
+ * 2^31-1 ms（约 24.8 天）——超出该上限时 setTimeout 不报错，而是把延迟改成 1ms。
+ */
+const MAX_TIMER_SECONDS = 24 * 60 * 60;
+
+/** 用作定时器延迟的秒数；integer 为 true 时只接受整数秒 */
+const timerSeconds = (value: number, { integer = false } = {}): SettingDef<number> =>
+  integer ? int(value, 1, MAX_TIMER_SECONDS) : positive(value, MAX_TIMER_SECONDS);
+
+/** 用作定时器延迟的毫秒数 */
+const timerMillis = (value: number): SettingDef<number> => int(value, 1, MAX_TIMER_SECONDS * 1000);
 
 const text = (value = ""): SettingDef<string> => ({
   schema: z.string(),
@@ -85,29 +99,53 @@ export const SETTING_DEFS = {
   "upload.batch_max_concurrent": int(1),
   /** 单个用户上传批次等待队列深度上限；超额立即 429 */
   "upload.batch_max_pending": int(10),
+  // 媒体处理并发门（specs/media-processing-concurrency.md）：
+  // ffmpeg 重型 / ffmpeg 轻型 / sharp 三个独立池，重型池两级准入（个人名额 → 全局槽位）
+  /** 全站同时运行的重型 ffmpeg 任务数（整段解码 / 重编码，所有用户合计） */
+  "media.ffmpeg_heavy_max_concurrency": int(2),
+  /** 全站重型任务排队上限（已拿到个人名额、在等全局槽位的请求） */
+  "media.ffmpeg_heavy_max_pending": int(4, 0),
+  /** 重型请求从到达到开始运行的最长等待（个人排队与全局排队合计，秒） */
+  "media.ffmpeg_heavy_max_wait_seconds": timerSeconds(60),
+  /** 每个用户同时运行的重型任务数；大于等于全局上限时个人限额失去作用 */
+  "media.ffmpeg_heavy_user_max_concurrency": int(1),
+  /** 每个用户在个人队列里排队的重型请求数上限 */
+  "media.ffmpeg_heavy_user_max_pending": int(2, 0),
+  /** 全站同时运行的轻型 ffmpeg 任务数（海报母版、截帧、流拷贝） */
+  "media.ffmpeg_light_max_concurrency": int(2),
+  /** 全站轻型任务排队上限 */
+  "media.ffmpeg_light_max_pending": int(16, 0),
+  /** 轻型任务的最长排队时间（秒） */
+  "media.ffmpeg_light_max_wait_seconds": timerSeconds(10),
+  /** 同时运行的受控 sharp 缩放任务数上限 */
+  "media.sharp_max_concurrency": int(2),
+  /** sharp 缩放的排队上限 */
+  "media.sharp_max_pending": int(64, 0),
+  /** sharp 缩放的最长排队时间（秒） */
+  "media.sharp_max_wait_seconds": timerSeconds(10),
 
   // Worker
-  "worker.poll_interval_seconds": int(1),
+  "worker.poll_interval_seconds": timerSeconds(1, { integer: true }),
   "worker.max_concurrency": int(10),
-  "worker.api_timeout_seconds": int(240),
+  "worker.api_timeout_seconds": timerSeconds(240, { integer: true }),
   /** 僵尸判定阈值（分钟）：轮询期间有心跳持续推进 updatedAt，这里只需兜住「轮询线程真的挂了」 */
   "worker.stuck_timeout_minutes": int(15),
   "worker.zombie_scan_interval_seconds": int(60),
   "worker.max_retries": int(2, 0),
-  "worker.drain_timeout_seconds": int(15),
-  "worker.poll_check_interval_ms": int(200),
-  "worker.async_poll_interval_seconds": positive(3),
+  "worker.drain_timeout_seconds": timerSeconds(15, { integer: true }),
+  "worker.poll_check_interval_ms": timerMillis(200),
+  "worker.async_poll_interval_seconds": timerSeconds(3),
   "worker.async_poll_max_attempts": int(120),
-  "worker.async_poll_initial_delay_seconds": positive(0.5),
+  "worker.async_poll_initial_delay_seconds": timerSeconds(0.5),
 
   // 出站 HTTP 超时
-  "http.download_timeout_seconds": positive(45),
-  "http.poll_timeout_seconds": positive(15),
-  "http.api_timeout_seconds": positive(120),
+  "http.download_timeout_seconds": timerSeconds(45),
+  "http.poll_timeout_seconds": timerSeconds(15),
+  "http.api_timeout_seconds": timerSeconds(120),
   /** fetchWithTimeout 的默认 body idle 超时：响应体内相邻数据块的最大空闲 */
-  "http.body_idle_timeout_seconds": positive(60),
+  "http.body_idle_timeout_seconds": timerSeconds(60),
   /** 单次结果下载总时长上限：防慢滴漏响应长期占用下载与 Worker 槽位 */
-  "http.download_total_timeout_seconds": positive(600),
+  "http.download_total_timeout_seconds": timerSeconds(600),
 
   // 存储引用 GC
   /** 引用归零后的保留宽限期，覆盖撤销 / 恢复等短暂重引用场景 */

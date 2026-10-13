@@ -59,7 +59,7 @@ import { resetTestSettings } from "../../helpers/settings";
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getLoginRateLimiter.mockReturnValue({ check: mocks.loginCheck });
-  mocks.loginCheck.mockReturnValue(true);
+  mocks.loginCheck.mockReturnValue({ allowed: true });
   mocks.getConnInfo.mockReturnValue({ remote: { address: "203.0.113.10" } });
   resetTestSettings();
   mocks.getUserByUsername.mockResolvedValue(null);
@@ -95,6 +95,37 @@ describe("认证限流 IP 解析", () => {
 
     expect(mocks.loginCheck).toHaveBeenCalledWith("login:198.51.100.10");
   });
+
+  it("登录被限流时返回 429，带 Retry-After 并禁止缓存", async () => {
+    mocks.loginCheck.mockReturnValue({ allowed: false, retryAfterSeconds: 30 });
+
+    const response = await router.request("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username: "alice", password: "secret" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(429);
+    expect(((await response.json()) as { error: string }).error).toBe("auth.login_rate_limited");
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
+
+  it("注册被限流时返回 429，带 Retry-After 并禁止缓存", async () => {
+    mocks.getRegisterRateLimiter.mockReturnValue({
+      check: () => ({ allowed: false, retryAfterSeconds: 45 }),
+    });
+
+    const response = await router.request("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username: "alice", password: "secret123" }),
+    });
+
+    expect(response.status).toBe(429);
+    expect(((await response.json()) as { error: string }).error).toBe("auth.register_rate_limited");
+    expect(response.headers.get("Retry-After")).toBe("45");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+  });
 });
 
 describe("注册并发重名", () => {
@@ -104,7 +135,7 @@ describe("注册并发重名", () => {
   });
 
   beforeEach(() => {
-    mocks.getRegisterRateLimiter.mockReturnValue({ check: () => true });
+    mocks.getRegisterRateLimiter.mockReturnValue({ check: () => ({ allowed: true }) });
     mocks.hashPassword.mockResolvedValue("hashed");
   });
 

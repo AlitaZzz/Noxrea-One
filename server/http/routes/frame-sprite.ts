@@ -15,9 +15,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createFrameSprite } from "@server/services/storage/video-frames";
 import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
+import { ensureArtifact } from "@server/services/storage/artifact";
 import { localStorage } from "@server/services/storage/backends/local";
 import { ok, failCode } from "@server/core/response";
-import { logger } from "@server/core/logger";
 import { createMediaEditRoute } from "./media-edit";
 import path from "path";
 import fs from "fs/promises";
@@ -43,8 +43,6 @@ const MAX_FRAMES = 20;
  * 超出部分是坏帧，必须整体重生成。
  */
 const SPRITE_VERSION = 2;
-/** 正在生成的图：同一视频的并发请求共用一次转码 */
-const inflight = new Map<string, Promise<void>>();
 /** 清理扫描的最小间隔：避免每次请求都遍历目录 */
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 /** 雪碧图存活时间：单张只有几十 KB，与代理同周期清理即可 */
@@ -76,32 +74,6 @@ async function cleanupStaleSprites(baseDir: string): Promise<void> {
   }
 }
 
-/** 生成到临时文件后原子改名；失败时清掉临时文件 */
-async function generateSprite(
-  videoPath: string,
-  tmpPath: string,
-  spritePath: string,
-  count: number,
-  duration: number,
-  signal?: AbortSignal,
-): Promise<void> {
-  let renamed = false;
-  try {
-    await createFrameSprite(videoPath, tmpPath, { count, cellWidth: CELL_WIDTH, duration }, signal);
-    await fs.mkdir(path.dirname(spritePath), { recursive: true });
-    await fs.rename(tmpPath, spritePath);
-    renamed = true;
-  } finally {
-    // 改名成功后临时文件已随之消失，只有失败路径才需要清理；
-    // force 兜住「根本没生成出来」的情况，避免又刷一条 ENOENT 警告
-    if (!renamed) {
-      await fs.rm(tmpPath, { force: true }).catch((err: unknown) => {
-        logger.warn({ err, tmpPath }, "Failed to remove temp sprite file");
-      });
-    }
-  }
-}
-
 const router = new Hono();
 
 router.post(
@@ -111,7 +83,10 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "sprite",
     failureCode: "frame_sprite.generation_failed",
-    async run({ c, sourceKey, sourcePath, tmpDir, signal }) {
+    // 只产出可缓存的派生产物，不落库新文件：不计数（限流保护的是存储增长），
+    // 重型开销由媒体池的个人与全局限额约束
+    persistsFileObject: false,
+    async run({ c, sourceKey, sourcePath, userId, signal }) {
       const baseDir = path.resolve(localStorage.baseDir);
       const meta = await probeVideoMetaCached(sourcePath);
       const declaredDuration = meta?.duration ?? null;
@@ -124,7 +99,7 @@ router.post(
       // 容器声明时长可能大于实际数据（下载中断的截断文件：moov 完整、mdat 只有前段）。
       // 按声明时长采样会把超出部分铺满坏帧，且与代理、播放器的时长对不上；
       // 这里把采样收敛到实际可解码范围，并随响应下发标记，前端在面板上给出警示
-      const integrity = await probeVideoIntegrity(sourcePath, declaredDuration);
+      const integrity = await probeVideoIntegrity(sourcePath, declaredDuration, { signal, owner: userId });
       const duration =
         integrity.truncated && integrity.decodableDuration
           ? integrity.decodableDuration
@@ -142,7 +117,6 @@ router.post(
         .update(`${sourceKey}|${CELL_WIDTH}|${count}|v${SPRITE_VERSION}`)
         .digest("hex")
         .slice(0, 32)}.webp`;
-      const spritePath = path.resolve(baseDir, spriteKey);
 
       // 顺带做一次低频清理，不阻塞本次请求
       void cleanupStaleSprites(baseDir);
@@ -157,35 +131,13 @@ router.post(
         declared_duration: declaredDuration,
       };
 
-      try {
-        await fs.access(spritePath);
-        return c.json(ok({ ...payload, cached: true }));
-      } catch {
-        // 未生成，继续往下走
-      }
-
-      // 同一张图正在生成：复用那次转码，避免并发各跑一个 ffmpeg
-      const pending = inflight.get(spriteKey);
-      if (pending) {
-        await pending.catch(() => {});
-        try {
-          await fs.access(spritePath);
-          return c.json(ok({ ...payload, cached: true }));
-        } catch {
-          return failCode(500, "frame_sprite.generation_failed");
-        }
-      }
-
-      const tmpPath = path.join(tmpDir, "sprite.webp");
-      const task = generateSprite(sourcePath, tmpPath, spritePath, count, duration, signal);
-      inflight.set(spriteKey, task);
-
-      try {
-        await task;
-        return c.json(ok({ ...payload, cached: false }));
-      } finally {
-        inflight.delete(spriteKey);
-      }
+      await ensureArtifact({
+        key: spriteKey,
+        signal,
+        produce: (tmpPath, genSignal) =>
+          createFrameSprite(sourcePath, tmpPath, { count, cellWidth: CELL_WIDTH, duration }, userId, genSignal),
+      });
+      return c.json(ok(payload));
     },
   }),
 );

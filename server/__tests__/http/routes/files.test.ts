@@ -44,6 +44,7 @@ vi.mock("@server/services/storage/resize-cache", async (importOriginal) => {
 });
 
 import { router } from "@server/http/routes/files";
+import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 let tmpDir = "";
 
@@ -148,5 +149,25 @@ describe("GET /api/files/* Range 请求", () => {
     });
     expect(res.status).toBe(416);
     expect(res.headers.get("Content-Range")).toBe("bytes */8");
+  });
+});
+
+describe("GET /api/files/* 媒体池过载", () => {
+  it("图片缩放过载返回 503，不回退原图", async () => {
+    mocks.getResizedWebP.mockRejectedValue(new MediaPoolBusyError("sharp", "global", "queue_full"));
+    const res = await router.request("/api/files/u1/ab/ok.png?w=100");
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("1");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(((await res.json()) as { error: string }).error).toBe("media.busy");
+  });
+
+  it("视频海报过载返回 503（而非 404）", async () => {
+    mocks.getVideoPosterWebP.mockRejectedValue(new MediaPoolBusyError("ffmpeg_heavy", "global", "wait_timeout"));
+    const res = await router.request("/api/files/u1/ab/r.mp4?w=100");
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("5");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(((await res.json()) as { error: string }).error).toBe("media.busy");
   });
 });

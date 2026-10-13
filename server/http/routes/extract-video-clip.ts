@@ -45,8 +45,9 @@ router.post(
 
       const clip = await extractVideoClip(
         sourcePath,
-        path.join(tmpDir, "clip.mp4"),
+        path.join(await tmpDir(), "clip.mp4"),
         { start: data.start, end: data.end },
+        userId,
         signal,
       );
 

@@ -25,8 +25,12 @@ router.post("/api/auth/login", async (c) => {
     forwardedFor: request.headers.get("x-forwarded-for"),
     trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
   });
-  if (!getLoginRateLimiter().check(`login:${ip}`)) {
-    return failCode(429, "auth.login_rate_limited");
+  const loginCheck = getLoginRateLimiter().check(`login:${ip}`);
+  if (!loginCheck.allowed) {
+    return failCode(429, "auth.login_rate_limited", undefined, {
+      "Retry-After": String(loginCheck.retryAfterSeconds),
+      "Cache-Control": "no-store",
+    });
   }
 
   // 解析
@@ -85,8 +89,12 @@ router.post("/api/auth/register", async (c) => {
     forwardedFor: request.headers.get("x-forwarded-for"),
     trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
   });
-  if (!getRegisterRateLimiter().check(`register:${ip}`)) {
-    return failCode(429, "auth.register_rate_limited");
+  const registerCheck = getRegisterRateLimiter().check(`register:${ip}`);
+  if (!registerCheck.allowed) {
+    return failCode(429, "auth.register_rate_limited", undefined, {
+      "Retry-After": String(registerCheck.retryAfterSeconds),
+      "Cache-Control": "no-store",
+    });
   }
 
   // 解析

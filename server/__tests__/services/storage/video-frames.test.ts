@@ -7,9 +7,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 const ffmpegDir = vi.hoisted(() => process.env.FFMPEG_TEST_DIR ?? process.env.FFMPEG_PATH ?? "ffmpeg");
 vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir, UPLOAD_DIR: "uploads" }) }));
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
-import { runFfmpeg, runFfprobe } from "@server/services/storage/ffmpeg";
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
+import { runFfmpegLight, runFfprobe } from "@server/services/storage/ffmpeg";
 import { probeImageMeta } from "@server/services/storage/media-probe";
 import { captureVideoFrame } from "@server/services/storage/video-frames";
+import { getVideoPosterWebP } from "@server/services/storage/resize-cache";
+import { localStorage } from "@server/services/storage/backends/local";
+import { logEvent } from "@server/core/logger/utils";
 
 const bin = path.resolve(ffmpegDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const available = spawnSync(bin, ["-version"]).status === 0;
@@ -111,13 +115,54 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 100);
     try {
-      await expect(runFfmpeg(["-re", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1", "-f", "null", "-"], 5000, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
+      await expect(runFfmpegLight(["-re", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1", "-f", "null", "-"], 5000, { signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" });
     } finally {
       clearTimeout(timer);
     }
   });
 
   it("closes a real running FFmpeg process on timeout", async () => {
-    await expect(runFfmpeg(["-re", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1", "-f", "null", "-"], 100)).rejects.toThrow("timed out");
+    await expect(runFfmpegLight(["-re", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1", "-f", "null", "-"], 100)).rejects.toThrow("timed out");
+  });
+
+  it("海报母版每视频只解码一次，档位由 sharp 从母版派生", async () => {
+    (localStorage as { baseDir: string }).baseDir = temp;
+    await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
+    const source = path.join(temp, "u1/ab/poster.mkv");
+    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
+
+    await getVideoPosterWebP("u1/ab/poster.mkv", 64);
+    await getVideoPosterWebP("u1/ab/poster.mkv", 480);
+
+    const masterRuns = vi.mocked(logEvent).mock.calls.filter(([, fields]) => (fields as { stage?: string }).stage === "poster_master").length;
+    expect(masterRuns).toBe(1);
+    // 母版 min(源宽, 3840) = 320；两个档位各自落盘（480 档不放大，实际 320 宽）
+    await expect(fs.stat(path.join(temp, "_posters/v1/u1/ab/poster.webp"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(temp, "_cache/64/u1/ab/poster.webp"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(temp, "_cache/480/u1/ab/poster.webp"))).resolves.toBeTruthy();
+  });
+
+  it("并发请求全部档位只解码一次，再次请求全部命中缓存", async () => {
+    (localStorage as { baseDir: string }).baseDir = temp;
+    await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
+    const source = path.join(temp, "u1/ab/tiers.mkv");
+    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
+
+    const widths = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
+    const keys = await Promise.all(widths.map((w) => getVideoPosterWebP("u1/ab/tiers.mkv", w)));
+    expect(keys.every((key) => key !== null)).toBe(true);
+    // 日志按视频名过滤：同文件其他用例的 poster_master 不计入
+    const masterRuns = () => vi.mocked(logEvent).mock.calls.filter(([, fields]) => {
+      const f = fields as { stage?: string; video?: string };
+      return f.stage === "poster_master" && f.video === "tiers.mkv";
+    }).length;
+    expect(masterRuns()).toBe(1);
+    for (const width of widths) {
+      await expect(fs.stat(path.join(temp, `_cache/${width}/u1/ab/tiers.webp`))).resolves.toBeTruthy();
+    }
+
+    // 再次并发请求全部命中缓存：母版不重新解码
+    await Promise.all(widths.map((w) => getVideoPosterWebP("u1/ab/tiers.mkv", w)));
+    expect(masterRuns()).toBe(1);
   });
 });

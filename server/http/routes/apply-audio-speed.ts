@@ -33,8 +33,9 @@ router.post(
     async run({ c, data, sourcePath, userId, signal, tmpDir }) {
       const result = await changeAudioSpeed(
         sourcePath,
-        path.join(tmpDir, `speed${OUT_EXT}`),
+        path.join(await tmpDir(), `speed${OUT_EXT}`),
         data.speed,
+        userId,
         signal,
       );
 

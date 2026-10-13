@@ -6,7 +6,7 @@
 import { upsertFileObject } from "@server/crud/file";
 import { buildStorageKey } from "./service";
 import { probePersistedMediaMeta } from "./media-probe";
-import { getVideoPosterWebP } from "./resize-cache";
+import { ensureVideoMasterPoster } from "./resize-cache";
 import { logEvent } from "@server/core/logger/utils";
 
 export interface FilePersistenceInput {
@@ -25,16 +25,23 @@ export interface PersistedMediaMeta {
   duration: number | null;
 }
 
-/** 海报预热宽度：画布视频节点静止态的一档缩略图（与前端 ?w=480 请求同一缓存） */
-const VIDEO_POSTER_PREWARM_WIDTH = 480;
-
 /**
- * 视频落库后预热首帧海报（fire-and-forget）。
- * getVideoPosterWebP 内部自带缓存命中短路、失败吞错与日志，这里只负责触发；
- * 失败不影响落盘结果，客户端首次 ?w= 请求仍会按需补生成。
+ * 视频落库时同步生成海报母版（ingest 阶段产出，specs/media-processing-concurrency.md 规则 8）。
+ * 母版是全部档位的根，属必备步骤而非可选优化：上传、AI 下载、派生剪辑三条落盘路径
+ * 一致受益，节点出现时各档位只剩 sharp 毫秒级派生。
+ * 过载与生成失败都不阻塞落盘（视频文件本身有效、可播放）：池侧已记录拒绝详情，
+ * 这里补记视频键上下文，档位首次请求时按需补生成（同一单飞）。
  */
-function prewarmVideoPoster(storageKey: string): void {
-  void getVideoPosterWebP(storageKey, VIDEO_POSTER_PREWARM_WIDTH);
+async function generatePosterMaster(storageKey: string): Promise<void> {
+  try {
+    await ensureVideoMasterPoster(storageKey);
+  } catch (err: unknown) {
+    logEvent("media", {
+      stage: "poster_master_deferred",
+      video: storageKey,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
@@ -76,7 +83,7 @@ export async function persistFileObject(data: FilePersistenceInput): Promise<Per
     });
 
     if (data.mimeType.startsWith("video/")) {
-      prewarmVideoPoster(storageKey);
+      await generatePosterMaster(storageKey);
     }
 
     return persistedMeta;

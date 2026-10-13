@@ -32,6 +32,8 @@ import { failClientDisconnected, failCode } from "@server/core/response";
 import { checkUserRateLimit } from "@server/core/ratelimit";
 import { logger } from "@server/core/logger";
 import type { ErrorCode } from "@server/core/errors/codes";
+import { MediaPoolBusyError } from "@server/services/storage/media-pool";
+import { failMediaBusy } from "../media-busy";
 
 export interface MediaEditContext<T> {
   /** 请求上下文（响应序列化、query 读取） */
@@ -45,8 +47,8 @@ export interface MediaEditContext<T> {
   userId: number;
   /** 客户端断开信号：向下游 ffmpeg 传导取消 */
   signal: AbortSignal;
-  /** 本次请求独享的临时目录，请求结束自动清理 */
-  tmpDir: string;
+  /** 本次请求独享的临时目录：首次调用时创建，请求结束自动清理；用不到临时文件的路由不会创建 */
+  tmpDir: () => Promise<string>;
 }
 
 export interface MediaEditRouteOptions<T> {
@@ -54,10 +56,17 @@ export interface MediaEditRouteOptions<T> {
   schema: ZodType<T>;
   /** 从请求体中取出源存储键 */
   resolveKey: (data: T) => string;
-  /** 临时目录前缀（路由名，避免并发请求互踩） */
+  /** 路由名：日志标签与临时目录前缀 */
   name: string;
   /** 处理失败（非取消/超时/缺 ffmpeg）的错误码 */
   failureCode: ErrorCode;
+  /**
+   * 路由是否落库新的文件对象（产出类编辑）。默认 true：受「每人 20 次/分钟」的
+   * 按用户限流约束——它限制的是单个用户每分钟产生的派生文件数量（存储增长），
+   * CPU 保护由媒体池负责。雪碧图 / 预览代理等只产出可缓存派生产物的路由为 false，
+   * 不计数（CPU 由重型池的个人与全局限额约束，specs/media-processing-concurrency.md 规则 5）。
+   */
+  persistsFileObject?: boolean;
   /** 路由特有的错误映射，返回 Response 时优先采用；返回 undefined 走默认映射 */
   mapError?: (err: unknown) => Response | undefined;
   run: (ctx: MediaEditContext<T>) => Promise<Response>;
@@ -79,6 +88,11 @@ export function mapMediaError(
 ): Response {
   const message = err instanceof Error ? err.message : String(err);
   const code = typeof err === "object" && err !== null && "code" in err ? err.code : undefined;
+
+  // 全局媒体池过载：全局阶段 503 media.busy，个人阶段 429 media.user_busy，与处理失败严格区分
+  if (err instanceof MediaPoolBusyError) {
+    return failMediaBusy(err.pool, err.scope);
+  }
 
   // 客户端断开：不记 error 级别，也无需向已断开的一端回复杂信息
   if ((err as Error).name === "AbortError") {
@@ -128,9 +142,16 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
     const auth = await authenticateRequest(request);
     if ("error" in auth) return auth.error;
 
-    // 按用户限流：每条都是 ffmpeg 重活，单用户 20 次/分钟（交互式点击远低于此）
-    if (!checkUserRateLimit("media-edit", auth.user.id, 20, 60)) {
-      return failCode(429, "common.rate_limited");
+    // 按用户限流（仅产出类编辑）：每条都落库新文件，单用户 20 次/分钟（交互式点击远低于此）；
+    // CPU 保护由媒体池负责，预览产物类路由不计数
+    if (opts.persistsFileObject !== false) {
+      const limitCheck = checkUserRateLimit("media-edit", auth.user.id, 20, 60);
+      if (!limitCheck.allowed) {
+        return failCode(429, "common.rate_limited", undefined, {
+          "Retry-After": String(limitCheck.retryAfterSeconds),
+          "Cache-Control": "no-store",
+        });
+      }
     }
 
     let body: unknown;
@@ -164,13 +185,15 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
       return failCode(404, "media.source_not_found");
     }
 
-    // 独立临时目录：UUID 避免并发请求互相踩踏临时文件
-    const tmpDir = path.resolve(
-      localStorage.baseDir,
-      "_tmp",
-      `${opts.name}_${process.pid}_${randomUUID()}`,
-    );
-    await fs.mkdir(tmpDir, { recursive: true });
+    // 请求独享的临时目录按需创建（UUID 避免并发请求互相踩踏临时文件）；
+    // 派生产物类路由（雪碧图 / 预览代理）由 ensureArtifact 自管临时文件，不会用到
+    const tmpDirPath = path.join(localStorage.tmpDir, `${opts.name}_${randomUUID()}`);
+    let tmpDirCreated = false;
+    const tmpDir = async () => {
+      await fs.mkdir(tmpDirPath, { recursive: true });
+      tmpDirCreated = true;
+      return tmpDirPath;
+    };
 
     try {
       return await opts.run({
@@ -191,9 +214,11 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
         failureCode: opts.failureCode,
       });
     } finally {
-      await fs.rm(tmpDir, { recursive: true, force: true }).catch((err: unknown) => {
-        logger.warn({ err, tmpDir }, `Failed to remove temp ${opts.name} dir`);
-      });
+      if (tmpDirCreated) {
+        await fs.rm(tmpDirPath, { recursive: true, force: true }).catch((err: unknown) => {
+          logger.warn({ err, tmpDir: tmpDirPath }, `Failed to remove temp ${opts.name} dir`);
+        });
+      }
     }
   };
 }

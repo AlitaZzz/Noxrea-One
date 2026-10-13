@@ -25,9 +25,10 @@ export class RateLimiter {
 
   /**
    * 检查是否允许通过。
-   * 返回 true 表示放行，false 表示被限流。
+   * 放行时返回 { allowed: true }；被限流时附带 retryAfterSeconds——窗口内最早一次
+   * 计数到期的剩余秒数（向上取整，至少 1），调用方据此回 429 + Retry-After。
    */
-  check(key: string): boolean {
+  check(key: string): { allowed: boolean; retryAfterSeconds?: number } {
     const now = Date.now();
     const cutoff = now - this.windowSeconds * 1000;
 
@@ -53,12 +54,16 @@ export class RateLimiter {
 
     // 检查是否超限
     if (entry.timestamps.length >= this.maxRequests) {
-      return false;
+      const oldest = entry.timestamps[0];
+      return {
+        allowed: false,
+        retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.windowSeconds * 1000 - now) / 1000)),
+      };
     }
 
     // 记录本次请求
     entry.timestamps.push(now);
-    return true;
+    return { allowed: true };
   }
 }
 
@@ -109,13 +114,13 @@ function getNamedRateLimiter(name: string, maxRequests: number, windowSeconds: n
 /**
  * 已登录接口的按用户限流：以「业务名 + userId」为键。
  * 已登录请求的调用方身份明确，无需走 IP 解析（IP 维度留给未鉴权的登录/注册）。
- * 返回 false 表示被限流，调用方应回 429。
+ * 被限流时返回 retryAfterSeconds，调用方回 429 + Retry-After。
  */
 export function checkUserRateLimit(
   name: string,
   userId: number,
   maxRequests: number,
   windowSeconds: number,
-): boolean {
+): { allowed: boolean; retryAfterSeconds?: number } {
   return getNamedRateLimiter(name, maxRequests, windowSeconds).check(`${name}:${userId}`);
 }

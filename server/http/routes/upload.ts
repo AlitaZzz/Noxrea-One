@@ -2,7 +2,7 @@
 import { Hono } from "hono";
 
 import { getSetting } from "@server/core/settings";
-import { ConcurrencyQueueFullError, waitForUserConcurrency } from "@server/core/ratelimit/concurrency";
+import { GateRejectedError, waitForUserConcurrency } from "@server/core/ratelimit/concurrency";
 import { failCode, failClientDisconnected, ok } from "@server/core/response";
 import { authenticateRequest, type AuthUser } from "@server/http/middleware/auth";
 import { uploadBodyLimit, uploadBodyStreamLimit, UploadBodyTooLargeError } from "@server/http/middleware/body-limit";
@@ -53,9 +53,13 @@ router.post(
         getSetting("upload.batch_max_pending"),
       );
     } catch (err) {
-      // 队列满立即 429（客户端按可重试退避）；仅客户端断开按 499 收口；其他异常重新抛出
-      if (err instanceof ConcurrencyQueueFullError) {
-        return failCode(429, "upload.too_many_pending", undefined, { "Retry-After": "1" });
+      // 按用户的门不设等待时限，过载只会是队列满：立即 429（客户端按可重试退避）；
+      // 仅客户端断开按 499 收口；其他异常重新抛出
+      if (err instanceof GateRejectedError) {
+        return failCode(429, "upload.too_many_pending", undefined, {
+          "Retry-After": "1",
+          "Cache-Control": "no-store",
+        });
       }
       if (!c.req.raw.signal.aborted) throw err;
       return failClientDisconnected("upload.cancelled");

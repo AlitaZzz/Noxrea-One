@@ -178,6 +178,10 @@ export const ERROR_CODES = [
   "media.ffmpeg_missing",
   /** 处理超时 */
   "media.timeout",
+  /** 媒体处理并发池过载（队列满或等待超时），稍后重试 */
+  "media.busy",
+  /** 该用户超出了自己的重型媒体处理名额（已有任务在运行 / 个人队列满） */
+  "media.user_busy",
 
   // ── 视频抽帧 ──
   /** 抽帧处理失败 */

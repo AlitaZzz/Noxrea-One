@@ -18,7 +18,7 @@ vi.mock("@server/http/routes/media-edit", () => ({
     const parsed = options.schema.safeParse(await c.req.json());
     if (!parsed.success) return c.json({ error: "invalid_request" }, 422);
     try {
-      return await options.run({ c, data: parsed.data, sourceKey: "1/test.mp4", sourcePath: "source.mp4", userId: 1, signal: c.req.raw.signal, tmpDir: "temp" });
+      return await options.run({ c, data: parsed.data, sourceKey: "1/test.mp4", sourcePath: "source.mp4", userId: 1, signal: c.req.raw.signal, tmpDir: async () => "temp" });
     } catch {
       return c.json({ error: "capture_failed" }, 500);
     }

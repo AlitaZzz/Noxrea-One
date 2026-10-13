@@ -1,12 +1,9 @@
 import { serve, type ServerType } from "@hono/node-server";
 import type { Server as HttpServer } from "node:http";
-import fs from "fs/promises";
-import path from "path";
 import { app } from "./app";
 import { closeAllSseConnections } from "./sse";
 import { getConfig } from "@server/core/config";
 import { logEvent } from "@server/core/logger/utils";
-import { localStorage } from "@server/services/storage/backends/local";
 
 let server: ServerType | null = null;
 
@@ -16,12 +13,6 @@ let server: ServerType | null = null;
  */
 export function startServer(): Promise<void> {
   const cfg = getConfig();
-
-  // 启动清扫 _tmp：临时产物只服务于「进行中的请求」，服务重启后全部作废。
-  // 崩溃 / 强杀留下的残留若不清会永久占据磁盘（各路由的 finally 清理只覆盖正常路径）
-  void fs.rm(path.join(localStorage.baseDir, "_tmp"), { recursive: true, force: true }).catch(
-    () => undefined,
-  );
 
   return new Promise((resolve) => {
     server = serve(

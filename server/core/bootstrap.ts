@@ -33,7 +33,22 @@ export async function bootstrap(): Promise<void> {
   initGateway();
   logEvent("bootstrap", { stage: "gateway_initialized" });
 
-  // 5. 存储引用 GC 循环（幂等，内部自带延迟首跑与异常兜底）
+  // 5. 清空存储临时目录：只剩上个进程进行中写入的残骸，必须在 HTTP 服务与 Worker 开始写入之前完成。
+  // 清理失败只多占磁盘、不影响正确性（临时文件名唯一），记录后继续启动
+  const { localStorage } = await import("@server/services/storage/backends/local");
+  try {
+    await localStorage.clearTmpDir();
+    logEvent("bootstrap", { stage: "storage_tmp_cleared" });
+  } catch (err) {
+    logEvent("bootstrap", {
+      level: "warn",
+      stage: "storage_tmp_clear_failed",
+      dir: localStorage.tmpDir,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // 6. 存储引用 GC 循环（幂等，内部自带延迟首跑与异常兜底）
   const { startStorageGc } = await import("@server/services/storage/gc");
   startStorageGc();
   logEvent("bootstrap", { stage: "storage_gc_scheduled" });

@@ -8,8 +8,9 @@ import path from "path";
 import fs from "fs/promises";
 import { z } from "zod";
 import type { FrameSelection } from "@noxrea/shared";
+import { throwIfAborted } from "@server/core/abort";
 import { logEvent } from "@server/core/logger/utils";
-import { runFfmpeg, runFfprobe, scanFfprobe } from "./ffmpeg";
+import { runFfmpegHeavy, runFfmpegLight, runFfprobe, scanFfprobe } from "./ffmpeg";
 
 /** ffmpeg 抽帧超时：子进程若挂起会持续持有视频文件句柄，必须兜底杀掉 */
 const FFMPEG_TIMEOUT_MS = 30_000;
@@ -82,7 +83,7 @@ export async function captureVideoFrame(
 ): Promise<number> {
   const deadline = performance.now() + FRAME_CAPTURE_BUDGET_MS;
   const remaining = () => {
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     const timeLeft = deadline - performance.now();
     if (timeLeft <= 0) throw new Error("Video frame capture timed out");
     return timeLeft;
@@ -94,7 +95,7 @@ export async function captureVideoFrame(
   const time = lastFrame ? lastFrame.time : selection.kind === "time" ? selection.seconds : 0;
   // FFmpeg seeks in microseconds. Round down to keep the selected frame within the seek range.
   const seekTime = lastFrame ? Math.max(0, Math.floor(time * 1e6) / 1e6) : time;
-  const { code, stderr } = await runFfmpeg(
+  const { code, stderr } = await runFfmpegLight(
     [
       "-nostdin", "-nostats",
       ...lastFrame ? ["-copyts"] : [],
@@ -154,6 +155,7 @@ export async function createFrameSprite(
   videoPath: string,
   outputPath: string,
   { count, cellWidth, duration }: FrameSpriteOptions,
+  owner: number,
   signal?: AbortSignal,
 ): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -163,7 +165,7 @@ export async function createFrameSprite(
   const fps = count / duration;
 
   const logFields = { video: path.basename(videoPath) };
-  const { code, stderr } = await runFfmpeg(
+  const { code, stderr } = await runFfmpegHeavy(
     [
       "-i", videoPath,
       // 只要画面：音轨对拼图没有意义，跳过能省掉一路解码
@@ -186,7 +188,7 @@ export async function createFrameSprite(
       outputPath,
     ],
     FFMPEG_SPRITE_TIMEOUT_MS,
-    { signal, stage: "frame_sprite", logFields }
+    { signal, stage: "frame_sprite", logFields, owner }
   );
 
   if (code !== 0) {
@@ -228,8 +230,9 @@ export async function createFrameSprite(
 export async function createScrubProxy(
   videoPath: string,
   outputPath: string,
-  width = 480,
-  fps: number | null = null,
+  width: number,
+  fps: number | null,
+  owner: number,
   signal?: AbortSignal,
 ): Promise<void> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -239,7 +242,7 @@ export async function createScrubProxy(
   const gop = Math.max(1, Math.round(fps && fps > 0 ? fps : FALLBACK_FPS));
 
   const logFields = { video: path.basename(videoPath) };
-  const { code, stderr } = await runFfmpeg(
+  const { code, stderr } = await runFfmpegHeavy(
     [
       "-i", videoPath,
       // 保留音轨：选帧时常要点开播放「边听边找」（口型、台词、卡点）。
@@ -257,7 +260,7 @@ export async function createScrubProxy(
       outputPath,
     ],
     FFMPEG_PROXY_TIMEOUT_MS,
-    { signal, stage: "video_proxy", logFields }
+    { signal, stage: "video_proxy", logFields, owner }
   );
 
   if (code !== 0) {

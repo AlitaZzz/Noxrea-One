@@ -1,98 +1,84 @@
 /**
- * 媒体缩放缓存（`_cache/<w>/`）。
- * 图片走 sharp 等比缩放，视频走 ffmpeg 抽首帧后缩放；共用「临时文件 + 原子
- * 替换 + withRetry」的缓存写入策略，缓存键由存储键与目标宽度派生。
+ * 媒体缩放缓存（`_cache/<w>/`）与视频海报母版（`_posters/`）。
+ * specs/media-processing-concurrency.md 业务规则 8：
+ * - 缩略图宽度只有 8 个档位，请求宽度向上取档，变体数有上限；
+ * - 图片从原图直接缩放（sharp 池），原图即母版；
+ * - 视频海报由每视频一份的高保真母版（ffmpeg 轻型池，落盘时生成）sharp 派生——
+ *   解码贵、缩放便宜，ffmpeg 每视频恰好执行一次，其余档位毫秒级派生。
+ * 生成受媒体池限流：媒体池过载抛 MediaPoolBusyError（不回退原图），其余失败返回 null。
  */
 
 import path from "path";
-import fs from "fs/promises";
 import { createReadStream, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
-import { randomUUID } from "crypto";
 import { localStorage } from "./backends/local";
 import { isPathWithinBase } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
-import { withRetry } from "./fs-utils";
-import { runFfmpeg } from "./ffmpeg";
+import { ensureArtifact } from "./artifact";
+import { runFfmpegLight } from "./ffmpeg";
+import { acquireMediaSlot, MediaPoolBusyError } from "./media-pool";
 
-/** 缩放宽度上限：避免 w 被传成极大值，导致 sharp 长时间占用内存与源文件句柄 */
-export const MAX_RESIZE_WIDTH = 2048;
+/** 缩略图宽度档位：全部来自前端调用点的实际宽度；1280 供视频节点海报（画布缩放 / retina） */
+export const RESIZE_WIDTH_TIERS = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
+
+/** 海报母版参数：代码常量（结构性参数，不做运行期设置）；变更后 POSTER_VERSION +1 整体重生成 */
+const POSTER_MASTER_MAX_WIDTH = 3840;
+const POSTER_MASTER_QUALITY = 90;
+const POSTER_VERSION = 1;
 
 /** ffmpeg 抽帧超时：子进程若挂起会持续持有视频文件句柄，必须兜底杀掉 */
 const FFMPEG_TIMEOUT_MS = 30_000;
 
-/** 收敛到合法区间：非数字 / 负值 / 超大值都不应放大成一次重型缩放任务 */
-function safeCacheWidth(width: number): number {
-  return Math.min(Math.max(1, Math.floor(width) || 1), MAX_RESIZE_WIDTH);
+/** 向上取档：请求宽度归一化到档位表（超过最大档一律最大档） */
+export function normalizeResizeWidth(width: number): number {
+  for (const tier of RESIZE_WIDTH_TIERS) {
+    if (width <= tier) return tier;
+  }
+  return RESIZE_WIDTH_TIERS[RESIZE_WIDTH_TIERS.length - 1];
 }
 
-/** 缓存命中判定：0 字节视为未命中——那是上次生成被打断留下的残骸，必须重新生成 */
-async function statFreshCache(cacheKey: string): Promise<boolean> {
-  const cached = await localStorage.stat(cacheKey);
-  if (cached && cached.size > 0) return true;
-  if (cached) await localStorage.delete(cacheKey).catch(() => undefined);
-  return false;
+function cacheKeyOf(storageKey: string, tier: number): string {
+  return `_cache/${tier}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
+}
+
+function posterMasterKey(storageKey: string): string {
+  return `_posters/v${POSTER_VERSION}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
+}
+
+function isWithinBase(storageKey: string): boolean {
+  // 存储层自带守卫：绝对路径 key（如 //etc/x.png、C:/x.png）不含 .. 段，
+  // 可绕过路由层的 .. 检查，而缩放在路由校验 full path 之前执行。
+  // isPathWithinBase 只接受绝对路径入参（相对路径会按 cwd 解析），必须先 resolve
+  return isPathWithinBase(
+    localStorage.baseDir,
+    path.resolve(localStorage.baseDir, storageKey)
+  );
 }
 
 /**
- * 图片等比缩放 WebP 缓存
- * sharp 缩放缓存
+ * 图片等比缩放 WebP 缓存（sharp，原图即母版）。
+ * 过载（MediaPoolBusyError）向上抛出，其余失败静默为 null——两条路径必须可区分，
+ * 路由层据此返回 503 而不是回退原图。
  */
 export async function getResizedWebP(
   storageKey: string,
   width: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  // 存储层自带守卫：绝对路径 key（如 //etc/x.png、C:/x.png）不含 .. 段，
-  // 可绕过路由层的 .. 检查，而缩放在路由校验 full path 之前执行。
-  // isPathWithinBase 只接受绝对路径入参（相对路径会按 cwd 解析），必须先 resolve
-  if (
-    !isPathWithinBase(
-      localStorage.baseDir,
-      path.resolve(localStorage.baseDir, storageKey)
-    )
-  ) {
-    return null;
-  }
+  if (!isWithinBase(storageKey)) return null;
 
-  const safeWidth = safeCacheWidth(width);
-  const cacheKey = `_cache/${safeWidth}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
-  if (await statFreshCache(cacheKey)) return cacheKey;
+  const tier = normalizeResizeWidth(width);
+  const cacheKey = cacheKeyOf(storageKey, tier);
 
   try {
-    const sharp = (await import("sharp")).default;
-
-    // 用 localStorage 的 baseDir 统一路径
-    const cachePath = path.resolve(localStorage.baseDir, cacheKey);
-    const sourcePath = path.resolve(localStorage.baseDir, storageKey);
-
-    await fs.mkdir(path.dirname(cachePath), { recursive: true });
-
-    // 先写临时文件再原子替换，避免并发请求读到尚未写完的 webp
-    const tmpPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
-
-    try {
-      // 源文件句柄交给 Node 的 createReadStream 持有，而不是让 sharp 自行按路径打开：
-      // sharp/libvips 的 native 句柄不受 Node 流体系管辖，中断时无法及时释放，
-      // 会把源文件锁住，导致同 hash 文件再次上传时 writeFile/rename 失败。
-      // 传入 signal 后，客户端断开会立即销毁流并释放句柄。
-      await pipeline(
-        createReadStream(sourcePath, signal ? { signal } : undefined),
-        sharp()
-          .resize(safeWidth, undefined, { fit: "inside", withoutEnlargement: true })
-          .webp({ quality: 75 }),
-        createWriteStream(tmpPath),
-      );
-
-      await withRetry(() => fs.rename(tmpPath, cachePath), { retries: 4 });
-    } finally {
-      await fs.rm(tmpPath, { force: true }).catch(() => undefined);
-    }
-
-    logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width: safeWidth });
-
+    await ensureArtifact({
+      key: cacheKey,
+      signal,
+      produce: (tmpPath, genSignal) => produceImageWebP(storageKey, tmpPath, tier, genSignal),
+    });
     return cacheKey;
   } catch (err: unknown) {
+    if (err instanceof MediaPoolBusyError) throw err;
     // sharp 不可用或转换失败时静默返回 null（含客户端中断导致的 AbortError）
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== "ENOENT" && (err as Error).name !== "AbortError") {
@@ -103,48 +89,29 @@ export async function getResizedWebP(
 }
 
 /**
- * 视频缩略图（海报帧）惰性生成 + 磁盘缓存。
- * 与图片 getResizedWebP 共用 `_cache/<w>/` 目录与「临时文件 + 原子替换」策略：
- * 客户端请求 /api/files/<video>?w=200 时按需用 ffmpeg 抽第一帧并缩放为 webp。
+ * 视频海报缩略图（档位派生 + 磁盘缓存）。
+ * 与图片共用 `_cache/<w>/` 目录；ffmpeg 只在母版缺失时执行一次（轻型池），
+ * 档位一律由 sharp 从母版派生（sharp 池）。
  */
 export async function getVideoPosterWebP(
   storageKey: string,
   width: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  if (
-    !isPathWithinBase(
-      localStorage.baseDir,
-      path.resolve(localStorage.baseDir, storageKey)
-    )
-  ) {
-    return null;
-  }
+  if (!isWithinBase(storageKey)) return null;
 
-  const safeWidth = safeCacheWidth(width);
-  const cacheKey = `_cache/${safeWidth}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
-  if (await statFreshCache(cacheKey)) return cacheKey;
+  const tier = normalizeResizeWidth(width);
+  const cacheKey = cacheKeyOf(storageKey, tier);
 
   try {
-    const cachePath = path.resolve(localStorage.baseDir, cacheKey);
-    const sourcePath = path.resolve(localStorage.baseDir, storageKey);
-
-    await fs.mkdir(path.dirname(cachePath), { recursive: true });
-
-    // 先写临时文件再原子替换，避免并发请求读到尚未写完的 webp
-    const tmpPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
-
-    try {
-      await captureVideoPoster(sourcePath, tmpPath, safeWidth, signal);
-      await withRetry(() => fs.rename(tmpPath, cachePath), { retries: 4 });
-    } finally {
-      await fs.rm(tmpPath, { force: true }).catch(() => undefined);
-    }
-
-    logEvent("media", { level: "debug", stage: "video_poster_cache", key: storageKey, width: safeWidth });
-
+    await ensureArtifact({
+      key: cacheKey,
+      signal,
+      produce: (tmpPath, genSignal) => producePosterTier(storageKey, tmpPath, tier, genSignal),
+    });
     return cacheKey;
   } catch (err: unknown) {
+    if (err instanceof MediaPoolBusyError) throw err;
     const code = (err as NodeJS.ErrnoException).code;
     if (code !== "ENOENT" && (err as Error).name !== "AbortError") {
       logEvent("media", { stage: "video_poster_failed", key: storageKey, error: (err as Error).message });
@@ -154,35 +121,49 @@ export async function getVideoPosterWebP(
 }
 
 /**
- * ffmpeg 抽第一帧并等比缩放到目标宽度，一步输出 webp。
- * -ss 0 取第一帧（seek 开销最小）；scale 用 min() 避免小图被放大。
+ * 确保视频海报母版已生成（落盘时由 persist.ts 调用；档位派生前也经此补齐）。
+ * 失败向上抛出：persist 层吞掉记日志（不阻塞落盘），档位派生层向上传播。
  */
-async function captureVideoPoster(
-  videoPath: string,
-  outputPath: string,
-  width: number,
-  signal?: AbortSignal
-): Promise<void> {
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+export async function ensureVideoMasterPoster(storageKey: string): Promise<void> {
+  if (!isWithinBase(storageKey)) {
+    throw new Error(`Poster master key escapes storage base: ${storageKey}`);
+  }
+  await ensureArtifact({
+    key: posterMasterKey(storageKey),
+    produce: (tmpPath, genSignal) => producePosterMaster(storageKey, tmpPath, genSignal),
+  });
+}
 
-  const logFields = { video: path.basename(videoPath) };
-  const { code, stderr } = await runFfmpeg(
+/**
+ * ffmpeg 抽首帧产出高保真母版（轻型池，由 runFfmpegLight 获取）。
+ * 宽度 min(源宽, 3840)：解码一次覆盖全部现在与未来的档位。
+ * -ss 0 取第一帧（seek 开销最小）；scale 用 min() 避免小源被放大。
+ */
+async function producePosterMaster(
+  storageKey: string,
+  outputPath: string,
+  signal: AbortSignal
+): Promise<void> {
+  const sourcePath = path.resolve(localStorage.baseDir, storageKey);
+  const logFields = { video: path.basename(sourcePath) };
+  const { code, stderr } = await runFfmpegLight(
     [
       "-ss", "0",
-      "-i", videoPath,
+      "-i", sourcePath,
       "-frames:v", "1",
-      "-vf", `scale='min(${width},iw)':-2`,
-      "-f", "webp",
+      "-vf", `scale='min(${POSTER_MASTER_MAX_WIDTH},iw)':-2`,
+      "-c:v", "libwebp",
+      "-quality", String(POSTER_MASTER_QUALITY),
       "-y",
       outputPath,
     ],
     FFMPEG_TIMEOUT_MS,
-    { signal, stage: "video_poster", logFields }
+    { signal, stage: "poster_master", logFields }
   );
 
   if (code !== 0) {
     logEvent("media", {
-      stage: "video_poster_capture_failed",
+      stage: "poster_master_failed",
       exitCode: code,
       stderr: stderr.slice(-200),
       ...logFields,
@@ -190,5 +171,70 @@ async function captureVideoPoster(
     throw new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`);
   }
 
-  logEvent("media", { stage: "video_poster" });
+  logEvent("media", { stage: "poster_master", ...logFields });
+}
+
+/** 档位派生：先确保母版存在（必要时 ffmpeg 一次），再由 sharp 从母版缩放 */
+async function producePosterTier(
+  storageKey: string,
+  tmpPath: string,
+  tier: number,
+  signal: AbortSignal
+): Promise<void> {
+  const masterKey = posterMasterKey(storageKey);
+  await ensureArtifact({
+    key: masterKey,
+    signal,
+    produce: (tmpPath, genSignal) => producePosterMaster(storageKey, tmpPath, genSignal),
+  });
+
+  const masterPath = path.resolve(localStorage.baseDir, masterKey);
+  const sharp = (await import("sharp")).default;
+
+  const releaseSlot = await acquireMediaSlot("sharp", signal);
+  try {
+    // 源文件句柄交给 Node 的 createReadStream 持有（理由同 produceImageWebP）；
+    // withoutEnlargement：小源视频的大档位不放大，实际宽度 = 源宽
+    await pipeline(
+      createReadStream(masterPath, { signal }),
+      sharp()
+        .resize(tier, undefined, { fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 75 }),
+      createWriteStream(tmpPath),
+    );
+  } finally {
+    releaseSlot();
+  }
+
+  logEvent("media", { level: "debug", stage: "video_poster_tier", key: storageKey, width: tier });
+}
+
+/** sharp 缩放：占 sharp 池一个槽位，管线结束 / 失败后释放 */
+async function produceImageWebP(
+  storageKey: string,
+  tmpPath: string,
+  tier: number,
+  signal: AbortSignal,
+): Promise<void> {
+  const sharp = (await import("sharp")).default;
+  const sourcePath = path.resolve(localStorage.baseDir, storageKey);
+
+  const releaseSlot = await acquireMediaSlot("sharp", signal);
+  try {
+    // 源文件句柄交给 Node 的 createReadStream 持有，而不是让 sharp 自行按路径打开：
+    // sharp/libvips 的 native 句柄不受 Node 流体系管辖，中断时无法及时释放，
+    // 会把源文件锁住，导致同 hash 文件再次上传时 writeFile/rename 失败。
+    // 传入 signal 后，生成被取消时会立即销毁流并释放句柄。
+    await pipeline(
+      createReadStream(sourcePath, { signal }),
+      sharp()
+        .resize(tier, undefined, { fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 75 }),
+      createWriteStream(tmpPath),
+    );
+  } finally {
+    releaseSlot();
+  }
+
+  logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width: tier });
 }

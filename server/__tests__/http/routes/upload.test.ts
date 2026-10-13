@@ -37,6 +37,7 @@ vi.mock("@server/services/storage/media-probe", () => ({
 }));
 
 import { router } from "@server/http/routes/upload";
+import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 import { resetTestSettings } from "../../helpers/settings";
 
 const MB = 1024 * 1024;
@@ -312,12 +313,27 @@ describe("POST /api/files/upload 体积校验", () => {
     const next = router.request("/api/files/upload", { method: "POST", body: imageForm });
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(mocks.probeIntegrity.mock.calls[0][2]).toBe(1500);
+    expect(mocks.probeIntegrity.mock.calls[0][2]).toEqual({ timeoutMs: 1500, owner: 202 });
     finish({ truncated: true, decodableDuration: 5 });
     const res = await video;
     const body = (await res.json()) as { data: { items: Array<{ data?: { media_warning?: unknown } }> } };
     expect(body.data.items[0].data?.media_warning).toEqual({ declared: 10, decodable: 5 });
     expect((await next).status).toBe(200);
     expect(mocks.save).toHaveBeenCalledTimes(2);
+  });
+
+  it("视频体检遇媒体池过载时跳过体检，上传仍成功且无截断提示", async () => {
+    mocks.authenticate.mockResolvedValue({ user: { id: 203 } });
+    mocks.probeMeta.mockResolvedValue({ duration: 10 });
+    mocks.probeIntegrity.mockRejectedValue(new MediaPoolBusyError("ffmpeg_heavy", "global", "queue_full"));
+    const form = new FormData();
+    form.append("file", new File([new Uint8Array([1])], "video.mp4", { type: "video/mp4" }));
+
+    const res = await router.request("/api/files/upload", { method: "POST", body: form });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { items: Array<{ ok: boolean; data?: { media_warning?: unknown } }> } };
+    expect(body.data.items[0].ok).toBe(true);
+    expect(body.data.items[0].data?.media_warning).toBeUndefined();
   });
 });

@@ -21,9 +21,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { createScrubProxy } from "@server/services/storage/video-frames";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
+import { ensureArtifact } from "@server/services/storage/artifact";
 import { localStorage } from "@server/services/storage/backends/local";
-import { ok, failCode } from "@server/core/response";
-import { logger } from "@server/core/logger";
+import { ok } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
 import path from "path";
 import fs from "fs/promises";
@@ -38,8 +38,6 @@ const videoProxySchema = z.object({
 const PROXY_WIDTH = 480;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
 const PROXY_VERSION = 3;
-/** 正在生成的代理：同一视频的并发请求共用一次转码 */
-const inflight = new Map<string, Promise<void>>();
 /** 清理扫描的最小间隔：避免每次请求都遍历目录 */
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 /** 代理存活时间：过期后删除，下次打开面板会自动重建 */
@@ -67,32 +65,6 @@ async function cleanupStaleProxies(baseDir: string): Promise<void> {
   }
 }
 
-/** 转码到临时文件后原子改名；失败时清掉临时文件 */
-async function generateProxy(
-  videoPath: string,
-  tmpPath: string,
-  proxyPath: string,
-  width: number,
-  fps: number | null,
-  signal?: AbortSignal,
-): Promise<void> {
-  let renamed = false;
-  try {
-    await createScrubProxy(videoPath, tmpPath, width, fps, signal);
-    await fs.mkdir(path.dirname(proxyPath), { recursive: true });
-    await fs.rename(tmpPath, proxyPath);
-    renamed = true;
-  } finally {
-    // 改名成功后临时文件已随之消失，只有失败路径才需要清理；
-    // force 兜住「根本没生成出来」的情况，避免又刷一条 ENOENT 警告
-    if (!renamed) {
-      await fs.rm(tmpPath, { force: true }).catch((err: unknown) => {
-        logger.warn({ err, tmpPath }, "Failed to remove temp proxy file");
-      });
-    }
-  }
-}
-
 /** 读取代理文件的真实时长（探一次后进缓存）；拿不到返回 null */
 async function proxyDurationOf(proxyPath: string): Promise<number | null> {
   return (await probeVideoMetaCached(proxyPath))?.duration ?? null;
@@ -107,7 +79,10 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "proxy",
     failureCode: "video_proxy.generation_failed",
-    async run({ c, sourceKey, sourcePath, tmpDir, signal }) {
+    // 只产出可缓存的派生产物，不落库新文件：不计数（限流保护的是存储增长），
+    // 重型开销由媒体池的个人与全局限额约束
+    persistsFileObject: false,
+    async run({ c, sourceKey, sourcePath, userId, signal }) {
       const baseDir = path.resolve(localStorage.baseDir);
 
       // 帧率与分辨率：读取容器信息，开销可忽略。
@@ -127,35 +102,12 @@ router.post(
       // 顺带做一次低频清理，不阻塞本次请求
       void cleanupStaleProxies(baseDir);
 
-      try {
-        await fs.access(proxyPath);
-        return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
-      } catch {
-        // 未生成，继续往下走
-      }
-
-      // 同一代理正在生成：复用那次转码，避免并发各跑一个 ffmpeg
-      const pending = inflight.get(proxyKey);
-      if (pending) {
-        await pending.catch(() => {});
-        try {
-          await fs.access(proxyPath);
-          return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: true }));
-        } catch {
-          return failCode(500, "video_proxy.generation_failed");
-        }
-      }
-
-      const tmpPath = path.join(tmpDir, "proxy.mp4");
-      const task = generateProxy(sourcePath, tmpPath, proxyPath, width, fps, signal);
-      inflight.set(proxyKey, task);
-
-      try {
-        await task;
-        return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath), cached: false }));
-      } finally {
-        inflight.delete(proxyKey);
-      }
+      await ensureArtifact({
+        key: proxyKey,
+        signal,
+        produce: (tmpPath, genSignal) => createScrubProxy(sourcePath, tmpPath, width, fps, userId, genSignal),
+      });
+      return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath) }));
     },
   }),
 );

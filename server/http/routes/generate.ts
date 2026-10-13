@@ -49,8 +49,12 @@ router.post("/api/generate/task", async (c) => {
   if ("error" in auth) return auth.error;
 
   // 按用户限流：每个任务都占用 worker 与上游配额，单用户 20 次/分钟
-  if (!checkUserRateLimit("generate", auth.user.id, 20, 60)) {
-    return failCode(429, "common.rate_limited");
+  const generateCheck = checkUserRateLimit("generate", auth.user.id, 20, 60);
+  if (!generateCheck.allowed) {
+    return failCode(429, "common.rate_limited", undefined, {
+      "Retry-After": String(generateCheck.retryAfterSeconds),
+      "Cache-Control": "no-store",
+    });
   }
 
   let body: unknown;

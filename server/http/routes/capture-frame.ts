@@ -11,6 +11,7 @@ import { probeImageMeta } from "@server/services/storage/media-probe";
 import { ok } from "@server/core/response";
 import { createMediaEditRoute, persistDerived } from "./media-edit";
 import { mimeByExt } from "@server/services/storage/mime";
+import { throwIfAborted } from "@server/core/abort";
 import { randomUUID } from "crypto";
 
 const captureFrameSchema = z.object({
@@ -29,12 +30,12 @@ router.post(
     failureCode: "capture_frame.capture_failed",
     async run({ c, data, sourcePath, userId, signal, tmpDir }) {
       // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错
-      const tmpFramePath = path.join(tmpDir, `frame_${randomUUID()}.jpg`);
+      const tmpFramePath = path.join(await tmpDir(), `frame_${randomUUID()}.jpg`);
       const time = await captureVideoFrame(sourcePath, tmpFramePath, data.selection, signal);
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       const dimensions = await probeImageMeta(tmpFramePath);
       if (!dimensions) throw new Error("Captured frame dimensions unavailable");
-      signal.throwIfAborted();
+      throwIfAborted(signal);
 
       // 产物落盘走工厂统一通道（流式哈希 + copyFile 落盘 + 文件对象登记，不整帧进内存）；
       // ffmpeg 抽帧产物恒为 JPEG，扩展名/MIME 定档不再嗅探

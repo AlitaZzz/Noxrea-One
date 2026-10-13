@@ -6,7 +6,7 @@
 import path from "path";
 import fs from "fs/promises";
 import { logEvent } from "@server/core/logger/utils";
-import { runFfmpeg } from "./ffmpeg";
+import { runFfmpegHeavy, runFfmpegLight } from "./ffmpeg";
 
 /** 音视频分离超时：即便 copy 也要完整读一遍长视频，抽帧的 30s 兜不住 */
 const FFMPEG_AUDIO_TIMEOUT_MS = 120_000;
@@ -59,8 +59,8 @@ function exitError(code: number, stderr: string): Error {
  * 从视频中分离音轨（无损优先）。
  *
  * 阶段一 `-acodec copy`：只换容器不解码。绝大多数视频音轨是 AAC，
- * 可直接封装进 MP4 容器，比特级无损且耗时近乎为零。
- * 阶段二（回退）：源编码装不进 MP4 容器时（Opus / Vorbis / PCM）重编码为 PCM wav。
+ * 可直接封装进 MP4 容器，比特级无损且耗时近乎为零（轻型池）。
+ * 阶段二（回退，重型池）：源编码装不进 MP4 容器时（Opus / Vorbis / PCM）重编码为 PCM wav。
  *
  * 源视频不含音频流时抛 NoAudioTrackError。
  */
@@ -68,6 +68,7 @@ export async function extractAudioTrack(
   videoPath: string,
   outputDir: string,
   baseName: string,
+  owner: number,
   signal?: AbortSignal,
 ): Promise<ExtractedAudio> {
   await fs.mkdir(outputDir, { recursive: true });
@@ -76,7 +77,7 @@ export async function extractAudioTrack(
   const copyPath = path.join(outputDir, `${baseName}${AUDIO_OUTPUT_FORMATS.copy.ext}`);
   const wavPath = path.join(outputDir, `${baseName}${AUDIO_OUTPUT_FORMATS.wav.ext}`);
 
-  const copy = await runFfmpeg(
+  const copy = await runFfmpegLight(
     ["-i", videoPath, "-vn", "-map", "a:0", "-acodec", "copy", "-f", "mp4", "-y", copyPath],
     FFMPEG_AUDIO_TIMEOUT_MS,
     { signal, stage: "audio_extract", logFields }
@@ -94,14 +95,14 @@ export async function extractAudioTrack(
   }
   await fs.rm(copyPath, { force: true }).catch(() => undefined);
 
-  const wav = await runFfmpeg(
+  const wav = await runFfmpegHeavy(
     [
       "-i", videoPath, "-vn", "-map", "a:0",
       "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
       "-f", "wav", "-y", wavPath,
     ],
     FFMPEG_AUDIO_TIMEOUT_MS,
-    { signal, stage: "audio_extract_wav", logFields }
+    { signal, stage: "audio_extract_wav", logFields, owner }
   );
 
   if (wav.code !== 0) {
@@ -138,7 +139,7 @@ export async function extractMutedVideo(
   args.push("-y", outputPath);
 
   const logFields = { video: path.basename(videoPath) };
-  const run = await runFfmpeg(args, FFMPEG_AUDIO_TIMEOUT_MS, { signal, stage: "muted_video_extract", logFields });
+  const run = await runFfmpegLight(args, FFMPEG_AUDIO_TIMEOUT_MS, { signal, stage: "muted_video_extract", logFields });
   if (run.code !== 0) {
     logEvent("media", {
       stage: "muted_video_extract_failed",
@@ -174,6 +175,7 @@ export async function extractVideoClip(
   videoPath: string,
   outputPath: string,
   range: { start: number; end: number },
+  owner: number,
   signal?: AbortSignal,
 ): Promise<ExtractedClip> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -183,7 +185,7 @@ export async function extractVideoClip(
   const duration = Math.max(0, range.end - start);
 
   const logFields = { video: path.basename(videoPath) };
-  const run = await runFfmpeg(
+  const run = await runFfmpegHeavy(
     [
       "-ss", start.toFixed(3), "-i", videoPath, "-t", duration.toFixed(3),
       "-map", "0:v:0", "-map", "0:a:0?",
@@ -193,7 +195,7 @@ export async function extractVideoClip(
       "-y", outputPath,
     ],
     FFMPEG_CLIP_TIMEOUT_MS,
-    { signal, stage: "clip_extract", logFields }
+    { signal, stage: "clip_extract", logFields, owner }
   );
 
   if (run.code !== 0) {
@@ -236,7 +238,7 @@ export async function extractAudioClip(
   const duration = Math.max(0, range.end - start);
 
   const logFields = { audio: path.basename(audioPath) };
-  const run = await runFfmpeg(
+  const run = await runFfmpegLight(
     [
       "-ss", start.toFixed(3), "-i", audioPath, "-t", duration.toFixed(3),
       "-map", "0:a:0",
@@ -278,6 +280,7 @@ export async function changeAudioSpeed(
   audioPath: string,
   outputPath: string,
   speed: number,
+  owner: number,
   signal?: AbortSignal,
 ): Promise<{ path: string }> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -295,7 +298,7 @@ export async function changeAudioSpeed(
   filters.push(`atempo=${remaining.toFixed(6)}`);
 
   const logFields = { audio: path.basename(audioPath) };
-  const run = await runFfmpeg(
+  const run = await runFfmpegHeavy(
     [
       "-i", audioPath, "-map", "0:a:0",
       "-af", filters.join(","),
@@ -303,7 +306,7 @@ export async function changeAudioSpeed(
       "-y", outputPath,
     ],
     FFMPEG_CLIP_TIMEOUT_MS,
-    { signal, stage: "audio_speed", logFields: { ...logFields, speed } }
+    { signal, stage: "audio_speed", logFields: { ...logFields, speed }, owner }
   );
 
   if (run.code !== 0) {
@@ -338,13 +341,14 @@ export async function cropVideoRegion(
   videoPath: string,
   outputPath: string,
   rect: { x: number; y: number; width: number; height: number },
+  owner: number,
   signal?: AbortSignal,
 ): Promise<ExtractedClip> {
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const { width, height, x, y } = rect;
   const logFields = { video: path.basename(videoPath) };
-  const run = await runFfmpeg(
+  const run = await runFfmpegHeavy(
     [
       "-i", videoPath,
       "-vf", `crop=${width}:${height}:${x}:${y}`,
@@ -355,7 +359,7 @@ export async function cropVideoRegion(
       "-y", outputPath,
     ],
     FFMPEG_CLIP_TIMEOUT_MS,
-    { signal, stage: "crop_video", logFields }
+    { signal, stage: "crop_video", logFields, owner }
   );
 
   if (run.code !== 0) {

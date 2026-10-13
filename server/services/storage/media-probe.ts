@@ -7,7 +7,8 @@
 import path from "path";
 import { localStorage } from "./backends/local";
 import { isPathWithinBase } from "@server/core/paths";
-import { probeFfmpeg } from "./ffmpeg";
+import { probeFfmpeg, probeFfmpegDecode } from "./ffmpeg";
+import { runSingleFlight } from "./media-singleflight";
 
 /**
  * 探测图片文件的真实宽高：sharp 只读元数据头，不解码整图像素，开销极小。
@@ -206,16 +207,36 @@ const integrityCache = new Map<string, VideoIntegrity>();
 export async function probeVideoIntegrity(
   videoPath: string,
   declaredDuration: number,
-  timeoutMs: number = FFMPEG_INTEGRITY_TIMEOUT_MS,
+  { owner, timeoutMs = FFMPEG_INTEGRITY_TIMEOUT_MS, signal }: {
+    owner: number;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  },
 ): Promise<VideoIntegrity> {
   const cached = integrityCache.get(videoPath);
   if (cached) return cached;
 
+  // 同一视频的并发首次问询（雪碧图 / 上传体检）共用一次全量解码；
+  // 超时预算并入键：短预算被杀不写缓存，不能与全预算的结果互相复用
+  return runSingleFlight({
+    key: `integrity|${videoPath}|${timeoutMs}`,
+    signal,
+    generate: (genSignal) => decodeIntegrity(videoPath, declaredDuration, timeoutMs, owner, genSignal),
+  });
+}
+
+async function decodeIntegrity(
+  videoPath: string,
+  declaredDuration: number,
+  timeoutMs: number,
+  owner: number,
+  signal: AbortSignal,
+): Promise<VideoIntegrity> {
   // 只要视频流：截断影响的是帧数据，音轨解码对判定没有意义还拖慢速度
-  const { stderr, killed, spawnFailed } = await probeFfmpeg(
+  const { stderr, killed, spawnFailed } = await probeFfmpegDecode(
     ["-i", videoPath, "-an", "-sn", "-dn", "-f", "null", "-"],
     timeoutMs,
-    { stage: "video_integrity" }
+    { stage: "video_integrity", signal, owner }
   );
 
   // 超时被杀（progress 停点不代表文件边界）或进程未启动：无法判定。

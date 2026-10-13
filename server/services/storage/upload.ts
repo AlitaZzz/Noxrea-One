@@ -10,6 +10,7 @@ import type { ErrorCode } from "@server/core/errors/codes";
 import { logEvent } from "@server/core/logger/utils";
 import { computeBufferHash } from "./hash";
 import { sniffMime, normalizeExt, mimeByExt } from "./mime";
+import { MediaPoolBusyError } from "./media-pool";
 import { probeVideoIntegrity, probeVideoMetaCached } from "./media-probe";
 import { persistFileObject } from "./persist";
 import { buildStorageKey } from "./service";
@@ -101,18 +102,19 @@ function isXmlContent(buffer: Buffer): boolean {
  * 视频上传体检：标称时长 vs 实际可解码时长。
  * 完整探测必须在当前批次返回前结束，确保并发租约覆盖整个媒体处理成本。
  */
-async function probeUploadVideo(storageKey: string): Promise<UploadSuccess["media_warning"] | undefined> {
+async function probeUploadVideo(storageKey: string, owner: number): Promise<UploadSuccess["media_warning"] | undefined> {
   const absPath = path.resolve(localStorage.baseDir, storageKey);
   try {
     const meta = await probeVideoMetaCached(absPath);
     if (!meta?.duration) return undefined;
-    const integrity = await probeVideoIntegrity(absPath, meta.duration, UPLOAD_VIDEO_PROBE_TIMEOUT_MS);
+    const integrity = await probeVideoIntegrity(absPath, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
     if (!integrity.truncated || !integrity.decodableDuration) return undefined;
     const warning = { declared: meta.duration, decodable: integrity.decodableDuration };
     logEvent("media", { stage: "upload_truncated", video: storageKey, ...warning });
     return warning;
   } catch (err: unknown) {
-    logger.debug({ err, video: storageKey }, "upload probe failed");
+    // 体检是 best-effort：媒体池过载（池已记录拒绝）按「无法体检」跳过，不使上传失败
+    if (!(err instanceof MediaPoolBusyError)) logger.debug({ err, video: storageKey }, "upload probe failed");
     return undefined;
   }
 }
@@ -165,7 +167,7 @@ async function processFile(
 
     let mediaWarning: UploadSuccess["media_warning"];
     if (/\.(mp4|webm|mov|mkv|m4v|avi|mpg|mpeg)$/i.test(finalExt)) {
-      mediaWarning = await probeUploadVideo(storageKey);
+      mediaWarning = await probeUploadVideo(storageKey, userId);
     }
 
     return {

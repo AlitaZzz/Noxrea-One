@@ -52,7 +52,7 @@ router.post(
 
       const clip = await extractAudioClip(
         sourcePath,
-        path.join(tmpDir, `clip${ext}`),
+        path.join(await tmpDir(), `clip${ext}`),
         { start: data.start, end: data.end },
         signal,
       );

@@ -1,6 +1,6 @@
 # System Settings DB
 
-状态：已确认（用户 2026-10-12 确认）
+状态：待确认（2026-10-13 新增「定时器类时长上限」规则，见待确认事项；此前版本已由用户于 2026-10-12 确认）
 
 ## 目标
 
@@ -44,23 +44,23 @@
 | `UPLOAD_BATCH_MAX_FILES` | `upload.batch_max_files` | int | `20` | |
 | `UPLOAD_BATCH_MAX_CONCURRENT` | `upload.batch_max_concurrent` | int | `1` | |
 | `UPLOAD_BATCH_MAX_PENDING` | `upload.batch_max_pending` | int | `10` | |
-| `WORKER_POLL_INTERVAL` | `worker.poll_interval_seconds` | int 秒 | `1` | 重命名：键名带单位 |
+| `WORKER_POLL_INTERVAL` | `worker.poll_interval_seconds` | int 秒（定时器） | `1` | 重命名：键名带单位 |
 | `WORKER_MAX_CONCURRENCY` | `worker.max_concurrency` | int | `10` | |
-| `WORKER_API_TIMEOUT` | `worker.api_timeout_seconds` | int 秒 | `240` | 同步生成 / Agent 补全的总超时 |
+| `WORKER_API_TIMEOUT` | `worker.api_timeout_seconds` | int 秒（定时器） | `240` | 同步生成 / Agent 补全的总超时 |
 | `WORKER_STUCK_TIMEOUT` | `worker.stuck_timeout_minutes` | int 分钟 | `15` | 单位与其他 Worker 项不同（分钟），键名显式带单位 |
 | `WORKER_ZOMBIE_INTERVAL` | `worker.zombie_scan_interval_seconds` | int 秒 | `60` | |
 | `WORKER_MAX_RETRIES` | `worker.max_retries` | int ≥0 | `2` | |
-| `WORKER_DRAIN_TIMEOUT` | `worker.drain_timeout_seconds` | int 秒 | `15` | |
-| `WORKER_POLL_CHECK_INTERVAL` | `worker.poll_check_interval_ms` | int 毫秒 | `200` | 现单位为毫秒（`loop.ts` 直接传入） |
-| `WORKER_ASYNC_POLL_INTERVAL` | `worker.async_poll_interval_seconds` | number 秒 | `3.0` | |
+| `WORKER_DRAIN_TIMEOUT` | `worker.drain_timeout_seconds` | int 秒（定时器） | `15` | |
+| `WORKER_POLL_CHECK_INTERVAL` | `worker.poll_check_interval_ms` | int 毫秒（定时器） | `200` | 现单位为毫秒（`loop.ts` 直接传入） |
+| `WORKER_ASYNC_POLL_INTERVAL` | `worker.async_poll_interval_seconds` | number 秒（定时器） | `3.0` | |
 | `WORKER_ASYNC_POLL_MAX_ATTEMPTS` | `worker.async_poll_max_attempts` | int | `120` | |
-| `WORKER_ASYNC_POLL_INITIAL_DELAY` | `worker.async_poll_initial_delay_seconds` | number 秒 | `0.5` | |
-| `HTTP_TIMEOUT_DL` | `http.download_timeout_seconds` | number 秒 | `45` | |
-| `HTTP_TIMEOUT_POLL` | `http.poll_timeout_seconds` | number 秒 | `15` | |
-| `HTTP_TIMEOUT_API` | `http.api_timeout_seconds` | number 秒 | `120` | |
+| `WORKER_ASYNC_POLL_INITIAL_DELAY` | `worker.async_poll_initial_delay_seconds` | number 秒（定时器） | `0.5` | |
+| `HTTP_TIMEOUT_DL` | `http.download_timeout_seconds` | number 秒（定时器） | `45` | |
+| `HTTP_TIMEOUT_POLL` | `http.poll_timeout_seconds` | number 秒（定时器） | `15` | |
+| `HTTP_TIMEOUT_API` | `http.api_timeout_seconds` | number 秒（定时器） | `120` | |
 | `HTTP_TIMEOUT_ASYNC` | （删除，不落库） | | | 死配置，随本次一并清理：移除 `HttpTimeoutScene` 的 `"async"` 成员、`getSceneTimeout` 对应分支及 `completion.ts` 中多余的 `scene: "async"` |
-| `HTTP_BODY_IDLE_TIMEOUT` | `http.body_idle_timeout_seconds` | number 秒 | `60` | |
-| `DOWNLOAD_TOTAL_TIMEOUT` | `http.download_total_timeout_seconds` | number 秒 | `600` | |
+| `HTTP_BODY_IDLE_TIMEOUT` | `http.body_idle_timeout_seconds` | number 秒（定时器） | `60` | |
+| `DOWNLOAD_TOTAL_TIMEOUT` | `http.download_total_timeout_seconds` | number 秒（定时器） | `600` | |
 | `GC_GRACE_HOURS` | `storage.gc_grace_hours` | int 小时 | `48` | |
 | `GC_DRY_RUN` | `storage.gc_dry_run` | boolean | `true` | |
 
@@ -85,6 +85,7 @@
 3. **env 不参与**：已迁移的变量从 env 体系中彻底移除，播种只用注册表默认值，不读取旧 env，也不做 env 与库不一致的提示（已确认：不需要向后兼容）。现有部署升级后，原先在 `.env` 里的自定义值需手工写入库中。
 4. **读取**：启动播种完成后，把全部设置读入进程内**不可变快照**，通过同步入口读取（保持现有调用方同步形态，不引入 async 传染）。运行期不再回库，也不回退读 env。
 5. **校验**：库中存储值按注册表规则解析；值非法一律启动失败并指明键名，不静默回退默认值。数值只接受规范化十进制文本（整数 `^\d+$`、小数 `^\d+(\.\d+)?$`），空串 / 空白 / `Infinity` / 科学计数法 / 负数均视为非法；布尔值只接受 `true` / `false`；两个 URL 设置（出网代理、对外访问地址）留空或必须是 http(s) URL，以便在启动期而非首次出站请求时暴露错误。
+   **定时器类时长**（表中标注「定时器」的项，以及 [media-processing-concurrency.md](media-processing-concurrency.md) 中各媒体池的 `media.*_max_wait_seconds`，第一阶段 2 个、第二阶段 3 个）会换算成 `setTimeout` 延迟，上限为 1 天（秒数 ≤ 86400、毫秒数 ≤ 86400000），超出即非法：Node 定时器的延迟上限为 2^31−1 ms（约 24.8 天），超出时不报错，而是把延迟改成 1ms；1 天上限同时为代码中的倍数换算（排空时限 ×3、轮询退避 ×2）留足余量。不换算成定时器的时长（`auth.token_ttl_minutes`、`worker.stuck_timeout_minutes`、`worker.zombie_scan_interval_seconds`、`storage.gc_grace_hours`）不受此限。
 6. **存储形式**：`value` 统一存规范化文本，由注册表按类型解析；不在表内存类型元信息。
 7. **生效时机**：本期修改库值需重启进程生效；管理端阶段再引入写入 + 快照刷新。
 
@@ -110,7 +111,7 @@
 
 - 全新库启动后，A 类全部键存在于 `system_settings`，值等于注册表默认值，且不受 env 中同名旧变量影响。
 - 重复启动不覆盖已存在的值，不产生重复记录；手工改库后重启，新值生效。
-- 非法库值（含空串、空白、`Infinity`、科学计数法、负数）导致启动失败，错误信息含键名。
+- 非法库值（含空串、空白、`Infinity`、科学计数法、负数、超过 1 天的定时器类时长）导致启动失败，错误信息含键名；1 天整取值通过，非定时器时长不受该上限约束。
 - `getConfig()` 不再包含 A 类变量；全仓无残留对已迁移 env 名的读取（含 Dockerfile / entrypoint / README / CI）。
 - B 类变量行为不变；上传批次总大小上限仍由 `UPLOAD_BATCH_MAX_MB` 单一来源控制。
 - 服务端类型检查、lint、相关测试通过（串行执行）。
@@ -129,9 +130,11 @@
 
 ## 待确认事项
 
-无。
+1. 定时器类时长上限（业务规则 5）：2026-10-13 由 media-processing-concurrency 第三轮代码审查发现——`media.*_max_wait_seconds` 设置过大时 `setTimeout` 溢出成 1ms，排查后同类问题覆盖表中全部换算成定时器的时长。用户已回复按建议修复，请确认本规则文本与 1 天上限。
 
 ## 当前状态
+
+2026-10-13：注册表新增定时器类时长类型（`timerSeconds` / `timerMillis`，上限 1 天），表中标注「定时器」的项与媒体等待时限已改用它；已实现并通过测试，规则待确认。媒体池第二阶段（重型 / 轻型 / sharp 三池）已实现，等待时限共 3 个，同样使用该类型（见 media-processing-concurrency.md）。
 
 已实现（2026-10-12）：`system_settings` 模型与 migration、`server/core/settings/`（注册表、播种与快照、`proxy.ts` 派生判定）、全部调用方迁移、`getConfig()` 收缩为 B 类、文档与 entrypoint 清理、`HTTP_TIMEOUT_ASYNC` 及 `"async"` 场景删除。
 

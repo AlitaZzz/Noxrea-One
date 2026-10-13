@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ probe: vi.fn(), scan: vi.fn(), capture: vi.fn() }));
-vi.mock("@server/services/storage/ffmpeg", () => ({ runFfprobe: mocks.probe, scanFfprobe: mocks.scan, runFfmpeg: mocks.capture }));
+vi.mock("@server/services/storage/ffmpeg", () => ({
+  runFfprobe: mocks.probe,
+  scanFfprobe: mocks.scan,
+  runFfmpegLight: mocks.capture,
+  runFfmpegHeavy: vi.fn(),
+}));
 vi.mock("fs/promises", () => ({ default: { mkdir: vi.fn() } }));
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 import { captureVideoFrame } from "@server/services/storage/video-frames";

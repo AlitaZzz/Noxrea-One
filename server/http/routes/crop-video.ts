@@ -60,8 +60,9 @@ router.post(
 
       const crop = await cropVideoRegion(
         sourcePath,
-        path.join(tmpDir, "crop.mp4"),
+        path.join(await tmpDir(), "crop.mp4"),
         rect,
+        userId,
         signal,
       );
 

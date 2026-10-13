@@ -1,7 +1,8 @@
 /**
  * 系统设置（specs/system-settings-db.md）的真实库回归测试。
- * 锁定：缺失键以默认值播种、已有值不覆盖、重启后读到手工修改、非法值（含空串 / 空白 / Infinity）
- * 启动失败并指明键名、初始化前读取直接报错。库结构由真实迁移（migrate deploy）建立，baseline SQL 随之被覆盖。
+ * 锁定：缺失键以默认值播种、已有值不覆盖、重启后读到手工修改、非法值（含空串 / 空白 / Infinity、
+ * 超过 1 天的定时器类时长）启动失败并指明键名、初始化前读取直接报错。
+ * 库结构由真实迁移（migrate deploy）建立，baseline SQL 随之被覆盖。
  */
 import { execSync } from "child_process";
 import fs from "fs";
@@ -187,6 +188,98 @@ describe("系统设置播种与读取（真实 SQLite 库）", () => {
     await settings.initSettings();
 
     expect(settings.getSetting("worker.max_retries")).toBe(0);
+  });
+
+  it("媒体并发门 11 个设置项按注册表默认值写入（specs/media-processing-concurrency.md）", async () => {
+    const settings = await restart();
+
+    await settings.initSettings();
+
+    expect(settings.getSetting("media.ffmpeg_heavy_max_concurrency")).toBe(2);
+    expect(settings.getSetting("media.ffmpeg_heavy_max_pending")).toBe(4);
+    expect(settings.getSetting("media.ffmpeg_heavy_max_wait_seconds")).toBe(60);
+    expect(settings.getSetting("media.ffmpeg_heavy_user_max_concurrency")).toBe(1);
+    expect(settings.getSetting("media.ffmpeg_heavy_user_max_pending")).toBe(2);
+    expect(settings.getSetting("media.ffmpeg_light_max_concurrency")).toBe(2);
+    expect(settings.getSetting("media.ffmpeg_light_max_pending")).toBe(16);
+    expect(settings.getSetting("media.ffmpeg_light_max_wait_seconds")).toBe(10);
+    expect(settings.getSetting("media.sharp_max_concurrency")).toBe(2);
+    expect(settings.getSetting("media.sharp_max_pending")).toBe(64);
+    expect(settings.getSetting("media.sharp_max_wait_seconds")).toBe(10);
+  });
+
+  it.each(["media.ffmpeg_heavy_max_concurrency", "media.ffmpeg_light_max_concurrency", "media.sharp_max_concurrency"])(
+    "媒体池并发上限 %s 取 0 时启动失败",
+    async (key) => {
+      await prisma.systemSetting.create({ data: { key, value: "0" } });
+      const settings = await restart();
+
+      await expect(settings.initSettings()).rejects.toThrow(key);
+    },
+  );
+
+  it("媒体池队列深度允许取 0（不排队，满即拒）", async () => {
+    await prisma.systemSetting.createMany({
+      data: [
+        { key: "media.ffmpeg_heavy_max_pending", value: "0" },
+        { key: "media.ffmpeg_heavy_user_max_pending", value: "0" },
+        { key: "media.ffmpeg_light_max_pending", value: "0" },
+        { key: "media.sharp_max_pending", value: "0" },
+      ],
+    });
+    const settings = await restart();
+
+    await settings.initSettings();
+
+    expect(settings.getSetting("media.ffmpeg_heavy_max_pending")).toBe(0);
+    expect(settings.getSetting("media.ffmpeg_heavy_user_max_pending")).toBe(0);
+    expect(settings.getSetting("media.ffmpeg_light_max_pending")).toBe(0);
+    expect(settings.getSetting("media.sharp_max_pending")).toBe(0);
+  });
+
+  // 超出 Node 定时器上限（约 24.8 天）的延迟不会报错，而是被改成 1ms，必须在启动期拒绝
+  it.each([
+    ["media.ffmpeg_heavy_max_wait_seconds", "86400.5"],
+    ["http.api_timeout_seconds", "2147484"],
+    ["worker.drain_timeout_seconds", "86401"],
+    ["worker.poll_check_interval_ms", "86400001"],
+  ])("定时器类时长 %s 超过 1 天（%s）启动失败", async (key, value) => {
+    await prisma.systemSetting.create({ data: { key, value } });
+    const settings = await restart();
+
+    await expect(settings.initSettings()).rejects.toThrow(key);
+  });
+
+  it("定时器类时长取 1 天上限时通过", async () => {
+    await prisma.systemSetting.createMany({
+      data: [
+        { key: "media.ffmpeg_light_max_wait_seconds", value: "86400" },
+        { key: "worker.poll_interval_seconds", value: "86400" },
+        { key: "worker.poll_check_interval_ms", value: "86400000" },
+      ],
+    });
+    const settings = await restart();
+
+    await settings.initSettings();
+
+    expect(settings.getSetting("media.ffmpeg_light_max_wait_seconds")).toBe(86400);
+    expect(settings.getSetting("worker.poll_interval_seconds")).toBe(86400);
+    expect(settings.getSetting("worker.poll_check_interval_ms")).toBe(86_400_000);
+  });
+
+  it("不换算成定时器的时长不受 1 天上限约束", async () => {
+    await prisma.systemSetting.createMany({
+      data: [
+        { key: "auth.token_ttl_minutes", value: "43200" },
+        { key: "storage.gc_grace_hours", value: "720" },
+      ],
+    });
+    const settings = await restart();
+
+    await settings.initSettings();
+
+    expect(settings.getSetting("auth.token_ttl_minutes")).toBe(43200);
+    expect(settings.getSetting("storage.gc_grace_hours")).toBe(720);
   });
 
   it("代理路由仅在开关打开且地址非空时启用", async () => {

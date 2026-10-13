@@ -11,6 +11,8 @@ import { createReadStream } from "fs";
 import { Readable } from "node:stream";
 import { buildFileResponseHeaders } from "@server/http/file-response";
 import { isPathWithinBase } from "@server/core/paths";
+import { MediaPoolBusyError } from "@server/services/storage/media-pool";
+import { failMediaBusy } from "@server/http/media-busy";
 
 const router = new Hono();
 
@@ -43,14 +45,20 @@ router.get("/api/files/*", async (c) => {
     const width = parseInt(w, 10);
     if (!isNaN(width) && width > 0) {
       // 透传 signal：客户端断开时中止缩放任务，及时释放源文件句柄
-      const cached = isVideoExt
-        ? await getVideoPosterWebP(filePath, width, request.signal)
-        : await getResizedWebP(filePath, width, request.signal);
-      if (cached) {
-        resolvedPath = cached;
-      } else if (isVideoExt) {
-        // 视频缩略图生成失败：不回退原视频（否则 <img> 解码失败），返回 404 由前端兜底
-        return failCode(404, "files.file_not_found");
+      try {
+        const cached = isVideoExt
+          ? await getVideoPosterWebP(filePath, width, request.signal)
+          : await getResizedWebP(filePath, width, request.signal);
+        if (cached) {
+          resolvedPath = cached;
+        } else if (isVideoExt) {
+          // 视频缩略图生成失败：不回退原视频（否则 <img> 解码失败），返回 404 由前端兜底
+          return failCode(404, "files.file_not_found");
+        }
+      } catch (err: unknown) {
+        // 媒体池过载：全局阶段 503 media.busy，个人阶段 429 media.user_busy；不回退原图（原图上限 100MB，回退会把 CPU 过载变成带宽洪峰）
+        if (err instanceof MediaPoolBusyError) return failMediaBusy(err.pool, err.scope);
+        throw err;
       }
     }
   }
