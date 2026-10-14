@@ -48,7 +48,7 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
             onClick={() => {
               const cs = useCanvasStore.getState();
               const node = cs.nodes.find(n => n.id === id);
-              const directorState = (node?.data as { directorState?: DirectorStateData }).directorState;
+              const directorState = (node?.data as { directorState?: DirectorStateData } | undefined)?.directorState;
               if (directorState) {
                 useDirectorStore.getState().setRestoreState(directorState);
               }
