@@ -55,11 +55,12 @@ export default function AudioSpeedPanel({ speed, onSpeedChange, onApply, onCance
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">4.0x</span>
       </div>
 
-      {/* 右组：数字输入 + 上下步进 */}
+      {/* 右组：数字输入 + 上下步进。precision 2 与 SPEED_STEP / 面板 clamp 的两位小数一致 */}
       <NumberInput
         min={SPEED_MIN}
         max={SPEED_MAX}
         step={SPEED_STEP}
+        precision={2}
         value={speed}
         onChange={(v) => { if (v != null) onSpeedChange(clamp(v)); }}
         className="h-8 w-[92px] shrink-0"
