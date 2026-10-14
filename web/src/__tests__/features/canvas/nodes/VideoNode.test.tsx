@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -35,9 +35,8 @@ vi.mock("@/features/canvas/nodes/NodeTitle", () => ({ default: () => null }));
 vi.mock("@/features/canvas/nodes/BusyOverlay", () => ({ default: () => null }));
 vi.mock("@/features/canvas/controls/ConnectionSideRail", () => ({ default: () => null }));
 vi.mock("@/features/canvas/shared/MediaPreviewOverlay", () => ({ default: () => null }));
-vi.mock("@/features/canvas/editing/VideoCropPanel", () => ({ default: function MockVideoCropPanel({ captureFrame }: { captureFrame: () => unknown }) {
-  const [frame] = useState(captureFrame);
-  return <div data-testid="crop">{frame ? "frame" : "empty"}</div>;
+vi.mock("@/features/canvas/editing/VideoCropPanel", () => ({ default: function MockVideoCropPanel({ videoSize }: { videoSize?: { w: number; h: number } }) {
+  return <div data-testid="crop">{videoSize ? `${videoSize.w}×${videoSize.h}` : "–"}</div>;
 } }));
 
 const data: VideoNodeData = { label: "video", src: "/api/files/test.mp4", naturalWidth: 1280, naturalHeight: 720, source: "derived", hasAudio: false };
@@ -153,6 +152,8 @@ describe("VideoNode poster-first", () => {
     fireEvent.error(failed);
     await flush();
     expect(screen.getByRole("alert")).toHaveTextContent("media.loadFailed");
+    // 非裁剪态的失败浮层只有重试：「取消」仅属于裁剪态（退出 croppingNodeId）
+    expect(screen.queryByRole("button", { name: "common.cancel" })).toBeNull();
     const playSpy = vi.mocked(HTMLMediaElement.prototype.play);
     playSpy.mockClear();
     fireEvent.click(screen.getByRole("button", { name: "media.retry" }));
@@ -322,24 +323,43 @@ describe("VideoNode poster-first", () => {
 });
 
 describe("VideoNode 编辑会话", () => {
-  it("裁剪面板等待首帧就绪，失败可重试恢复", async () => {
+  it("裁剪面板立即出现叠加在画面上，视频失败时让位给失败重试浮层", async () => {
     const view = render(<Scene />);
     await flush();
     act(() => useCanvasStore.setState({ croppingNodeId: "video" }));
     await flush();
-    expect(screen.getByRole("status")).toHaveTextContent("media.loading");
-    const broken = view.container.querySelector("video")!;
-    fireEvent.error(broken);
+    // 裁剪是空间操作：面板立即渲染，不等会话视频就绪，也没有黑幕加载层
+    expect(screen.getByTestId("crop")).toHaveTextContent("1280×720");
+    expect(screen.queryByRole("status")).toBeNull();
+    const video = view.container.querySelector("video")!;
+    expect(video).toHaveAttribute("src", data.src);
+    fireEvent.error(video);
     await flush();
     expect(screen.getByRole("alert")).toHaveTextContent("media.loadFailed");
+    expect(screen.queryByTestId("crop")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "media.retry" }));
     await flush();
     const retried = view.container.querySelector("video")!;
-    expect(retried).not.toBe(broken);
+    expect(retried).not.toBe(video);
     ready(retried);
     await flush();
-    expect(screen.getByTestId("crop")).toHaveTextContent("frame");
+    expect(screen.getByTestId("crop")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("裁剪中视频加载失败：失败浮层保留「取消」直接入口，点击退出裁剪态", async () => {
+    const view = render(<Scene />);
+    await flush();
+    act(() => useCanvasStore.setState({ croppingNodeId: "video" }));
+    await flush();
+    fireEvent.error(view.container.querySelector("video")!);
+    await flush();
+    // 失败态下裁剪面板让位，面板自带的关闭键随之不可见：浮层上的「取消」是退出裁剪态的直接入口
+    expect(screen.getByRole("alert")).toHaveTextContent("media.loadFailed");
+    expect(screen.queryByTestId("crop")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
+    await flush();
+    expect(useCanvasStore.getState().croppingNodeId).toBeNull();
   });
 
   it("选帧面板打开即挂载会话，代理换源与恢复不丢播放位置", async () => {

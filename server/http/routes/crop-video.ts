@@ -6,6 +6,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
+import { clampRect } from "@noxrea/shared/crop-rect";
 import { cropVideoRegion } from "@server/services/storage/media-ops";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ok, failCode } from "@server/core/response";
@@ -21,24 +22,6 @@ const cropVideoSchema = z.object({
 });
 
 const router = new Hono();
-
-/** 把矩形钳进源画面，且偏移/宽高全部取偶（yuv420p 色度采样要求） */
-export function clampRect(
-  rect: { x: number; y: number; width: number; height: number },
-  srcW: number,
-  srcH: number,
-): { x: number; y: number; width: number; height: number } {
-  const even = (v: number) => v - (v % 2);
-  let width = Math.min(even(rect.width), even(srcW));
-  let height = Math.min(even(rect.height), even(srcH));
-  let x = Math.min(even(rect.x), even(srcW - width));
-  let y = Math.min(even(rect.y), even(srcH - height));
-  width = Math.max(2, width);
-  height = Math.max(2, height);
-  x = Math.max(0, x);
-  y = Math.max(0, y);
-  return { x, y, width, height };
-}
 
 router.post(
   "/api/files/crop-video",

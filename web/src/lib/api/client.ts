@@ -207,7 +207,8 @@ function parseRetryAfterMs(header: string | null): number | undefined {
 export function apiUploadWithProgress<T = unknown>(
   path: string,
   formData: FormData,
-  onProgress?: (pct: number, loaded: number) => void
+  onProgress?: (pct: number, loaded: number) => void,
+  signal?: AbortSignal
 ): Promise<T> {
   const session = captureSession();
   return new Promise((resolve, reject) => {
@@ -218,14 +219,15 @@ export function apiUploadWithProgress<T = unknown>(
     let lastActiveAt = Date.now();
     let bodySent = false;
     let settled = false;
+    /** 请求可能已结束：部分浏览器对已完成请求调 abort 会抛错，统一吞掉 */
+    const abortXhr = () => {
+      try { xhr.abort(); } catch { /* 请求已结束时 abort 可能抛错，忽略 */ }
+    };
     const watcher = setInterval(() => {
       if (settled) return;
       const idle = Date.now() - lastActiveAt;
       if (idle <= (bodySent ? UPLOAD_RESPONSE_TIMEOUT_MS : UPLOAD_IDLE_TIMEOUT_MS)) return;
-      settle(() => {
-        xhr.abort();
-        reject(new UploadTransportError("timeout", i18n.t("error.upload.timeout")));
-      });
+      abortWith(new UploadTransportError("timeout", i18n.t("error.upload.timeout")));
     }, UPLOAD_WATCH_INTERVAL_MS);
     const touch = () => { lastActiveAt = Date.now(); };
     /** 统一收口：定时器只清理一次，且每个分支只会 resolve / reject 一次 */
@@ -235,26 +237,35 @@ export function apiUploadWithProgress<T = unknown>(
       clearInterval(watcher);
       window.removeEventListener("offline", onOffline);
       session.signal.removeEventListener("abort", onSessionAbort);
+      signal?.removeEventListener("abort", onOperationAbort);
       fn();
+    };
+    /** 中止统一收口：清挂起定时器 → 中止 XHR → 以给定原因拒绝（settle 保证只执行一次） */
+    const abortWith = (reason: unknown) => {
+      settle(() => {
+        abortXhr();
+        reject(reason);
+      });
     };
     /**
      * 断网立即止损：浏览器不会为「已发出但尚未响应」的 XHR 报错，
      * 只靠超时兜底的话，用户会长时间停在「进度条走完却没有图」的状态。
      */
-    const onOffline = () => {
-      settle(() => {
-        try { xhr.abort(); } catch { /* 请求已结束时 abort 可能抛错，忽略 */ }
-        reject(new UploadTransportError("network", i18n.t("error.upload.offline")));
-      });
-    };
+    const onOffline = () => abortWith(new UploadTransportError("network", i18n.t("error.upload.offline")));
     window.addEventListener("offline", onOffline);
-    const onSessionAbort = () => {
-      settle(() => {
-        xhr.abort();
-        reject(session.signal.reason);
-      });
-    };
+    const onSessionAbort = () => abortWith(session.signal.reason);
     session.signal.addEventListener("abort", onSessionAbort, { once: true });
+
+    // 逐操作中止：调用方（如客户端媒体管线的取消按钮）显式取消本次上传，
+    // 与会话级中止同一收口语义；挂起检测定时器经 settle 统一清理
+    const onOperationAbort = () => abortWith(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    if (signal) {
+      if (signal.aborted) {
+        onOperationAbort();
+        return;
+      }
+      signal.addEventListener("abort", onOperationAbort, { once: true });
+    }
 
     xhr.upload.onprogress = (e) => {
       touch();

@@ -58,7 +58,6 @@
     "statusFailed": "失败"
   },
   "media": {
-    "loading": "正在加载视频...",
     "loadFailed": "视频加载失败",
     "previewLoadFailed": "预览加载失败",
     "playFailed": "视频无法播放",
@@ -570,6 +569,9 @@
     "processing": "正在分离音频...",
     "audioSuffix": " (音频)",
     "mutedSuffix": " (静音)"
+  },
+  "speed": {
+    "processing": "正在调整播放速度..."
   },
   "clip": {
     "menu": "截取",

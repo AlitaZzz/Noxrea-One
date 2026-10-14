@@ -2,9 +2,13 @@
  * 文件（Files）相关 API 封装：上传约束、抽帧、音视频分离等媒体处理接口。
  */
 import type { FrameSelection } from "@noxrea/shared";
+import { type CropRectPx } from "@noxrea/shared/crop-rect";
 import { MANAGED_FILE_PATH } from "@noxrea/shared/url";
+import type { TFunction } from "i18next";
 
+import { notifyActionFailed } from "@/features/canvas/shared/notify";
 import { apiRaw } from "@/lib/api/client";
+import type { NotificationApi } from "@/lib/feedback";
 
 /** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
     后端媒体接口的统一入参格式，抽帧/代理/雪碧图/截取等调用方共用 */
@@ -111,6 +115,38 @@ export async function readMediaError(res: Response): Promise<MediaRequestError> 
   };
 }
 
+/**
+ * 编辑动作 serverTask 的统一响应信封解析：{ data, error } 形状由各编辑路由约定。
+ * 响应返回后先复核中止信号（取消与响应收尾竞态时不弹虚假失败通知），失败经
+ * notifyActionFailed 按 error.<code> 本地化（fallbackKey 回落 + Retry-After 附注
+ * + 按节点去重）并返回 undefined——服务端兜底失败不抛（useMediaEditTask 契约）。
+ */
+export async function readEditEnvelope<T>(
+  res: Response,
+  signal: AbortSignal,
+  ctx: {
+    notification: NotificationApi;
+    t: TFunction;
+    /** 失败文案的兜底 key */
+    errorKey: string;
+    /** 通知去重的节点 id */
+    nodeId: string;
+    /** 特定错误码的节点侧联动（如分离音轨确认无音轨后禁用入口）；无错误码时收到 undefined */
+    onErrorCode?: (code: string | undefined) => void;
+  },
+): Promise<T | undefined> {
+  // 错误响应体可能非 JSON：防御解析，成功 / 失败共用
+  const json = (await res.json().catch(() => null)) as { data?: T; error?: string } | null;
+  if (signal.aborted) return undefined;
+  if (!res.ok || !json?.data) {
+    const code = json?.error;
+    notifyActionFailed(ctx.notification, ctx.t, code, ctx.errorKey, ctx.nodeId, retryAfterOf(res));
+    ctx.onErrorCode?.(code);
+    return undefined;
+  }
+  return json.data;
+}
+
 /** 音轨分离结果：独立音轨 + 静音视频 */
 export interface DetachAudioResult {
   /** 音轨产物。format 为 copy 时是原编码无损拷贝，wav 为不兼容时的回退重编码 */
@@ -129,15 +165,6 @@ export async function detachAudio(videoKey: string, signal?: AbortSignal): Promi
     body: JSON.stringify({ video_key: videoKey }),
     signal,
   });
-}
-
-/** 片段截取结果 */
-export interface ExtractedClipInfo {
-  key: string;
-  url: string;
-  size: number;
-  ext: string;
-  mime: string;
 }
 
 /**
@@ -193,17 +220,10 @@ export async function applyAudioSpeed(
   });
 }
 
-/** 视频画面裁剪的源像素矩形（服务端会再次做偶数钳位与边界校验） */
-export interface CropRectPx {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 /**
  * 裁剪视频画面区域（重编码整段视频），返回原始 Response。
  * 同步长请求，调用方需自行给出忙反馈；失败时按 `error.<code>` 读取本地化错误。
+ * 源像素矩形契约类型 CropRectPx 直接从 @noxrea/shared/crop-rect 导入（单一来源）。
  */
 export async function cropVideo(
   videoKey: string,

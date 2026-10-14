@@ -1,11 +1,14 @@
 /**
- * 视频画面裁剪面板（交互与图片 CropPanel 同构）。
- * 挂载时通过 captureFrame 抓取视频当前帧作为背景静帧，选框确定后按源像素
- * 矩形派发 crop-video-apply 事件，由视频节点走服务端 ffmpeg 裁剪 + 派生节点
- * 链路。挂在节点 body 之外（露出顶部工具条），由 croppingNodeId 驱动显隐。
+ * 视频画面裁剪面板。
+ * 裁剪是空间操作，矩形对每一帧同样成立：裁剪框直接叠加在节点的会话视频上
+ * （cropOpen 时节点挂载会话 <video>），不抓帧、不生成静态背景图。
+ * 选框确定后按源像素矩形派发 crop-video-apply 事件，由视频节点走客户端管线
+ * 或服务端裁剪链路。挂在节点 body 之外（露出顶部工具条），由 croppingNodeId
+ * 驱动显隐。
  */
 "use client";
 
+import { clampRect as clampRectPx } from "@noxrea/shared/crop-rect";
 import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,10 +27,14 @@ import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 interface Props {
   nodeId: string;
-  /** 抓取视频当前帧为裁剪背景（面板挂载时调用一次） */
-  captureFrame: () => { src: string; w: number; h: number } | null;
+  /** 源视频像素尺寸：确认时把比例选框换算成源像素矩形。元数据未回填时缺省
+      （轮六⑦允许运行时缺失）——确认禁用、尺寸显示占位 */
+  videoSize?: { w: number; h: number };
   onClose: () => void;
 }
+
+/** 比例坐标 → 源像素（四舍五入）：确认换算与尺寸展示共用同一投影 */
+const toPx = (fraction: number, size: number) => Math.round(fraction * size);
 
 const ASPECT_PRESETS: { label: string; value: number | undefined }[] = [
   { label: "crop.aspect.free", value: undefined },
@@ -49,17 +56,28 @@ interface CropRect {
 
 const MIN_SIZE = 20;
 
-export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props) {
+export default function VideoCropPanel({ nodeId, videoSize, onClose }: Props) {
   const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
 
-  const imgRef = useRef<HTMLImageElement>(null);
-  // 挂载时抓帧一次：state 初始化器只在首次挂载执行，抓到的帧在面板生命周期内固定
-  const [snap] = useState(() => captureFrame());
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  // 裁剪框相对的显示区域尺寸：ResizeObserver 跟踪 overlay 尺寸——面板打开期间
+  // 元数据回填（onLoadedMeta）仍可能改变节点主体大小，一次性测量会拿到过期值
   const [displaySize, setDisplaySize] = useState({ w: 0, h: 0 });
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [crop, setCrop] = useState<CropRect>({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    // clientWidth/clientHeight 是 CSS 布局尺寸，不受 React Flow 缩放影响；
+    // observe 首次回调即完成初始测量，之后尺寸变化时续测
+    const observer = new ResizeObserver(() => {
+      setDisplaySize({ w: overlay.clientWidth, h: overlay.clientHeight });
+    });
+    observer.observe(overlay);
+    return () => observer.disconnect();
+  }, []);
 
   const dragRef = useRef<{ handle: Handle; startMouseX: number; startMouseY: number; startRect: CropRect } | null>(null);
 
@@ -68,19 +86,11 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     return () => { setModalOpen(false); };
   }, [setModalOpen]);
 
-  const handleImgLoad = useCallback(() => {
-    const img = imgRef.current;
-    if (!img) return;
-    // clientWidth/clientHeight 是 CSS 布局尺寸，不受 React Flow 缩放影响
-    setDisplaySize({ w: img.clientWidth, h: img.clientHeight });
-    setImgLoaded(true);
-  }, []);
-
   // 显示像素 → 选框比例（0-1）
   const getFraction = useCallback((e: PointerEvent | React.PointerEvent) => {
-    const img = imgRef.current;
-    if (!img) return { x: 0, y: 0 };
-    const rect = img.getBoundingClientRect();
+    const overlay = overlayRef.current;
+    if (!overlay) return { x: 0, y: 0 };
+    const rect = overlay.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
       y: Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height)),
@@ -124,9 +134,9 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     e.stopPropagation();
     const { handle, startRect } = dragRef.current;
     const pt = getFraction(e);
-    const img = imgRef.current;
-    if (!img) return;
-    const rect = img.getBoundingClientRect();
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const rect = overlay.getBoundingClientRect();
     const dx = pt.x - (dragRef.current.startMouseX - rect.left) / rect.width;
     const dy = pt.y - (dragRef.current.startMouseY - rect.top) / rect.height;
 
@@ -179,35 +189,32 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
     setCrop({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
   }, []);
 
-  // 确认：比例 → 源像素矩形（宽高/偏移取偶，满足 yuv420p 色度采样要求），
-  // 派发给视频节点走服务端 ffmpeg 裁剪链路。
+  // 确认：比例 → 源像素矩形（偶数钳位与边界校验收口到共享实现
+  // @noxrea/shared/crop-rect，与服务端兜底路由同一 clampRect），
+  // 派发给视频节点走客户端管线或服务端裁剪链路（按能力探测）。
   // 不在这里关闭面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、选区
   // 原样保留可重试；裁剪被接受后节点会清除 croppingNodeId 关闭面板
   const handleConfirm = useCallback(() => {
-    if (!snap || !imgLoaded || snap.w === 0) return;
-    let x = Math.round(crop.x * snap.w);
-    let y = Math.round(crop.y * snap.h);
-    let w = Math.round(crop.w * snap.w);
-    let h = Math.round(crop.h * snap.h);
-    // 取偶并防越界：裁剪偏移与宽高必须为偶数，且矩形落在画面内
-    w -= w % 2;
-    h -= h % 2;
-    x -= x % 2;
-    y -= y % 2;
-    x = Math.max(0, Math.min(x, snap.w - 2));
-    y = Math.max(0, Math.min(y, snap.h - 2));
-    w = Math.max(2, Math.min(w, snap.w - x));
-    h = Math.max(2, Math.min(h, snap.h - y));
+    if (!videoSize || videoSize.w < 2 || videoSize.h < 2) return;
+    const rect = clampRectPx(
+      {
+        x: toPx(crop.x, videoSize.w),
+        y: toPx(crop.y, videoSize.h),
+        width: toPx(crop.w, videoSize.w),
+        height: toPx(crop.h, videoSize.h),
+      },
+      videoSize.w,
+      videoSize.h,
+    );
 
-    dispatchNodeAction(nodeId, "crop-video-apply", { rect: { x, y, width: w, height: h } });
-  }, [snap, imgLoaded, crop, nodeId]);
+    dispatchNodeAction(nodeId, "crop-video-apply", { rect });
+  }, [videoSize, crop, nodeId]);
 
-  // 视频帧不可用（理论上不可达：入口已保证视频有画面）：不渲染面板
-  if (!snap) return null;
-
-  // 信息展示：源像素尺寸
-  const cropW = Math.round(crop.w * snap.w);
-  const cropH = Math.round(crop.h * snap.h);
+  // 信息展示：输出像素尺寸（源尺寸未就绪时占位，不产 NaN）
+  const sizeReady = videoSize != null && videoSize.w >= 2 && videoSize.h >= 2;
+  const sizeLabel = sizeReady
+    ? `${toPx(crop.w, videoSize.w)} × ${toPx(crop.h, videoSize.h)}`
+    : "– × –";
 
   const handleStyle: React.CSSProperties = {
     position: "absolute",
@@ -253,7 +260,7 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
         <span className="min-w-[70px] text-center text-xs font-medium text-muted-foreground">
-          {cropW} × {cropH}
+          {sizeLabel}
         </span>
 
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />
@@ -264,33 +271,28 @@ export default function VideoCropPanel({ nodeId, captureFrame, onClose }: Props)
 
         <Separator orientation="vertical" className="mx-1 h-5 self-center" />
 
-        {/* 确认：反色 ↑（与截取/变速工具栏一致） */}
-        <IconActionButton onClick={handleConfirm} disabled={!imgLoaded} />
+        {/* 确认：反色 ↑（与截取/变速工具栏一致）。源尺寸未就绪（元数据未回填，
+            videoSize 缺省）时禁用——handleConfirm 的同条件守卫只作防御，不留
+            可点但静默 no-op 的按钮 */}
+        <IconActionButton
+          onClick={handleConfirm}
+          disabled={!sizeReady}
+        />
       </Card>
       </WheelGuard>
       </RfNodeToolbar>
 
       {/* Crop overlay */}
-      {/* 只覆盖视频画面区（标题栏以下）：面板挂在节点根部以露出顶部工具条，
-          若用 inset-0 会把背景帧铺到标题栏里，画面被拉伸并超出视频显示区 */}
+      {/* 只覆盖视频画面区（标题栏以下）并直接叠在会话视频上：裁剪是空间操作，
+          矩形对每一帧同样成立，无需冻结某一帧为背景图 */}
       <div
+        ref={overlayRef}
         className="nodrag absolute z-30 pointer-events-auto rounded-lg overflow-hidden"
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         style={{ top: NODE_TITLE_HEIGHT, left: 0, right: 0, bottom: 0, cursor: "crosshair", touchAction: "none" }}
       >
-        {/* 背景是本地 dataURL 快照，不用 next/image */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          ref={imgRef}
-          src={snap.src}
-          alt=""
-          draggable={false}
-          onLoad={handleImgLoad}
-          className="absolute inset-0 w-full h-full"
-          style={{ pointerEvents: "none", userSelect: "none" }}
-        />
         {/* 裁剪框的 9999px 投影负责压暗框外区域，框内保持原始亮度（裁剪结果预览）；
             不另铺全幅遮罩，否则框内会被二次压暗 */}
         {/* Cutout for crop area (clear the dark overlay) */}

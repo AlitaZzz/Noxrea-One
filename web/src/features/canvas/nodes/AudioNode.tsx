@@ -8,7 +8,7 @@
 
 import { type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { UploadOutlined } from "@/components/ui/AppIcon";
@@ -18,12 +18,13 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
   extractAudioClip as extractAudioClipApi,
-  retryAfterOf,
+  readEditEnvelope,
   toFileKey,
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
+import { tryApplyAudioSpeedOnClient, tryExtractAudioClipOnClient } from "@/features/canvas/editing/client-media/client-video";
+import { resolveBusyLabelKey, useMediaEditTask } from "@/features/canvas/editing/use-media-edit-task";
 import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
-import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/notify";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromUrl } from "@/features/canvas/upload";
@@ -51,8 +52,11 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const src = data.src || "";
   const duration = data.duration || 0;
 
-  // 本地处理忙浮层（音频片段截取：ffmpeg 流 copy，通常秒级完成）
-  const [busy, setBusy] = useState<{ kind: string; startedAt: number } | null>(null);
+  // 本地处理忙浮层（音频片段截取 / 音频变速）。busy 形状与任务编排（守卫 /
+  // 取消 / 客户端失败切服务端兜底）统一由 useMediaEditTask 提供
+  const { busy, runEditTask, cancelActive, expectSource } = useMediaEditTask(id);
+  // 换源替换 / 卸载：中止进行中的本地处理任务
+  useEffect(() => () => cancelActive(), [cancelActive, src]);
   // 片段截取模式：选区操作全部在节点下方的 AudioClipStripPanel 内进行。
   // 打开瞬间的暂停由面板挂载 effect 经注册表执行；这里把 clipActive 下传给
   // 波形组件锁住节点自身的播放按钮与进度拖动，避免与面板循环试听双声叠加
@@ -91,93 +95,95 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     document.body.removeChild(a);
   }, [src, data.label]);
 
-  /** 片段截取：服务端音频流 copy 截取 [start, end]，产物作为派生音频节点
-      连回源节点（历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
+  /** 片段截取：优先走客户端管线（纯重封装，零解码，specs/client-video-editing.md），
+      探测不支持或管线失败自动回退服务端；产物作为派生音频节点连回源节点
+      （历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
   const handleExtractAudioClip = useCallback(
     async (start: number, end: number) => {
       if (!src) return;
-      // 变速/上一次截取仍在服务端处理中：面板保持打开、选区原样保留可重试，
-      // 这里给出 busy 反馈而不是静默吞掉（面板无法感知节点本地的 busy 态）
-      if (busy) {
-        notifyNodeBusy(notification, t, id);
-        return;
-      }
       const audioKey = toFileKey(src);
       if (!audioKey) return;
-      setBusy({ kind: "audio-clip", startedAt: Date.now() });
-      // 退出截取模式：关闭选区面板（面板卸载即停试听；与 onClose 幂等），
-      // 节点进入忙浮层状态
-      useCanvasStore.getState().setAudioClipNodeId(null);
-      try {
-        const res = await extractAudioClipApi(audioKey, start, end);
-        const json = await res.json();
-
-        if (!res.ok || !json?.data) {
-          // 后端按错误码给出确定结论（范围无效 / 超时等），优先用其本地化文案；
-          // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
-          notifyActionFailed(notification, t, json?.error as string | undefined, "error.clip.extract_failed", id, retryAfterOf(res));
-          return;
-        }
-
-        const { url } = json.data as { url: string };
-        const rangeLabel = `${formatTime(start)}-${formatTime(end)}`;
-        createAudioNodeFromUrl(
-          id,
-          url,
-          t("clip.suffix", { range: rangeLabel }),
-          useCanvasStore.getState(),
-          { source: "derived" },
-        );
-        markDirtyImmediate();
-      } catch (e) {
-        console.error("Audio clip extraction failed:", e);
-        notifyActionFailed(notification, t, undefined, "error.clip.extract_failed", id);
-      } finally {
-        setBusy(null);
-      }
+      runEditTask({
+        kind: "audio-clip",
+        // 退出截取模式：关闭选区面板（面板卸载即停试听；与 onClose 幂等），
+        // 节点进入忙浮层状态
+        onAccept: () => useCanvasStore.getState().setAudioClipNodeId(null),
+        // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
+        // 产物投影为与服务端响应同形的 url，onSuccess 单一形状消费
+        clientTask: async ({ signal, onProgress }) =>
+          (await tryExtractAudioClipOnClient(audioKey, { start, end }, { signal, onProgress })).url,
+        serverTask: async ({ signal }) => {
+          const res = await extractAudioClipApi(audioKey, start, end, signal);
+          // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
+          return (await readEditEnvelope<{ url: string }>(res, signal, {
+            notification,
+            t,
+            errorKey: "error.clip.extract_failed",
+            nodeId: id,
+          }))?.url;
+        },
+        onSuccess: (url) => {
+          // 源已被替换：旧源的派生产物不再写入
+          if (!expectSource(src)) return;
+          const rangeLabel = `${formatTime(start)}-${formatTime(end)}`;
+          createAudioNodeFromUrl(
+            id,
+            url,
+            t("clip.suffix", { range: rangeLabel }),
+            useCanvasStore.getState(),
+            { source: "derived" },
+          );
+          markDirtyImmediate();
+        },
+        errorKey: "error.clip.extract_failed",
+        logLabel: "Audio clip extraction failed:",
+      });
     },
-    [src, busy, id, notification, t],
+    [src, id, notification, t, runEditTask, expectSource],
   );
 
-  /** 变速：服务端 atempo 重编码（保留音调）生成变速产物，派生音频节点连回源节点 */
+  /** 变速：优先走客户端管线（解码 + soundtouchjs 时间拉伸 + AAC 编码，
+      specs/client-video-editing.md），探测不支持或管线失败自动回退服务端；
+      派生音频节点连回源节点 */
   const handleApplyAudioSpeed = useCallback(
     async (speed: number) => {
       if (!src) return;
-      // 截取/变速仍在服务端处理中：请求无法排队，必须给反馈而不是静默吞掉
-      if (busy) {
-        notifyNodeBusy(notification, t, id);
-        return;
-      }
       const audioKey = toFileKey(src);
       if (!audioKey) return;
-      setBusy({ kind: "audio-speed", startedAt: Date.now() });
-      try {
-        const res = await applyAudioSpeedApi(audioKey, speed);
-        const json = await res.json();
-
-        if (!res.ok || !json?.data) {
-          notifyActionFailed(notification, t, json?.error as string | undefined, "error.speed.failed", id, retryAfterOf(res));
-          return;
-        }
-
-        const { url } = json.data as { url: string };
-        const speedLabel = `${Number(speed.toFixed(2))}x`;
-        createAudioNodeFromUrl(
-          id,
-          url,
-          t("node.speedSuffix", { speed: speedLabel }),
-          useCanvasStore.getState(),
-          { source: "derived" },
-        );
-        markDirtyImmediate();
-      } catch (e) {
-        console.error("Audio speed change failed:", e);
-        notifyActionFailed(notification, t, undefined, "error.speed.failed", id);
-      } finally {
-        setBusy(null);
-      }
+      runEditTask({
+        kind: "audio-speed",
+        // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
+        // 产物投影为与服务端响应同形的 url，onSuccess 单一形状消费
+        clientTask: async ({ signal, onProgress }) =>
+          (await tryApplyAudioSpeedOnClient(audioKey, speed, { signal, onProgress })).url,
+        serverTask: async ({ signal }) => {
+          const res = await applyAudioSpeedApi(audioKey, speed, signal);
+          // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
+          return (await readEditEnvelope<{ url: string }>(res, signal, {
+            notification,
+            t,
+            errorKey: "error.speed.failed",
+            nodeId: id,
+          }))?.url;
+        },
+        onSuccess: (url) => {
+          // 源已被替换：旧源的派生产物不再写入
+          if (!expectSource(src)) return;
+          const speedLabel = `${Number(speed.toFixed(2))}x`;
+          createAudioNodeFromUrl(
+            id,
+            url,
+            t("node.speedSuffix", { speed: speedLabel }),
+            useCanvasStore.getState(),
+            { source: "derived" },
+          );
+          markDirtyImmediate();
+        },
+        errorKey: "error.speed.failed",
+        logLabel: "Audio speed change failed:",
+      });
     },
-    [src, busy, id, notification, t],
+    [src, id, notification, t, runEditTask, expectSource],
   );
 
   // Listen for node action events from NodeToolbar
@@ -273,7 +279,14 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
             </Button>
           </div>
         )}
-        {busy && <BusyOverlay label={t("clip.processing")} startedAt={busy.startedAt} />}
+        {busy && (
+          <BusyOverlay
+            label={t(resolveBusyLabelKey(busy.kind))}
+            startedAt={busy.startedAt}
+            progress={busy.progress}
+            onCancel={busy.onCancel}
+          />
+        )}
       </div>
     </div>
   );

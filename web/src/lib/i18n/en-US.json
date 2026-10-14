@@ -23,6 +23,8 @@
     "collapse": "Collapse",
     "cancel": "Cancel",
     "confirm": "OK",
+    "play": "Play",
+    "stop": "Stop",
     "close": "Close",
     "save": "Save",
     "add": "Add",
@@ -56,7 +58,6 @@
     "statusFailed": "Failed"
   },
   "media": {
-    "loading": "Loading video...",
     "loadFailed": "Video failed to load",
     "previewLoadFailed": "Preview failed to load",
     "playFailed": "Video could not be played",
@@ -486,8 +487,6 @@
   "crop": {
     "reset": "Reset",
     "confirm": "Confirm",
-    "play": "Play",
-    "stop": "Stop",
     "cancel": "Cancel",
     "processing": "Cropping video...",
     "suffix": " (crop {{size}})",
@@ -570,6 +569,9 @@
     "processing": "Detaching audio...",
     "audioSuffix": " (audio)",
     "mutedSuffix": " (muted)"
+  },
+  "speed": {
+    "processing": "Adjusting playback speed..."
   },
   "clip": {
     "menu": "Clip",

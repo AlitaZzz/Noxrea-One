@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { clampRect } from "@server/http/routes/crop-video";
+import { clampRect } from "@noxrea/shared/crop-rect";
 
 /** yuv420p 不变量：偏移与宽高必须为偶数，且矩形不得越出源画面 */
 function assertEvenAndInside(

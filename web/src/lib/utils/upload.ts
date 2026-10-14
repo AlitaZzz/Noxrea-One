@@ -25,14 +25,15 @@ export interface UploadResult {
   media_warning?: { declared: number; decodable: number } | null;
 }
 
-interface UploadBatchResponse {
+/** POST /api/files/upload 的批量响应（apiUploadWithProgress 已剥离 { code, data, msg } 信封） */
+export interface UploadBatchResponse {
   items: Array<
     | { index: number; ok: true; data: UploadResult }
     | { index: number; ok: false; error: { code: string; ctx?: Record<string, string | number> } }
   >;
 }
 
-function isUploadResult(value: unknown): value is UploadResult {
+export function isUploadResult(value: unknown): value is UploadResult {
   if (!value || typeof value !== "object") return false;
   const result = value as Partial<UploadResult>;
   return typeof result.url === "string" && result.url.length > 0

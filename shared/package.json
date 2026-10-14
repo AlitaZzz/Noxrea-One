@@ -11,6 +11,10 @@
     "./url": {
       "types": "./url.ts",
       "default": "./url.ts"
+    },
+    "./crop-rect": {
+      "types": "./crop-rect.ts",
+      "default": "./crop-rect.ts"
     }
   },
   "dependencies": {
