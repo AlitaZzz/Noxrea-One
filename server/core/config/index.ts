@@ -9,7 +9,7 @@ const PLACEHOLDER_SECRETS: Record<string, string> = {
   JWT_SECRET_KEY: "change-me-to-a-random-secret",
 };
 
-// DATABASE_URL / DB_TIMEOUT 由 Prisma 与 core/database/client 直接读取 process.env，不经此处
+// DATABASE_URL 由 core/database/client 直接读取 process.env，不经此处
 const configSchema = z.object({
   // JWT（密钥与算法属引导配置；有效期在 system_settings）
   JWT_SECRET_KEY: z.string().min(1, "JWT_SECRET_KEY is required"),

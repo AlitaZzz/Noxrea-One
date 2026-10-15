@@ -17,12 +17,13 @@ web/out
 .env.*
 !.env.example
 
-# 本地数据库（容器内用 /data 卷，不打进镜像）
+# 本地数据库（容器内用 /data 卷 + 外置 PostgreSQL，不打进镜像）
 prisma/prisma
 prisma/backups
 *.db
 *.db-shm
 *.db-wal
+data
 
 # 上传 / 生成产物
 uploads
@@ -50,3 +51,10 @@ models
 Dockerfile
 docker-compose.yml
 .dockerignore
+
+# 开发期工具（迁移授权只发生在开发机，部署侧只做 migrate deploy）
+scripts
+
+# 开发期文档与测试（运行时不用；测试只在开发机 vitest 跑）
+specs
+server/__tests__

@@ -1,17 +1,17 @@
 // ── Noxrea One - Prisma Schema ──
 // 字段 camelCase + @map("snake_case")，表名 @@map
-// JSON 列在 SQLite 下声明为 String(TEXT)，CRUD 层集中序列化
+// JSON 列统一存 TEXT，CRUD 层集中序列化
+// 方言统一 PostgreSQL：本地模式经 driver adapter 连 PGlite（进程内 PG），
+// 服务器模式连真 PG；连接配置见 prisma.config.ts（v7 不再允许 schema 内 url）
 
 generator client {
-  provider = "prisma-client-js"
-  // Docker 构建环境（node:20-slim）无 openssl 二进制，native 会被误检测为
-  // debian-openssl-1.1.x；显式补上运行容器（Debian 12）所需的 3.0.x 引擎
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
+  provider = "prisma-client"
+  output   = "../server/core/database/generated"
+  runtime  = "nodejs"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgres"
 }
 
 // ──────────────────────────────────────────

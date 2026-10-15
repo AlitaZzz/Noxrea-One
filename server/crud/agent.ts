@@ -5,7 +5,7 @@ import { stringifyJson, parseJsonArray, parseJsonObjectArray } from "./json-colu
  * 管理按画布工程隔离的 Agent 会话与消息的创建与读取。
  * assistant 消息的工具调用（toolCalls）以 JSON 持久化，续流时原样回填上游。
  */
-import type { AgentSession, AgentMessage } from "@prisma/client";
+import type { AgentSession, AgentMessage } from "@server/core/database/generated/client";
 
 export type AgentRole = "user" | "assistant" | "tool";
 

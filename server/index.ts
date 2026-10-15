@@ -7,7 +7,7 @@
  */
 import { bootstrap } from "@server/core/bootstrap";
 import { workerLoop, type StopSignal } from "@server/services/worker/loop";
-import { prisma } from "@server/core/database/client";
+import { closeLocalDatabase, prisma } from "@server/core/database/client";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
@@ -58,8 +58,9 @@ async function main(): Promise<void> {
       new Promise<void>((r) => setTimeout(r, exitBound)),
     ]);
 
-    // 4d. 断开数据库
+    // 4d. 断开数据库并关闭本地模式 PGlite（close 触发 checkpoint 把 WAL 落盘 + 释放数据目录锁）
     await prisma.$disconnect();
+    await closeLocalDatabase();
     logEvent("server", { stage: "shutdown_complete" });
     process.exit(0);
   };

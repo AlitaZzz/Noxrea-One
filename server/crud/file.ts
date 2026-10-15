@@ -3,7 +3,7 @@
  * 基于内容哈希去重存储文件元数据，并提供文件对象的 upsert 与查询。
  */
 import { prisma } from "@server/core/database/client";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@server/core/database/generated/client";
 
 // FileObject upsert（去重：hash 碰撞时更新）
 export async function upsertFileObject(data: {

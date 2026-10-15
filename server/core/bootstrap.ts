@@ -1,9 +1,9 @@
 /**
  * 服务启动引导。
- * 幂等初始化配置、数据库 PRAGMA、网关等全局依赖，
+ * 幂等初始化配置、数据库迁移、网关等全局依赖，
  * 供 HTTP 服务与 Worker 循环在同进程中共用。
  */
-import { applyPragmas } from "@server/core/database/client";
+import { ensureLocalMigrations, isServerMode } from "@server/core/database/client";
 import { loadConfig } from "@server/core/config";
 import { initSettings } from "@server/core/settings";
 import { logEvent } from "@server/core/logger/utils";
@@ -18,11 +18,14 @@ export async function bootstrap(): Promise<void> {
   const cfg = loadConfig();
   logEvent("bootstrap", { stage: "config_loaded", logLevel: cfg.LOG_LEVEL });
 
-  // 2. PRAGMA（SQLite WAL）
-  await applyPragmas();
-  logEvent("bootstrap", { stage: "pragmas_applied" });
+  // 2. 数据库迁移：本地模式（PGlite）应用 prisma/migrations 增量；服务器模式由部署侧 migrate deploy 负责
+  await ensureLocalMigrations();
+  logEvent("bootstrap", {
+    stage: "database_ready",
+    mode: isServerMode() ? "server" : "local",
+  });
 
-  // 3. 系统设置：补齐缺失键并读入快照（依赖数据库，必须在 PRAGMA 之后）
+  // 3. 系统设置：补齐缺失键并读入快照（依赖数据库，必须在迁移之后）
   await initSettings();
   logEvent("bootstrap", { stage: "settings_loaded" });
 

@@ -3,8 +3,9 @@
  * 每个用户拥有一个资产库，「未分类」是固定的系统文件夹；
  * 资产变更与文件夹计数在同一事务内执行，保证数据与计数一致。
  */
-import { Prisma, type AssetItem as AssetItemModel } from "@prisma/client";
+import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
+import { isUniqueConstraintError } from "@server/core/database/errors";
 import { extractHashFromUrl } from "@server/services/canvas/extract-hashes";
 import {
   replaceSourceFileRefs,
@@ -156,7 +157,9 @@ async function getOrCreateUncategorizedFolder(
       data: { userId, scope, name: "Uncategorized", kind: "uncategorized", parentId: null },
     });
   } catch (error) {
-    if (!isUncategorizedFolderUniqueError(error)) throw error;
+    // 并发首访撞部分唯一索引（asset_folders_uncategorized_key，迁移 20261015213000）：
+    // 回读并发事务已建好的「未分类」目录
+    if (!isUniqueConstraintError(error, "user_id", "scope")) throw error;
 
     const raced = await tx.assetFolder.findFirst({
       where: { userId, scope, kind: "uncategorized" },
@@ -164,16 +167,6 @@ async function getOrCreateUncategorizedFolder(
     if (!raced) throw error;
     return raced;
   }
-}
-
-/** 判断唯一约束冲突是否来自「未分类」目录的固定索引。 */
-function isUncategorizedFolderUniqueError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-  const target = error.meta?.target;
-  const targetText = Array.isArray(target) ? target.join(":") : String(target ?? "");
-  return targetText.includes("uncategorized");
 }
 
 /** 校验目录归属与 scope，避免任意目录 ID 越权或跨库移动。 */

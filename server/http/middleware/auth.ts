@@ -12,7 +12,7 @@ import { prisma } from "@server/core/database/client";
 import { getSetting } from "@server/core/settings";
 import { decodeAccessToken } from "@server/core/auth/jwt";
 import { failCode } from "@server/core/response";
-import type { User } from "@prisma/client";
+import type { User } from "@server/core/database/generated/client";
 
 /** 鉴权 cookie 名：与 Next proxy.ts 的路由门共用 */
 export const AUTH_COOKIE = "noxrea-auth-token";

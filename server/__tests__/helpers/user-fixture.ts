@@ -2,7 +2,7 @@
  * 认证相关测试共用的 Prisma User 行夹具。
  * overrides 用 Partial<User> 约束：schema 字段漂移时编译期即报错，而非运行时。
  */
-import type { User } from "@prisma/client";
+import type { User } from "@server/core/database/generated/client";
 
 /** 登录/序列化路径用的 User 行夹具；overrides 覆盖本用例关心的字段。 */
 export function makeUser(overrides: Partial<User> = {}): User {

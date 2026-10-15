@@ -17,7 +17,7 @@
  *
  * 启动后延迟首跑 + 每日一次（进程内 interval），由 bootstrap 挂载，幂等。
  */
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
 import { getSetting } from "@server/core/settings";
 import { buildStorageKey } from "./service";

@@ -9,7 +9,7 @@ import crypto from "crypto";
  * 生成任务 CRUD。
  * 提供异步生成任务的创建、状态更新与查询等数据库操作。
  */
-import type { GenerationTask } from "@prisma/client";
+import type { GenerationTask } from "@server/core/database/generated/client";
 
 export type HydratedGenerationTask = Omit<
   GenerationTask,

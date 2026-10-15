@@ -4,7 +4,7 @@
  * 锁定：差值语义（正增/负减/零短路）、upsert 兜底形状、
  * P2025（聚合行已被外部清理）吞掉不阻塞账本删除、其他错误原样抛出。
  */
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@server/core/database/generated/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@server/core/database/client", () => ({ prisma: {} }));

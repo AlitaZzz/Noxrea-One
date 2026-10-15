@@ -39,10 +39,10 @@ Noxrea One 是一个面向创意生产流程的 AI Canvas 应用。你可以在�
 | --- | --- | --- |
 | 前端 | Next.js、React、TypeScript | 画布、项目管理、设置中心与登录界面 |
 | 后端 | Hono、TypeScript | REST API、SSE、文件与媒体处理 |
-| 数据库 | Prisma、SQLite | 用户、项目、任务、模型、素材与 Agent 数据 |
+| 数据库 | Prisma、PostgreSQL | 用户、项目、任务、模型、素材与 Agent 数据；本地开发用进程内 PGlite（零安装），部署用外置 PostgreSQL |
 | 模型网关 | Hono Services | 能力路由、协议适配、参数映射与任务执行 |
 | 媒体处理 | FFmpeg、Sharp | 视频抽帧、音频分离与图像处理 |
-| 部署 | Docker、Node.js 20 | 单容器运行前端与后端，`/data` 持久化数据 |
+| 部署 | Docker、Node.js 20 | 单容器运行前端与后端（数据库外置 PostgreSQL），`/data` 持久化数据 |
 
 Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署中，前端端口为 `3000`，后端端口为 `4000`；容器只对外暴露 `3000`。
 
@@ -55,7 +55,8 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 │   ├── http/routes/      # API 路由
 │   ├── services/         # 模型网关、任务 Worker、存储与 Agent 服务
 │   └── resources/        # 模型 UI、供应商预设、Prompt 与技能配置
-├── prisma/               # Prisma schema 与本地 SQLite 数据
+├── prisma/               # Prisma schema 与迁移
+├── data/                 # 本地模式 PGlite 数据目录（首次启动自动创建）
 ├── uploads/              # 本地上传文件
 ├── Dockerfile            # 构建单容器镜像
 ├── docker-entrypoint.sh  # 容器初始化入口
@@ -86,12 +87,13 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
    cp .env.example .env
    ```
 
-   编辑 `.env`，至少设置以下变量：
+   编辑 `.env`，设置 JWT 密钥即可：
 
    ```env
    JWT_SECRET_KEY=替换为随机长密钥
-   DATABASE_URL=file:./dev.db
    ```
+
+   不设置 `DATABASE_URL` 即为本地模式：进程内 PGlite，零安装，数据存于 `data/pglite`（自动创建）。需要连接已有 PostgreSQL 时再设置 `DATABASE_URL`（见下方环境变量表）。
 
    生成密钥示例：
 
@@ -99,13 +101,9 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
    openssl rand -hex 32
    ```
 
-4. 初始化数据库
+4. 启动开发服务
 
-   ```bash
-   npm run prisma:migrate
-   ```
-
-5. 启动开发服务
+   首次启动会自动应用 `prisma/migrations` 建表（本地模式由内置迁移 runner 完成），无需手动初始化数据库。
 
    ```bash
    npm run dev
@@ -129,11 +127,10 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `npm start` | 启动构建后的 Web 与后端 |
 | `npm run lint` | 运行前端与后端 ESLint |
 | `npm run typecheck` | 运行根目录与前端 TypeScript 检查 |
-| `npm test` | 运行前端 Vitest 测试 |
+| `npm test` | 运行后端与前端 Vitest 测试 |
 | `npm run test:watch` | 以监听模式运行 Vitest |
-| `npm run prisma:migrate` | 创建或应用开发数据库迁移 |
+| `npm run db:migrate:new -- <name>` | 修改 `prisma/schema.prisma` 后生成新迁移（本地模式下次启动自动应用） |
 | `npm run prisma:generate` | 生成 Prisma Client |
-| `npm run prisma:studio` | 打开 Prisma Studio |
 
 ## 环境变量
 
@@ -142,7 +139,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | 变量 | 说明 |
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
-| `DATABASE_URL` | SQLite 连接串，默认 `file:./dev.db` |
+| `DATABASE_URL` | 数据库连接串（双模式）：不设置即本地模式（进程内 PGlite，数据在 `data/pglite`）；设为 `postgres://` 连接串即服务器模式（外置 PostgreSQL，迁移由部署侧 `prisma migrate deploy` 负责） |
 | `API_HOST` / `API_PORT` | 后端（Hono）监听地址与端口，默认 `0.0.0.0:4000` |
 | `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
 | `WEB_AUTH_GATE_MODE` | 前端路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
@@ -158,7 +155,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 ### 系统设置
 
-运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面，可用 `npm run prisma:studio` 或 `sqlite3` 修改）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
+运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面：服务器模式可用 `psql` 执行 SQL，本地模式可用一次性脚本经 PGlite 执行同样的 SQL）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
 
 | 前缀 | 内容 |
 | --- | --- |
@@ -177,7 +174,7 @@ UPDATE system_settings SET value = 'false' WHERE key = 'auth.registration_enable
 
 ## Docker 部署
 
-镜像将前端与后端封装在同一容器中，SQLite 数据库、配置与上传文件统一持久化到 `/data`。
+镜像将前端与后端封装在同一容器中，配置与上传文件统一持久化到 `/data`；数据库为外置 PostgreSQL（compose 示例内置 postgres 服务，也可指向自备实例），entrypoint 会等待数据库就绪并自动执行 `prisma migrate deploy`。
 
 1. 准备 `docker-compose.nas.yml`
 
@@ -220,35 +217,17 @@ docker build -t noxrea-one .
 
 容器内后端固定监听 `0.0.0.0:4000`，与构建期固化的前端 `/api` 代理目标一致，不读取 `API_HOST` / `API_PORT`。前后端分开部署时，用构建参数 `--build-arg WEB_API_ORIGIN=http://backend-host:4000` 指定后端地址；应用名用 `--build-arg WEB_APP_NAME=...`。
 
-### 升级旧版数据库
-
-数据库迁移历史已合并为单个 baseline（`20261012100000_baseline`）。**早于该版本创建的数据库**（`_prisma_migrations` 里记录着旧迁移）升级前需执行一次迁移历史重置，否则容器启动时的 `prisma migrate deploy` 会因表已存在而失败；旧库还没有 `system_settings` 表，需要一并补建。表结构与已有数据不受影响，建议先备份 `/data` 下的数据库文件。
-
-先拉取新镜像，再用一次性容器执行（容器启动脚本会在迁移失败时退出，所以不能用 `exec` 进入原容器）：
-
-```bash
-docker compose -f docker-compose.nas.yml pull
-docker compose -f docker-compose.nas.yml run --rm --entrypoint sh noxrea -c '
-set -e
-set -a; . /data/.env; set +a
-echo "DELETE FROM _prisma_migrations;" | npx prisma db execute --stdin --schema prisma/schema.prisma
-npx prisma db push --skip-generate
-npx prisma migrate resolve --applied 20261012100000_baseline
-'
-```
-
-三步依次是：清空旧迁移记录、补建缺失的表（已有的表不动）、把 baseline 标记为已应用。本地开发库同理：在 `.env` 已配置 `DATABASE_URL` 的前提下，去掉 `docker compose` 外壳，直接在项目根目录执行这三条 `npx prisma` 命令。全新部署无需此步骤。
-
 ## 数据与持久化
 
 Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初始化以下路径：
 
 | 容器路径 | 内容 |
 | --- | --- |
-| `/data/noxrea.db` | SQLite 数据库 |
 | `/data/.env` | 运行配置 |
 | `/data/uploads` | 上传与生成结果 |
 | `/data/resources` | 模型配置、Prompt 模板与技能文件 |
+
+数据库在外置 PostgreSQL 中（compose 示例使用独立数据卷），不落在 `/data` 卷内。
 
 升级镜像前建议先备份整个数据目录。
 
@@ -283,7 +262,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 - 使用根目录工作区命令统一运行检查，而不是分别进入 `web` 执行重复命令。
 - 后端路由位于 `server/http/routes`，业务能力放在 `server/services`，请求校验放在 `server/schemas`。
 - 前端按 `features` 组织业务模块，通用组件放在 `web/src/components`。
-- 新增数据模型时同步更新 `prisma/schema.prisma` 与迁移。
+- 新增数据模型时同步更新 `prisma/schema.prisma`，并用 `npm run db:migrate:new -- <name>` 生成迁移（本地模式启动时由内置 runner 自动应用）。
 - 新增模型参数时优先通过 `model-ui.json` 定义字段与映射，避免在界面和后端重复硬编码。
 
 ## 贡献流程

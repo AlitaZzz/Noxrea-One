@@ -1,12 +1,44 @@
 # NAS 部署用：直接从 GitHub 容器仓库拉取现成镜像（无需在 NAS 上构建）
-# 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（SQLite 数据库 + 上传文件）
-# 配置文件：无需手动准备，首次启动自动生成 /share/Container/noxreaone/.env
-#           （含自动生成的 JWT 密钥）；之后编辑该文件并重启容器即可修改配置
+# 架构：双容器 —— PostgreSQL 17 + 应用（web 3000 / api 4000），见 specs/postgres-dialect-unification.md
+# 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（PG 数据 + 上传文件）
+# 配置文件：首次启动前只需在 /share/Container/noxreaone/.env 写一行 POSTGRES_PASSWORD=...，
+#           其余配置（JWT 密钥等）由容器首次启动自动生成；之后编辑该文件并重启容器即可修改
 # 容器加入已存在的 mihomo_shared_network 共享网络（需先确保该网络已创建）
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: noxrea-postgres
+    environment:
+      POSTGRES_USER: noxrea
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 compose 同目录 .env 设置 POSTGRES_PASSWORD=...}
+      POSTGRES_DB: noxrea
+    # 2核2G 内存约束：shared_buffers 128MB、连接收敛、autovacuum 收敛
+    command: >
+      postgres -c shared_buffers=128MB -c max_connections=20
+               -c work_mem=8MB -c maintenance_work_mem=64MB
+               -c autovacuum_max_workers=2
+    volumes:
+      - /share/Container/noxreaone/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U noxrea -d noxrea"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - mihomo_shared_network
+
   noxrea:
     image: ghcr.io/alitazzz/noxrea-one:latest
     container_name: noxrea-one
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # 服务器模式：连接串指向 compose 内的 postgres 服务；
+      # 迁移由 entrypoint 的 prisma migrate deploy 自动执行
+      DATABASE_URL: postgres://noxrea:${POSTGRES_PASSWORD}@postgres:5432/noxrea
     ports:
       - "3000:3000"
     volumes:

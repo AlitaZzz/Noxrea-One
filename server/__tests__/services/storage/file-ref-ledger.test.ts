@@ -5,7 +5,7 @@
  * adjustFileRefCount 被 mock 并记录调用，断言聚合计数收到正确的增减量。
  * 移除类操作（集合运算 SQL）见 file-ref-ledger-bulk.test.ts。
  */
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@server/core/database/generated/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const adjustCalls = vi.hoisted(() => ({

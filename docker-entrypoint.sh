@@ -7,6 +7,7 @@ set -e
 #   - 已通过 -e 传入的变量原样写入（环境变量优先）
 #   - 未传入的使用 Docker 默认值
 #   - JWT_SECRET_KEY 缺失时自动生成随机密钥并持久化（重启不变）
+# 数据库固定为服务器模式（真 PostgreSQL，连接串由 compose 注入 DATABASE_URL）。
 # ------------------------------------------------------------
 if [ ! -f /data/.env ]; then
   cat > /data/.env <<EOF
@@ -23,9 +24,8 @@ if [ ! -f /data/.env ]; then
 # JWT 签名密钥（首次启动自动生成；更换：openssl rand -hex 32）
 JWT_SECRET_KEY="${JWT_SECRET_KEY:-$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")}"
 
-# ---------- 后端：数据库 ----------
-DATABASE_URL="${DATABASE_URL:-file:/data/noxrea.db}"
-DB_TIMEOUT="${DB_TIMEOUT:-30}"
+# ---------- 后端：数据库（服务器模式：真 PostgreSQL，由 compose 注入） ----------
+DATABASE_URL="${DATABASE_URL}"
 
 # ---------- 后端：服务 ----------
 # 容器内 API 监听 0.0.0.0:4000，与镜像构建期固化的前端 /api 代理目标一致，不提供配置
@@ -68,7 +68,6 @@ set +a
 # ------------------------------------------------------------
 # 默认值（环境变量优先）
 # ------------------------------------------------------------
-export DATABASE_URL="${DATABASE_URL:-file:/data/noxrea.db}"
 export LOG_LEVEL="${LOG_LEVEL:-INFO}"
 export API_PORT=4000
 export API_HOST=0.0.0.0
@@ -86,6 +85,18 @@ if [ -z "$JWT_SECRET_KEY" ]; then
   echo "       生成方式：openssl rand -hex 32" >&2
   exit 1
 fi
+if [ -z "$DATABASE_URL" ]; then
+  echo "ERROR: 必须设置 DATABASE_URL（服务器模式连接串，形如 postgres://user:pass@postgres:5432/noxrea）。" >&2
+  echo "       NAS compose 已自动注入；手工 docker run 时请用 -e DATABASE_URL=... 传入。" >&2
+  exit 1
+fi
+case "$DATABASE_URL" in
+  postgres://*|postgresql://*) ;;
+  *)
+    echo "ERROR: DATABASE_URL 必须是 postgres:// 连接串（容器不再支持 SQLite 文件库）。" >&2
+    exit 1
+    ;;
+esac
 
 # ------------------------------------------------------------
 # 数据目录
@@ -103,7 +114,25 @@ if [ -d /data ]; then
 fi
 
 # ------------------------------------------------------------
-# 数据库迁移（首次运行建表，之后幂等）
+# 等待 PostgreSQL 就绪（compose healthcheck 之外的双保险）
+# ------------------------------------------------------------
+echo "== 等待 PostgreSQL 就绪 =="
+i=0
+until node -e "
+const { Client } = require('pg');
+const c = new Client({ connectionString: process.env.DATABASE_URL });
+c.connect().then(() => c.end()).then(() => process.exit(0)).catch(() => process.exit(1));
+" 2>/dev/null; do
+  i=$((i+1))
+  if [ "$i" -ge 30 ]; then
+    echo "ERROR: 连接 PostgreSQL 超时（60 秒）。请检查 postgres 服务与 DATABASE_URL。" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+# ------------------------------------------------------------
+# 数据库迁移（首次运行建表，之后幂等；Prisma v7 连接取自 DATABASE_URL）
 # ------------------------------------------------------------
 npx prisma migrate deploy
 

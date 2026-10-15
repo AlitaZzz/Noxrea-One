@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================
-# Noxrea One - 单容器镜像
+# Noxrea One - 单容器镜像（数据库为外置 PostgreSQL，见 docker-compose.nas.yml）
 #   - web (Next.js)  : 3000（对外暴露）
 #   - server (Hono)   : 4000（仅容器内部）
-#   - SQLite + uploads: /data（挂载卷持久化）
+#   - 上传文件与配置: /data（挂载卷持久化）
 # ============================================================
 
 # ------------------------------------------------------------
@@ -65,7 +65,7 @@ COPY --from=builder /app /app
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
-# 数据卷：SQLite 数据库 + 上传文件
+# 数据卷：上传文件与配置（数据库在 PostgreSQL 容器，不入此卷）
 VOLUME ["/data"]
 
 # 对外暴露 web 端口

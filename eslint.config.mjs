@@ -8,7 +8,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["server/**/*.ts"],
+    files: ["server/**/*.ts", "scripts/**/*.mts"],
     languageOptions: {
       parserOptions: {
         projectService: true,

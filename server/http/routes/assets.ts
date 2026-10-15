@@ -4,7 +4,7 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { isUniqueConstraintError } from "@server/core/database/errors";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import {
   ASSET_BATCH_LIMIT,
@@ -59,12 +59,7 @@ function handleAssetError(error: unknown): Response | null {
 
 /** 判断唯一约束冲突是否来自资产来源 URL；避免把目录唯一冲突误报为来源重复。 */
 function isSourceUrlUniqueError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-  const target = error.meta?.target;
-  const targetText = Array.isArray(target) ? target.join(":") : String(target ?? "");
-  return targetText.includes("source_url");
+  return isUniqueConstraintError(error, "source_url");
 }
 
 // ════════ Folders ════════

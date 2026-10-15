@@ -3,19 +3,19 @@
  *
  * removeSourceFileRefsBatch 已改为集合运算 SQL（聚合 UPDATE ... FROM + 分片 DELETE），
  * removeSourceFileRefs（单来源）委托同一实现。$executeRaw 无法在内存 mock 上验证，
- * 语义与规模必须在真实 SQLite 库上锁定；各用例使用独立 userId，互不干扰：
+ * 语义与规模必须在真实 PGlite 库上锁定（Gate 2 性能判定基座）；各用例使用独立 userId，互不干扰：
  * - 语义：同 hash 多来源合并递减、跨分片累加、缺失 file_objects 行跳过、归零保留、账本行清空。
  * - 规模：5 万来源在 Prisma 默认 5s 交互式事务预算内完成（曾实测逐 hash 循环在此规模 P2028 回滚）。
  */
-import { execSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@server/core/database/generated/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const dbPath = path.join(os.tmpdir(), `noxrea-ledger-bulk-${process.pid}.db`);
-const dbUrl = "file:" + dbPath.replace(/\\/g, "/");
+// 本地模式数据目录（PGlite）；client 模块在环境变量就位后才首次导入
+const dbDir = path.join(os.tmpdir(), `noxrea-ledger-bulk-${process.pid}`);
+const dbUrl = "file:" + dbDir.replace(/\\/g, "/");
 
 let prisma: PrismaClient | null = null;
 let removeSourceFileRefsBatch: typeof import("@server/services/storage/file-ref-ledger").removeSourceFileRefsBatch = null!;
@@ -34,26 +34,19 @@ beforeAll(async () => {
   removeSourceFileRefsBatch = ledger.removeSourceFileRefsBatch;
   removeSourceFileRefs = ledger.removeSourceFileRefs;
 
-  execSync("npx prisma db push --skip-generate", {
-    // storage → services → __tests__ → server → 仓库根
-    cwd: path.resolve(import.meta.dirname ?? ".", "../../../.."),
-    env: { ...process.env },
-    stdio: "pipe",
-  });
-  // 与生产启动一致：WAL + busy_timeout，否则写事务耗时显著高于生产路径
-  await client.applyPragmas();
+  // 与生产启动一致：应用 prisma/migrations 增量（幂等）
+  await client.ensureLocalMigrations();
 }, 60_000);
 
 afterAll(async () => {
   await prisma?.$disconnect();
-  for (const suffix of ["", "-wal", "-shm"]) {
-    try { fs.rmSync(dbPath + suffix, { force: true }); } catch { /* Windows 句柄延迟释放 */ }
-  }
+  await (await import("@server/core/database/client")).closeLocalDatabase();
+  try { fs.rmSync(dbDir, { recursive: true, force: true }); } catch { /* Windows 句柄延迟释放 */ }
   process.env.DATABASE_URL = savedEnv.DATABASE_URL;
   process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
 });
 
-describe("removeSourceFileRefsBatch（真实 SQLite 库）", () => {
+describe("removeSourceFileRefsBatch（真实 PGlite 库）", () => {
   it("多来源同 hash 合并递减、缺失聚合行跳过、账本行清空", async () => {
     // hash a：两个来源共 3 个引用，file_objects 行存在 → 递减到 0（归零保留）
     // hash b：来源行存在但 file_objects 缺失 → 跳过不报错
@@ -151,7 +144,7 @@ describe("removeSourceFileRefsBatch（真实 SQLite 库）", () => {
   }, 30_000);
 });
 
-describe("removeSourceFileRefs（真实 SQLite 库，单来源委托批量实现）", () => {
+describe("removeSourceFileRefs（真实 PGlite 库，单来源委托批量实现）", () => {
   it("按行数量递减聚合并清空该来源账本，其他来源与其他类型不受影响", async () => {
     await prisma!.fileObject.createMany({ data: [
       { userId: 3, hash: "a", refCount: 4, size: 1 },

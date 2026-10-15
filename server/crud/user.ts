@@ -3,7 +3,8 @@
  * 按 ID 与用户名查询用户信息，用户名匹配大小写不敏感。
  */
 import { prisma } from "@server/core/database/client";
-import { Prisma, type User } from "@prisma/client";
+import { isUniqueConstraintError } from "@server/core/database/errors";
+import { type User } from "@server/core/database/generated/client";
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -16,12 +17,7 @@ export async function getUserByUsername(username: string) {
 
 /** 判断唯一约束冲突是否来自用户名：注册查重在事务外，并发同名注册的败方会撞到该约束。 */
 export function isUsernameTakenError(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-  const target = error.meta?.target;
-  const targetText = Array.isArray(target) ? target.join(":") : String(target ?? "");
-  return targetText.includes("username");
+  return isUniqueConstraintError(error, "username");
 }
 
 export async function createUser(data: {

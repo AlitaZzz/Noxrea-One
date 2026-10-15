@@ -3,7 +3,7 @@
  * file_refs 是引用事实来源；file_objects.ref_count 只保存按账本计算的聚合结果。
  * 所有写操作都要求传入 Prisma 事务客户端，确保业务数据、账本与聚合计数同生共死。
  */
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@server/core/database/generated/client";
 import { adjustFileRefCount } from "@server/crud/file";
 
 /** 支持的业务来源类型。canvas_cover 是项目封面专用来源：与画布内容（canvas）
