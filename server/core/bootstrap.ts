@@ -3,7 +3,7 @@
  * 幂等初始化配置、数据库迁移、网关等全局依赖，
  * 供 HTTP 服务与 Worker 循环在同进程中共用。
  */
-import { ensureLocalMigrations, isServerMode } from "@server/core/database/client";
+import { describeConnectionTarget, ensureLocalMigrations, isServerMode } from "@server/core/database/client";
 import { loadConfig } from "@server/core/config";
 import { initSettings } from "@server/core/settings";
 import { logEvent } from "@server/core/logger/utils";
@@ -23,6 +23,7 @@ export async function bootstrap(): Promise<void> {
   logEvent("bootstrap", {
     stage: "database_ready",
     mode: isServerMode() ? "server" : "local",
+    target: describeConnectionTarget(),
   });
 
   // 3. 系统设置：补齐缺失键并读入快照（依赖数据库，必须在迁移之后）

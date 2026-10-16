@@ -42,6 +42,17 @@ export function isServerMode(): boolean {
   return isServerDatabaseUrl(process.env.DATABASE_URL ?? "");
 }
 
+/** 当前连接目标的可读描述（供启动日志）：pg 用户@host:port/库 或 pglite 数据目录；密码一律不出现。 */
+export function describeConnectionTarget(): string {
+  const dbUrl = process.env.DATABASE_URL ?? "";
+  if (isServerDatabaseUrl(dbUrl)) {
+    const url = new URL(dbUrl);
+    const user = url.username ? `${url.username}@` : "";
+    return `pg ${user}${url.host}${url.pathname}`;
+  }
+  return `pglite ${resolveLocalDataDir()}`;
+}
+
 /** 本地模式数据目录：DATABASE_URL=file:<dir> 显式指定，否则默认 data/pglite（相对进程 cwd）。 */
 function resolveLocalDataDir(): string {
   const url = process.env.DATABASE_URL ?? "";
