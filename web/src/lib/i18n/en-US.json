@@ -963,7 +963,10 @@
       "server_error": "Service temporarily unavailable (HTTP {{status}}), please try again later",
       "http_error": "Upload did not go through (HTTP {{status}}), please retry or try another file",
       "aborted": "Upload cancelled",
-      "offline": "You are offline, please restore the connection and retry"
+      "offline": "You are offline, please restore the connection and retry",
+      "staging_missing": "Direct upload object not found or expired, please upload again",
+      "verify_failed": "Upload verification failed, please try again",
+      "direct_unavailable": "Direct upload is not available with the current storage, please use the standard upload"
     },
     "files": {
       "invalid_path": "Invalid file path",

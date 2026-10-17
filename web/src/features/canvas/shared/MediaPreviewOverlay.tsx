@@ -166,7 +166,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
                 }`}
               >
                 {item.mediaType === "video" ? (
-                  <video src={managedFileUrl(item.ref)} muted preload="metadata" className="h-full w-full object-cover" />
+                  <video src={managedFileUrl(item.ref)} crossOrigin="anonymous" muted preload="metadata" className="h-full w-full object-cover" />
                 ) : (
                   <img src={managedFileUrl(item.ref)} alt="" className="h-full w-full object-cover" draggable={false} />
                 )}

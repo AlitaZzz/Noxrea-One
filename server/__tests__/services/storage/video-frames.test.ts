@@ -8,6 +8,7 @@ const ffmpegDir = vi.hoisted(() => process.env.FFMPEG_TEST_DIR ?? process.env.FF
 const cfg = vi.hoisted(() => ({ uploadDir: "uploads" }));
 vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir, UPLOAD_DIR: cfg.uploadDir }) }));
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
+vi.mock("@server/core/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 import { runFfmpegLight, runFfprobe } from "@server/services/storage/ffmpeg";
 import { probeImageMeta } from "@server/services/storage/media-probe";

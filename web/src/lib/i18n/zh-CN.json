@@ -963,7 +963,10 @@
       "server_error": "服务暂时不可用（HTTP {{status}}），请稍后重试",
       "http_error": "上传没成功（HTTP {{status}}），请重试或换个文件试试",
       "aborted": "上传已取消",
-      "offline": "网络已断开，请恢复网络后重试"
+      "offline": "网络已断开，请恢复网络后重试",
+      "staging_missing": "直传对象不存在或已过期，请重新上传",
+      "verify_failed": "上传内容校验未通过，请重新上传",
+      "direct_unavailable": "当前存储不支持直传，请改用普通上传"
     },
     "files": {
       "invalid_path": "文件路径非法",

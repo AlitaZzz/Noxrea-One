@@ -153,26 +153,29 @@ describe("工作区 clearTmpDir", () => {
 
 describe("LocalStorageBackend.delete 派生产物清理", () => {
   it("删除源文件时按前缀清掉其缩略图档位与海报母版，并回收空目录", async () => {
-    await fs.mkdir(path.join(root, "u9/ef"), { recursive: true });
-    await fs.writeFile(path.join(root, "u9/ef/clip.mp4"), "video");
+    // 内容寻址 key 严格形态（派生联动以 isStorageKey 门控，fixture 须对齐生产行态）
+    const hash = "a".repeat(64);
+    const otherHash = "b".repeat(64);
+    await fs.mkdir(path.join(root, "9/ef"), { recursive: true });
+    await fs.writeFile(path.join(root, `9/ef/${hash}.mp4`), "video");
     for (const p of [
-      "_cache/64/u9/ef/clip.webp",
-      "_cache/480/u9/ef/clip.webp",
-      "_posters/v1/u9/ef/clip.webp",
+      `_cache/64/9/ef/${hash}.webp`,
+      `_cache/480/9/ef/${hash}.webp`,
+      `_posters/v1/9/ef/${hash}.webp`,
       // 其他源的派生文件不受影响
-      "_cache/64/u9/ef/other.webp",
+      `_cache/64/9/ef/${otherHash}.webp`,
     ]) {
       await fs.mkdir(path.dirname(abs(p)), { recursive: true });
       await fs.writeFile(abs(p), "derived");
     }
 
-    await storage.delete("u9/ef/clip.mp4");
+    await storage.delete(`9/ef/${hash}.mp4`);
 
-    await expect(fs.access(abs("u9/ef/clip.mp4"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs("_cache/64/u9/ef/clip.webp"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs("_cache/480/u9/ef/clip.webp"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs("_posters/v1/u9/ef/clip.webp"))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs("_cache/64/u9/ef/other.webp"))).resolves.toBeUndefined();
+    await expect(fs.access(abs(`9/ef/${hash}.mp4`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/64/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/480/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_posters/v1/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/64/9/ef/${otherHash}.webp`))).resolves.toBeUndefined();
     // 清空的分组目录被回收
     await expect(fs.access(abs("_posters/v1"))).rejects.toMatchObject({ code: "ENOENT" });
   });

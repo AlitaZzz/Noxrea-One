@@ -22,6 +22,8 @@ export interface UploadLimits {
   maxBatchFiles: number;
   maxBatchBytes: number;
   formats: UploadFormats;
+  /** 上传链路模式（specs/storage-s3-backend.md 规则 6）：direct=预签名直传，relay=服务器中转 */
+  mode: "direct" | "relay";
 }
 
 const FALLBACK_UPLOAD_FORMATS: UploadFormats = {
@@ -40,6 +42,7 @@ export const FALLBACK_UPLOAD_LIMITS: UploadLimits = {
   maxBatchFiles: 20,
   maxBatchBytes: 128 * 1024 * 1024,
   formats: FALLBACK_UPLOAD_FORMATS,
+  mode: "relay",
 };
 
 let cachedLimits: UploadLimits | null = null;
@@ -49,6 +52,19 @@ let cachedLimits: UploadLimits | null = null;
  * 弹窗打开）共享同一次请求。失败时清空以允许后续重试；成功后写入 cachedLimits。
  */
 let limitsInFlight: Promise<UploadLimits> | null = null;
+
+/**
+ * 同步读取上传链路模式：未拉取到服务端数据时按 relay（行为与旧版一致）。
+ * 由上传入口 uploadBatchWithRetry 读取做模式分派。
+ */
+export function getUploadMode(): "direct" | "relay" {
+  return cachedLimits?.mode ?? "relay";
+}
+
+/** 清除限制缓存（直传不可用等服务端能力变化后下次拉取新值） */
+export function invalidateUploadLimits(): void {
+  cachedLimits = null;
+}
 
 /** 同步读取当前白名单（未拉取到服务端数据时返回兜底值） */
 export function getUploadFormats(): UploadFormats {

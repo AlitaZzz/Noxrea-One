@@ -94,6 +94,7 @@ export default function VideoPlayer({ src, className, autoPlay = true, loop = tr
       <video
         ref={videoRef}
         src={src}
+        crossOrigin="anonymous"
         loop={loop}
         muted={volume === 0}
         playsInline

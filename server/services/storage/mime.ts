@@ -3,7 +3,7 @@
  *
  * 扩展名 → MIME 主表（含 .wave/.oga/.opus 别名）与 magic bytes 嗅探表集中于此，
  * 上传定档、下载响应头、参考素材 data: URL、媒体产物落档共用。
- * 业务白名单（如 upload 的 ALLOWED_MIME / ALLOWED_FORMATS）属各路由策略，不在此处。
+ * 业务白名单（formats.ts 的 ALLOWED_MIME / ALLOWED_EXT）属上传策略，不在此处。
  */
 
 /** 扩展名 → MIME 主表（键为小写含点形式） */
@@ -38,6 +38,12 @@ export function normalizeExt(ext: string): string {
   return ext.toLowerCase();
 }
 
+/** 文件名 / 存储 key 的扩展名提取（小写含点；无扩展名返回空串） */
+export function extOfName(name: string): string {
+  const m = name.match(/\.([a-z0-9]+)$/i);
+  return m ? `.${m[1].toLowerCase()}` : "";
+}
+
 /**
  * 按扩展名查 MIME。
  * 未收录时返回 fallback，各调用方按自己的语境传默认值
@@ -46,6 +52,9 @@ export function normalizeExt(ext: string): string {
 export function mimeByExt(ext: string, fallback = "application/octet-stream"): string {
   return MIME_BY_EXT[normalizeExt(ext)] ?? fallback;
 }
+
+/** 魔数嗅探窗口（字节）：覆盖最长签名与 RIFF 第二段 / ftyp 品牌（offset 8+4），上传定档共用 */
+export const SNIFF_WINDOW_BYTES = 16;
 
 /** magic bytes 签名表（支持两段匹配：first + 可选 second / brand 细分） */
 interface MagicSignature {

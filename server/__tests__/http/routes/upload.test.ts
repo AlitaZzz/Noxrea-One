@@ -4,8 +4,7 @@ const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
   persist: vi.fn(),
   save: vi.fn(),
-  probeIntegrity: vi.fn(),
-  probeMeta: vi.fn(),
+  probeUpload: vi.fn(),
 }));
 
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
@@ -41,12 +40,10 @@ vi.mock("@server/services/storage/persist", () => ({
 }));
 
 vi.mock("@server/services/storage/media-probe", () => ({
-  probeVideoIntegrity: mocks.probeIntegrity,
-  probeVideoMetaCached: mocks.probeMeta,
+  probeUploadVideo: mocks.probeUpload,
 }));
 
 import { router } from "@server/http/routes/upload";
-import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 import { resetTestSettings } from "../../helpers/settings";
 
 const MB = 1024 * 1024;
@@ -61,6 +58,7 @@ beforeEach(() => {
   });
   mocks.authenticate.mockResolvedValue({ user: { id: 1 } });
   mocks.persist.mockResolvedValue({ width: null, height: null, duration: null });
+  mocks.probeUpload.mockResolvedValue(undefined);
 });
 
 const errorOf = async (res: Response): Promise<{ error: string; ctx?: unknown }> =>
@@ -310,20 +308,22 @@ describe("POST /api/files/upload 体积校验", () => {
 
   it("视频探测完成前不释放批次租约，完成后保留截断提示", async () => {
     mocks.authenticate.mockResolvedValue({ user: { id: 202 } });
-    mocks.probeMeta.mockResolvedValue({ duration: 10 });
-    let finish!: (result: { truncated: boolean; decodableDuration: number }) => void;
-    mocks.probeIntegrity.mockImplementation(() => new Promise((r) => { finish = r; }));
+    let finish!: (warning: { declared: number; decodable: number }) => void;
+    // 门槛内聚于 probeUploadVideo 后调用方无条件调用：仅首个调用（视频）挂起，
+    // 后续调用（非视频 key 即时 undefined / 同批其他文件）落回 mockResolvedValue(undefined)
+    mocks.probeUpload.mockImplementationOnce(() => new Promise((r) => { finish = r; }));
     const form = new FormData();
     form.append("file", new File([new Uint8Array([1])], "video.mp4", { type: "video/mp4" }));
     const video = router.request("/api/files/upload", { method: "POST", body: form });
-    await vi.waitFor(() => expect(mocks.probeIntegrity).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mocks.probeUpload).toHaveBeenCalledTimes(1));
+    // 属主随体检透传（媒体池个人名额按用户计费）
+    expect(mocks.probeUpload.mock.calls[0][1]).toBe(202);
     const imageForm = new FormData();
     imageForm.append("file", new File([new Uint8Array([2])], "image.png", { type: "image/png" }));
     const next = router.request("/api/files/upload", { method: "POST", body: imageForm });
     await new Promise((r) => setTimeout(r, 10));
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(mocks.probeIntegrity.mock.calls[0][2]).toEqual({ timeoutMs: 1500, owner: 202 });
-    finish({ truncated: true, decodableDuration: 5 });
+    finish({ declared: 10, decodable: 5 });
     const res = await video;
     const body = (await res.json()) as { data: { items: Array<{ data?: { media_warning?: unknown } }> } };
     expect(body.data.items[0].data?.media_warning).toEqual({ declared: 10, decodable: 5 });
@@ -331,10 +331,9 @@ describe("POST /api/files/upload 体积校验", () => {
     expect(mocks.save).toHaveBeenCalledTimes(2);
   });
 
-  it("视频体检遇媒体池过载时跳过体检，上传仍成功且无截断提示", async () => {
+  it("视频体检未返回警告：上传成功且无截断提示（池过载跳过体检的下游语义）", async () => {
     mocks.authenticate.mockResolvedValue({ user: { id: 203 } });
-    mocks.probeMeta.mockResolvedValue({ duration: 10 });
-    mocks.probeIntegrity.mockRejectedValue(new MediaPoolBusyError("ffmpeg_heavy", "global", "queue_full"));
+    mocks.probeUpload.mockResolvedValue(undefined);
     const form = new FormData();
     form.append("file", new File([new Uint8Array([1])], "video.mp4", { type: "video/mp4" }));
 

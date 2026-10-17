@@ -1,8 +1,17 @@
 /**
- * 文件上传公共工具：并发限制 + 失败重试。
+ * 文件上传公共工具：并发限制 + 失败重试 + 双模式分派。
  * 供画布拖入上传（use-file-drop）与资产管理上传（AssetCreateDialog）共用。
+ *
+ * 链路按后端能力二选一（specs/storage-s3-backend.md 业务规则 6，mode 来自
+ * upload-limits 启动预热缓存）：
+ * - relay（local 后端 / 缓存未就绪）：multipart 中转批次（原始路径）；
+ * - direct（S3 后端）：逐文件 增量 SHA256 → upload-ticket（秒传短路）→
+ *   PUT 预签名 URL → upload-complete（服务端提升复验），字节不经应用服务器。
  */
 import {
+  api,
+  ApiError,
+  apiPresignedPutWithProgress,
   apiUploadWithProgress,
   UnauthorizedError,
   type UploadErrorKind,
@@ -11,9 +20,17 @@ import {
 import { resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, SessionChangedError } from "@/lib/session-lifecycle";
+import { getUploadMode, invalidateUploadLimits } from "@/lib/upload-formats";
+import { computeFileSha256 } from "@/lib/utils/upload-hash";
 
 /** 单个上传失败后的最大重试次数 */
 export const UPLOAD_MAX_RETRIES = 1;
+
+/** PUT 同 URL 重试上限（不含首次）：预签名 PUT 同 URL 同内容幂等，可安全重发 */
+const PUT_MAX_RETRIES = 2;
+
+/** 直传并发上限：与服务端按用户并发闸门呼应，避免打满排队深度 */
+const DIRECT_CONCURRENCY = 3;
 
 export interface UploadResult {
   url: string;
@@ -46,10 +63,13 @@ export type UploadSession = ReturnType<typeof captureSession>;
 /** 业务错误：服务端返回了响应但 code !== 200，不应重试 */
 export class UploadBusinessError extends Error {
   detail?: string;
-  constructor(detail?: string) {
+  /** 服务端错误码（如有）：批次执行层按码执行副作用（如 direct_unavailable 清 limits 缓存） */
+  code?: string;
+  constructor(detail?: string, code?: string) {
     super(detail ?? "Upload failed");
     this.name = "UploadBusinessError";
     this.detail = detail;
+    this.code = code;
   }
 }
 
@@ -98,13 +118,28 @@ export function classifyUploadError(err: unknown): UploadErrorInfo {
   };
 }
 
+/** 退避等待：优先服务端 Retry-After，否则指数退避；会话中止立即以中止原因抛出 */
+async function waitBackoff(session: UploadSession, attempt: number, retryAfterMs?: number): Promise<void> {
+  const backoff = retryAfterMs ?? Math.min(30_000, 1_000 * 2 ** attempt);
+  await new Promise<void>((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      session.signal.removeEventListener("abort", onAbort);
+      reject(session.signal.reason);
+    };
+    const timer = setTimeout(() => {
+      session.signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, backoff);
+    session.signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * 上传单个文件，网络错误自动重试。
  * - 网络错误 -> 重试，重试前通过 onProgress(0) 通知调用方重置进度
  * - 业务错误（code !== 200）-> 不重试，直接抛出 UploadBusinessError
  * - 鉴权错误（401）-> 不重试，直接抛出 UnauthorizedError（由全局处理器跳转登录）
- *
- * 注：服务端只按 source 区分文件归属，不按 category 分目录，故不再传 category。
  *
  * @param file       要上传的文件
  * @param onProgress 进度回调
@@ -125,7 +160,7 @@ export async function uploadWithRetry(
 
 /**
  * 上传一个批次并按文件返回 PromiseSettledResult。
- * 传输层失败时整个批次按退避策略重试；业务层单文件失败只影响自身。
+ * 模式分派后各自执行：传输层失败按退避重试；业务层单文件失败只影响自身。
  */
 export async function uploadBatchWithRetry(
   files: File[],
@@ -135,7 +170,32 @@ export async function uploadBatchWithRetry(
   sessionOverride?: UploadSession,
 ): Promise<PromiseSettledResult<UploadResult>[]> {
   if (files.length === 0) return [];
-  const session = sessionOverride ?? captureSession();
+  const params: BatchUploadParams = {
+    files,
+    onProgress,
+    maxRetries,
+    source,
+    session: sessionOverride ?? captureSession(),
+  };
+  // mode 取自启动预热的 upload-limits 缓存；缓存未就绪按 relay（服务端兜底校验不变）
+  if (getUploadMode() === "direct") {
+    return uploadBatchDirect(params);
+  }
+  return uploadBatchRelay(params);
+}
+
+/** 批次上下文参数束：分派入口与两条模式路径共用（公开 API 签名不变） */
+interface BatchUploadParams {
+  files: File[];
+  onProgress?: (pct: number, loaded: number) => void;
+  maxRetries: number;
+  source?: "upload" | "derived";
+  session: UploadSession;
+}
+
+/** relay 模式：multipart 中转批次（一个请求承载全部文件） */
+async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettledResult<UploadResult>[]> {
+  const { files, onProgress, maxRetries, source, session: currentSession } = params;
   const sourceQuery = source ? `?source=${source}` : "";
   let lastErr: unknown;
   const rejected = (reason: unknown): PromiseSettledResult<UploadResult>[] =>
@@ -148,12 +208,12 @@ export async function uploadBatchWithRetry(
     try {
       const formData = new FormData();
       for (const file of files) formData.append("file", file);
-      const data = await session.run(() => apiUploadWithProgress<UploadBatchResponse>(
+      const data = await currentSession.run(() => apiUploadWithProgress<UploadBatchResponse>(
         `/api/files/upload${sourceQuery}`,
         formData,
         onProgress,
       ));
-      session.assertCurrent();
+      currentSession.assertCurrent();
 
       const results: PromiseSettledResult<UploadResult>[] = files.map(() => ({
         status: "rejected",
@@ -177,7 +237,7 @@ export async function uploadBatchWithRetry(
       return results;
     } catch (err) {
       try {
-        session.assertCurrent();
+        currentSession.assertCurrent();
       } catch (sessionError) {
         return rejected(sessionError);
       }
@@ -188,21 +248,8 @@ export async function uploadBatchWithRetry(
       lastErr = err;
       if (attempt >= maxRetries) break;
       onProgress?.(0, 0);
-      const retryAfter = err instanceof UploadTransportError ? err.retryAfterMs : undefined;
-      const backoff = retryAfter ?? Math.min(30_000, 1_000 * 2 ** attempt);
       try {
-        await new Promise<void>((resolve, reject) => {
-          const onAbort = () => {
-            clearTimeout(timer);
-            session.signal.removeEventListener("abort", onAbort);
-            reject(session.signal.reason);
-          };
-          const timer = setTimeout(() => {
-            session.signal.removeEventListener("abort", onAbort);
-            resolve();
-          }, backoff);
-          session.signal.addEventListener("abort", onAbort, { once: true });
-        });
+        await waitBackoff(currentSession, attempt, err instanceof UploadTransportError ? err.retryAfterMs : undefined);
       } catch (waitError) {
         return rejected(waitError);
       }
@@ -210,6 +257,185 @@ export async function uploadBatchWithRetry(
   }
 
   return rejected(lastErr instanceof Error ? lastErr : new Error(i18n.t("error.upload.upload_failed")));
+}
+
+// ── 直传（direct 模式）──
+
+/** 服务端受管文件引用：票据秒传与完成响应共用形状，isUploadFileData 守卫同一形状 */
+type RemoteFileRef = { url: string; key: string; width: number | null; height: number | null };
+
+/** 直传票据响应（upload-ticket，envelope 已剥离） */
+type TicketResponse =
+  | { duplicate: true; file: RemoteFileRef }
+  | { duplicate: false; staging_key: string; upload_url: string; content_type: string };
+
+/** 直传完成响应（upload-complete，envelope 已剥离） */
+interface CompleteResponse {
+  file: RemoteFileRef;
+  media_warning?: { declared: number; decodable: number };
+}
+
+/** 把 api() 异常归一到批次重试层的错误分类：401 透传、网络/5xx/429 可重试、其余业务失败 */
+function mapDirectApiError(err: unknown): unknown {
+  if (!(err instanceof ApiError)) return err;
+  if (err.status === 401) return new UnauthorizedError();
+  if (err.status === 0) return new UploadTransportError("network", err.message);
+  if (err.status === 429 || err.status >= 500) {
+    return new UploadTransportError("http", err.message, err.status);
+  }
+  return new UploadBusinessError(resolveApiError(
+    { error: err.error, ctx: err.ctx },
+    err.status,
+    "upload.upload_failed",
+  ), err.error);
+}
+
+/** api() 异常统一归一后重抛：票据与完成两处共用 */
+function rethrowMapped(err: unknown): never {
+  throw mapDirectApiError(err);
+}
+
+function isUploadFileData(value: unknown): value is RemoteFileRef {
+  if (!value || typeof value !== "object") return false;
+  const v = value as { url?: unknown; key?: unknown; width?: unknown; height?: unknown };
+  return typeof v.url === "string" && v.url.length > 0 && typeof v.key === "string" && v.key.length > 0
+    && (v.width === null || typeof v.width === "number")
+    && (v.height === null || typeof v.height === "number");
+}
+
+/**
+ * 单文件直传：ticket（秒传短路）→ PUT 预签名 → complete。
+ * 哈希由调用方每文件只算一次（重试不重算）。PUT 同 URL 同内容幂等（spec 业务规则 6）：
+ * 网络 / 超时 / 5xx 在同一预签名 URL 上退避重试（响应丢失时同字节覆盖，终态正确）；
+ * 4xx（签名过期等）不可同 URL 恢复，直接上抛使该文件失败——批次层不为 4xx
+ * 重开 ticket，调用方重新上传时会重新开票（旧 staging 由超龄清扫回收）。
+ */
+async function directUploadFile(
+  file: File,
+  opts: {
+    session: UploadSession;
+    hash: string;
+    source?: "upload" | "derived";
+    onPutProgress?: (loaded: number) => void;
+  },
+): Promise<UploadResult> {
+  const { hash } = opts;
+  const contentType = file.type || undefined;
+  const ticket = await opts.session.run(() => api<TicketResponse>("/api/files/upload-ticket", {
+    method: "POST",
+    body: JSON.stringify({
+      hash,
+      size: file.size,
+      name: file.name,
+      ...(contentType ? { content_type: contentType } : {}),
+    }),
+  })).catch(rethrowMapped);
+
+  if (ticket.duplicate) {
+    if (!isUploadFileData(ticket.file)) throw new UploadBusinessError(i18n.t("error.parse_failed"));
+    return { ...ticket.file, media_warning: null };
+  }
+
+  // PUT 同 URL 同内容幂等（spec 业务规则 6）：可重试错误在同一预签名 URL 退避重试
+  let putAttempt = 0;
+  for (;;) {
+    try {
+      await apiPresignedPutWithProgress(ticket.upload_url, file, ticket.content_type, opts.onPutProgress, opts.session.signal);
+      break;
+    } catch (err) {
+      if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
+      if (putAttempt >= PUT_MAX_RETRIES || isOffline()) throw err;
+      opts.onPutProgress?.(0);
+      await waitBackoff(opts.session, putAttempt, err.retryAfterMs);
+      putAttempt += 1;
+    }
+  }
+
+  const done = await opts.session.run(() => api<CompleteResponse>("/api/files/upload-complete", {
+    method: "POST",
+    body: JSON.stringify({
+      staging_key: ticket.staging_key,
+      hash,
+      name: file.name,
+      ...(contentType ? { content_type: contentType } : {}),
+      ...(opts.source ? { source: opts.source } : {}),
+    }),
+  })).catch(rethrowMapped);
+
+  if (!isUploadFileData(done?.file)) throw new UploadBusinessError(i18n.t("error.parse_failed"));
+  return { ...done.file, media_warning: done.media_warning ?? null };
+}
+
+/** direct 模式：逐文件独立上传（小并发池），进度聚合为整批字节 */
+async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSettledResult<UploadResult>[]> {
+  const { files, onProgress, maxRetries, source, session: currentSession } = params;
+  const results: PromiseSettledResult<UploadResult>[] = files.map(() => ({
+    status: "rejected",
+    reason: new UploadBusinessError(i18n.t("error.upload.upload_failed")),
+  }));
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  /** 进度聚合：已完成文件字节 + 在途文件已 PUT 字节 */
+  const settledBytes = new Array<number>(files.length).fill(0);
+  const inflightBytes = new Array<number>(files.length).fill(0);
+  const report = () => {
+    const loaded = settledBytes.reduce((a, b) => a + b, 0) + inflightBytes.reduce((a, b) => a + b, 0);
+    onProgress?.(totalBytes > 0 ? Math.round((loaded / totalBytes) * 100) : 100, loaded);
+  };
+
+  const runOne = async (index: number): Promise<void> => {
+    let lastErr: unknown;
+    // 哈希每文件只算一次：重试直接复用（逐块 signal 检查保证中止语义）
+    const hash = await computeFileSha256(files[index], currentSession.signal);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (isOffline()) {
+        throw new UploadTransportError("network", i18n.t("error.upload.offline"));
+      }
+      try {
+        const value = await directUploadFile(files[index], {
+          session: currentSession,
+          hash,
+          source,
+          onPutProgress: (loaded) => { inflightBytes[index] = loaded; report(); },
+        });
+        settledBytes[index] = files[index].size;
+        inflightBytes[index] = 0;
+        report();
+        results[index] = { status: "fulfilled", value };
+        return;
+      } catch (err) {
+        currentSession.assertCurrent();
+        if (err instanceof UploadBusinessError) {
+          // 服务端已不在直传后端（切换重启后 limits 缓存过期）：清缓存，下次自动走 relay。
+          // 副作用归批次执行层，mapDirectApiError 保持纯映射
+          if (err.code === "upload.direct_unavailable") invalidateUploadLimits();
+          throw err;
+        }
+        if (err instanceof UnauthorizedError) throw err;
+        if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
+        lastErr = err;
+        if (attempt >= maxRetries) break;
+        inflightBytes[index] = 0;
+        report();
+        await waitBackoff(currentSession, attempt, err.retryAfterMs);
+      }
+    }
+    throw lastErr ?? new Error(i18n.t("error.upload.upload_failed"));
+  };
+
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next++;
+      if (index >= files.length) return;
+      try {
+        await runOne(index);
+      } catch (err) {
+        results[index] = { status: "rejected", reason: err };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(DIRECT_CONCURRENCY, files.length) }, worker));
+  return results;
 }
 
 /**

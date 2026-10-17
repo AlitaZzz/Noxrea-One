@@ -77,6 +77,12 @@ const cidrList = (): SettingDef<string> => ({
   default: "",
 });
 
+/** 枚举文本设置（后端选择、分发模式等有限值域） */
+const enumText = <T extends string>(values: readonly T[], value: T): SettingDef<T> => ({
+  schema: z.enum(values as [T, ...T[]]),
+  default: value,
+});
+
 export const SETTING_DEFS = {
   // 认证
   "auth.registration_enabled": bool(true),
@@ -152,6 +158,28 @@ export const SETTING_DEFS = {
   "storage.gc_grace_hours": int(48),
   /** 试运行模式：只扫描报告不删除；确认扫描结果无误后再关闭 */
   "storage.gc_dry_run": bool(true),
+
+  // 存储后端选择与 S3 连接（specs/storage-s3-backend.md 规则 1/2）。
+  // 重启生效，永不参与快照热刷新；backend=s3 时必填键的跨项联合校验
+  // 放在存储初始化点（service.ts），注册表维持各项独立校验的现状
+  /** 存储后端：local（默认）| s3；切换须停写 + 迁移脚本 */
+  "storage.backend": enumText(["local", "s3"] as const, "local"),
+  "storage.s3.endpoint": httpUrlOrEmpty(),
+  "storage.s3.bucket": text(),
+  "storage.s3.region": text(),
+  /** 凭据与 model_providers.api_key 同级明文存库（项目已确认的密钥处理基准） */
+  "storage.s3.access_key_id": text(),
+  "storage.s3.secret_access_key": text(),
+  /** path-style 寻址（MinIO 等自建默认 true） */
+  "storage.s3.path_style": bool(true),
+  /** 对象 key 统一前缀（bucket 复用）；存储层内部映射，接口层 key 不含前缀 */
+  "storage.s3.prefix": text(),
+  /** 预签名有效期（秒）：读取重定向、媒体工具输入、上游拉取共用 */
+  "storage.s3.signed_url_ttl_seconds": timerSeconds(3600),
+  /** files 路由分发：redirect（302 预签名，默认）| proxy（服务器流式转发） */
+  "storage.s3.delivery": enumText(["redirect", "proxy"] as const, "redirect"),
+  /** 上游 AI 引用下发：signed-url（默认）| base64（无公网可达性兜底） */
+  "storage.upstream_ref_delivery": enumText(["signed-url", "base64"] as const, "signed-url"),
 };
 
 export type SettingKey = keyof typeof SETTING_DEFS;

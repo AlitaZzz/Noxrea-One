@@ -204,16 +204,28 @@ function parseRetryAfterMs(header: string | null): number | undefined {
   return undefined;
 }
 
-export function apiUploadWithProgress<T = unknown>(
-  path: string,
-  formData: FormData,
-  onProgress?: (pct: number, loaded: number) => void,
-  signal?: AbortSignal
-): Promise<T> {
+/**
+ * XHR 上传共用底座：挂起检测（传输 / 响应双档位）、离线止损、会话与逐操作中止。
+ * 应用 API（POST /api/*，会话凭据 + envelope）与 S3 预签名直传 PUT（外域、无凭据）
+ * 共用同一传输语义，只有请求构造与响应解析不同（由调用方回调完成）。
+ */
+function xhrUploadWithWatch<T>(opts: {
+  method: "POST" | "PUT";
+  url: string;
+  body: FormData | Blob;
+  contentType?: string;
+  /** 应用 API：会话绑定 + 全局 401 处理；预签名直传（外域）为 false */
+  sessionBound: boolean;
+  signal?: AbortSignal;
+  onProgress?: (pct: number, loaded: number) => void;
+  /** 响应解析（onload 内执行，抛错按该错误拒绝） */
+  parse: (xhr: XMLHttpRequest) => T;
+}): Promise<T> {
   const session = captureSession();
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${BASE}${path}`);
+    xhr.open(opts.method, opts.url);
+    if (opts.contentType) xhr.setRequestHeader("Content-Type", opts.contentType);
 
     // 挂起检测：传输阶段看字节是否推进，等待响应阶段看服务端是否回应
     let lastActiveAt = Date.now();
@@ -236,8 +248,8 @@ export function apiUploadWithProgress<T = unknown>(
       settled = true;
       clearInterval(watcher);
       window.removeEventListener("offline", onOffline);
-      session.signal.removeEventListener("abort", onSessionAbort);
-      signal?.removeEventListener("abort", onOperationAbort);
+      if (opts.sessionBound) session.signal.removeEventListener("abort", onSessionAbort);
+      opts.signal?.removeEventListener("abort", onOperationAbort);
       fn();
     };
     /** 中止统一收口：清挂起定时器 → 中止 XHR → 以给定原因拒绝（settle 保证只执行一次） */
@@ -254,24 +266,24 @@ export function apiUploadWithProgress<T = unknown>(
     const onOffline = () => abortWith(new UploadTransportError("network", i18n.t("error.upload.offline")));
     window.addEventListener("offline", onOffline);
     const onSessionAbort = () => abortWith(session.signal.reason);
-    session.signal.addEventListener("abort", onSessionAbort, { once: true });
+    if (opts.sessionBound) session.signal.addEventListener("abort", onSessionAbort, { once: true });
 
     // 逐操作中止：调用方（如客户端媒体管线的取消按钮）显式取消本次上传，
     // 与会话级中止同一收口语义；挂起检测定时器经 settle 统一清理
-    const onOperationAbort = () => abortWith(signal?.reason ?? new DOMException("Aborted", "AbortError"));
-    if (signal) {
-      if (signal.aborted) {
+    const onOperationAbort = () => abortWith(opts.signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    if (opts.signal) {
+      if (opts.signal.aborted) {
         onOperationAbort();
         return;
       }
-      signal.addEventListener("abort", onOperationAbort, { once: true });
+      opts.signal.addEventListener("abort", onOperationAbort, { once: true });
     }
 
     xhr.upload.onprogress = (e) => {
       touch();
       if (e.lengthComputable) {
         if (e.loaded >= e.total) bodySent = true;
-        onProgress?.(Math.round((e.loaded / e.total) * 100), e.loaded);
+        opts.onProgress?.(Math.round((e.loaded / e.total) * 100), e.loaded);
       }
     };
     // 请求体发完（无论是否带进度回调）→ 切换到「等待响应」超时档位
@@ -279,28 +291,84 @@ export function apiUploadWithProgress<T = unknown>(
 
     xhr.onload = () => {
       settle(() => {
-        if (checkUnauthorized(xhr.status)) { reject(new UnauthorizedError()); return; }
-        if (xhr.status < 200 || xhr.status >= 300) {
-          // 网关错误页、413 等在此收口，不再被误判成网络错误而无效重试。
-          // 服务端错误响应带结构化错误码（{ error, ctx }），优先翻译成人话；
-          // 解析不出（网关 HTML / 代理错误页）才退回带状态码的兜底文案。
-          const body = parseErrorBody(parseJsonSafe(xhr.responseText));
-          const message = body?.error
-            ? resolveApiError(body, xhr.status, "upload.upload_failed")
-            : xhr.status >= 500
-              ? i18n.t("error.upload.server_error", { status: xhr.status })
-              : i18n.t("error.upload.http_error", { status: xhr.status });
-          const retryAfterMs = parseRetryAfterMs(xhr.getResponseHeader?.("Retry-After"));
-          reject(new UploadTransportError("http", message, xhr.status, retryAfterMs));
-          return;
+        try {
+          resolve(opts.parse(xhr));
+        } catch (err) {
+          reject(err);
         }
-        try { resolve(unwrapBody<T>(JSON.parse(xhr.responseText))); }
-        catch { reject(new UploadTransportError("http", i18n.t("error.parse_failed"), xhr.status)); }
       });
     };
     xhr.onerror = () => settle(() => reject(new UploadTransportError("network", i18n.t("error.network_error"))));
     xhr.onabort = () => settle(() => reject(new UploadTransportError("abort", i18n.t("error.upload.aborted"))));
-    xhr.send(formData);
+    xhr.send(opts.body);
+  });
+}
+
+/** POST /api/* 批量上传（multipart，带进度）：应用 API 的完整语义（会话 / 401 / envelope） */
+export function apiUploadWithProgress<T = unknown>(
+  path: string,
+  formData: FormData,
+  onProgress?: (pct: number, loaded: number) => void,
+  signal?: AbortSignal
+): Promise<T> {
+  return xhrUploadWithWatch<T>({
+    method: "POST",
+    url: `${BASE}${path}`,
+    body: formData,
+    sessionBound: true,
+    onProgress,
+    signal,
+    parse: (xhr) => {
+      if (checkUnauthorized(xhr.status)) throw new UnauthorizedError();
+      if (xhr.status < 200 || xhr.status >= 300) {
+        // 网关错误页、413 等在此收口，不再被误判成网络错误而无效重试。
+        // 服务端错误响应带结构化错误码（{ error, ctx }），优先翻译成人话；
+        // 解析不出（网关 HTML / 代理错误页）才退回带状态码的兜底文案。
+        const body = parseErrorBody(parseJsonSafe(xhr.responseText));
+        const message = body?.error
+          ? resolveApiError(body, xhr.status, "upload.upload_failed")
+          : xhr.status >= 500
+            ? i18n.t("error.upload.server_error", { status: xhr.status })
+            : i18n.t("error.upload.http_error", { status: xhr.status });
+        const retryAfterMs = parseRetryAfterMs(xhr.getResponseHeader?.("Retry-After"));
+        throw new UploadTransportError("http", message, xhr.status, retryAfterMs);
+      }
+      try { return unwrapBody<T>(JSON.parse(xhr.responseText)); }
+      catch { throw new UploadTransportError("http", i18n.t("error.parse_failed"), xhr.status); }
+    },
+  });
+}
+
+/**
+ * S3 预签名 PUT 直传（带进度）：绝对 URL 指向对象存储外域，请求凭签名放行，
+ * 不携带会话也不做 401 处理；成功响应（200/204）无正文。
+ */
+export function apiPresignedPutWithProgress(
+  url: string,
+  body: Blob,
+  contentType: string | undefined,
+  onProgress?: (pct: number, loaded: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return xhrUploadWithWatch<void>({
+    method: "PUT",
+    url,
+    body,
+    contentType,
+    sessionBound: false,
+    onProgress,
+    signal,
+    parse: (xhr) => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const retryAfterMs = parseRetryAfterMs(xhr.getResponseHeader?.("Retry-After"));
+        throw new UploadTransportError(
+          "http",
+          i18n.t("error.upload.http_error", { status: xhr.status }),
+          xhr.status,
+          retryAfterMs,
+        );
+      }
+    },
   });
 }
 

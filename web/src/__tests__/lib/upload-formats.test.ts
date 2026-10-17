@@ -63,6 +63,16 @@ describe("upload-formats loadUploadLimits 并发去重", () => {
     expect(getUploadFormats().image).toEqual(["png"]);
   });
 
+  it("上传模式：未拉取按 relay，拉取后透传服务端模式，清除缓存回落 relay", async () => {
+    const m = await import("@/lib/upload-formats");
+    expect(m.getUploadMode()).toBe("relay");
+    mocks.api.mockResolvedValue({ ...LIMITS, mode: "direct" });
+    await m.loadUploadLimits();
+    expect(m.getUploadMode()).toBe("direct");
+    m.invalidateUploadLimits();
+    expect(m.getUploadMode()).toBe("relay");
+  });
+
   it("失败后在途标记清空，后续调用可重试", async () => {
     const { loadUploadLimits } = await import("@/lib/upload-formats");
     mocks.api.mockRejectedValueOnce(new Error("network down"));

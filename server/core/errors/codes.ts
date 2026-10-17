@@ -162,6 +162,12 @@ export const ERROR_CODES = [
   "upload.too_many_pending",
   /** 客户端在批次排队等待期间断开，处理已中止 */
   "upload.cancelled",
+  /** 直传 staging 对象不存在（未上传或已被清扫） */
+  "upload.staging_missing",
+  /** 直传复验失败：内容与申报不符（哈希 / 尺寸 / XML），未验证内容不提升（staging 保留供排查，超龄清扫回收） */
+  "upload.verify_failed",
+  /** 当前存储后端不支持直传（mode=relay） */
+  "upload.direct_unavailable",
 
   // ── 文件 ──
   /** 文件路径非法 */

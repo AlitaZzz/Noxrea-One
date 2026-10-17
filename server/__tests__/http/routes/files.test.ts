@@ -6,7 +6,10 @@ import path from "path";
 const mocks = vi.hoisted(() => ({
   getResizedWebP: vi.fn(),
   getVideoPosterWebP: vi.fn(),
+  authenticate: vi.fn(),
 }));
+
+vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
@@ -15,6 +18,7 @@ vi.mock("@server/core/config", () => ({
     FFPROBE_PATH: "ffprobe",
     LOG_LEVEL: "silent",
     ALLOW_INSECURE_SECRETS: true,
+    JWT_SECRET_KEY: "test-file-route-secret",
   }),
 }));
 
@@ -31,23 +35,48 @@ vi.mock("@server/services/storage/resize-cache", async (importOriginal) => {
   };
 });
 
+vi.mock("@server/http/middleware/auth", () => ({
+  authenticateRequest: mocks.authenticate,
+}));
+
 import { router } from "@server/http/routes/files";
 import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
+import { signFileUrlParams } from "@server/services/storage/file-url-signature";
+import { resetTestSettings } from "../../helpers/settings";
+
+/** local 语义 + 预签名能力（redirect 分发的分发形态路由级验证；签名产出为固定假 URL） */
+class PresignableLocalBackend extends LocalStorageBackend {
+  readonly presignCalls: Array<{ key: string; opts?: Record<string, unknown> }> = [];
+  async presignGet(
+    key: string,
+    opts?: { ttlSeconds?: number; responseContentDisposition?: string; cacheControl?: string },
+  ): Promise<string> {
+    this.presignCalls.push({ key, opts });
+    return `https://s3.example/get?key=${encodeURIComponent(key)}`;
+  }
+}
 
 let tmpDir = "";
+let backend: PresignableLocalBackend;
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "files-route-"));
   // stat / 读取流走真实后端（指向隔离根）：穿越与 404 语义由后端自带守卫给出
-  initStorageBackend(new LocalStorageBackend(tmpDir));
+  backend = new PresignableLocalBackend(tmpDir);
+  initStorageBackend(backend);
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  backend.presignCalls.length = 0;
+  // 本文件默认 proxy 分发（流式语义）；redirect 分发由专用 describe 显式开启
+  resetTestSettings({ "storage.s3.delivery": "proxy" });
   mocks.getResizedWebP.mockResolvedValue(null);
   mocks.getVideoPosterWebP.mockResolvedValue(null);
+  // 默认会话凭据：双凭据的拒绝与签名路径由专用 describe 验证
+  mocks.authenticate.mockResolvedValue({ user: { id: 1 } });
 });
 
 describe("GET /api/files/*", () => {
@@ -156,5 +185,116 @@ describe("GET /api/files/* 媒体池过载", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(((await res.json()) as { error: string }).error).toBe("media.busy");
+  });
+});
+
+describe("GET /api/files/* 双凭据（spec 规则 6）", () => {
+  beforeEach(async () => {
+    // 无会话：鉴权失败，只能靠签名凭据放行
+    mocks.authenticate.mockResolvedValue({
+      error: Response.json({ error: "auth.not_authenticated" }, { status: 401 }),
+    });
+    await fs.mkdir(path.join(tmpDir, "u1/ab"), { recursive: true });
+    await fs.writeFile(path.join(tmpDir, "u1/ab/signed.png"), "x");
+  });
+
+  it("无会话且无签名 → 401", async () => {
+    const res = await router.request("/api/files/u1/ab/signed.png");
+    expect(res.status).toBe(401);
+  });
+
+  it("有效签名放行并返回内容", async () => {
+    const { expires, signature } = signFileUrlParams("u1/ab/signed.png", 60);
+    const res = await router.request(
+      `/api/files/u1/ab/signed.png?expires=${expires}&signature=${signature}`,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("x");
+  });
+
+  it("过期签名拒绝", async () => {
+    const { expires, signature } = signFileUrlParams("u1/ab/signed.png", 0);
+    const res = await router.request(
+      `/api/files/u1/ab/signed.png?expires=${expires}&signature=${signature}`,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("篡改签名拒绝", async () => {
+    const { expires, signature } = signFileUrlParams("u1/ab/signed.png", 60);
+    const tampered = signature.slice(0, -1) + (signature.endsWith("a") ? "b" : "a");
+    const res = await router.request(
+      `/api/files/u1/ab/signed.png?expires=${expires}&signature=${tampered}`,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("签名与 key 绑定：A 的签名请求 B 拒绝", async () => {
+    const { expires, signature } = signFileUrlParams("u1/ab/other.png", 60);
+    const res = await router.request(
+      `/api/files/u1/ab/signed.png?expires=${expires}&signature=${signature}`,
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("会话请求不受签名逻辑影响", async () => {
+    mocks.authenticate.mockResolvedValue({ user: { id: 1 } });
+    const res = await router.request("/api/files/u1/ab/signed.png");
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("GET /api/files/* redirect 分发（spec 规则 4/5）", () => {
+  beforeEach(async () => {
+    await fs.mkdir(path.join(tmpDir, "u1/ab"), { recursive: true });
+    await fs.writeFile(path.join(tmpDir, "u1/ab/ok.png"), "x");
+    resetTestSettings({
+      "storage.s3.delivery": "redirect",
+      "storage.s3.signed_url_ttl_seconds": 600,
+    });
+  });
+
+  it("redirect 模式 302 到预签名 URL，字节不经应用服务器（Cache-Control no-store）", async () => {
+    const res = await router.request("/api/files/u1/ab/ok.png");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe(
+      `https://s3.example/get?key=${encodeURIComponent("u1/ab/ok.png")}`,
+    );
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(await res.text()).toBe("");
+
+    const call = backend.presignCalls.at(-1)!;
+    expect(call.key).toBe("u1/ab/ok.png");
+    expect(call.opts).toMatchObject({
+      ttlSeconds: 600,
+      cacheControl: "public, max-age=600, immutable",
+    });
+  });
+
+  it("?download 透传 disposition，filename 参数缺扩展名时补上", async () => {
+    const res = await router.request("/api/files/u1/ab/ok.png?download=1&filename=%E6%8A%A5%E5%91%8A");
+    expect(res.status).toBe(302);
+    const opts = backend.presignCalls.at(-1)!.opts;
+    expect(opts?.responseContentDisposition).toBe(
+      `attachment; filename*=UTF-8''${encodeURIComponent("报告.png")}`,
+    );
+  });
+
+  it("?w= 命中缩放缓存后 redirect 派生 key", async () => {
+    const cacheKey = "_cache/100/u1/ab/ok.webp";
+    await fs.mkdir(path.join(tmpDir, "_cache/100/u1/ab"), { recursive: true });
+    await fs.writeFile(path.join(tmpDir, cacheKey), "x");
+    mocks.getResizedWebP.mockResolvedValue(cacheKey);
+
+    const res = await router.request("/api/files/u1/ab/ok.png?w=100");
+    expect(res.status).toBe(302);
+    expect(backend.presignCalls.at(-1)!.key).toBe(cacheKey);
+  });
+
+  it("proxy 模式下具备预签名能力也不 302", async () => {
+    resetTestSettings({ "storage.s3.delivery": "proxy" });
+    const res = await router.request("/api/files/u1/ab/ok.png");
+    expect(res.status).toBe(200);
+    expect(backend.presignCalls).toHaveLength(0);
   });
 });

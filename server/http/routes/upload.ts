@@ -2,74 +2,36 @@
 import { Hono } from "hono";
 
 import { getSetting } from "@server/core/settings";
-import { GateRejectedError, waitForUserConcurrency } from "@server/core/ratelimit/concurrency";
-import { failCode, failClientDisconnected, ok } from "@server/core/response";
-import { authenticateRequest, type AuthUser } from "@server/http/middleware/auth";
+import { failCode, ok } from "@server/core/response";
+import { requireUploadUser, uploadConcurrencyLease, type UploadEnv } from "@server/http/middleware/upload";
 import { uploadBodyLimit, uploadBodyStreamLimit, UploadBodyTooLargeError } from "@server/http/middleware/body-limit";
 import { failBatchTooLarge, getUploadBatchLimits } from "@server/services/storage/upload-limits";
-import { processUploadBatch, UPLOAD_FORMATS } from "@server/services/storage/upload";
-
-type UploadEnv = {
-  Variables: {
-    uploadUser: AuthUser;
-  };
-};
+import { getStorageBackend } from "@server/services/storage/service";
+import { supportsDirectUpload } from "@server/services/storage/backend";
+import { UPLOAD_FORMATS } from "@server/services/storage/formats";
+import { processUploadBatch } from "@server/services/storage/upload";
 
 const router = new Hono<UploadEnv>();
 
 /** 上传约束：供前端批次调度和格式提示共用，避免两端漂移。 */
-router.get("/api/files/upload-limits", async (c) => {
-  const auth = await authenticateRequest(c.req.raw);
-  if ("error" in auth) return auth.error;
-
+router.get("/api/files/upload-limits", requireUploadUser, async (c) => {
   const limits = getUploadBatchLimits();
   return c.json(ok({
     maxSizeMb: getSetting("upload.max_file_mb"),
     maxBatchFiles: limits.maxFiles,
     maxBatchBytes: limits.maxBytes,
     formats: UPLOAD_FORMATS,
+    // 直传能力统一判定（与 ticket/complete 同口径）：前端据此选择直传或中转路径
+    mode: supportsDirectUpload(getStorageBackend()) ? "direct" : "relay",
   }));
 });
 
 router.post(
   "/api/files/upload",
-  async (c, next) => {
-    const auth = await authenticateRequest(c.req.raw);
-    if ("error" in auth) return auth.error;
-    c.set("uploadUser", auth.user);
-    return next();
-  },
+  requireUploadUser,
   // 请求体 header 预检先于并发租约；chunked 请求在租约内通过流式 middleware 限制
   uploadBodyLimit(),
-  async (c, next) => {
-    const user = c.get("uploadUser");
-    let release: (() => void) | undefined;
-    try {
-      release = await waitForUserConcurrency(
-        "upload",
-        user.id,
-        getSetting("upload.batch_max_concurrent"),
-        c.req.raw.signal,
-        getSetting("upload.batch_max_pending"),
-      );
-    } catch (err) {
-      // 按用户的门不设等待时限，过载只会是队列满：立即 429（客户端按可重试退避）；
-      // 仅客户端断开按 499 收口；其他异常重新抛出
-      if (err instanceof GateRejectedError) {
-        return failCode(429, "upload.too_many_pending", undefined, {
-          "Retry-After": "1",
-          "Cache-Control": "no-store",
-        });
-      }
-      if (!c.req.raw.signal.aborted) throw err;
-      return failClientDisconnected("upload.cancelled");
-    }
-    try {
-      return await next();
-    } finally {
-      release();
-    }
-  },
+  uploadConcurrencyLease(),
   uploadBodyStreamLimit(),
   async (c) => {
     const user = c.get("uploadUser");

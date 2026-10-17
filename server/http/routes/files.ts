@@ -7,9 +7,14 @@ import { getResizedWebP, getVideoPosterWebP } from "@server/services/storage/res
 import { StorageTraversalError } from "@server/services/storage/backend";
 import { getStorageBackend } from "@server/services/storage/service";
 import { failCode } from "@server/core/response";
+import { getSetting } from "@server/core/settings";
+import { authenticateRequest } from "@server/http/middleware/auth";
+import { verifyFileUrlSignature } from "@server/services/storage/file-url-signature";
 import path from "path";
 import { Readable } from "node:stream";
-import { buildFileResponseHeaders } from "@server/http/file-response";
+import { attachmentDisposition, buildFileResponseHeaders } from "@server/http/file-response";
+import { isVideoExt } from "@server/services/storage/formats";
+import { extOfName } from "@server/services/storage/mime";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 import { failMediaBusy } from "@server/http/media-busy";
 
@@ -28,7 +33,18 @@ router.get("/api/files/*", async (c) => {
     return failCode(400, "common.invalid_request");
   }
 
-  // 路径穿越防护
+  // 双凭据（spec 规则 6）：浏览器会话（cookie/Bearer）或与 key 绑定的
+  // 应用层签名 URL 二者其一；无会话的上游消费方（AI 拉取、脚本）走
+  // 签名凭据，两类凭据互不影响。鉴权先于派生缓存（重型工作）执行
+  const auth = await authenticateRequest(request);
+  if (
+    "error" in auth &&
+    !verifyFileUrlSignature(requestedKey, url.searchParams.get("expires"), url.searchParams.get("signature"))
+  ) {
+    return auth.error;
+  }
+
+  // 路径穿越防护（鉴权之后：key 形态的 403 信息只暴露给通过凭据校验的调用方）
   const pathSegments = requestedKey.split("/");
   if (pathSegments.some((seg) => seg.includes(".."))) {
     return failCode(403, "files.invalid_path");
@@ -39,18 +55,18 @@ router.get("/api/files/*", async (c) => {
   // w 缩放参数 -> WebP 缓存：
   // 图片走 sharp 缩放；视频走 ffmpeg 抽帧缩放（首帧），按需惰性生成并缓存。
   const w = c.req.query("w");
-  const isVideoExt = /\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(requestedKey);
   if (w) {
     const width = parseInt(w, 10);
     if (!isNaN(width) && width > 0) {
       // 透传 signal：客户端断开时中止缩放任务，及时释放源文件句柄
+      const video = isVideoExt(extOfName(requestedKey));
       try {
-        const cached = isVideoExt
+        const cached = video
           ? await getVideoPosterWebP(requestedKey, width, request.signal)
           : await getResizedWebP(requestedKey, width, request.signal);
         if (cached) {
           objectKey = cached;
-        } else if (isVideoExt) {
+        } else if (video) {
           // 视频缩略图生成失败：不回退原视频（否则 <img> 解码失败），返回 404 由前端兜底
           return failCode(404, "files.file_not_found");
         }
@@ -77,20 +93,34 @@ router.get("/api/files/*", async (c) => {
 
   if (!stat) return failCode(404, "files.file_not_found");
 
-  const ext = path.extname(objectKey).toLowerCase();
+  const ext = extOfName(objectKey);
 
   // download 参数 -> Content-Disposition
   const download = c.req.query("download");
   const filename = c.req.query("filename");
   const headers = buildFileResponseHeaders(ext, stat.size);
 
+  // 下载名：filename 参数优先，缺扩展名时补上（redirect 分发的 disposition 同名）
+  let baseName = filename ?? path.basename(objectKey);
+  if (!baseName.toLowerCase().endsWith(ext)) {
+    baseName += ext;
+  }
   if (download !== null) {
-    const rawExt = path.extname(objectKey);
-    let baseName = filename ?? path.basename(objectKey);
-    if (!baseName.toLowerCase().endsWith(rawExt.toLowerCase())) {
-      baseName += rawExt;
-    }
-    headers.set("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(baseName)}`);
+    headers.set("Content-Disposition", attachmentDisposition(baseName));
+  }
+
+  // 读取分发（spec 规则 4/5）：具备预签名能力且 delivery=redirect 时 302 到
+  // 预签名 GET——字节不经过应用服务器，Range 由浏览器直接向对象存储发起
+  // （原生 206）；proxy 模式与 local 后端走下方流式转发。预签名的签名时间
+  // 对齐 TTL/4 的 epoch 窗口，配合 immutable 缓存控制命中浏览器缓存
+  if (backend.presignGet && getSetting("storage.s3.delivery") === "redirect") {
+    const ttl = getSetting("storage.s3.signed_url_ttl_seconds");
+    const target = await backend.presignGet(objectKey, {
+      ttlSeconds: ttl,
+      ...(download !== null ? { responseContentDisposition: attachmentDisposition(baseName) } : {}),
+      cacheControl: `public, max-age=${ttl}, immutable`,
+    });
+    return new Response(null, { status: 302, headers: { Location: target, "Cache-Control": "no-store" } });
   }
 
   // Range 请求支持（视频 seek 依赖）

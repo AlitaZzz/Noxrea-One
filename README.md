@@ -164,7 +164,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `upload.*` | 单文件大小、单批文件数、单用户并发批次数与排队深度 |
 | `worker.*` | 生成任务 Worker 的轮询、并发、超时、重试等 |
 | `http.*` | 下载、轮询、API 请求超时，响应体空闲与下载总时长 |
-| `storage.*` | 存储引用 GC 宽限期与试运行开关 |
+| `storage.*` | 存储后端选择与 S3 连接配置（`storage.backend` / `storage.s3.*`）、读取分发与上游引用策略、存储引用 GC 宽限期与试运行开关 |
 
 例如关闭注册：
 
@@ -231,6 +231,40 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 
 升级镜像前建议先备份整个数据目录。
 
+## 对象存储（S3 兼容后端）
+
+存储后端按 `system_settings` 的 `storage.backend` 二选一（`local` 本地盘 / `s3` 兼容对象存储，重启生效，不支持热切换）。S3 模式下文件字节默认不经过应用服务器：读取 302 重定向到预签名 URL、上传走预签名直传；连接参数与分发策略同样存放在 `system_settings`（键定义见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)）：
+
+| 设置键 | 默认 | 说明 |
+| --- | --- | --- |
+| `storage.s3.endpoint` / `bucket` / `region` | 空 | 连接三要素；`backend=s3` 时必填，缺失则启动失败并指明键名 |
+| `storage.s3.access_key_id` / `secret_access_key` | 空 | 访问凭据；`backend=s3` 时必填 |
+| `storage.s3.path_style` | `true` | path-style 寻址（MinIO 等自建为 true） |
+| `storage.s3.prefix` | 空 | 对象 key 统一前缀（bucket 复用） |
+| `storage.s3.signed_url_ttl_seconds` | `3600` | 预签名有效期 |
+| `storage.s3.delivery` | `redirect` | `redirect`（302 预签名）/ `proxy`（服务器流式转发，预签名 URL 不可达时兜底） |
+| `storage.upstream_ref_delivery` | `signed-url` | 上游 AI 拉取引用媒体的方式：`signed-url` / `base64` |
+
+`backend=s3` 时启动即对 bucket 做 HeadBucket 探测，连通性或凭据失败会直接终止启动（不静默降级到本地盘）。
+
+### Bucket 初始化清单（切换前必配）
+
+1. **CORS 规则（必配，redirect 读与直传写共同依赖）**：
+   - `AllowedOrigins`：生产域名 + 本地开发来源（如 `http://localhost:9898`）；
+   - `AllowedMethods`：`GET`（读取 / 解码 / 抓帧 / Range 请求）与 `PUT`（预签名直传）；
+   - `AllowedHeaders`：`Range`、`Content-Type`（PUT 只签/只发 Content-Type；Range 不参与签名，但浏览器跨源发送需在 CORS 放行）；
+   - `ExposeHeaders`：`Content-Length`、`Content-Range`、`Content-Type`（浏览器侧不消费 ETag：客户端哈希本地计算，复验以服务端重算为准）；
+   - `MaxAgeSeconds`：86400。
+   - 配置入口：MinIO 用 `mc cors set` / 控制台，R2 与各云 S3 网关用各自仪表盘 / API。
+2. **lifecycle 规则（可选）**：可按前缀自动过期替代 `_sprite` / `_proxy` 的代码内 30 天 TTL 清扫；**禁止**对主对象前缀配置 lifecycle（主对象删除只能由引用计数 GC 驱动）。
+3. **服务端加密**：bucket 不得启用 SSE-KMS / SSE-C（MinIO/R2 默认关闭）；启用会使 ETag≠MD5，迁移校验自动降级为 size 比对 + 重读哈希并告警（直传复验以服务端重算 SHA256 为准，不受影响）。
+
+### 对账与切换
+
+低频维护命令：`npm run storage:audit` 对 bucket 与 `file_objects` 全量对账（孤儿 / 缺失 / 超龄 staging / 未知对象清单，只读不修改，发现异常退出码 1）。
+
+切换与回滚遵循「单一后端、切换必须停写」：停应用 → 迁移脚本全量搬迁并校验（迁移脚本属 Stage 4 待交付项，交付前不得执行切换；规格要求支持 dry-run 与断点续跑，不删除本地数据）→ 设置 `storage.backend=s3` → 重启；回滚先反向补迁再改回 `local`。完整规则见 [`specs/storage-s3-backend.md`](specs/storage-s3-backend.md)。
+
 ## 资源与模型配置
 
 后端运行期读取以下资源：
@@ -249,13 +283,13 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 
 - `auth`：注册、登录与会话
 - `canvas`：画布项目与节点数据
-- `upload` / `files` / `assets`：文件上传、访问与素材管理
+- `upload` / `files` / `assets`：文件上传（本地中转或 S3 预签名直传）、文件访问（会话或签名 URL 凭据）与素材管理
 - `model-config`、`models`、`model-params`：供应商、模型、能力与参数配置
 - `generate`：生成任务创建、状态查询、取消与 SSE 订阅
 - `agent`：Agent 会话、消息、技能与工具结果
 - `capture-frame`、`detach-audio`、`video-proxy`、`frame-sprite`：媒体处理能力
 
-接口需要 JWT 认证；注册开放策略由系统设置 `auth.registration_enabled` 控制。
+接口需要 JWT 认证；注册开放策略由系统设置 `auth.registration_enabled` 控制。files 读取额外接受短期签名 URL 凭据，供上游 AI 等免会话消费方使用。
 
 ## 开发约定
 

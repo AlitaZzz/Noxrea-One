@@ -5,8 +5,13 @@
  */
 
 import { mediaSourceInput, resolveMediaSource, type MediaSource } from "./media-source";
+import { isVideoExt } from "./formats";
+import { extOfName } from "./mime";
 import { probeFfmpeg, probeFfmpegDecode } from "./ffmpeg";
 import { runSingleFlight } from "./media-singleflight";
+import { MediaPoolBusyError } from "./media-pool";
+import { logEvent } from "@server/core/logger/utils";
+import { logger } from "@server/core/logger";
 
 /**
  * 探测图片的真实宽高：sharp 只读元数据头，不解码整图像素，开销极小。
@@ -284,4 +289,39 @@ async function decodeIntegrity(
   if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
   integrityCache.set(videoPath, result);
   return result;
+}
+
+/** 视频上传体检结论：标称时长 vs 实际可解码时长（截断/损坏时非空） */
+export interface VideoUploadWarning {
+  declared: number;
+  decodable: number;
+}
+
+const UPLOAD_VIDEO_PROBE_TIMEOUT_MS = 1_500;
+
+/**
+ * 视频上传体检：标称时长 vs 实际可解码时长。
+ * 门槛内聚于探测入口：仅视频扩展名的 key 参与体检（key 以内容寻址扩展名结尾），
+ * 调用方无需各自预判 isVideoExt。完整探测必须在当前批次返回前结束，
+ * 确保并发租约覆盖整个媒体处理成本。
+ */
+export async function probeUploadVideo(storageKey: string, owner: number): Promise<VideoUploadWarning | undefined> {
+  if (!isVideoExt(extOfName(storageKey))) return undefined;
+  try {
+    // 探测只读容器头 / 解码判定，不值得把远程文件整体下载到工作区：
+    // ffmpeg 直接以源为输入（local 后端给存储路径，S3 后端给预签名 GET URL）
+    const source = await resolveMediaSource(storageKey);
+    const input = mediaSourceInput(source);
+    const meta = await probeVideoMetaCached(input);
+    if (!meta?.duration) return undefined;
+    const integrity = await probeVideoIntegrity(input, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
+    if (!integrity.truncated || !integrity.decodableDuration) return undefined;
+    const warning = { declared: meta.duration, decodable: integrity.decodableDuration };
+    logEvent("media", { stage: "upload_truncated", video: storageKey, ...warning });
+    return warning;
+  } catch (err: unknown) {
+    // 体检是 best-effort：媒体池过载（池已记录拒绝）按「无法体检」跳过，不使上传失败
+    if (!(err instanceof MediaPoolBusyError)) logger.debug({ err, video: storageKey }, "upload probe failed");
+    return undefined;
+  }
 }

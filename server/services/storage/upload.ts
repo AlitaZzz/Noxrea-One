@@ -5,44 +5,19 @@
  */
 import { getSetting } from "@server/core/settings";
 import type { ErrorCode } from "@server/core/errors/codes";
-import { logEvent } from "@server/core/logger/utils";
 import { computeBufferHash } from "./hash";
-import { sniffMime, normalizeExt, mimeByExt } from "./mime";
-import { MediaPoolBusyError } from "./media-pool";
-import { probeVideoIntegrity, probeVideoMetaCached } from "./media-probe";
+import { sniffMime, normalizeExt, SNIFF_WINDOW_BYTES } from "./mime";
+import { isXmlContent } from "./xml-content";
+import { evaluateUploadIdentity, resolveUploadMime } from "./formats";
+import { probeUploadVideo, type VideoUploadWarning } from "./media-probe";
 import { persistFileObject } from "./persist";
-import { buildFileUrl, buildStorageKey, getStorageBackend } from "./service";
-import { mediaSourceInput, resolveMediaSource } from "./media-source";
+import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
 import { logger } from "@server/core/logger";
 
-export const UPLOAD_FORMATS = {
-  image: ["png", "jpg", "jpeg", "gif", "webp", "avif"],
-  video: ["mp4", "webm", "mov", "avi", "mkv"],
-  audio: ["mp3", "wav", "ogg", "m4a", "aac", "flac", "webm"],
-} as const;
-
-const ALLOWED_MIME = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp",
-  "image/avif",
-  "video/mp4", "video/webm", "video/quicktime", "video/x-msvideo",
-  "video/x-matroska",
-  "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg",
-  "audio/flac", "audio/mp4", "audio/x-m4a", "audio/aac", "audio/x-aac", "audio/webm",
-]);
-
-const ALLOWED_EXT = new Set<string>(Object.values(UPLOAD_FORMATS).flat());
 const FILE_PROCESS_CONCURRENCY = 3;
-const UPLOAD_VIDEO_PROBE_TIMEOUT_MS = 1_500;
 
-export interface UploadSuccess {
-  key: string;
-  url: string;
-  size: number;
-  mime_type: string;
-  hash: string;
-  width: number | null;
-  height: number | null;
-  media_warning?: { declared: number; decodable: number };
+export interface UploadSuccess extends StoredFileView {
+  media_warning?: VideoUploadWarning;
 }
 
 export interface UploadItemError {
@@ -56,68 +31,6 @@ export type UploadItemResult =
 
 export interface UploadBatchResult {
   items: UploadItemResult[];
-}
-
-function extOfName(name: string): string {
-  const m = name.match(/\.([a-z0-9]+)$/i);
-  return m ? `.${m[1].toLowerCase()}` : "";
-}
-
-/**
- * 白名单全是二进制媒体；XML 文本（含 SVG）不能凭伪造的文件名/MIME 获准上传。
- * 扫描首个非空白码元而非固定长度前缀，兼顾长注释/空白、UTF-8 BOM 和 UTF-16。
- * 不解码整份文件，也不误拒绝二进制媒体元数据中偶然包含的 <svg 字样。
- */
-function isXmlContent(buffer: Buffer): boolean {
-  let offset = 0;
-  let step = 1;
-  let littleEndian = true;
-  if (buffer[0] === 0xff && buffer[1] === 0xfe) {
-    offset = 2;
-    step = 2;
-  } else if (buffer[0] === 0xfe && buffer[1] === 0xff) {
-    offset = 2;
-    step = 2;
-    littleEndian = false;
-  } else if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-    offset = 3;
-  } else if (buffer[0] === 0 && buffer[1] === 0x3c) {
-    step = 2;
-    littleEndian = false;
-  } else if (buffer[0] === 0x3c && buffer[1] === 0) {
-    step = 2;
-  }
-  for (; offset + step <= buffer.length; offset += step) {
-    const code = step === 1 ? buffer[offset]
-      : littleEndian ? buffer.readUInt16LE(offset) : buffer.readUInt16BE(offset);
-    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) continue;
-    return code === 0x3c;
-  }
-  return false;
-}
-
-/**
- * 视频上传体检：标称时长 vs 实际可解码时长。
- * 完整探测必须在当前批次返回前结束，确保并发租约覆盖整个媒体处理成本。
- */
-async function probeUploadVideo(storageKey: string, owner: number): Promise<UploadSuccess["media_warning"] | undefined> {
-  try {
-    // 探测只读容器头 / 解码判定，不值得把远程文件整体下载到工作区：
-    // ffmpeg 直接以源为输入（local 后端给存储路径，S3 后端给预签名 GET URL）
-    const source = await resolveMediaSource(storageKey);
-    const input = mediaSourceInput(source);
-    const meta = await probeVideoMetaCached(input);
-    if (!meta?.duration) return undefined;
-    const integrity = await probeVideoIntegrity(input, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
-    if (!integrity.truncated || !integrity.decodableDuration) return undefined;
-    const warning = { declared: meta.duration, decodable: integrity.decodableDuration };
-    logEvent("media", { stage: "upload_truncated", video: storageKey, ...warning });
-    return warning;
-  } catch (err: unknown) {
-    // 体检是 best-effort：媒体池过载（池已记录拒绝）按「无法体检」跳过，不使上传失败
-    if (!(err instanceof MediaPoolBusyError)) logger.debug({ err, video: storageKey }, "upload probe failed");
-    return undefined;
-  }
 }
 
 function itemError(
@@ -138,22 +51,20 @@ async function processFile(
   const maxSize = maxSizeMb * 1024 * 1024;
   if (file.size > maxSize) return itemError(index, "upload.file_too_large", { limit: maxSizeMb });
 
-  const nameExt = extOfName(file.name);
-  const mimeOk = Boolean(file.type) && ALLOWED_MIME.has(file.type);
-  const extOk = nameExt !== "" && ALLOWED_EXT.has(nameExt.slice(1));
-  if (!mimeOk && !extOk) {
-    return itemError(index, "upload.unsupported_type", { type: file.type || nameExt || "unknown" });
+  const identity = evaluateUploadIdentity(file.name, file.type);
+  if (!identity.admitted) {
+    return itemError(index, "upload.unsupported_type", { type: identity.type });
   }
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
-    if (file.type === "image/svg+xml" || nameExt === ".svg" || isXmlContent(buffer)) {
-      return itemError(index, "upload.unsupported_type", { type: file.type || nameExt || "svg" });
+    if (isXmlContent(buffer)) {
+      return itemError(index, "upload.unsupported_type", { type: identity.type });
     }
     const hash = await computeBufferHash(buffer);
-    const sniffed = sniffMime(buffer.subarray(0, 16));
-    const mime = (file.type && mimeOk ? file.type : null) ?? mimeByExt(nameExt, sniffed.mime);
-    const finalExt = extOk ? nameExt : normalizeExt(sniffed.ext);
+    const sniffed = sniffMime(buffer.subarray(0, SNIFF_WINDOW_BYTES));
+    const mime = resolveUploadMime(identity.whitelistedMime, identity.nameExt, sniffed.mime);
+    const finalExt = identity.extOk ? identity.nameExt : normalizeExt(sniffed.ext);
     const storageKey = buildStorageKey(userId, hash, finalExt);
 
     await getStorageBackend().put(storageKey, buffer);
@@ -166,22 +77,22 @@ async function processFile(
       source,
     });
 
-    let mediaWarning: UploadSuccess["media_warning"];
-    if (/\.(mp4|webm|mov|mkv|m4v|avi|mpg|mpeg)$/i.test(finalExt)) {
-      mediaWarning = await probeUploadVideo(storageKey, userId);
-    }
+    // 体检门槛（仅视频）内聚于 probeUploadVideo
+    const mediaWarning = await probeUploadVideo(storageKey, userId);
 
     return {
       index,
       ok: true,
       data: {
-        key: storageKey,
-        url: buildFileUrl(storageKey),
-        size: buffer.length,
-        mime_type: mime,
-        hash,
-        width: mediaMeta.width,
-        height: mediaMeta.height,
+        ...storedFileView({
+          userId,
+          hash,
+          ext: finalExt,
+          size: buffer.length,
+          mimeType: mime,
+          width: mediaMeta.width,
+          height: mediaMeta.height,
+        }),
         ...(mediaWarning ? { media_warning: mediaWarning } : {}),
       },
     };

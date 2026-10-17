@@ -10,7 +10,7 @@ import { logger } from "@server/core/logger";
 import { getSetting } from "@server/core/settings";
 import { buildStorageKey, getStorageBackend } from "./service";
 import { computeBufferHash } from "./hash";
-import { sniffMime, normalizeExt } from "./mime";
+import { sniffMime, normalizeExt, SNIFF_WINDOW_BYTES } from "./mime";
 import { persistFileObject } from "./persist";
 
 /**
@@ -147,7 +147,7 @@ export async function downloadAndSave(
 
     // SHA256 + magic bytes 校验
     const fileHash = await computeBufferHash(buffer);
-    const { mime, ext: sniffedExt } = sniffMime(buffer.subarray(0, 16));
+    const { mime, ext: sniffedExt } = sniffMime(buffer.subarray(0, SNIFF_WINDOW_BYTES));
     const fileExt = normalizeExt(sniffedExt);
 
     // 构建存储路径：{userId}/{hash[:2]}/{hash}{ext}

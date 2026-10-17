@@ -6,6 +6,11 @@
  */
 import { mimeByExt } from "@server/services/storage/mime";
 
+/** Content-Disposition 的 RFC 5987 下载形态（?download 与 redirect 预签名分发共用单一来源） */
+export function attachmentDisposition(filename: string): string {
+  return `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 export function buildFileResponseHeaders(ext: string, size: number): Headers {
   const contentType = mimeByExt(ext);
   const headers = new Headers({

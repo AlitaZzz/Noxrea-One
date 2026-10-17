@@ -24,6 +24,7 @@ import { extractAudioClipRouter } from "./routes/extract-audio-clip";
 import { applyAudioSpeedRouter } from "./routes/apply-audio-speed";
 import { router as cropVideoRouter } from "./routes/crop-video";
 import { router as uploadRouter } from "./routes/upload";
+import { router as uploadDirectRouter } from "./routes/upload-direct";
 import { router as filesRouter } from "./routes/files";
 
 // Hono 应用实例
@@ -64,6 +65,7 @@ app.route("/", extractAudioClipRouter);
 app.route("/", applyAudioSpeedRouter);
 app.route("/", cropVideoRouter);
 app.route("/", uploadRouter);
+app.route("/", uploadDirectRouter);
 app.route("/", filesRouter);
 
 // 404

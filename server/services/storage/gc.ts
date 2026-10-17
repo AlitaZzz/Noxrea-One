@@ -13,7 +13,7 @@
  *   回到，事务终检会放弃回收。残余竞态（引用恰好在删行与删文件之间回来）窗口为
  *   毫秒级，远小于 48h 宽限期语义，此时最多留下一个无账本行的孤儿磁盘文件，
  *   不影响任何引用的完整性。
- * - storage.gc_dry_run：首版默认只报告不删除，观察扫描结果后再切换实删。
+ * - storage.gc_dry_run：引用回收与 staging 清扫都只报告不删除，观察扫描结果后再切换实删。
  *
  * 启动后延迟首跑 + 每日一次（进程内 interval），由 bootstrap 挂载，幂等。
  */
@@ -21,6 +21,7 @@ import { Prisma } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
 import { getSetting } from "@server/core/settings";
 import { buildStorageKey, getStorageBackend } from "./service";
+import { sweepStagingObjects } from "./upload-direct";
 import { logEvent } from "@server/core/logger/utils";
 
 const GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -152,20 +153,30 @@ let running = false;
 async function tick(): Promise<void> {
   if (running) return;
   running = true;
+  // latch 释放不依赖任何内部日志调用不抛错：整个 tick 体由 finally 兜底
   try {
-    const report = await runStorageGc();
-    logEvent("gc", {
-      stage: "done",
-      dryRun: report.dryRun,
-      candidates: report.candidates,
-      ledgerProtected: report.ledgerProtected,
-      agentProtected: report.agentProtected,
-      unlocatable: report.unlocatable,
-      skipped: report.skipped,
-      reclaimed: report.reclaimed.length,
-    });
-  } catch (err) {
-    logEvent("gc", { stage: "failed", error: String(err) });
+    try {
+      const report = await runStorageGc();
+      logEvent("gc", {
+        stage: "done",
+        dryRun: report.dryRun,
+        candidates: report.candidates,
+        ledgerProtected: report.ledgerProtected,
+        agentProtected: report.agentProtected,
+        unlocatable: report.unlocatable,
+        skipped: report.skipped,
+        reclaimed: report.reclaimed.length,
+      });
+    } catch (err) {
+      logEvent("gc", { stage: "failed", error: String(err) });
+    }
+    // staging 清扫与孤儿回收同一节奏但独立成败：一方失败不拖累另一方
+    try {
+      const swept = await sweepStagingObjects();
+      logEvent("gc", { stage: "staging_swept", swept, dryRun: getSetting("storage.gc_dry_run") });
+    } catch (err) {
+      logEvent("gc", { stage: "staging_sweep_failed", error: String(err) });
+    }
   } finally {
     running = false;
   }

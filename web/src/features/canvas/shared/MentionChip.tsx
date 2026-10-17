@@ -44,6 +44,7 @@ export default function MentionChip({ node }: NodeViewProps) {
       ) : item.kind === "video" ? (
         <video
           src={refThumbnailUrl(item.src, "video")}
+          crossOrigin="anonymous"
           muted
           preload="metadata"
           playsInline

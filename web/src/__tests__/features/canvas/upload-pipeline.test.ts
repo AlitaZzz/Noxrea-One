@@ -67,6 +67,7 @@ describe("上传管道的失败与落库行为", () => {
       maxBatchFiles: 20,
       maxBatchBytes: 128 * 1024 * 1024,
       formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
     vi.mocked(uploadBatchWithRetry).mockReset();
     vi.mocked(uploadWithRetry).mockReset();
@@ -178,6 +179,7 @@ describe("上传管道的失败与落库行为", () => {
       maxBatchFiles: 20,
       maxBatchBytes: 6,
       formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
     vi.mocked(uploadBatchWithRetry).mockImplementation(async (files) => files.map((file) => ({
       status: "fulfilled",
@@ -204,12 +206,14 @@ describe("上传管道的失败与落库行为", () => {
       maxBatchFiles: number;
       maxBatchBytes: number;
       formats: { image: string[]; video: string[]; audio: string[] };
+      mode: "direct" | "relay";
     }) => void;
     const limits = new Promise<{
       maxSizeMb: number;
       maxBatchFiles: number;
       maxBatchBytes: number;
       formats: { image: string[]; video: string[]; audio: string[] };
+      mode: "direct" | "relay";
     }>((resolve) => { resolveLimits = resolve; });
     vi.mocked(loadUploadLimits).mockReturnValue(limits);
     vi.mocked(uploadBatchWithRetry).mockResolvedValue([{
@@ -224,6 +228,7 @@ describe("上传管道的失败与落库行为", () => {
       maxBatchFiles: 20,
       maxBatchBytes: 128 * 1024 * 1024,
       formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
 
     const summary = await settled;
@@ -237,6 +242,7 @@ describe("上传管道的失败与落库行为", () => {
       maxBatchFiles: 20,
       maxBatchBytes: 2,
       formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
     vi.mocked(uploadBatchWithRetry).mockResolvedValue([]);
 
@@ -287,6 +293,7 @@ describe("上传管道的失败与落库行为", () => {
     vi.mocked(loadUploadLimits).mockResolvedValue({
       maxSizeMb: 100, maxBatchFiles: 1, maxBatchBytes: 128 * 1024 * 1024,
       formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
     vi.mocked(uploadBatchWithRetry).mockImplementation(async () => {
       vi.stubGlobal("navigator", { onLine: false });

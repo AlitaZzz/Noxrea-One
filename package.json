@@ -23,6 +23,7 @@
     "test:watch": "npm -w web run test:watch",
     "prisma:generate": "prisma generate",
     "db:migrate:new": "tsx scripts/db/author-migration.mts",
+    "storage:audit": "tsx --env-file=.env scripts/storage/audit.mts",
     "postinstall": "prisma generate"
   },
   "overrides": {
@@ -30,6 +31,8 @@
     "three": "^0.186.1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@electric-sql/pglite": "^0.5.10",
     "@hono/node-server": "^2.0.12",
     "@noxrea/shared": "*",

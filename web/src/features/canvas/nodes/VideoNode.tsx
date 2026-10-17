@@ -949,7 +949,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         {data.upload?.uploading ? (
           <div className="absolute inset-0 rounded-lg overflow-hidden">
             {data.upload?.previewUrl && (
-              <video src={data.upload.previewUrl} muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
+              <video src={data.upload.previewUrl} crossOrigin="anonymous" muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 px-8">
               {uploadProgress != null ? (
@@ -981,6 +981,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               key={`${sessionEpoch}:${loadingSrc}`}
               ref={setVideoRef}
               src={loadingSrc}
+              crossOrigin="anonymous"
               className="absolute inset-0 w-full h-full rounded-lg"
               loop={!clipOpen}
               muted={volume === 0 || autoplayMuted}

@@ -170,6 +170,7 @@ function ReadyMediaContent({
           key={retryCount}
           ref={setMediaRef}
           src={src}
+          crossOrigin="anonymous"
           className={cn(mediaClassName, phase === "error" && "hidden")}
           autoPlay
           muted

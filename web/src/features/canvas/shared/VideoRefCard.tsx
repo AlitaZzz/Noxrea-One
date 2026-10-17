@@ -96,7 +96,7 @@ function VideoRefCard({
           onReorder(dragged, src);
         }}
       >
-        <video src={refThumbnailUrl(src, "video")} className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
+        <video src={refThumbnailUrl(src, "video")} crossOrigin="anonymous" className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
         <ReferenceIndexBadge>{t("common.refVideoLabel", { index: index + 1 })}</ReferenceIndexBadge>
         <ReferenceRemoveButton
           ariaLabel={t("common.delete")}
