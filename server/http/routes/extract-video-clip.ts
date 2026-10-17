@@ -33,7 +33,7 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "clip",
     failureCode: "clip.extract_failed",
-    async run({ c, data, sourcePath, userId, signal, tmpDir }) {
+    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
       // zod refine 已保证 end > start，这里再按业务语义限宽（1e-6 容差吃掉浮点误差：
       // 前端钳位极限处 end-start 可能是 0.49999999999999994 这类值）
       if (data.end - data.start < MIN_CLIP_DURATION_S - 1e-6) {
@@ -44,7 +44,7 @@ router.post(
       }
 
       const clip = await extractVideoClip(
-        sourcePath,
+        sourceInput,
         path.join(await tmpDir(), "clip.mp4"),
         { start: data.start, end: data.end },
         userId,

@@ -11,6 +11,8 @@
  * 会持续失败，重试只是浪费时间，需要区分对待。
  */
 
+import fs from "fs/promises";
+
 /** 属于「文件被短暂占用」类、值得重试的错误码集合 */
 const TRANSIENT_FILE_ERROR_CODES = new Set([
   "UNKNOWN", // libuv 未映射的 Windows 错误（共享冲突 errno -4094 落在这里）
@@ -24,6 +26,14 @@ const TRANSIENT_FILE_ERROR_CODES = new Set([
 export function isTransientFileError(err: unknown): boolean {
   const code = (err as NodeJS.ErrnoException | undefined)?.code;
   return typeof code === "string" && TRANSIENT_FILE_ERROR_CODES.has(code);
+}
+
+/** rename 冲突重试次数（配合 withRetry 默认 50ms 起退避，累计约 1.5s，覆盖外部句柄的短暂占用） */
+export const RENAME_RETRIES = 5;
+
+/** 尽力而为删除：失败静默（临时文件清理的统一形态；残留由启动时的 clearTmpDir 兜底） */
+export async function rmQuiet(target: string): Promise<void> {
+  await fs.rm(target, { force: true }).catch(() => undefined);
 }
 
 export interface RetryOptions {

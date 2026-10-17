@@ -6,8 +6,6 @@ import path from "path";
 const mocks = vi.hoisted(() => ({
   getResizedWebP: vi.fn(),
   getVideoPosterWebP: vi.fn(),
-  stat: vi.fn(),
-  baseDir: "",
 }));
 
 vi.mock("@server/core/config", () => ({
@@ -18,16 +16,6 @@ vi.mock("@server/core/config", () => ({
     LOG_LEVEL: "silent",
     ALLOW_INSECURE_SECRETS: true,
   }),
-}));
-
-vi.mock("@server/services/storage/backends/local", () => ({
-  localStorage: {
-    get baseDir() {
-      return mocks.baseDir;
-    },
-    stat: mocks.stat,
-    delete: vi.fn(),
-  },
 }));
 
 // 缩放两个入口替换为 spy：守卫行为由 media.test.ts 对真实实现验证，
@@ -44,17 +32,20 @@ vi.mock("@server/services/storage/resize-cache", async (importOriginal) => {
 });
 
 import { router } from "@server/http/routes/files";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 let tmpDir = "";
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "files-route-"));
+  // stat / 读取流走真实后端（指向隔离根）：穿越与 404 语义由后端自带守卫给出
+  initStorageBackend(new LocalStorageBackend(tmpDir));
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.baseDir = tmpDir;
   mocks.getResizedWebP.mockResolvedValue(null);
   mocks.getVideoPosterWebP.mockResolvedValue(null);
 });
@@ -93,7 +84,6 @@ describe("GET /api/files/*", () => {
     await fs.mkdir(path.join(tmpDir, "_cache/100/u1/ab"), { recursive: true });
     await fs.writeFile(path.join(tmpDir, cacheKey), "x");
     mocks.getResizedWebP.mockResolvedValue(cacheKey);
-    mocks.stat.mockResolvedValue({ size: 1, mtimeMs: 0 });
 
     const res = await router.request("/api/files/u1/ab/ok.png?w=100");
     expect(res.status).toBe(200);
@@ -101,7 +91,6 @@ describe("GET /api/files/*", () => {
   });
 
   it("文件不存在返回 404", async () => {
-    mocks.stat.mockResolvedValue(null);
     const res = await router.request("/api/files/u1/ab/missing.png");
     expect(res.status).toBe(404);
   });
@@ -109,7 +98,6 @@ describe("GET /api/files/*", () => {
   it("正常文件按扩展名返回 Content-Type", async () => {
     await fs.mkdir(path.join(tmpDir, "u1/ab"), { recursive: true });
     await fs.writeFile(path.join(tmpDir, "u1/ab/ok.png"), "x");
-    mocks.stat.mockResolvedValue({ size: 1, mtimeMs: 0 });
 
     const res = await router.request("/api/files/u1/ab/ok.png");
     expect(res.status).toBe(200);
@@ -120,7 +108,6 @@ describe("GET /api/files/*", () => {
 describe("GET /api/files/* Range 请求", () => {
   beforeEach(async () => {
     // 8 字节文件：Range 边界一目了然
-    mocks.stat.mockResolvedValue({ size: 8, mtimeMs: 0 });
     await fs.mkdir(path.join(tmpDir, "u1/ab"), { recursive: true });
     await fs.writeFile(path.join(tmpDir, "u1/ab/r.mp4"), "01234567");
   });

@@ -3,8 +3,6 @@
  * 路由只负责认证、限流和请求解析；文件校验、落盘、去重和元数据持久化
  * 全部在这里按文件独立处理，避免一个坏文件阻断同批其他文件。
  */
-import path from "path";
-
 import { getSetting } from "@server/core/settings";
 import type { ErrorCode } from "@server/core/errors/codes";
 import { logEvent } from "@server/core/logger/utils";
@@ -13,8 +11,8 @@ import { sniffMime, normalizeExt, mimeByExt } from "./mime";
 import { MediaPoolBusyError } from "./media-pool";
 import { probeVideoIntegrity, probeVideoMetaCached } from "./media-probe";
 import { persistFileObject } from "./persist";
-import { buildStorageKey } from "./service";
-import { localStorage } from "./backends/local";
+import { buildFileUrl, buildStorageKey, getStorageBackend } from "./service";
+import { mediaSourceInput, resolveMediaSource } from "./media-source";
 import { logger } from "@server/core/logger";
 
 export const UPLOAD_FORMATS = {
@@ -103,11 +101,14 @@ function isXmlContent(buffer: Buffer): boolean {
  * 完整探测必须在当前批次返回前结束，确保并发租约覆盖整个媒体处理成本。
  */
 async function probeUploadVideo(storageKey: string, owner: number): Promise<UploadSuccess["media_warning"] | undefined> {
-  const absPath = path.resolve(localStorage.baseDir, storageKey);
   try {
-    const meta = await probeVideoMetaCached(absPath);
+    // 探测只读容器头 / 解码判定，不值得把远程文件整体下载到工作区：
+    // ffmpeg 直接以源为输入（local 后端给存储路径，S3 后端给预签名 GET URL）
+    const source = await resolveMediaSource(storageKey);
+    const input = mediaSourceInput(source);
+    const meta = await probeVideoMetaCached(input);
     if (!meta?.duration) return undefined;
-    const integrity = await probeVideoIntegrity(absPath, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
+    const integrity = await probeVideoIntegrity(input, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
     if (!integrity.truncated || !integrity.decodableDuration) return undefined;
     const warning = { declared: meta.duration, decodable: integrity.decodableDuration };
     logEvent("media", { stage: "upload_truncated", video: storageKey, ...warning });
@@ -155,7 +156,7 @@ async function processFile(
     const finalExt = extOk ? nameExt : normalizeExt(sniffed.ext);
     const storageKey = buildStorageKey(userId, hash, finalExt);
 
-    await localStorage.save(storageKey, buffer);
+    await getStorageBackend().put(storageKey, buffer);
     const mediaMeta = await persistFileObject({
       userId,
       hash,
@@ -175,7 +176,7 @@ async function processFile(
       ok: true,
       data: {
         key: storageKey,
-        url: `/api/files/${storageKey}`,
+        url: buildFileUrl(storageKey),
         size: buffer.length,
         mime_type: mime,
         hash,

@@ -7,11 +7,14 @@ import { Hono } from "hono";
 
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
+  root: "",
 }));
 
 vi.mock("@server/core/config", () => ({
+  // workspace 的 uploadRoot() 每次调用即时读取 UPLOAD_DIR：beforeAll 里
+  // 先建好隔离目录再触发请求即可，无需在模块加载期落定
   getConfig: () => ({
-    UPLOAD_DIR: "uploads",
+    UPLOAD_DIR: mocks.root,
     FFMPEG_PATH: "ffmpeg",
     FFPROBE_PATH: "ffprobe",
     LOG_LEVEL: "silent",
@@ -24,7 +27,8 @@ vi.mock("@server/http/middleware/auth", () => ({
 }));
 
 import { createMediaEditRoute, type MediaEditContext } from "@server/http/routes/media-edit";
-import { localStorage } from "@server/services/storage/backends/local";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 const USER_ID = 3;
@@ -56,8 +60,9 @@ function buildApp(
 let root = "";
 
 beforeAll(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), "media-edit-"));
-  (localStorage as { baseDir: string }).baseDir = root;
+  root = mocks.root = await fs.mkdtemp(path.join(os.tmpdir(), "media-edit-"));
+  // 路由工厂经 getStorageBackend() 取 stat / 源租约：注入指向隔离根的 local 后端
+  initStorageBackend(new LocalStorageBackend(root));
 });
 
 beforeEach(() => {
@@ -124,7 +129,7 @@ describe("createMediaEditRoute 前置链路", () => {
     expect(res.status).toBe(200);
     const ctx = run.mock.calls[0][0];
     expect(ctx.sourceKey).toBe("3/ab/ok.png");
-    expect(ctx.sourcePath).toBe(path.resolve(root, "3/ab/ok.png"));
+    expect(ctx.sourceInput).toBe(path.resolve(root, "3/ab/ok.png"));
     expect(ctx.userId).toBe(USER_ID);
   });
 

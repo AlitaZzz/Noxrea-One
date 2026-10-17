@@ -16,11 +16,10 @@ import { z } from "zod";
 import { createFrameSprite } from "@server/services/storage/video-frames";
 import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ensureArtifact } from "@server/services/storage/artifact";
-import { localStorage } from "@server/services/storage/backends/local";
+import { buildFileUrl } from "@server/services/storage/service";
+import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
-import path from "path";
-import fs from "fs/promises";
 import { createHash } from "crypto";
 
 const frameSpriteSchema = z.object({
@@ -43,35 +42,11 @@ const MAX_FRAMES = 20;
  * 超出部分是坏帧，必须整体重生成。
  */
 const SPRITE_VERSION = 2;
-/** 清理扫描的最小间隔：避免每次请求都遍历目录 */
-const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 /** 雪碧图存活时间：单张只有几十 KB，与代理同周期清理即可 */
 const SPRITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-let lastCleanupAt = 0;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-/** 清掉过期雪碧图：按最后生成时间判定，纯维护动作，任何失败都不影响主流程 */
-async function cleanupStaleSprites(baseDir: string): Promise<void> {
-  const now = Date.now();
-  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
-  lastCleanupAt = now;
-  try {
-    const dir = path.resolve(baseDir, "_sprite");
-    const names = await fs.readdir(dir);
-    for (const name of names) {
-      const target = path.join(dir, name);
-      const stat = await fs.stat(target).catch(() => null);
-      if (!stat || !stat.isFile()) continue;
-      if (now - stat.mtimeMs > SPRITE_TTL_MS) {
-        await fs.rm(target, { force: true }).catch(() => {});
-      }
-    }
-  } catch {
-    // 目录不存在或读取失败：清理只是顺带做的维护，静默跳过
-  }
 }
 
 const router = new Hono();
@@ -86,9 +61,8 @@ router.post(
     // 只产出可缓存的派生产物，不落库新文件：不计数（限流保护的是存储增长），
     // 重型开销由媒体池的个人与全局限额约束
     persistsFileObject: false,
-    async run({ c, sourceKey, sourcePath, userId, signal }) {
-      const baseDir = path.resolve(localStorage.baseDir);
-      const meta = await probeVideoMetaCached(sourcePath);
+    async run({ c, sourceKey, sourceInput, userId, signal }) {
+      const meta = await probeVideoMetaCached(sourceInput);
       const declaredDuration = meta?.duration ?? null;
       // 拿不到时长就无法把格子映射到时间轴，采样间隔无从计算——此时只能放弃缩略图。
       // 面板退化为「只有播放头」仍可定位与截取：成片抽帧走后端精确 seek
@@ -99,7 +73,7 @@ router.post(
       // 容器声明时长可能大于实际数据（下载中断的截断文件：moov 完整、mdat 只有前段）。
       // 按声明时长采样会把超出部分铺满坏帧，且与代理、播放器的时长对不上；
       // 这里把采样收敛到实际可解码范围，并随响应下发标记，前端在面板上给出警示
-      const integrity = await probeVideoIntegrity(sourcePath, declaredDuration, { signal, owner: userId });
+      const integrity = await probeVideoIntegrity(sourceInput, declaredDuration, { signal, owner: userId });
       const duration =
         integrity.truncated && integrity.decodableDuration
           ? integrity.decodableDuration
@@ -119,10 +93,10 @@ router.post(
         .slice(0, 32)}.webp`;
 
       // 顺带做一次低频清理，不阻塞本次请求
-      void cleanupStaleSprites(baseDir);
+      void cleanupStaleDerived("_sprite/", SPRITE_TTL_MS);
 
       const payload = {
-        url: `/api/files/${spriteKey}`,
+        url: buildFileUrl(spriteKey),
         count,
         cell_width: CELL_WIDTH,
         duration,
@@ -135,7 +109,7 @@ router.post(
         key: spriteKey,
         signal,
         produce: (tmpPath, genSignal) =>
-          createFrameSprite(sourcePath, tmpPath, { count, cellWidth: CELL_WIDTH, duration }, userId, genSignal),
+          createFrameSprite(sourceInput, tmpPath, { count, cellWidth: CELL_WIDTH, duration }, userId, genSignal),
       });
       return c.json(ok(payload));
     },

@@ -43,9 +43,7 @@ vi.mock("@server/core/logger/utils", () => ({
 }));
 vi.mock("@server/services/storage/service", () => ({
   buildFileUrl: vi.fn((key: string) => `/api/files/${key}`),
-}));
-vi.mock("@server/services/storage/backends/local", () => ({
-  localStorage: { stat: vi.fn() },
+  getStorageBackend: () => ({ stat: vi.fn(async () => null) }),
 }));
 
 import { router } from "@server/http/routes/generate";

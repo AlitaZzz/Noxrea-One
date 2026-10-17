@@ -30,9 +30,9 @@ router.post(
     resolveKey: (d) => d.audio_key,
     name: "audio_speed",
     failureCode: "speed.failed",
-    async run({ c, data, sourcePath, userId, signal, tmpDir }) {
+    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
       const result = await changeAudioSpeed(
-        sourcePath,
+        sourceInput,
         path.join(await tmpDir(), `speed${OUT_EXT}`),
         data.speed,
         userId,

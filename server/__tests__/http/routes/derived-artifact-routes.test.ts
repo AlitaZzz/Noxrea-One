@@ -17,8 +17,10 @@ const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(() => ({ allowed: true })),
 }));
 
+const cfg = vi.hoisted(() => ({ uploadDir: "" }));
+
 vi.mock("@server/core/config", () => ({
-  getConfig: () => ({ UPLOAD_DIR: "uploads", FFMPEG_PATH: "ffmpeg", LOG_LEVEL: "silent", ALLOW_INSECURE_SECRETS: true }),
+  getConfig: () => ({ UPLOAD_DIR: cfg.uploadDir, FFMPEG_PATH: "ffmpeg", LOG_LEVEL: "silent", ALLOW_INSECURE_SECRETS: true }),
 }));
 vi.mock("@server/http/middleware/auth", () => ({ authenticateRequest: mocks.authenticate }));
 vi.mock("@server/services/storage/video-frames", () => ({
@@ -36,7 +38,8 @@ vi.mock("@server/core/ratelimit", () => ({ checkUserRateLimit: mocks.checkRateLi
 
 import { router as spriteRouter } from "@server/http/routes/frame-sprite";
 import { router as proxyRouter } from "@server/http/routes/video-proxy";
-import { localStorage } from "@server/services/storage/backends/local";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 const USER_ID = 3;
@@ -57,7 +60,9 @@ let root = "";
 
 beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "derived-routes-"));
-  (localStorage as { baseDir: string }).baseDir = root;
+  // 后端与工作区根都锚定隔离目录：uploadRoot() 惰性读 config，beforeAll 落定即可
+  cfg.uploadDir = root;
+  initStorageBackend(new LocalStorageBackend(root));
   await fs.mkdir(path.join(root, "3/ab"), { recursive: true });
   await fs.writeFile(path.join(root, SOURCE_KEY), "video");
 });

@@ -4,20 +4,19 @@
  * 头部或全量解码判定完整性），全部 best-effort：拿不到返回 null，由调用方兜底。
  */
 
-import path from "path";
-import { localStorage } from "./backends/local";
-import { isPathWithinBase } from "@server/core/paths";
+import { mediaSourceInput, resolveMediaSource, type MediaSource } from "./media-source";
 import { probeFfmpeg, probeFfmpegDecode } from "./ffmpeg";
 import { runSingleFlight } from "./media-singleflight";
 
 /**
- * 探测图片文件的真实宽高：sharp 只读元数据头，不解码整图像素，开销极小。
+ * 探测图片的真实宽高：sharp 只读元数据头，不解码整图像素，开销极小。
+ * input 为本地路径或 Buffer（S3 探测经 probeSharpInput 拉取）。
  * 拿不到（文件缺失 / 非图片 / 编码不支持）返回 null，由调用方兜底。
  */
-export async function probeImageMeta(filePath: string): Promise<MediaDimensions | null> {
+export async function probeImageMeta(input: string | Buffer): Promise<MediaDimensions | null> {
   try {
     const sharp = (await import("sharp")).default;
-    const meta = await sharp(filePath).metadata();
+    const meta = await sharp(input).metadata();
     if (meta.width && meta.height) {
       // EXIF orientation 5-8 = 旋转 90° 存储：浏览器按方向显示（宽高互换），
       // 而 metadata 返回未旋转的存储宽高，这里对齐显示语义，否则旋转照片
@@ -52,6 +51,17 @@ export interface PersistedMediaMeta {
   duration: number | null;
 }
 
+/**
+ * sharp 输入取用：sharp 只接受路径 / Buffer，不接受 URL 字符串。
+ * S3 短操作探测把预签名 GET URL 拉成 Buffer（图片体积受上传上限约束，内存可控）。
+ */
+async function probeSharpInput(source: MediaSource): Promise<string | Buffer> {
+  if (source.kind === "path") return source.path;
+  const res = await fetch(source.url);
+  if (!res.ok) throw new Error(`Probe fetch failed with ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export async function probePersistedMediaMeta(
   storageKey: string,
   mimeType: string,
@@ -61,22 +71,26 @@ export async function probePersistedMediaMeta(
   const isVideo = mimeType.startsWith("video/");
   const isAudio = mimeType.startsWith("audio/");
   if (!isImage && !isVideo && !isAudio) return empty;
-  const filePath = path.resolve(path.join(localStorage.baseDir, storageKey));
-  if (!isPathWithinBase(localStorage.baseDir, filePath)) return empty;
   try {
+    // 探测只读元数据 / 容器头，不值得把远程文件整体下载到工作区：
+    // ffmpeg 原生支持 URL 输入（S3 后端经 resolveMediaSource 给预签名 GET）；
+    // sharp 不接受 URL，S3 下经 probeSharpInput 拉成 Buffer；本地后端给绝对路径。
+    // 探测失败一律静默 empty
+    const source = await resolveMediaSource(storageKey);
+    const input = mediaSourceInput(source);
     if (isImage) {
-      const dims = await probeImageMeta(filePath);
+      const dims = await probeImageMeta(await probeSharpInput(source));
       return dims ? { ...empty, width: dims.width, height: dims.height } : empty;
     }
     if (isVideo) {
-      const meta = await probeVideoMetaCached(filePath);
+      const meta = await probeVideoMetaCached(input);
       return {
         width: meta?.width ?? null,
         height: meta?.height ?? null,
         duration: meta?.duration ?? null,
       };
     }
-    return { ...empty, duration: await probeAudioDuration(filePath) };
+    return { ...empty, duration: await probeAudioDuration(input) };
   } catch {
     return empty;
   }
@@ -157,6 +171,7 @@ export async function probeVideoMeta(videoPath: string): Promise<VideoMeta | nul
  * 帧序列面板会同时请求雪碧图与预览代理，两者都要同一次探测结果；各跑一次
  * ffmpeg 只是白白多 spawn 一个进程。这里按路径缓存，命中直接返回。
  * 存储键由内容哈希派生（同一路径的文件内容不会变），因此不存在陈旧问题；
+ * 键为输入串：local 为稳定存储路径；S3 预签名 URL 随签名窗口变化，缓存命中率下降但结果仍正确。
  * 条目数上限只是防止长跑进程下 Map 无界增长。
  */
 const metaCache = new Map<string, VideoMeta | null>();

@@ -28,10 +28,12 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "frame",
     failureCode: "capture_frame.capture_failed",
-    async run({ c, data, sourcePath, userId, signal, tmpDir }) {
+    // 单帧抽帧属短操作（规则 8）：经源解析直接取输入，S3 下 ffmpeg 直接消费预签名 URL，不整片下载
+    sourceDelivery: "direct",
+    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
       // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错
       const tmpFramePath = path.join(await tmpDir(), `frame_${randomUUID()}.jpg`);
-      const time = await captureVideoFrame(sourcePath, tmpFramePath, data.selection, signal);
+      const time = await captureVideoFrame(sourceInput, tmpFramePath, data.selection, signal);
       throwIfAborted(signal);
       const dimensions = await probeImageMeta(tmpFramePath);
       if (!dimensions) throw new Error("Captured frame dimensions unavailable");

@@ -1,16 +1,19 @@
 /**
- * 派生产物（缩略图、视频海报、雪碧图、预览代理）的惰性生成：产物已存在则直接复用；
- * 否则同一产物的并发请求合并为一次生成，经 localStorage.writeAtomic 写临时文件后原子落盘。
+ * 派生产物（缩略图、视频海报、雪碧图、预览代理）的惰性生成（specs/storage-s3-backend.md 规则 7）：
+ * 产物已存在（stat 命中）则直接复用；否则同一产物的并发请求合并为一次生成，
+ * 写入本地工作区临时文件后经后端 put 发布（local 为零拷贝 rename，S3 为上传）。
  * 有效产物 = 非空文件：生成出空文件（如 ffmpeg 无输出却正常退出）按生成失败处理、不发布，
  * 命中判定与之同一规则。
  */
 
 import fs from "fs/promises";
-import { localStorage } from "./backends/local";
+import { rmQuiet } from "./fs-utils";
+import { getStorageBackend } from "./service";
+import { allocateTempPath, tmpDir } from "./workspace";
 import { runSingleFlight } from "./media-singleflight";
 
 async function isPublished(key: string): Promise<boolean> {
-  const stat = await localStorage.stat(key);
+  const stat = await getStorageBackend().stat(key);
   return stat !== null && stat.size > 0;
 }
 
@@ -33,11 +36,18 @@ export async function ensureArtifact({ key, signal, produce }: EnsureArtifactOpt
     generate: async (genSignal) => {
       // 入口检查与发起生成之间，上一轮同键生成可能刚好落盘；复核一次避免重复生成
       if (await isPublished(key)) return;
-      await localStorage.writeAtomic(key, async (tmpPath) => {
+      const tmpPath = allocateTempPath(key);
+      await fs.mkdir(tmpDir(), { recursive: true });
+      try {
         await produce(tmpPath, genSignal);
         const output = await fs.stat(tmpPath).catch(() => null);
-        if (!output || output.size === 0) throw new Error(`Artifact generation produced no output: ${key}`);
-      });
+        if (!output || output.size === 0) {
+          throw new Error(`Artifact generation produced no output: ${key}`);
+        }
+        await getStorageBackend().put(key, tmpPath);
+      } finally {
+        await rmQuiet(tmpPath);
+      }
     },
   });
 }

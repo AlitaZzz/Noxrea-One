@@ -5,21 +5,28 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const ffmpegDir = vi.hoisted(() => process.env.FFMPEG_TEST_DIR ?? process.env.FFMPEG_PATH ?? "ffmpeg");
-vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir, UPLOAD_DIR: "uploads" }) }));
+const cfg = vi.hoisted(() => ({ uploadDir: "uploads" }));
+vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir, UPLOAD_DIR: cfg.uploadDir }) }));
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 import { runFfmpegLight, runFfprobe } from "@server/services/storage/ffmpeg";
 import { probeImageMeta } from "@server/services/storage/media-probe";
 import { captureVideoFrame } from "@server/services/storage/video-frames";
 import { getVideoPosterWebP } from "@server/services/storage/resize-cache";
-import { localStorage } from "@server/services/storage/backends/local";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { logEvent } from "@server/core/logger/utils";
 
 const bin = path.resolve(ffmpegDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
 const available = spawnSync(bin, ["-version"]).status === 0;
 let temp = "";
 describe.skipIf(!available)("real FFmpeg frame capture", () => {
-  beforeAll(async () => { temp = await fs.mkdtemp(path.join(os.tmpdir(), "noxrea-frame-test-")); });
+  beforeAll(async () => {
+    temp = await fs.mkdtemp(path.join(os.tmpdir(), "noxrea-frame-test-"));
+    // 海报用例的后端与工作区根锚定隔离目录（uploadRoot 惰性读 config）
+    cfg.uploadDir = temp;
+    initStorageBackend(new LocalStorageBackend(temp));
+  });
   afterAll(async () => { await fs.rm(temp, { recursive: true, force: true }); });
 
   it.each([1, 2, 10, 30])("captures the last actual frame at %s fps", async (fps) => {
@@ -126,7 +133,6 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   });
 
   it("海报母版每视频只解码一次，档位由 sharp 从母版派生", async () => {
-    (localStorage as { baseDir: string }).baseDir = temp;
     await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
     const source = path.join(temp, "u1/ab/poster.mkv");
     execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
@@ -143,7 +149,6 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   });
 
   it("并发请求全部档位只解码一次，再次请求全部命中缓存", async () => {
-    (localStorage as { baseDir: string }).baseDir = temp;
     await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
     const source = path.join(temp, "u1/ab/tiers.mkv");
     execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);

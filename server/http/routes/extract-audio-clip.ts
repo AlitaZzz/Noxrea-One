@@ -35,7 +35,7 @@ router.post(
     resolveKey: (d) => d.audio_key,
     name: "audio_clip",
     failureCode: "clip.extract_failed",
-    async run({ c, data, sourceKey, sourcePath, userId, signal, tmpDir }) {
+    async run({ c, data, sourceKey, sourceInput, userId, signal, tmpDir }) {
       // zod refine 已保证 end > start，这里再按业务语义限宽（1e-6 容差吃掉浮点误差）
       if (data.end - data.start < MIN_CLIP_DURATION_S - 1e-6) {
         return failCode(422, "clip.invalid_range");
@@ -51,7 +51,7 @@ router.post(
       const mime = ext === ".webm" ? "audio/webm" : mimeByExt(ext, "audio/mpeg");
 
       const clip = await extractAudioClip(
-        sourcePath,
+        sourceInput,
         path.join(await tmpDir(), `clip${ext}`),
         { start: data.start, end: data.end },
         signal,

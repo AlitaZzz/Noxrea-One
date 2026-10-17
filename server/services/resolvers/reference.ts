@@ -6,53 +6,59 @@
 import { isStorageKey, buildManagedFileUrl, stripTrailingSlash } from "@noxrea/shared/url";
 import { logEvent } from "@server/core/logger/utils";
 import { getSetting } from "@server/core/settings";
-import { isPathWithinBase } from "@server/core/paths";
 import fs from "fs/promises";
 import path from "path";
-import { localStorage } from "@server/services/storage/backends/local";
+import { StorageTraversalError } from "@server/services/storage/backend";
+import { acquireMediaFile } from "@server/services/storage/media-source";
 import { mimeByExt } from "@server/services/storage/mime";
 import { GenerationFailureError } from "@server/services/tasks/failure";
 
 /**
- * 将存储路径转为完整的 data: URL（base64）。
- * 读取自身文件并 base64 编码。
- * 读取失败或路径越界直接抛错——把损坏的本地路径原样传给上游只会得到
+ * 将存储 key 引用的素材转为完整的 data: URL（base64）。
+ * local 后端直接读存储文件；S3 后端先下载到工作区再读（base64 整体上传属重操作）。
+ * 读取失败（含 key 逃出命名空间）直接抛错——把损坏的引用原样传给上游只会得到
  * 一个必然失败的上游任务（且计费），不如在本环节就明确失败原因。
  */
-async function readSelfFile(relPath: string): Promise<string> {
-  const fullPath = path.resolve(localStorage.baseDir, relPath);
-
-  // 路径穿越防护
-  if (!isPathWithinBase(localStorage.baseDir, fullPath)) {
-    logEvent("resolver.reference", {
-      stage: "path_traversal_blocked",
-      path: relPath.slice(0, 80),
-    });
-    throw new GenerationFailureError(
-      `参考素材读取失败: ${relPath}`,
-      "generation.reference_unavailable"
-    );
-  }
-
-  let data: Buffer;
+async function readSelfFile(storageKey: string): Promise<string> {
+  let file: Awaited<ReturnType<typeof acquireMediaFile>>;
   try {
-    data = await fs.readFile(fullPath);
+    file = await acquireMediaFile(storageKey);
   } catch (err) {
-    logEvent("resolver.reference", {
-      stage: "self_file_read_failed",
-      path: relPath.slice(0, 80),
-      error: (err as Error).message,
-    });
+    if (err instanceof StorageTraversalError) {
+      logEvent("resolver.reference", {
+        stage: "path_traversal_blocked",
+        path: storageKey.slice(0, 80),
+      });
+    }
     throw new GenerationFailureError(
-      `参考素材读取失败: ${relPath}`,
+      `参考素材读取失败: ${storageKey}`,
       "generation.reference_unavailable"
     );
   }
 
-  const ext = path.extname(relPath).toLowerCase();
-  const mime = mimeByExt(ext);
-  const b64 = data.toString("base64");
-  return `data:${mime};base64,${b64}`;
+  try {
+    let data: Buffer;
+    try {
+      data = await fs.readFile(file.path);
+    } catch (err) {
+      logEvent("resolver.reference", {
+        stage: "self_file_read_failed",
+        path: storageKey.slice(0, 80),
+        error: (err as Error).message,
+      });
+      throw new GenerationFailureError(
+        `参考素材读取失败: ${storageKey}`,
+        "generation.reference_unavailable"
+      );
+    }
+
+    const ext = path.extname(storageKey).toLowerCase();
+    const mime = mimeByExt(ext);
+    const b64 = data.toString("base64");
+    return `data:${mime};base64,${b64}`;
+  } finally {
+    await file.release();
+  }
 }
 
 /**

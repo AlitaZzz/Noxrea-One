@@ -23,11 +23,12 @@ import fs from "fs/promises";
 import { randomUUID } from "crypto";
 
 import { authenticateRequest } from "@server/http/middleware/auth";
-import { localStorage } from "@server/services/storage/backends/local";
-import { isPathWithinBase } from "@server/core/paths";
+import { StorageTraversalError } from "@server/services/storage/backend";
 import { computeFileHash } from "@server/services/storage/hash";
-import { buildFileUrl, buildStorageKey } from "@server/services/storage/service";
+import { buildFileUrl, buildStorageKey, getStorageBackend } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
+import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
+import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
 import { failClientDisconnected, failCode } from "@server/core/response";
 import { checkUserRateLimit } from "@server/core/ratelimit";
 import { logger } from "@server/core/logger";
@@ -42,8 +43,11 @@ export interface MediaEditContext<T> {
   data: T;
   /** 客户端传入的源存储键 */
   sourceKey: string;
-  /** 源文件绝对路径（已通过归属、穿越与存在性校验） */
-  sourcePath: string;
+  /**
+   * 媒体工具输入串：lease 模式恒为本地路径（local 存储路径 / S3 工作区下载副本）；
+   * direct 模式为源解析产物（local 存储路径 / S3 预签名 URL）。已通过归属与存在性校验。
+   */
+  sourceInput: string;
   userId: number;
   /** 客户端断开信号：向下游 ffmpeg 传导取消 */
   signal: AbortSignal;
@@ -67,6 +71,14 @@ export interface MediaEditRouteOptions<T> {
    * 不计数（CPU 由重型池的个人与全局限额约束，specs/media-processing-concurrency.md 规则 5）。
    */
   persistsFileObject?: boolean;
+  /**
+   * 源交付方式（specs/storage-s3-backend.md 规则 8 短/重操作分类）：
+   * - "lease"(默认)：租约出本地路径——重操作（全量解码 / 转码 / 重剪辑），
+   *   S3 下先整体下载到工作区，规避预签名 URL 中途过期与 HTTP seek 往返；
+   * - "direct"：短操作（单帧抽帧）经源解析直接取输入，不下载不租约，
+   *   S3 下 ffmpeg 直接消费预签名 GET URL。
+   */
+  sourceDelivery?: "lease" | "direct";
   /** 路由特有的错误映射，返回 Response 时优先采用；返回 undefined 走默认映射 */
   mapError?: (err: unknown) => Response | undefined;
   run: (ctx: MediaEditContext<T>) => Promise<Response>;
@@ -122,8 +134,8 @@ export async function persistDerived(params: {
   const { size } = await fs.stat(params.tmpPath);
   const storageKey = buildStorageKey(params.userId, hash, params.ext);
 
-  // 传路径而非 Buffer：内部走 copyFile，全程不进内存
-  await localStorage.save(storageKey, params.tmpPath);
+  // 传路径而非 Buffer：内容不进内存（local 后端工作区内 rename / copyFile，S3 后端读流上传）
+  await getStorageBackend().put(storageKey, params.tmpPath);
   await persistFileObject({
     userId: params.userId,
     hash,
@@ -173,21 +185,23 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
       return failCode(403, "files.access_denied");
     }
 
-    // 路径穿越防护：解析后的绝对路径必须仍位于存储根目录内
-    const sourcePath = path.resolve(localStorage.baseDir, sourceKey);
-    if (!isPathWithinBase(localStorage.baseDir, sourcePath)) {
-      return failCode(403, "files.invalid_path");
-    }
-
+    // 穿越防护与存在性检查：后端解析 key 时逃出命名空间抛 StorageTraversalError（403），
+    // key 不存在返回 null（404）。S3 后端无文件系统语义，但未约束 key 形态的请求
+    // 仍在此统一拒绝，错误码与 local 一致
     try {
-      await fs.access(sourcePath);
-    } catch {
-      return failCode(404, "media.source_not_found");
+      if (!(await getStorageBackend().stat(sourceKey))) {
+        return failCode(404, "media.source_not_found");
+      }
+    } catch (err: unknown) {
+      if (err instanceof StorageTraversalError) {
+        return failCode(403, "files.invalid_path");
+      }
+      throw err;
     }
 
     // 请求独享的临时目录按需创建（UUID 避免并发请求互相踩踏临时文件）；
     // 派生产物类路由（雪碧图 / 预览代理）由 ensureArtifact 自管临时文件，不会用到
-    const tmpDirPath = path.join(localStorage.tmpDir, `${opts.name}_${randomUUID()}`);
+    const tmpDirPath = path.join(workspaceTmpDir(), `${opts.name}_${randomUUID()}`);
     let tmpDirCreated = false;
     const tmpDir = async () => {
       await fs.mkdir(tmpDirPath, { recursive: true });
@@ -196,15 +210,28 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
     };
 
     try {
-      return await opts.run({
+      const baseCtx = {
         c,
         data: parsed.data,
         sourceKey,
-        sourcePath,
         userId: auth.user.id,
         signal: request.signal,
         tmpDir,
-      });
+      };
+      if (opts.sourceDelivery === "direct") {
+        // 短操作：不租约、不下载，源输入直接交给 run（local 为存储路径，S3 为预签名 URL）
+        const source = await resolveMediaSource(sourceKey);
+        return await opts.run({ ...baseCtx, sourceInput: mediaSourceInput(source) });
+      }
+      // 源租约：local 后端零成本取存储路径；S3 后端下载到工作区（重操作，业务规则 8），
+      // 客户端断开经 signal 中止下载。获取失败与处理失败走同一套错误映射，
+      // 请求结束（含失败）统一释放
+      const source = await acquireMediaFile(sourceKey, request.signal);
+      try {
+        return await opts.run({ ...baseCtx, sourceInput: source.path });
+      } finally {
+        await source.release();
+      }
     } catch (err: unknown) {
       const mapped = opts.mapError?.(err);
       if (mapped) return mapped;

@@ -30,9 +30,9 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "crop",
     failureCode: "crop.failed",
-    async run({ c, data, sourcePath, userId, signal, tmpDir }) {
+    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
       // 源分辨率用于钳位；探测失败按无法裁剪处理（源画面尺寸都拿不到时裁剪无从谈起）
-      const meta = await probeVideoMetaCached(sourcePath);
+      const meta = await probeVideoMetaCached(sourceInput);
       if (!meta?.width || !meta?.height) {
         return failCode(422, "crop.invalid_rect");
       }
@@ -42,7 +42,7 @@ router.post(
       }
 
       const crop = await cropVideoRegion(
-        sourcePath,
+        sourceInput,
         path.join(await tmpDir(), "crop.mp4"),
         rect,
         userId,

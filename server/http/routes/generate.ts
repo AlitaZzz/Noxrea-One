@@ -14,8 +14,7 @@ import { cancelUpstreamTask } from "@server/services/tasks/upstream-cancel";
 import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
-import { buildFileUrl } from "@server/services/storage/service";
-import { localStorage } from "@server/services/storage/backends/local";
+import { buildFileUrl, getStorageBackend } from "@server/services/storage/service";
 import { checkUserRateLimit } from "@server/core/ratelimit";
 
 const router = new Hono();
@@ -30,7 +29,7 @@ const router = new Hono();
  */
 async function toTaskPayload(state: TerminalTaskState) {
   const resultSizes = state.resultUrls
-    ? await Promise.all(state.resultUrls.map(async (key) => (await localStorage.stat(key))?.size ?? null))
+    ? await Promise.all(state.resultUrls.map(async (key) => (await getStorageBackend().stat(key))?.size ?? null))
     : undefined;
   return {
     taskId: state.taskId,

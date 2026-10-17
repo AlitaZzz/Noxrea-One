@@ -22,11 +22,11 @@ import { z } from "zod";
 import { createScrubProxy } from "@server/services/storage/video-frames";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ensureArtifact } from "@server/services/storage/artifact";
-import { localStorage } from "@server/services/storage/backends/local";
+import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
+import { mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
+import { buildFileUrl } from "@server/services/storage/service";
 import { ok } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
-import path from "path";
-import fs from "fs/promises";
 import { createHash } from "crypto";
 
 const videoProxySchema = z.object({
@@ -38,36 +38,13 @@ const videoProxySchema = z.object({
 const PROXY_WIDTH = 480;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
 const PROXY_VERSION = 3;
-/** 清理扫描的最小间隔：避免每次请求都遍历目录 */
-const CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 /** 代理存活时间：过期后删除，下次打开面板会自动重建 */
 const PROXY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-let lastCleanupAt = 0;
-
-/** 清掉过期代理：按最后生成时间判定，纯维护动作，任何失败都不影响主流程 */
-async function cleanupStaleProxies(baseDir: string): Promise<void> {
-  const now = Date.now();
-  if (now - lastCleanupAt < CLEANUP_INTERVAL_MS) return;
-  lastCleanupAt = now;
-  try {
-    const dir = path.resolve(baseDir, "_proxy");
-    const names = await fs.readdir(dir);
-    for (const name of names) {
-      const target = path.join(dir, name);
-      const stat = await fs.stat(target).catch(() => null);
-      if (!stat || !stat.isFile()) continue;
-      if (now - stat.mtimeMs > PROXY_TTL_MS) {
-        await fs.rm(target, { force: true }).catch(() => {});
-      }
-    }
-  } catch {
-    // 目录不存在或读取失败：清理只是顺带做的维护，静默跳过
-  }
-}
 
 /** 读取代理文件的真实时长（探一次后进缓存）；拿不到返回 null */
-async function proxyDurationOf(proxyPath: string): Promise<number | null> {
-  return (await probeVideoMetaCached(proxyPath))?.duration ?? null;
+async function proxyDurationOf(proxyKey: string): Promise<number | null> {
+  const source = await resolveMediaSource(proxyKey);
+  return (await probeVideoMetaCached(mediaSourceInput(source)))?.duration ?? null;
 }
 
 const router = new Hono();
@@ -82,13 +59,11 @@ router.post(
     // 只产出可缓存的派生产物，不落库新文件：不计数（限流保护的是存储增长），
     // 重型开销由媒体池的个人与全局限额约束
     persistsFileObject: false,
-    async run({ c, sourceKey, sourcePath, userId, signal }) {
-      const baseDir = path.resolve(localStorage.baseDir);
-
+    async run({ c, sourceKey, sourceInput, userId, signal }) {
       // 帧率与分辨率：读取容器信息，开销可忽略。
       // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成；
       // 帧率用来把关键帧间隔定成 1 秒——探测结果在雪碧图路由间共用，只跑一次
-      const meta = await probeVideoMetaCached(sourcePath);
+      const meta = await probeVideoMetaCached(sourceInput);
       const width = meta?.width && meta.width > 0
         ? Math.min(PROXY_WIDTH, meta.width)
         : PROXY_WIDTH;
@@ -96,18 +71,17 @@ router.post(
       // 代理名由源键与宽度共同派生：同一视频反复打开面板直接命中缓存；
       // 宽度并入哈希后，调整参数会自动生成新代理，不会命中旧尺寸的缓存
       const proxyKey = `_proxy/${createHash("sha1").update(`${sourceKey}|${width}|v${PROXY_VERSION}`).digest("hex").slice(0, 32)}.mp4`;
-      const proxyPath = path.resolve(baseDir, proxyKey);
       const fps = meta?.fps ?? null;
 
       // 顺带做一次低频清理，不阻塞本次请求
-      void cleanupStaleProxies(baseDir);
+      void cleanupStaleDerived("_proxy/", PROXY_TTL_MS);
 
       await ensureArtifact({
         key: proxyKey,
         signal,
-        produce: (tmpPath, genSignal) => createScrubProxy(sourcePath, tmpPath, width, fps, userId, genSignal),
+        produce: (tmpPath, genSignal) => createScrubProxy(sourceInput, tmpPath, width, fps, userId, genSignal),
       });
-      return c.json(ok({ url: `/api/files/${proxyKey}`, fps, duration: await proxyDurationOf(proxyPath) }));
+      return c.json(ok({ url: buildFileUrl(proxyKey), fps, duration: await proxyDurationOf(proxyKey) }));
     },
   }),
 );

@@ -3,9 +3,11 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 
+const cfg = vi.hoisted(() => ({ uploadDir: "uploads" }));
+
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
-    UPLOAD_DIR: "uploads",
+    UPLOAD_DIR: cfg.uploadDir,
     FFMPEG_PATH: "ffmpeg",
     FFPROBE_PATH: "ffprobe",
     LOG_LEVEL: "debug",
@@ -15,8 +17,9 @@ vi.mock("@server/core/config", () => ({
 
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
-import { localStorage } from "@server/services/storage/backends/local";
 import { getResizedWebP, getVideoPosterWebP, normalizeResizeWidth } from "@server/services/storage/resize-cache";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { acquireMediaSlot } from "@server/services/storage/media-pool";
 import { resetTestSettings } from "../../helpers/settings";
 
@@ -24,7 +27,9 @@ let tmpDir = "";
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "media-guard-"));
-  (localStorage as { baseDir: string }).baseDir = tmpDir;
+  // 后端与工作区根都锚定隔离目录：uploadRoot() 惰性读 config，beforeAll 落定即可
+  cfg.uploadDir = tmpDir;
+  initStorageBackend(new LocalStorageBackend(tmpDir));
 });
 
 afterAll(async () => {

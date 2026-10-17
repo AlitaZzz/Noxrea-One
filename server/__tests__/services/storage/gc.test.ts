@@ -27,11 +27,9 @@ vi.mock("@server/core/database/client", () => ({
 
 vi.mock("@server/core/config", () => ({ getConfig: mocks.getConfig }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
-vi.mock("@server/services/storage/backends/local", () => ({
-  localStorage: {
-    delete: mocks.del,
-    stat: mocks.stat,
-  },
+vi.mock("@server/services/storage/service", async () => ({
+  ...(await vi.importActual("@server/services/storage/service")),
+  getStorageBackend: () => ({ delete: mocks.del, stat: mocks.stat }),
 }));
 
 import { runStorageGc } from "@server/services/storage/gc";

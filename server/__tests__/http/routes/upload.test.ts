@@ -23,9 +23,18 @@ vi.mock("@server/http/middleware/auth", () => ({
   authenticateRequest: mocks.authenticate,
 }));
 
-vi.mock("@server/services/storage/backends/local", () => ({
-  localStorage: { baseDir: "", save: mocks.save, stat: vi.fn() },
-}));
+vi.mock("@server/services/storage/service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@server/services/storage/service")>();
+  // 真实 LocalStorageBackend 实例（media-source 按原型判型），仅覆写 put 为 spy；
+  // 本测试不触盘：put 被覆写，源解析只做 key→路径换算
+  const { LocalStorageBackend } = await import("@server/services/storage/backends/local");
+  const backend = new LocalStorageBackend(process.cwd());
+  (backend as unknown as { put: unknown }).put = mocks.save;
+  return {
+    ...actual,
+    getStorageBackend: () => backend,
+  };
+});
 
 vi.mock("@server/services/storage/persist", () => ({
   persistFileObject: mocks.persist,

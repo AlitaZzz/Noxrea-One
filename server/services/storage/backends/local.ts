@@ -1,15 +1,8 @@
 /**
  * 本地磁盘存储后端。
- * 基于文件系统实现 StorageBackend，提供上传根目录下的保存与读取。
- *
- * 落盘一律经 writeAtomic：先写 `<baseDir>/_tmp` 下的唯一临时文件，再 rename 原子替换就位。
- * - 直接 `writeFile` 最终路径时，中途失败会留下顶着最终文件名、内容却残缺的文件，
- *   而文件名即内容 hash，后续去重会一直命中这份坏数据；
- * - `rename` 只改目录项，不需要获取目标文件的写句柄，
- *   因此目标正被 sharp / 安全软件等外部句柄占用时仍有机会成功，冲突时退避重试；
- * - 临时文件集中在 `_tmp`：进程崩溃 / 强杀留下的残骸由启动时的 clearTmpDir 一次清空，
- *   不会散落在各业务目录里永久占盘。rename 跨文件系统会失败（EXDEV），因此上传根目录
- *   （含 `_tmp` 与各派生目录）必须位于同一文件系统。
+ * 基于文件系统实现 StorageBackend（specs/storage-s3-backend.md 业务规则 3）：
+ * put/get/stat/delete/list，发布经工作区 writeAtomic 原子落盘；
+ * 派生产物清理经 list 按 stem 枚举（与 S3 后端同一接口语义）。
  */
 
 import fs from "fs/promises";
@@ -17,79 +10,42 @@ import path from "path";
 import { createReadStream, createWriteStream } from "fs";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
-import { randomUUID } from "crypto";
-import { getConfig } from "@server/core/config";
-import { isPathWithinBase, resolveFromRoot } from "@server/core/paths";
-import { isTransientFileError, withRetry } from "@server/services/storage/fs-utils";
-import type { StorageBackend } from "@server/services/storage/backend";
-
-/** 上传文件根目录（由 UPLOAD_DIR 配置项解析，相对路径按项目根锚定） */
-const UPLOAD_DIR = resolveFromRoot(getConfig().UPLOAD_DIR);
-
-/** rename 冲突重试次数（配合 50ms 起退避，累计约 1.5s，覆盖外部句柄的短暂占用） */
-const REPLACE_RETRIES = 5;
+import { isPathWithinBase } from "@server/core/paths";
+import { isTransientFileError, RENAME_RETRIES, withRetry } from "@server/services/storage/fs-utils";
+import { listDerivedArtifactKeys, StorageTraversalError, type StorageBackend } from "@server/services/storage/backend";
+import { uploadRoot, tmpDir, writeAtomic } from "@server/services/storage/workspace";
 
 export class LocalStorageBackend implements StorageBackend {
-  /** 对外暴露，供 media.ts 等模块获取正确的 uploads 路径 */
+  /** 存储根目录（本地实现细节；业务侧经 backend / workspace / 源解析三入口访问，不直连） */
   readonly baseDir: string;
 
   constructor(baseDir?: string) {
-    this.baseDir = baseDir ?? UPLOAD_DIR;
+    this.baseDir = baseDir ?? uploadRoot();
   }
 
-  private ensureDir(dir: string): Promise<void> {
-    return fs.mkdir(dir, { recursive: true }).then(() => {});
-  }
-
-  private resolveKey(key: string): string {
-    const resolved = path.resolve(path.join(this.baseDir, key));
+  /** 本地路径能力（接口可选方法 resolveLocalPath 的实现）：存储 key → 绝对路径（穿越守卫） */
+  resolveLocalPath(key: string): string {
+    // path.resolve 语义：key 以 / 或盘符开头时整体替换 base，视为逃出（与旧路由守卫一致）
+    const resolved = path.resolve(this.baseDir, key);
     if (!isPathWithinBase(this.baseDir, resolved)) {
-      throw new Error(`Path traversal detected: ${key}`);
+      throw new StorageTraversalError(key);
     }
     return resolved;
   }
 
-  /** 临时文件目录（见文件头说明） */
-  get tmpDir(): string {
-    return path.join(this.baseDir, "_tmp");
-  }
-
   /**
-   * 清空临时目录：其中只有进行中的写入，进程重启后全部作废。
-   * 只能在启动阶段、HTTP 服务与 Worker 开始写入之前调用，否则会删掉进行中的写入。
-   */
-  async clearTmpDir(): Promise<void> {
-    await fs.rm(this.tmpDir, { recursive: true, force: true });
-  }
-
-  /**
-   * 原子落盘：write 把内容写到 `_tmp` 下的唯一临时文件（文件名以目标 basename 结尾、扩展名不变，
-   * ffmpeg 等按扩展名选封装格式的写入方可直接使用），成功后 rename 到 key 对应路径
-   * （目标被外部句柄短暂占用时退避重试）；任一步失败都清理临时文件。
-   */
-  async writeAtomic(key: string, write: (tmpPath: string) => Promise<void>): Promise<void> {
-    const filePath = this.resolveKey(key);
-    const tmpPath = path.join(this.tmpDir, `${randomUUID()}.${path.basename(filePath)}`);
-    await Promise.all([this.ensureDir(this.tmpDir), this.ensureDir(path.dirname(filePath))]);
-    try {
-      await write(tmpPath);
-      await withRetry(() => fs.rename(tmpPath, filePath), { retries: REPLACE_RETRIES });
-    } catch (err) {
-      // 清理失败的残留由下次启动的 clearTmpDir 回收，不能掩盖原始错误
-      await fs.rm(tmpPath, { force: true }).catch(() => undefined);
-      throw err;
-    }
-  }
-
-  /**
-   * 保存文件：经 writeAtomic 原子落盘。
+   * 保存文件：经工作区 writeAtomic 原子落盘。
    *
    * 内容寻址（key 即内容 hash）语义：目标已存在且大小一致 ⇒ 内容必然一致，
    * 跳过写盘直接视为成功（幂等 PUT）。任一步失败都会清理临时文件，
    * 不会在 uploads 里留下半截文件。
+   *
+   * 零拷贝快路径：source 为工作区 `_tmp` 内的文件路径时（派生产物 / 派生落库把产物
+   * 直接写进临时区），直接 rename 到目标位——同文件系统内 rename 只改目录项，
+   * 不重复搬运字节；rename 持续失败回退通用拷贝流。
    */
-  async save(key: string, source: string | Buffer | ReadableStream): Promise<void> {
-    // 本次内容的期望大小：Buffer 直接取长度，string 路径取源文件大小；
+  async put(key: string, source: string | Buffer | ReadableStream): Promise<void> {
+    // 期望大小：Buffer 直接取长度，string 路径取源文件大小；
     // ReadableStream 大小未知，去重/幂等降级时只以「目标存在」为准。
     let expectedSize: number | undefined;
     if (Buffer.isBuffer(source)) {
@@ -98,58 +54,70 @@ export class LocalStorageBackend implements StorageBackend {
       try {
         expectedSize = (await fs.stat(source)).size;
       } catch {
-        expectedSize = undefined; // 源路径不可读时交给后续 copyFile 报错
+        expectedSize = undefined; // 源路径不可读时交给后续拷贝流报错
       }
     }
 
-    // 去重短路：目标已存在且大小一致 ⇒ 内容一致，直接返回。
+    // 去重短路：目标已存在且大小一致 => 内容一致，直接返回。
     const existing = await this.stat(key);
     if (existing && (expectedSize === undefined || existing.size === expectedSize)) {
       return;
     }
 
-    try {
-      await this.writeAtomic(key, async (tmpPath) => {
-        if (typeof source === "string") {
-          await fs.copyFile(source, tmpPath);
-        } else if (Buffer.isBuffer(source)) {
-          await fs.writeFile(tmpPath, source);
-        } else {
-          // pipeline 自带背压与错误传播，异常时自动 destroy，不会残留未关闭的 fd
-          await pipeline(
-            Readable.fromWeb(source as Parameters<typeof Readable.fromWeb>[0]),
-            createWriteStream(tmpPath),
-          );
+    // 零拷贝快路径：源在本后端工作区临时区内且目标不存在 => rename 直接就位（同文件系统原子）。
+    // 注意 rename 后源文件不再存在于原路径——临时文件本就是一次性产物，
+    // 调用方不得在 put(path) 之后复用该路径（发布即消费）。
+    // 快路径命中要求工作区临时路径（allocateTempPath 缺省锚定 uploadRoot）与本后端 baseDir
+    // 同根；不一致时静默退化为拷贝流，仅多一次搬运，正确性不受影响。
+    if (typeof source === "string" && !existing) {
+      const tmpZone = tmpDir(this.baseDir);
+      if (source.startsWith(tmpZone + path.sep)) {
+        try {
+          const target = this.resolveLocalPath(key);
+          await fs.mkdir(path.dirname(target), { recursive: true });
+          await withRetry(() => fs.rename(source, target), { retries: RENAME_RETRIES });
+          return;
+        } catch (err) {
+          if (!isTransientFileError(err)) throw err;
+          // 持续被占用：回退拷贝流再试一轮。只有 rename 未成功才会走到这里，源仍在。
         }
-      });
-    } catch (err) {
-      // 覆盖失败：目标可能正被并发写入方的读取/缩略图句柄占用
-      // （Windows 上对打开中的文件覆盖报 EPERM）。CAS 下目标存在即内容一致，
-      // 若目标已就位且大小一致，按幂等成功处理；否则向上抛。
-      if (!isTransientFileError(err)) throw err;
-      const after = await this.stat(key);
-      if (after && (expectedSize === undefined || after.size === expectedSize)) {
-        return;
       }
-      throw err;
     }
+
+    await writeAtomic(this.baseDir, key, async (tmpPath) => {
+      if (typeof source === "string") {
+        await fs.copyFile(source, tmpPath);
+      } else if (Buffer.isBuffer(source)) {
+        await fs.writeFile(tmpPath, source);
+      } else {
+        // pipeline 自带背压与错误传播，异常时自动 destroy，不会残留未关闭的 fd
+        await pipeline(
+          Readable.fromWeb(source as Parameters<typeof Readable.fromWeb>[0]),
+          createWriteStream(tmpPath),
+        );
+      }
+    });
   }
 
   /**
    * 读取文件流。
    * 传入 signal 后，客户端断开 / 视频 seek 取消会立即销毁流并释放句柄，
    * 这是 Windows 上避免文件被残留句柄占用的关键。
+   * range 供 proxy 分发模式透传（files 路由已按 stat 校验边界后传入）。
    */
-  async read(key: string, signal?: AbortSignal): Promise<NodeJS.ReadableStream> {
-    const filePath = this.resolveKey(key);
-    return createReadStream(
-      filePath,
-      signal ? { signal } : undefined,
-    ) as unknown as NodeJS.ReadableStream;
+  async get(
+    key: string,
+    opts?: { range?: { start: number; end?: number }; signal?: AbortSignal },
+  ): Promise<Readable> {
+    const filePath = this.resolveLocalPath(key);
+    return createReadStream(filePath, {
+      ...(opts?.range ? { start: opts.range.start, end: opts.range.end } : {}),
+      ...(opts?.signal ? { signal: opts.signal } : {}),
+    });
   }
 
   async stat(key: string): Promise<{ size: number; mtimeMs: number } | null> {
-    const filePath = this.resolveKey(key);
+    const filePath = this.resolveLocalPath(key);
     try {
       const st = await fs.stat(filePath);
       return { size: st.size, mtimeMs: st.mtimeMs };
@@ -159,43 +127,74 @@ export class LocalStorageBackend implements StorageBackend {
   }
 
   async delete(key: string): Promise<void> {
-    const filePath = this.resolveKey(key);
-    try {
-      // 被外部句柄短暂占用时退避重试，避免 GC 因一次瞬时冲突就永久漏删
-      await withRetry(() => fs.unlink(filePath), { retries: 3 });
-    } catch {
-      // 文件不存在（ENOENT）或持续被占用：忽略，后续 GC 会再试
-    }
-    // 向上清理空目录（不删 baseDir 本身）
-    await this.cleanupEmptyDirs(path.dirname(filePath));
+    await this.deleteFileOnly(key);
+    // 向上清理空目录（不删存储根本身）
+    await this.cleanupEmptyDirs(path.dirname(this.resolveLocalPath(key)));
     await this.deleteDerivedArtifacts(key);
   }
 
   /**
-   * 删除该源文件的派生产物（缩略图档位、海报母版）：派生路径为
-   * `<派生根>/<一个分组段>/<源键去扩展名>.webp`（`_cache/<w>/…`、`_posters/v<版本>/…`），
-   * 遍历派生根的分组段按前缀删除即可，无需知道具体档位与版本。
-   * 雪碧图 / 代理（_sprite / _proxy）的文件名由源键单向哈希派生、无法反查，由各自的 TTL 清扫兜底。
+   * 删除该源文件的派生产物（specs/storage-s3-backend.md 规则 9：delete 负责 key 的一切）。
+   * 经 list 枚举 `_cache` / `_posters` 派生根，按 stem 后缀匹配逐个删除——
+   * 派生路径为 `<派生根>/<分组段>/<源键去扩展名>.webp`（`_cache/<w>/…`、`_posters/v<版本>/…`）。
+   * 雪碧图 / 代理（_sprite / _proxy）的文件名由源键单向哈希派生、无法反查，由各自 TTL 清扫兜底。
    */
   private async deleteDerivedArtifacts(key: string): Promise<void> {
-    const stem = key.replace(/\.[^.]+$/, "");
+    // 枚举半边是接口级规则，共享实现见 listDerivedArtifactKeys；删除力学（含空目录回收）本地自理
+    for (const derived of await listDerivedArtifactKeys(this, key)) {
+      await this.deleteFileOnly(derived);
+      // 向上回收该派生文件留下的空目录（档位目录、版本目录等）
+      await this.cleanupEmptyDirs(path.dirname(this.resolveLocalPath(derived)));
+    }
     for (const root of ["_cache", "_posters"]) {
-      const rootDir = path.join(this.baseDir, root);
-      let groups: string[];
-      try {
-        groups = await fs.readdir(rootDir);
-      } catch {
-        continue; // 派生根不存在：没有可清理的产物
-      }
-      for (const group of groups) {
-        await fs.rm(path.join(rootDir, group, `${stem}.webp`), { force: true }).catch(() => undefined);
-        // 从源键所在目录向上回收空目录（分组段与派生根本身空了也一并删，按需重建）
-        await this.cleanupEmptyDirs(path.join(rootDir, group, path.dirname(stem)));
-      }
+      await this.cleanupEmptyDirs(path.join(this.baseDir, root));
     }
   }
 
-  /** 从 dir 向上逐级删除空目录，直到 baseDir 为止 */
+  /** 仅删除对象本体（不触发派生联动）：delete 主体与派生枚举删除共用 */
+  private async deleteFileOnly(key: string): Promise<void> {
+    const filePath = this.resolveLocalPath(key);
+    try {
+      await withRetry(() => fs.unlink(filePath), { retries: 3 });
+    } catch {
+      // 不存在或被占用：忽略
+    }
+  }
+
+  /**
+   * 按前缀枚举对象（相对 posix key + size + 修改时间）；`_tmp` 工作区不在对象命名空间，排除。
+   * 遍历根收窄：key 为相对 posix 路径，命中 `xxx/` 前缀的对象必在首段子目录下
+   * （如 `_cache/` → `<baseDir>/_cache`），派生清理 / TTL 清扫不再全树遍历；
+   * 无 `/` 的前缀保持全树遍历。
+   */
+  async list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>> {
+    const out: Array<{ key: string; size: number; lastModifiedMs: number }> = [];
+    const walk = async (dir: string): Promise<void> => {
+      let items;
+      try {
+        items = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return; // 目录不存在：没有可枚举对象
+      }
+      for (const item of items) {
+        const full = path.join(dir, item.name);
+        if (item.isDirectory()) {
+          if (full === tmpDir(this.baseDir)) continue; // 本后端工作区临时区不是对象
+          await walk(full);
+          continue;
+        }
+        const key = path.relative(this.baseDir, full).split(path.sep).join("/");
+        if (!key.startsWith(prefix)) continue;
+        const st = await fs.stat(full).catch(() => null);
+        if (st) out.push({ key, size: st.size, lastModifiedMs: st.mtimeMs });
+      }
+    };
+    // 首段收窄遍历根（见方法注释）；无 `/` 的前缀从存储根整树遍历
+    await walk(prefix.includes("/") ? path.join(this.baseDir, prefix.split("/", 1)[0]) : this.baseDir);
+    return out;
+  }
+
+  /** 从 dir 向上逐级删除空目录，直到存储根为止 */
   private async cleanupEmptyDirs(dir: string): Promise<void> {
     if (dir === this.baseDir || dir === path.dirname(this.baseDir)) return;
     try {
@@ -208,11 +207,4 @@ export class LocalStorageBackend implements StorageBackend {
       // 目录不存在或非空，忽略
     }
   }
-
-  /** 返回相对路径（不再使用 network.public_base_url 硬编码） */
-  publicUrl(key: string): string {
-    return `/api/files/${key}`;
-  }
 }
-
-export const localStorage = new LocalStorageBackend();

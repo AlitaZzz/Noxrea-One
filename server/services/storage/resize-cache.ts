@@ -11,8 +11,7 @@
 import path from "path";
 import { createReadStream, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
-import { localStorage } from "./backends/local";
-import { isPathWithinBase } from "@server/core/paths";
+import { acquireMediaFile } from "./media-source";
 import { logEvent } from "@server/core/logger/utils";
 import { ensureArtifact } from "./artifact";
 import { runFfmpegLight } from "./ffmpeg";
@@ -45,16 +44,6 @@ function posterMasterKey(storageKey: string): string {
   return `_posters/v${POSTER_VERSION}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
 }
 
-function isWithinBase(storageKey: string): boolean {
-  // 存储层自带守卫：绝对路径 key（如 //etc/x.png、C:/x.png）不含 .. 段，
-  // 可绕过路由层的 .. 检查，而缩放在路由校验 full path 之前执行。
-  // isPathWithinBase 只接受绝对路径入参（相对路径会按 cwd 解析），必须先 resolve
-  return isPathWithinBase(
-    localStorage.baseDir,
-    path.resolve(localStorage.baseDir, storageKey)
-  );
-}
-
 /**
  * 图片等比缩放 WebP 缓存（sharp，原图即母版）。
  * 过载（MediaPoolBusyError）向上抛出，其余失败静默为 null——两条路径必须可区分，
@@ -65,8 +54,6 @@ export async function getResizedWebP(
   width: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  if (!isWithinBase(storageKey)) return null;
-
   const tier = normalizeResizeWidth(width);
   const cacheKey = cacheKeyOf(storageKey, tier);
 
@@ -98,8 +85,6 @@ export async function getVideoPosterWebP(
   width: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  if (!isWithinBase(storageKey)) return null;
-
   const tier = normalizeResizeWidth(width);
   const cacheKey = cacheKeyOf(storageKey, tier);
 
@@ -125,9 +110,6 @@ export async function getVideoPosterWebP(
  * 失败向上抛出：persist 层吞掉记日志（不阻塞落盘），档位派生层向上传播。
  */
 export async function ensureVideoMasterPoster(storageKey: string): Promise<void> {
-  if (!isWithinBase(storageKey)) {
-    throw new Error(`Poster master key escapes storage base: ${storageKey}`);
-  }
   await ensureArtifact({
     key: posterMasterKey(storageKey),
     produce: (tmpPath, genSignal) => producePosterMaster(storageKey, tmpPath, genSignal),
@@ -144,34 +126,38 @@ async function producePosterMaster(
   outputPath: string,
   signal: AbortSignal
 ): Promise<void> {
-  const sourcePath = path.resolve(localStorage.baseDir, storageKey);
-  const logFields = { video: path.basename(sourcePath) };
-  const { code, stderr } = await runFfmpegLight(
-    [
-      "-ss", "0",
-      "-i", sourcePath,
-      "-frames:v", "1",
-      "-vf", `scale='min(${POSTER_MASTER_MAX_WIDTH},iw)':-2`,
-      "-c:v", "libwebp",
-      "-quality", String(POSTER_MASTER_QUALITY),
-      "-y",
-      outputPath,
-    ],
-    FFMPEG_TIMEOUT_MS,
-    { signal, stage: "poster_master", logFields }
-  );
+  const source = await acquireMediaFile(storageKey, signal);
+  try {
+    const logFields = { video: path.basename(source.path) };
+    const { code, stderr } = await runFfmpegLight(
+      [
+        "-ss", "0",
+        "-i", source.path,
+        "-frames:v", "1",
+        "-vf", `scale='min(${POSTER_MASTER_MAX_WIDTH},iw)':-2`,
+        "-c:v", "libwebp",
+        "-quality", String(POSTER_MASTER_QUALITY),
+        "-y",
+        outputPath,
+      ],
+      FFMPEG_TIMEOUT_MS,
+      { signal, stage: "poster_master", logFields }
+    );
 
-  if (code !== 0) {
-    logEvent("media", {
-      stage: "poster_master_failed",
-      exitCode: code,
-      stderr: stderr.slice(-200),
-      ...logFields,
-    });
-    throw new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`);
+    if (code !== 0) {
+      logEvent("media", {
+        stage: "poster_master_failed",
+        exitCode: code,
+        stderr: stderr.slice(-200),
+        ...logFields,
+      });
+      throw new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`);
+    }
+
+    logEvent("media", { stage: "poster_master", ...logFields });
+  } finally {
+    await source.release();
   }
-
-  logEvent("media", { stage: "poster_master", ...logFields });
 }
 
 /** 档位派生：先确保母版存在（必要时 ffmpeg 一次），再由 sharp 从母版缩放 */
@@ -188,7 +174,7 @@ async function producePosterTier(
     produce: (tmpPath, genSignal) => producePosterMaster(storageKey, tmpPath, genSignal),
   });
 
-  const masterPath = path.resolve(localStorage.baseDir, masterKey);
+  const master = await acquireMediaFile(masterKey, signal);
   const sharp = (await import("sharp")).default;
 
   const releaseSlot = await acquireMediaSlot("sharp", signal);
@@ -196,7 +182,7 @@ async function producePosterTier(
     // 源文件句柄交给 Node 的 createReadStream 持有（理由同 produceImageWebP）；
     // withoutEnlargement：小源视频的大档位不放大，实际宽度 = 源宽
     await pipeline(
-      createReadStream(masterPath, { signal }),
+      createReadStream(master.path, { signal }),
       sharp()
         .resize(tier, undefined, { fit: "inside", withoutEnlargement: true })
         .webp({ quality: 75 }),
@@ -204,6 +190,7 @@ async function producePosterTier(
     );
   } finally {
     releaseSlot();
+    await master.release();
   }
 
   logEvent("media", { level: "debug", stage: "video_poster_tier", key: storageKey, width: tier });
@@ -217,7 +204,7 @@ async function produceImageWebP(
   signal: AbortSignal,
 ): Promise<void> {
   const sharp = (await import("sharp")).default;
-  const sourcePath = path.resolve(localStorage.baseDir, storageKey);
+  const source = await acquireMediaFile(storageKey, signal);
 
   const releaseSlot = await acquireMediaSlot("sharp", signal);
   try {
@@ -226,7 +213,7 @@ async function produceImageWebP(
     // 会把源文件锁住，导致同 hash 文件再次上传时 writeFile/rename 失败。
     // 传入 signal 后，生成被取消时会立即销毁流并释放句柄。
     await pipeline(
-      createReadStream(sourcePath, { signal }),
+      createReadStream(source.path, { signal }),
       sharp()
         .resize(tier, undefined, { fit: "inside", withoutEnlargement: true })
         .webp({ quality: 75 }),
@@ -234,6 +221,7 @@ async function produceImageWebP(
     );
   } finally {
     releaseSlot();
+    await source.release();
   }
 
   logEvent("media", { level: "debug", stage: "resize_cache", key: storageKey, width: tier });

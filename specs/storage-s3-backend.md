@@ -83,7 +83,7 @@
      /** 删除；不存在视为成功（S3：NoSuchKey 视为成功） */
      delete(key: string): Promise<void>;
      /** 按前缀枚举（派生清理、staging 清扫、全 bucket 审计） */
-     list(prefix: string): Promise<Array<{ key: string; size: number }>>;
+     list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>>;
      /** 预签名 GET（重定向分发、媒体工具输入）；不支持的后端不实现 */
      presignGet?(key: string, opts?: {
        ttlSeconds?: number;
@@ -112,7 +112,7 @@
    - 上传路径按后端能力分派，`GET /api/files/upload-limits` 暴露 `{ mode: "direct" | "relay" }` 供前端选择。
    - 完整性立场：key 即内容 hash 是寻址根基，服务端复验不作为可选项省略；复验流量走内网/同区域端点（NAS 局域网、云上内网免费），公网带宽仍不被占用。
 7. **派生产物生成**：`ensureArtifact` 命中检查经 `stat`；生成写入本地工作区临时文件后 `put(key, tmpPath)`。
-8. **媒体工具接入**：新增 `resolveMediaSource(key)` 返回 `{ kind: "path", path }`（local）或 `{ kind: "url", url }`（S3 预签名 GET）。ffmpeg / ffprobe 原生支持 HTTP 输入直接消费；sharp 经 fetch 流式消费（Web Stream 需 `Readable.fromWeb` 转换）或下载到工作区走文件路径（更稳）；ffmpeg 消费预签名 HTTPS URL 需构建含 TLS 支持的 ffmpeg（常规发行版均满足，`FFMPEG_PATH` 指向自编译产物时注意）。**输入策略启发式**：短操作（probe、抽帧、单帧处理）直接消费 URL；长耗时重剪辑（crop / extract / 转码）一律先下载到工作区处理——既避免预签名 URL 在作业中途过期，也避免 HTTP seek 的额外往返。现有全部 `localStorage.` 直连消费方（含 files.ts 裸 `createReadStream`、media-probe / resize-cache / media-edit / frame-sprite / video-proxy / reference.ts 的 baseDir 拼路径）收敛到 backend / 工作区 / 源解析三个入口。
+8. **媒体工具接入**：新增 `resolveMediaSource(key)` 返回 `{ kind: "path", path }`（local）或 `{ kind: "url", url }`（S3 预签名 GET）。ffmpeg / ffprobe 原生支持 HTTP 输入直接消费；sharp 经 fetch 流式消费（Web Stream 需 `Readable.fromWeb` 转换）或下载到工作区走文件路径（更稳）；ffmpeg 消费预签名 HTTPS URL 需构建含 TLS 支持的 ffmpeg（常规发行版均满足，`FFMPEG_PATH` 指向自编译产物时注意）。**输入策略启发式**：短操作（probe、单帧抽帧）直接消费 URL；全量解码 / 转码类（雪碧图 / 预览代理 / crop / extract 重剪辑）一律先下载到工作区处理——既避免预签名 URL 在作业中途过期，也避免 HTTP seek 的额外往返。单帧抽帧（capture-frame）在 S3 后端下经源解析取 URL 直接消费，雪碧图与预览代理属重操作走下载租约。现有全部 `localStorage.` 直连消费方（含 files.ts 裸 `createReadStream`、media-probe / resize-cache / media-edit / frame-sprite / video-proxy / reference.ts 的 baseDir 拼路径）收敛到 backend / 工作区 / 源解析三个入口。
 9. **删除与 GC / 孤儿治理**：`delete(key)` 负责该 key 的一切——主对象 + `_cache` / `_posters` 派生（经 `list` 按 stem 前缀枚举后逐个 `delete`）；`_sprite` / `_proxy` 维持 30 天 TTL 清扫（实现改走 `list` + `delete`）。GC 调用方不变。孤儿对象治理分层：**staging 前缀按龄清扫**（每日任务，超 24h 的 staging 对象回收；MinIO/R2 lifecycle 规则可替代，代码保留兜底）；**低频全 bucket 审计命令**（人工触发）：bucket 与 `file_objects` 全量对账，兜底 GC「先删 DB 行后删对象」窗口的崩溃残留与异常路径孤儿——不作为定时任务（多用户大 bucket 上全量 List 昂贵）。
 10. **启动探测**：`storage.backend=s3` 时启动即 HeadBucket 校验连通性与凭据（先于 HTTP 服务与 Worker 开始工作），失败直接启动失败并输出端点与缺失键名（凭据不落日志）；**禁止静默降级到本地**。
 11. **对象迁移脚本**（`scripts/storage/`，一次性）：遍历 `file_objects` 全部行 + 本地派生目录（排除 `_tmp`），逐对象上传并以本地 MD5 与 S3 ETag 校验；支持 dry-run 与断点续跑；**不删除本地任何数据**（原 `uploads/` 留作备份，用户手工处置）。校验失败即中止；ETag==MD5 的前提为单次 PUTObject 且 bucket 未启用 SSE-KMS/SSE-C（见「Bucket 初始化清单」），不满足时降级为 size 比对 + 重读哈希。**支持双向**（`--direction local-to-s3 | s3-to-local`），回滚前先反向补迁。完整流程见「切换与回滚流程」专节。
@@ -187,4 +187,12 @@
 
 ## 当前状态
 
-已确认（2026-10-16），未开始实现。实施顺序：key 化 → 接口扩展 + 工作区拆分 → LocalStorageBackend 收敛 13 处直连 → S3 后端 + 启动探测 → 迁移脚本 → 切换演练。
+已确认（2026-10-16）。实施顺序：key 化 → 接口扩展 + 工作区拆分 → LocalStorageBackend 收敛 13 处直连 → S3 后端 + 启动探测 → 迁移脚本 → 切换演练。
+
+- [已完成] key 化：specs/storage-reference-key-unification.md（提交 b5f4befb）。
+- [已完成] 接口扩展 + 工作区拆分：`storage/backend.ts`（put/get/stat/delete/list + 可选 presignGet/presignPut；`StorageTraversalError`；get 返回 Node Readable、list 带 lastModifiedMs 供按龄清扫）；`storage/workspace.ts`（`_tmp` 临时区、writeAtomic、uploadRoot 惰性解析）。
+- [已完成] 直连收敛：media-edit（路由工厂 stat/租约/错误映射统一，persistDerived 经 put）、resize-cache（三处 produce 租约化，穿越守卫移交后端）、media-probe（探测经 resolveMediaSource，ffmpeg 直吃 URL、sharp 拉成 Buffer）、files（stat/get 流式分发，Range 206/416 语义不变）、upload（put + 探测 URL 化）、download、gc、video-proxy / frame-sprite（TTL 清扫经 list + lastModifiedMs）、reference（readSelfFile 租约化）、generate（resultSizes 经 stat）；localStorage 单例导出删除，单例由 service 引导期构造。
+- [进行中] S3 后端 + 启动探测 → 迁移脚本 → 切换演练。
+- 后续小项：media-edit 各路由 schema 的 video_key/audio_key 目前仍是 z.string().min(1)，穿越拒绝由工厂 + 后端守卫兜底；若收紧为存储 key schema 属 Phase 2 范围外，另行确认。
+- 第七轮代码审核（接口/工作区/收敛阶段）修订：规则 3 的 list 签名补 lastModifiedMs；规则 8 澄清短/重操作分类（单帧抽帧=短、雪碧图/代理=重）；派生 TTL 清扫抽公共 derived-cleanup（每前缀节流）；local list 遍历根按前缀首段收窄、临时区排除锚定本后端 baseDir；acquireMediaFile 的 release 改为尽力而为（重试后吞错，防顶替成功响应）；put 零拷贝快路径「发布即消费源文件」契约显式化。
+- 第八轮代码审核修订：uploadRoot 锚定回归 resolveFromRoot（修正 cwd 锚定的未授权行为变更）；capture-frame 按规则 8 改为 direct 源交付（路由工厂新增 sourceDelivery 选项，租约/direct 两模式，工厂 ctx 字段更名 sourceInput）；规则 9 枚举半边抽为接口级共享 listDerivedArtifactKeys（backend.ts，S3 后端复用）；接口新增可选 resolveLocalPath 能力，media-source 消除 instanceof 具体类耦合；RENAME_RETRIES / rmQuiet 收敛 fs-utils；initStorageBackend 双初始化守卫（fail-fast）；media-probe 修正 sharp 可吃 URL 的失实注释并补 S3 探测通道（URL 拉成 Buffer）。

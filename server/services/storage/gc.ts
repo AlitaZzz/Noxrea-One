@@ -20,8 +20,7 @@
 import { Prisma } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
 import { getSetting } from "@server/core/settings";
-import { buildStorageKey } from "./service";
-import { localStorage } from "./backends/local";
+import { buildStorageKey, getStorageBackend } from "./service";
 import { logEvent } from "@server/core/logger/utils";
 
 const GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -135,10 +134,10 @@ export async function runStorageGc(): Promise<StorageGcReport> {
     }
     report.reclaimed.push(item);
 
-    await localStorage.delete(item.key);
+    await getStorageBackend().delete(item.key);
     // backend.delete 会吞掉句柄占用类失败：文件若仍在，只是留下一个
     // 无账本行的孤儿磁盘文件，不影响任何引用，记录留痕即可
-    const stat = await localStorage.stat(item.key).catch(() => null);
+    const stat = await getStorageBackend().stat(item.key).catch(() => null);
     if (stat) {
       logEvent("gc", { stage: "file_still_present", key: item.key });
     }

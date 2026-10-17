@@ -9,7 +9,6 @@ vi.mock("@server/services/storage/ffmpeg", () => ({
   probeFfmpeg: mocks.probeFfmpeg,
   probeFfmpegDecode: mocks.probeFfmpegDecode,
 }));
-vi.mock("@server/services/storage/backends/local", () => ({ localStorage: { baseDir: "base" } }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 

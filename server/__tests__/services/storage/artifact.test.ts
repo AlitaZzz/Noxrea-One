@@ -1,21 +1,24 @@
 /**
  * 派生产物惰性生成：命中复用、同键并发合并、引用计数中止、空产物不发布、
- * 命中检查只读、临时文件位置与清理（真实 LocalStorageBackend.writeAtomic）。
+ * 命中检查只读、临时文件位置与清理（真实 LocalStorageBackend.put 原子落盘）。
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
 
+const cfg = vi.hoisted(() => ({ uploadDir: "" }));
+
 vi.mock("@server/core/config", () => ({
-  getConfig: () => ({ UPLOAD_DIR: "uploads", FFMPEG_PATH: "ffmpeg", LOG_LEVEL: "silent", ALLOW_INSECURE_SECRETS: true }),
+  getConfig: () => ({ UPLOAD_DIR: cfg.uploadDir, FFMPEG_PATH: "ffmpeg", LOG_LEVEL: "silent", ALLOW_INSECURE_SECRETS: true }),
 }));
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
 import * as mediaPool from "@server/services/storage/media-pool";
-import { localStorage } from "@server/services/storage/backends/local";
 import { ensureArtifact } from "@server/services/storage/artifact";
+import { initStorageBackend } from "@server/services/storage/service";
+import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 import { resetTestSettings } from "../../helpers/settings";
 
@@ -40,7 +43,9 @@ async function writeExisting(key: string, content: string): Promise<void> {
 
 beforeAll(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "artifact-"));
-  (localStorage as { baseDir: string }).baseDir = root;
+  // 后端与工作区根都锚定隔离目录：uploadRoot() 惰性读 config，beforeAll 落定即可
+  cfg.uploadDir = root;
+  initStorageBackend(new LocalStorageBackend(root));
 });
 afterAll(async () => { await fs.rm(root, { recursive: true, force: true }); });
 

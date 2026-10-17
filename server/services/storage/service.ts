@@ -1,20 +1,33 @@
 /**
- * 存储服务入口。
- * 聚合存储后端，提供上传保存、下载 URL 与密钥构建等统一访问入口。
+ * 存储服务入口（specs/storage-s3-backend.md 规则 1）。
+ * 引导期（initSettings 之后）构建进程级存储单例，业务侧经 getStorageBackend() 访问；
+ * 不支持热切换——后端选择与连接参数变更一律重启生效。
  */
 
 import { buildManagedFileUrl } from "@noxrea/shared/url";
-import { localStorage } from "./backends/local";
+import { LocalStorageBackend } from "./backends/local";
 import type { StorageBackend } from "./backend";
 
-const currentBackend: StorageBackend = localStorage;
+let backend: StorageBackend | null = null;
 
-/** 从文件路径保存上传文件 */
-export async function saveUploadFromPath(
-  key: string,
-  tempPath: string
-): Promise<void> {
-  await currentBackend.save(key, tempPath);
+/**
+ * 引导期构建存储单例。selected 缺省构造 local 后端；
+ * settings 键接线后由 bootstrap 按 `storage.backend` 传入 S3 或 local 实现。
+ */
+export function initStorageBackend(selected?: StorageBackend): void {
+  // 双初始化即静默换后端（在途租约与已发布 URL 全部失效），宁可 fail-fast
+  if (backend) {
+    throw new Error("Storage backend already initialized; backend selection requires a restart");
+  }
+  backend = selected ?? new LocalStorageBackend();
+}
+
+/** 进程级存储后端单例；未引导（bootstrap 之前）访问即抛错 */
+export function getStorageBackend(): StorageBackend {
+  if (!backend) {
+    throw new Error("Storage backend not initialized; call bootstrap() first");
+  }
+  return backend;
 }
 
 /**

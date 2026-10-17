@@ -31,14 +31,14 @@ router.post(
     failureCode: "detach_audio.extract_failed",
     mapError: (err) =>
       err instanceof NoAudioTrackError ? failCode(422, "detach_audio.no_audio_track") : undefined,
-    async run({ c, sourceKey, sourcePath, userId, signal, tmpDir }) {
+    async run({ c, sourceKey, sourceInput, userId, signal, tmpDir }) {
       const dir = await tmpDir();
-      const audio = await extractAudioTrack(sourcePath, dir, "audio", userId, signal);
+      const audio = await extractAudioTrack(sourceInput, dir, "audio", userId, signal);
       // 静音视频容器沿用源扩展名（无扩展名兜底 .mp4）；MIME 由扩展名映射
       const sourceExt = path.extname(sourceKey).toLowerCase() || ".mp4";
       const mutedMime = mimeByExt(sourceExt, "video/mp4");
       const mutedPath = path.join(dir, `muted${sourceExt}`);
-      await extractMutedVideo(sourcePath, mutedPath, signal);
+      await extractMutedVideo(sourceInput, mutedPath, signal);
 
       const audioStored = await persistDerived({
         userId,

@@ -8,11 +8,10 @@ import { fetchWithTimeout } from "@server/core/http-client";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getSetting } from "@server/core/settings";
-import { buildStorageKey } from "./service";
+import { buildStorageKey, getStorageBackend } from "./service";
 import { computeBufferHash } from "./hash";
 import { sniffMime, normalizeExt } from "./mime";
 import { persistFileObject } from "./persist";
-import { localStorage } from "./backends/local";
 
 /**
  * 解析 base64 data: URL 为原始字节。
@@ -157,7 +156,7 @@ export async function downloadAndSave(
     // 落盘统一交给存储后端：临时文件 + 原子 rename，目标被外部句柄短暂占用时自动退避重试。
     // 旧实现直接 writeFile 最终路径，且只按 EPERM 判定「文件被锁」——
     // 而 Windows 的共享冲突实际以 code=UNKNOWN（errno -4094）抛出，那个兜底从未生效过。
-    await localStorage.save(storageKey, buffer);
+    await getStorageBackend().put(storageKey, buffer);
 
     // 去重 + DB 记录
     await persistFileObject({
