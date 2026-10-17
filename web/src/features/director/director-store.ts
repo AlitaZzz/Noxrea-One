@@ -52,7 +52,7 @@ export interface DirectorRuntime {
   groupCharacters: (ids: string[]) => void;
   duplicateMany: (ids: string[]) => Promise<void>;
   toggleVisibleMany: (ids: string[]) => void;
-  captureShot: () => Promise<{ url: string; name: string; cameraId: string } | null>;
+  captureShot: () => Promise<{ ref: string; name: string; cameraId: string } | null>;
   sendShotToCanvas: (shotId: string) => Promise<void>;
   resetView: () => void;
   requestRender: () => void;

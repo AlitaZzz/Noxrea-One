@@ -42,7 +42,10 @@ export interface AssetItem {
   prompt: string;
   folderId?: string;
   scope: AssetScope;
-  sourceUrl?: string;
+  /** 来源引用：存储 key 或外部 URL（与画布节点 src 同值域） */
+  fileKey?: string;
+  /** 服务端派生的访问 URL（托管 key → /api/files/{key}，外部 URL 原样）；展示用 */
+  url?: string | null;
   sourceType?: string;
 }
 
@@ -53,7 +56,7 @@ export interface CreateAssetInput {
   description?: string;
   tags?: string[];
   prompt?: string;
-  sourceUrl?: string;
+  fileKey?: string;
   sourceType?: string;
   folderId?: string;
   scope?: AssetScope;

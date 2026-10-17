@@ -86,21 +86,21 @@ function typeLabelKey(type: string): string | undefined {
 function Preview({ asset }: { asset: AssetItem }) {
   const [audioDuration, setAudioDuration] = useState(0);
 
-  const thumbUrl = withManagedFileWidth(asset.sourceUrl, 400);
+  const thumbUrl = withManagedFileWidth(asset.fileKey, 400);
 
   return (
     <div
       className="relative aspect-square max-h-[280px] w-full overflow-hidden rounded-lg bg-black text-white flex items-center justify-center"
     >
-      {asset.mediaType === "audio" && asset.sourceUrl ? (
+      {asset.mediaType === "audio" && asset.url ? (
         <AudioWaveform
-          url={asset.sourceUrl}
+          url={asset.url}
           duration={audioDuration}
           onReady={setAudioDuration}
         />
-      ) : asset.mediaType === "video" && asset.sourceUrl ? (
+      ) : asset.mediaType === "video" && asset.url ? (
         // 复用画布节点同款播放器；检查器内不自动播放，用户主动点播放时默认有声
-        <VideoPlayer src={asset.sourceUrl} fill autoPlay={false} loop defaultVolume={1} />
+        <VideoPlayer src={asset.url} fill autoPlay={false} loop defaultVolume={1} />
       ) : thumbUrl ? (
         // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
         // eslint-disable-next-line @next/next/no-img-element

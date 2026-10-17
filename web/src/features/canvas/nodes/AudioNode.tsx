@@ -31,7 +31,8 @@ import { createAudioNodeFromUrl } from "@/features/canvas/upload";
 import { useNodeUpload } from "@/features/canvas/upload";
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating } from "@/lib/constants";
-import { sanitizeFileName } from "@/lib/utils/file-name";
+import { fileRefUrl } from "@/lib/file-url";
+import { downloadManagedFile } from "@/lib/utils/download";
 import { formatTime } from "@/lib/utils/format";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
@@ -83,16 +84,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const handleUpload = useNodeUpload(id, { accept: "audio/*" });
 
   const handleDownload = useCallback(() => {
-    if (!src) return;
-    const a = document.createElement("a");
-    const sep = src.includes("?") ? "&" : "?";
-    const params = new URLSearchParams({ download: "true" });
-    const fileName = sanitizeFileName(data.label);
-    if (fileName) params.set("filename", fileName);
-    a.href = `${src}${sep}${params.toString()}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
   /** 片段截取：优先走客户端管线（纯重封装，零解码，specs/client-video-editing.md），
@@ -258,7 +250,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasAudio ? (
           <AudioWaveform
-            url={src}
+            url={fileRefUrl(src)}
             nodeId={id}
             clipActive={clipActive}
             duration={duration}

@@ -26,7 +26,6 @@ import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { withManagedFileWidth } from "@/lib/file-url";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
@@ -197,20 +196,17 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   const references = useMemo<ReferenceItem[]>(() => {
     const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
       src,
-      thumbnail: src,
       index: i,
       kind: "audio",
       label: upstreamAudio.find((a) => a.src === src)?.label || "",
     }));
     const images: ReferenceItem[] = refOrder.map((src, i) => ({
       src,
-      thumbnail: withManagedFileWidth(src, 64),
       index: i,
       kind: "image",
     }));
     const videos: ReferenceItem[] = refVideoOrder.map((src, i) => ({
       src,
-      thumbnail: src,
       index: i,
       kind: "video",
       label: upstreamVideos.find((v) => v.src === src)?.label || "",

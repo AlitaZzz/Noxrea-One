@@ -15,7 +15,6 @@ import { useMemo } from "react";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
-import { withManagedFileWidth } from "@/lib/file-url";
 
 import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
@@ -149,20 +148,17 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     const videoLabelMap = new Map(upstreamVideos.map((v) => [v.src, v.label]));
     const audios: ReferenceItem[] = audioOrder.map((src, i) => ({
       src,
-      thumbnail: src,
       index: i,
       kind: "audio",
       label: audioSrcLabel.get(src) || "",
     }));
     const images: ReferenceItem[] = refOrder.map((src, i) => ({
       src,
-      thumbnail: withManagedFileWidth(src, 128),
       index: i,
       kind: "image",
     }));
     const videos: ReferenceItem[] = refVideoOrder.map((src, i) => ({
       src,
-      thumbnail: src,
       index: i,
       kind: "video",
       label: videoLabelMap.get(src) || "",

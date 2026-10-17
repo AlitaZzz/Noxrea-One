@@ -29,7 +29,8 @@ model User {
   // 展示名：空时按 username 回退（toPublicUser 序列化单点），无数据库默认值
   displayName     String?   @map("display_name")
   lastLoginAt     DateTime? @map("last_login_at")
-  avatarUrl       String?   @map("avatar")
+  // 头像：引用值为存储 key（列名保持 avatar；旧 URL 值由 key 化数据迁移脚本重写）
+  avatarKey       String?   @map("avatar")
   theme           String    @default("dark") @map("theme")
   language        String    @default("zh") @map("lang")
   isActive        Boolean   @default(true) @map("is_active")
@@ -64,9 +65,9 @@ model GenerationTask {
   prompt         String    @default("") @map("prompt")
   config         String    @default("{}") @map("config") // JSON TEXT
 
-  refImages      String?   @map("ref_images") // JSON TEXT：参考图 URL 数组
-  refAudios      String?   @map("ref_audios") // JSON TEXT：参考音频 URL 数组
-  refVideos      String?   @map("ref_videos") // JSON TEXT：参考视频 URL 数组
+  refImages      String?   @map("ref_images") // JSON TEXT：参考图 key 数组
+  refAudios      String?   @map("ref_audios") // JSON TEXT：参考音频 key 数组
+  refVideos      String?   @map("ref_videos") // JSON TEXT：参考视频 key 数组
 
   resultUrls     String?   @map("result_urls") // JSON TEXT
   resultText     String?   @map("result_text")
@@ -101,9 +102,9 @@ model CanvasProject {
   userId     Int      @map("user_id")
   name       String   @default("Untitled") @map("name")
   canvasData String   @default("{}") @map("canvas_data") // JSON TEXT
-  // 用户自定义封面（/api/files/... URL）；null 时列表页回退首图预览。
+  // 用户自定义封面（存储 key `{userId}/{hash[:2]}/{hash}{ext}`）；null 时列表页回退首图预览。
   // 文件本体走内容寻址存储，引用登记在 canvas_cover 来源的账本（防 GC 回收）
-  coverUrl   String?  @map("cover_url")
+  coverKey   String?  @map("cover_key")
   revision   Int      @default(1) @map("revision") // 乐观并发版本号；每次更新递增
   // 列表摘要冗余列：保存事务中由已解析的画布 JSON 派生（节点数 / 首个带 src 的
   // image-node src，封面无关），列表查询不再全量读取 canvasData（读放大根治）。
@@ -191,12 +192,14 @@ model AssetItem {
   userId      Int      @map("user_id")
   folderId    Int      @map("folder_id")
   scope       String   @default("personal") @map("scope")
-  sourceUrl   String?  @map("source_url")
+  // 来源引用：存储 key（`{userId}/{hash[:2]}/{hash}{ext}`）或外部 http(s) URL；
+  // 托管 key 据此关联 file_objects（探测元数据与引用账本）
+  fileKey     String?  @map("file_key")
   sourceType  String   @default("") @map("source_type")
   name        String   @default("Untitled") @map("name")
   type        String   @default("other") @map("type")
   mediaType   String   @default("") @map("media_type") // 媒体类型：image/video/audio
-  // 宽高不在此表存储：以 sourceUrl 关联 file_objects 的探测值为准（join 得出）
+  // 宽高不在此表存储：以 fileKey 关联 file_objects 的探测值为准（join 得出）
   description String   @default("") @map("description")
   tags        String   @default("[]") @map("tags") // JSON TEXT
   prompt      String   @default("") @map("prompt") // 生成该素材所用的提示词
@@ -208,7 +211,7 @@ model AssetItem {
   folder AssetFolder @relation(fields: [folderId], references: [id], onDelete: Restrict)
 
   @@index([userId, scope, folderId, createdAt])
-  @@unique([userId, scope, sourceUrl])
+  @@unique([userId, scope, fileKey])
   @@index([folderId])
   @@index([mediaType])
   @@map("asset_items")
@@ -289,7 +292,7 @@ model AgentMessage {
   toolCallId String?  @map("tool_call_id")
   toolName   String?  @map("tool_name")
   toolCalls  String?  @map("tool_calls") // JSON TEXT：assistant 消息的工具调用数组
-  refImages  String?  @map("ref_images") // JSON TEXT：参考图 URL 数组
+  refImages  String?  @map("ref_images") // JSON TEXT：参考图 key 数组
   createdAt  DateTime @default(now()) @map("created_at")
 
   // 关系

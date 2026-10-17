@@ -4,6 +4,8 @@
  */
 import { z } from "zod";
 
+import { isStorageKey } from "@noxrea/shared/url";
+
 export const canvasCreateSchema = z.object({
   name: z.string().max(200).optional(),
   canvasData: z.record(z.unknown()).optional(),
@@ -12,9 +14,9 @@ export const canvasCreateSchema = z.object({
 export const canvasUpdateSchema = z.object({
   name: z.string().max(200).optional(),
   canvasData: z.record(z.unknown()).optional(),
-  // 用户自定义封面（/api/files/... URL）；null 表示清除封面。
+  // 用户自定义封面（存储 key，`{userId}/{hash[:2]}/{hash}{ext}`）；null 表示清除封面。
   // 纯元数据：与 name 同语义，不参与版本判定、不递增 revision
-  coverUrl: z.string().max(2000).nullable().optional(),
+  coverKey: z.string().max(200).refine(isStorageKey, { message: "封面引用须为存储 key" }).nullable().optional(),
   // 仅改名（无 canvasData）可省略；带 canvasData 的画布保存必须携带，由路由层强制校验
   baseRevision: z.number().int().min(1).optional(),
   // 编辑权租约令牌（fencing token）：与 baseRevision 配对，由路由层强制校验；

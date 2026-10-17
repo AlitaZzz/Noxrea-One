@@ -15,7 +15,7 @@ import {
   assetBatchCreateSchema,
   assetBatchUpdateSchema,
   assetBatchDeleteSchema,
-  assetDeleteBySourceSchema,
+  assetDeleteByFileKeysSchema,
 } from "@server/schemas/asset";
 import {
   AssetOperationError,
@@ -29,10 +29,10 @@ import {
   updateAsset,
   deleteAsset,
   deleteAssetsBatch,
-  deleteAssetsBySourceUrls,
+  deleteAssetsByFileKeys,
   createAssetsBatch,
   updateAssetsBatch,
-  listSourceUrls,
+  listFileKeys,
   getAssetLibrarySummary,
 } from "@server/crud/asset";
 import { ok, failCode } from "@server/core/response";
@@ -41,12 +41,15 @@ const router = new Hono();
 
 /** 将 CRUD 层业务错误统一转换为 HTTP 错误码，避免事务细节泄漏到路由层。 */
 function handleAssetError(error: unknown): Response | null {
-  if (isSourceUrlUniqueError(error)) {
-    return failCode(409, "assets.duplicate_source_url");
+  if (isFileKeyUniqueError(error)) {
+    return failCode(409, "assets.duplicate_file_key");
   }
   if (!(error instanceof AssetOperationError)) return null;
-  if (error.code === "duplicate_source_url") {
-    return failCode(409, "assets.duplicate_source_url");
+  if (error.code === "duplicate_file_key") {
+    return failCode(409, "assets.duplicate_file_key");
+  }
+  if (error.code === "invalid_file_key") {
+    return failCode(400, "assets.invalid_file_key");
   }
   if (error.code === "uncategorized_folder_protected") {
     return failCode(403, "assets.uncategorized_folder_protected");
@@ -57,9 +60,9 @@ function handleAssetError(error: unknown): Response | null {
   return failCode(404, "assets.asset_not_found");
 }
 
-/** 判断唯一约束冲突是否来自资产来源 URL；避免把目录唯一冲突误报为来源重复。 */
-function isSourceUrlUniqueError(error: unknown): boolean {
-  return isUniqueConstraintError(error, "source_url");
+/** 判断唯一约束冲突是否来自资产来源引用；避免把目录唯一冲突误报为来源重复。 */
+function isFileKeyUniqueError(error: unknown): boolean {
+  return isUniqueConstraintError(error, "file_key");
 }
 
 // ════════ Folders ════════
@@ -196,14 +199,14 @@ router.get("/api/assets/items", async (c) => {
   return c.json(ok({ items: result.items, total: result.total, nextCursor: result.nextCursor }));
 });
 
-router.get("/api/assets/items/source-urls", async (c) => {
+router.get("/api/assets/items/file-keys", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
   const scope = c.req.query("scope") ?? "personal";
-  const urls = await listSourceUrls(auth.user.id, scope);
-  return c.json(ok(urls));
+  const keys = await listFileKeys(auth.user.id, scope);
+  return c.json(ok(keys));
 });
 
 router.post("/api/assets/items", async (c) => {
@@ -224,7 +227,7 @@ router.post("/api/assets/items", async (c) => {
   try {
     const result = await createAssetsBatch([{ ...parsed.data, userId: auth.user.id }]);
     // 批量创建对重复来源是「跳过」，单条创建保持「重复即 409」语义，避免前端拿到空 item。
-    if (!result.items[0]) return failCode(409, "assets.duplicate_source_url");
+    if (!result.items[0]) return failCode(409, "assets.duplicate_file_key");
     return c.json(ok({ item: result.items[0], counters: result.counters }));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");
@@ -316,8 +319,8 @@ router.delete("/api/assets/items/batch", async (c) => {
   }
 });
 
-// DELETE /api/assets/items/by-source — 画布「取消收藏」：按 sourceUrl 删除个人库条目（宽松语义）
-router.delete("/api/assets/items/by-source", async (c) => {
+// DELETE /api/assets/items/by-file-keys — 画布「取消收藏」：按 fileKey 删除个人库条目（宽松语义）
+router.delete("/api/assets/items/by-file-keys", async (c) => {
   const request = c.req.raw;
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
@@ -329,11 +332,11 @@ router.delete("/api/assets/items/by-source", async (c) => {
     return failCode(400, "common.invalid_json");
   }
 
-  const parsed = assetDeleteBySourceSchema.safeParse(body);
+  const parsed = assetDeleteByFileKeysSchema.safeParse(body);
   if (!parsed.success) return failCode(422, "common.invalid_request");
 
   try {
-    const result = await deleteAssetsBySourceUrls(auth.user.id, parsed.data.sourceUrls);
+    const result = await deleteAssetsByFileKeys(auth.user.id, parsed.data.fileKeys);
     return c.json(ok(result));
   } catch (error) {
     return handleAssetError(error) ?? failCode(500, "common.internal_error");

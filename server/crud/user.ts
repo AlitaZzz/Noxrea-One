@@ -5,6 +5,7 @@
 import { prisma } from "@server/core/database/client";
 import { isUniqueConstraintError } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
+import { resolveFileUrl } from "@noxrea/shared/url";
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -46,7 +47,7 @@ export async function touchLastLogin(id: number) {
 
 /** 用户可更新字段白名单 */
 type UpdatableUserFields = {
-  avatarUrl?: string;
+  avatarKey?: string;
   theme?: string;
   language?: string;
   isActive?: boolean;
@@ -56,6 +57,7 @@ type UpdatableUserFields = {
  * 对外安全的用户视图：剔除 hashedPassword 等敏感字段。
  * 所有返回给 HTTP 客户端的 user 对象都必须经此转换。
  * displayName 展示回退约定：为空时按 username 回退（Spec user-table-upgrade），消费方不做二次回退。
+ * 头像同时携带存储 key（avatarKey）与派生访问 URL（avatarUrl，外部值原样透传），展示侧不重复派生。
  */
 export function toPublicUser(user: User) {
   return {
@@ -64,7 +66,9 @@ export function toPublicUser(user: User) {
     displayName: user.displayName ?? user.username,
     email: user.email,
     role: user.role,
-    avatarUrl: user.avatarUrl,
+    avatarKey: user.avatarKey,
+    // 引用值 → 访问 URL 规则单点在 shared 的 resolveFileUrl（key → 托管文件访问 URL，外部值透传）
+    avatarUrl: resolveFileUrl(user.avatarKey),
     theme: user.theme,
     language: user.language,
     isActive: user.isActive,
@@ -85,7 +89,7 @@ export async function updateUser(
 ) {
   // 白名单过滤：仅允许安全字段更新，防止直接设置 hashedPassword 等敏感字段
   const allowed: Record<string, unknown> = {};
-  const allowedKeys = new Set(["avatarUrl", "theme", "language", "isActive"]);
+  const allowedKeys = new Set(["avatarKey", "theme", "language", "isActive"]);
   for (const [key, val] of Object.entries(data)) {
     if (allowedKeys.has(key) && val !== undefined) {
       allowed[key] = val;

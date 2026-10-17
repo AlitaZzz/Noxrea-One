@@ -44,17 +44,18 @@ export function createAssetNode(
   const { width: dw, height: dh } = computeNodeSize(nw, nh);
   const pos = findFreePosition({ width: dw, height: dh }, center);
 
-  const sourceUrl = asset.sourceUrl;
+  // 节点 src 与资产 fileKey 同值域（存储 key / 外部 URL），直接落 key
+  const fileKey = asset.fileKey;
   const isAudio = asset.mediaType === "audio";
   const isVideo = asset.mediaType === "video";
 
   if (isAudio) {
-    const node = createAudioNode(pos, sourceUrl);
+    const node = createAudioNode(pos, fileKey);
     node.data.label = asset.name;
     node.data.fileSize = asset.size || undefined;
     return node;
   } else if (isVideo) {
-    const node = createVideoNode(pos, sourceUrl);
+    const node = createVideoNode(pos, fileKey);
     node.data.label = asset.name;
     node.data.naturalWidth = nw;
     node.data.naturalHeight = nh;
@@ -63,7 +64,7 @@ export function createAssetNode(
     node.style = { width: dw, height: dh };
     return node;
   } else {
-    const imgSrc = asset.sourceUrl as string;
+    const imgSrc = asset.fileKey as string;
     const node = createImageNode(pos, imgSrc);
     node.data.label = asset.name;
     node.data.naturalWidth = nw;

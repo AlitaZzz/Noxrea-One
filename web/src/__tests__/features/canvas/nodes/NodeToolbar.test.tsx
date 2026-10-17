@@ -12,7 +12,7 @@ vi.mock("react-i18next", async (importOriginal) => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 vi.mock("@/features/assets/store", () => ({
-  useAssetsStore: (selector: (state: unknown) => unknown) => selector({ knownAssetUrls: new Set(), unsaveAssetsByUrls: vi.fn() }),
+  useAssetsStore: (selector: (state: unknown) => unknown) => selector({ knownAssetKeys: new Set(), unsaveAssetsByFileKeys: vi.fn() }),
 }));
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
   useCanvasStore: (selector: (state: unknown) => unknown) => selector({ nodes: [{ id: "image-1", data: { src: "/image.png" } }] }),

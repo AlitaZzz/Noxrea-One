@@ -20,7 +20,7 @@ import { canvasToBlob } from "@/lib/utils/image-utils";
 interface Props {
   open: boolean;
   file: File | null;
-  onDone: (url: string) => void;
+  onDone: (key: string) => void;
   onClose: () => void;
 }
 
@@ -123,9 +123,9 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
       const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
         ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
       });
-      // 统一上传管道 raw sink：只取远程地址，不碰画布
+      // 统一上传管道 raw sink：只取存储 key（URL 渲染期派生），不碰画布
       const result = await uploadOne(blob, "avatar.png", "derived");
-      if (result?.url) { onDone(result.url); message.success(t("auth.avatarSaved")); }
+      if (result?.key) { onDone(result.key); message.success(t("auth.avatarSaved")); }
       else message.error(t("auth.avatarFailed"));
     } catch { message.error(t("auth.avatarFailed")); }
     finally { setSaving(false); }

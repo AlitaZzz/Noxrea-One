@@ -48,7 +48,8 @@ export function setAuthCookie(c: Context, token: string, maxAgeS = authCookieMax
 export interface AuthUser {
   id: number;
   username: string;
-  avatarUrl: string | null;
+  /** 头像引用：存储 key（{userId}/{hash[:2]}/{hash}{ext}；头像只来自上传，无外部 URL 值域） */
+  avatarKey: string | null;
   theme: string;
   language: string;
   isActive: boolean;
@@ -58,7 +59,7 @@ function toAuthUser(user: User): AuthUser {
   return {
     id: user.id,
     username: user.username,
-    avatarUrl: user.avatarUrl,
+    avatarKey: user.avatarKey,
     theme: user.theme,
     language: user.language,
     isActive: user.isActive,

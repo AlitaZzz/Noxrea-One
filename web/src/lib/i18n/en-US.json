@@ -1046,7 +1046,8 @@
       "folder_not_found": "Folder not found",
       "invalid_asset_id": "Invalid asset ID",
       "asset_not_found": "Asset not found",
-      "duplicate_source_url": "This asset is already in the library",
+      "duplicate_file_key": "This asset is already in the library",
+      "invalid_file_key": "Invalid asset reference, please re-upload",
       "uncategorized_folder_protected": "The uncategorized folder cannot be renamed or deleted",
       "batch_too_large": "Up to {{limit}} assets per request, please upload in batches"
     },

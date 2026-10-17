@@ -35,7 +35,8 @@ import type { ImageNode as ImageNodeType, ImageNodeData } from "@/features/canva
 import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/features/canvas/upload";
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
-import { sanitizeFileName } from "@/lib/utils/file-name";
+import { fileRefUrl } from "@/lib/file-url";
+import { downloadManagedFile } from "@/lib/utils/download";
 import { canvasToBlob, computeNodeSize } from "@/lib/utils/image-utils";
 import { mediaAspect } from "@/lib/utils/media-utils";
 
@@ -105,79 +106,61 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   }, [expanded, setExpanded]);
 
   // 主图真相统一为 data.src（不再有本地 src state / 渲染期 setState hack）。
-  // 多图模式约定（写侧保证）：src 必为 multiResultUrls 的成员；
+  // 多图模式约定（写侧保证）：src 必为 multiResultKeys 的成员；
   // 撤销会把整个 data 快照替换，故无需额外同步。
   const src = data.src || "";
+  // 浏览器消费（编辑面板加载图片）用的访问 URL；key 派生，外部 URL 原样
+  const mediaUrl = fileRefUrl(src);
   const mainAspect = mediaAspect(data.naturalWidth, data.naturalHeight);
 
-  // 多图结果模式：存在 multiResultUrls 且 >=2 张时，节点以堆叠卡片/展开网格展示
-  const isMulti = Array.isArray(data.multiResultUrls) && data.multiResultUrls.length >= 2;
+  // 多图结果模式：存在 multiResultKeys 且 >=2 张时，节点以堆叠卡片/展开网格展示
+  const isMulti = Array.isArray(data.multiResultKeys) && data.multiResultKeys.length >= 2;
 
   // 展开网格的卡片布局（纯函数计算，仅在多图+展开时有效）
   const multiExpandedLayouts = useMemo(
-    () => (expanded && isMulti && data.multiResultUrls ? layoutMultiImages(data.multiResultUrls, src) : []),
-    [expanded, isMulti, data.multiResultUrls, src]
+    () => (expanded && isMulti && data.multiResultKeys ? layoutMultiImages(data.multiResultKeys, src) : []),
+    [expanded, isMulti, data.multiResultKeys, src]
   );
 
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
   const handleUpload = useNodeUpload(id, {
     accept: "image/*",
-    clearFields: ["multiResultUrls", "multiResultTotalCount"],
+    clearFields: ["multiResultKeys", "multiResultTotalCount"],
   });
 
   const handleDownload = useCallback(() => {
-    if (!src) return;
-    const a = document.createElement("a");
-    const sep = src.includes("?") ? "&" : "?";
-    const params = new URLSearchParams({ download: "true" });
-    const fileName = sanitizeFileName(data.label);
-    if (fileName) params.set("filename", fileName);
-    a.href = `${src}${sep}${params.toString()}`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
-  /** 多图模式：下载指定 URL 的结果图 */
-  const handleDownloadUrl = useCallback((url: string) => {
-    if (!url) return;
-    const a = document.createElement("a");
-    const sep = url.includes("?") ? "&" : "?";
-    const params = new URLSearchParams({ download: "true" });
-    const fileName = sanitizeFileName(data.label);
-    if (fileName) params.set("filename", fileName);
-    a.href = `${url}${sep}${params.toString()}`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  /** 多图模式：下载指定结果图（引用值为 key，派生下载 URL） */
+  const handleDownloadUrl = useCallback((ref: string) => {
+    downloadManagedFile(ref, data.label);
   }, [data.label]);
 
   // 预览浮层：图片列表优先用多图结果，单图时退化为 [src]
   const previewList = useMemo<PreviewItem[]>(
     () =>
-      (isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls : [src]).map((url) => ({
-        url,
+      (isMulti && Array.isArray(data.multiResultKeys) ? data.multiResultKeys : [src]).map((ref) => ({
+        ref,
         mediaType: "image" as const,
       })),
-    [isMulti, data.multiResultUrls, src]
+    [isMulti, data.multiResultKeys, src]
   );
   const openPreview = useCallback(() => {
     if (!src) return;
-    const idx = isMulti && Array.isArray(data.multiResultUrls) ? data.multiResultUrls.indexOf(src) : 0;
+    const idx = isMulti && Array.isArray(data.multiResultKeys) ? data.multiResultKeys.indexOf(src) : 0;
     setPreviewIndex(idx < 0 ? 0 : idx);
     setPreviewOpen(true);
-  }, [src, isMulti, data.multiResultUrls]);
+  }, [src, isMulti, data.multiResultKeys]);
 
   /** 多图模式：把某张结果图设为主图（更新 src 与真实尺寸，并收起网格） */
-  const handleSetMain = useCallback((url: string) => {
-    if (!url) return;
+  const handleSetMain = useCallback((ref: string) => {
+    if (!ref) return;
     const store = useCanvasStore.getState();
     const node = store.nodes.find((n) => n.id === id);
     const d = node?.data as ImageNodeData | undefined;
     const { width, height } = computeNodeSize(d?.naturalWidth || 1024, d?.naturalHeight || 1024);
-    store.updateNodeData(id, { src: url, pendingNaturalSize: { width, height } }, { width, height }, { skipHistory: true });
+    store.updateNodeData(id, { src: ref, pendingNaturalSize: { width, height } }, { width, height }, { skipHistory: true });
     markDirtyImmediate();
     setExpanded(false);
   }, [id, setExpanded]);
@@ -219,13 +202,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     try {
-      // 1. 加载原图
+      // 1. 加载原图（key → 派生 URL，供 canvas 跨域烘焙）
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const i = new window.Image();
         i.crossOrigin = "anonymous";
         i.onload = () => resolve(i);
         i.onerror = reject;
-        i.src = src;
+        i.src = mediaUrl;
       });
 
       // 2. Canvas 烘焙
@@ -251,7 +234,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 本链路不占用 taskBinding，无需回滚生成态；仅记录日志
       console.error("transform failed:", e);
     }
-  }, [id, src, t]);
+  }, [id, src, mediaUrl, t]);
 
   const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
@@ -261,14 +244,14 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       name: data.label || t("node.image"),
       type: "other",
       mediaType: "image",
-      sourceUrl: src,
+      fileKey: src,
       sourceType: d?.source,
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
     });
   }, [src, data.label, id, addAsset, t]);
 
-  const handleGridSplit = useGridSplit(id, src);
+  const handleGridSplit = useGridSplit(id, mediaUrl);
 
   // 模板目录（与生成面板 / 工具条同一数据源）：按条目 target 决定派生节点类型，
   // 统一写入令牌（chip 展示，提交时展开）
@@ -407,8 +390,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               expanded ? (
                 // 展开平铺：卡片同尺寸 2 列排列，溢出节点边界。
                 <div className="absolute inset-0 overflow-visible">
-                  {data.multiResultUrls!.map((url, i) => {
-                    const isMain = url === src;
+                  {data.multiResultKeys!.map((ref, i) => {
+                    const isMain = ref === src;
                     const placement = multiExpandedLayouts[i] ?? {};
                     return (
                       <div
@@ -423,7 +406,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <CanvasImage nodeId={id} src={url} placement={placement} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} onLoad={isMain ? handleMainImgLoad : undefined} />
+                        <CanvasImage nodeId={id} src={ref} placement={placement} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} onLoad={isMain ? handleMainImgLoad : undefined} />
                         {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
                         <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
                           <Tooltip><TooltipTrigger asChild>
@@ -432,7 +415,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                                 size="icon-sm"
                                 variant="ghost"
                                 className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
-                                onClick={() => handleDownloadUrl(url)}
+                                onClick={() => handleDownloadUrl(ref)}
                               >
                                 <DownloadOutlined className="size-4" />
                               </Button>
@@ -444,7 +427,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                                   size="icon-sm"
                                   variant="ghost"
                                   className="rounded-md bg-black/50 p-0 text-white/70 hover:bg-black/70 hover:text-white"
-                                  onClick={() => handleSetMain(url)}
+                                  onClick={() => handleSetMain(ref)}
                                 >
                                   <CrownOutlined className="size-4" />
                                 </Button>
@@ -471,7 +454,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
               ) : (
                 // 折叠堆叠卡片：排除当前主图，取最多 3 张作为背景卡
                 <div className="relative w-full h-full overflow-visible rounded-lg">
-                  {data.multiResultUrls!.filter((u) => u !== src).slice(0, 3).map((url, i) => {
+                  {data.multiResultKeys!.filter((ref) => ref !== src).slice(0, 3).map((ref, i) => {
                     const depth = i + 1;
                     const placement = { stackDepth: depth };
                     return (
@@ -487,7 +470,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <CanvasImage nodeId={id} src={url} placement={placement} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
+                        <CanvasImage nodeId={id} src={ref} placement={placement} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
                       </div>
                     );
                   })}
@@ -527,18 +510,18 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
         </div>
         {annotateOpen && src && (
           <div className="pointer-events-none absolute inset-0 overflow-visible">
-            <AnnotationPanel src={src} sourceId={id} onClose={() => setAnnotateOpen(false)} />
+            <AnnotationPanel src={mediaUrl} sourceId={id} onClose={() => setAnnotateOpen(false)} />
           </div>
         )}
         {cropOpen && src && (
           <div className="pointer-events-none absolute inset-0 overflow-visible">
-            <CropPanel src={src} sourceId={id} onClose={() => setCroppingNodeId(null)} />
+            <CropPanel src={mediaUrl} sourceId={id} onClose={() => setCroppingNodeId(null)} />
           </div>
         )}
         {panoramaOpen && src && (
           <div className="pointer-events-none absolute inset-0 overflow-visible">
             <PanoramaPanel
-              src={src}
+              src={mediaUrl}
               sourceId={id}
               selected={selected && !multiSelect}
               onClose={() => setPanoramaOpen(false)}

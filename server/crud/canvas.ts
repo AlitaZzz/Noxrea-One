@@ -6,7 +6,8 @@ import { prisma } from "@server/core/database/client";
 import type { CanvasDelta } from "@server/schemas/canvas";
 import { newId } from "@server/utils/id";
 import { withProjectGate, isCurrentLease } from "@server/services/canvas/editor-lease";
-import { extractHashCountsFromCanvas, extractHashFromUrl, hashCountsEqual } from "@server/services/canvas/extract-hashes";
+import { extractHashCountsFromCanvas, hashCountsEqual } from "@server/services/canvas/extract-hashes";
+import { hashFromStorageKey } from "@noxrea/shared/url";
 import { deriveCanvasSummary, toProjectSummary } from "@server/services/canvas/project-summary";
 import {
   replaceSourceFileRefs,
@@ -21,10 +22,10 @@ export class CanvasRevisionConflictError extends Error {
   }
 }
 
-/** 封面 URL 不是本站 /api/files/ 内容寻址地址（无法登记引用账本防 GC） */
-export class CanvasCoverUrlError extends Error {
+/** 封面引用不是存储 key 严格形态（无法登记引用账本防 GC） */
+export class CanvasCoverKeyError extends Error {
   constructor() {
-    super("cover url is not a managed file url");
+    super("cover ref is not a storage key");
   }
 }
 
@@ -49,7 +50,7 @@ export async function getProjects(userId: number) {
       name: true,
       revision: true,
       updatedAt: true,
-      coverUrl: true,
+      coverKey: true,
       nodeCount: true,
       thumbnailSrc: true,
     },
@@ -115,7 +116,7 @@ async function leaseLostError(id: string, userId: number): Promise<CanvasLeaseLo
 export async function updateProject(
   id: string,
   userId: number,
-  data: { name?: string; canvasData?: Record<string, unknown>; coverUrl?: string | null },
+  data: { name?: string; canvasData?: Record<string, unknown>; coverKey?: string | null },
   options?: { baseRevision?: number; lease?: number }
 ) {
   // 画布内容写必须持有效编辑权租约：租约校验与事务整体进入每项目写临界区，
@@ -203,7 +204,7 @@ export async function updateProjectDelta(
 async function updateProjectRow(
   id: string,
   userId: number,
-  data: { name?: string; canvasData?: Record<string, unknown>; coverUrl?: string | null },
+  data: { name?: string; canvasData?: Record<string, unknown>; coverKey?: string | null },
   options?: { baseRevision?: number }
 ) {
   return prisma.$transaction(async (tx) => {
@@ -237,13 +238,13 @@ async function updateProjectRow(
       updateData.nodeCount = summary.nodeCount;
       updateData.thumbnailSrc = summary.thumbnailSrc;
     }
-    if (data.coverUrl !== undefined) {
-      // 封面必须能解析出本站文件 hash：引用账本按 hash 登记，防 GC 回收封面文件
-      coverHash = data.coverUrl === null ? null : extractHashFromUrl(data.coverUrl);
-      if (data.coverUrl !== null && !coverHash) {
-        throw new CanvasCoverUrlError();
+    if (data.coverKey !== undefined) {
+      // 封面必须是存储 key 严格形态：引用账本按 hash 登记，防 GC 回收封面文件
+      coverHash = data.coverKey === null ? null : hashFromStorageKey(data.coverKey);
+      if (data.coverKey !== null && !coverHash) {
+        throw new CanvasCoverKeyError();
       }
-      updateData.coverUrl = data.coverUrl;
+      updateData.coverKey = data.coverKey;
     }
 
     const updated = await tx.canvasProject.update({
@@ -267,7 +268,7 @@ async function updateProjectRow(
 
     // 封面引用走独立来源（canvas_cover），与画布内容（canvas）正交：
     // 画布保存整替 canvas 来源集合，封面混入会被冲掉。清除封面（null）即清空该来源。
-    if (data.coverUrl !== undefined) {
+    if (data.coverKey !== undefined) {
       await replaceSourceFileRefs(tx, {
         userId,
         sourceType: "canvas_cover",

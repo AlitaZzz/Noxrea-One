@@ -91,7 +91,9 @@ export const ERROR_CODES = [
   /** 素材不存在 */
   "assets.asset_not_found",
   /** 相同来源素材已保存 */
-  "assets.duplicate_source_url",
+  "assets.duplicate_file_key",
+  /** 素材来源引用值域非法：托管引用须为存储 key 严格形态，或外部 http(s) URL */
+  "assets.invalid_file_key",
   /** 系统「未分类」目录不可修改或删除 */
   "assets.uncategorized_folder_protected",
   /** 单次提交的素材数量超过上限 */

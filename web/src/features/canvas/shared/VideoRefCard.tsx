@@ -11,12 +11,14 @@ import { useTranslation } from "react-i18next";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TYPE } from "@/lib/constants";
+import { fileRefUrl } from "@/lib/file-url";
 
+import { refThumbnailUrl } from "./reference";
 import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { findReferenceNode, useRevealCanvasNode } from "./reveal-node";
 
 export interface VideoRefCardProps {
-  /** 参考视频地址 */
+  /** 参考视频引用（存储 key 或外部 URL），展示时派生访问 URL */
   src: string;
   /** 生成面板所属节点 id（用于定位来源节点与断开连线） */
   nodeId: string;
@@ -42,11 +44,12 @@ function VideoRefCard({
   const reveal = useRevealCanvasNode();
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const videoUrl = fileRefUrl(src);
 
   return (
     <ReferenceHoverPreview
       disabled={dragging || Boolean(dragActive) || dragOver}
-      src={src}
+      src={videoUrl}
       mediaType="video"
     >
       <Card
@@ -93,7 +96,7 @@ function VideoRefCard({
           onReorder(dragged, src);
         }}
       >
-        <video src={`${src}#t=0.1`} className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
+        <video src={refThumbnailUrl(src, "video")} className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
         <ReferenceIndexBadge>{t("common.refVideoLabel", { index: index + 1 })}</ReferenceIndexBadge>
         <ReferenceRemoveButton
           ariaLabel={t("common.delete")}

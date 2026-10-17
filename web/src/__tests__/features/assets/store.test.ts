@@ -37,7 +37,7 @@ import { selectChildFolders, useAssetsStore } from "@/features/assets/store";
 describe("assets store initialize 并发去重", () => {
   beforeEach(() => {
     mocks.bootstrap.mockReset();
-    useAssetsStore.setState({ initialized: false, folders: [], knownAssetUrls: new Set() });
+    useAssetsStore.setState({ initialized: false, folders: [], knownAssetKeys: new Set() });
   });
 
   it("并发 initialize 共享同一次 bootstrap 请求", async () => {
@@ -50,7 +50,7 @@ describe("assets store initialize 并发去重", () => {
     const b = useAssetsStore.getState().initialize();
     expect(mocks.bootstrap).toHaveBeenCalledTimes(1);
 
-    resolveBootstrap({ folders: [], sourceUrls: [] });
+    resolveBootstrap({ folders: [], fileKeys: [] });
     await Promise.all([a, b]);
 
     expect(mocks.bootstrap).toHaveBeenCalledTimes(1);
@@ -63,14 +63,14 @@ describe("assets store initialize 并发去重", () => {
     await useAssetsStore.getState().initialize();
     expect(useAssetsStore.getState().initialized).toBe(false);
 
-    mocks.bootstrap.mockResolvedValue({ folders: [], sourceUrls: [] });
+    mocks.bootstrap.mockResolvedValue({ folders: [], fileKeys: [] });
     await useAssetsStore.getState().initialize();
     expect(useAssetsStore.getState().initialized).toBe(true);
     expect(mocks.bootstrap).toHaveBeenCalledTimes(2);
   });
 
   it("已初始化后再次 initialize 不再发请求", async () => {
-    mocks.bootstrap.mockResolvedValue({ folders: [], sourceUrls: [] });
+    mocks.bootstrap.mockResolvedValue({ folders: [], fileKeys: [] });
 
     await useAssetsStore.getState().initialize();
     await useAssetsStore.getState().initialize();
@@ -104,7 +104,7 @@ describe("超限批量操作分片提交", () => {
 
   /** 超过 ASSET_BATCH_LIMIT 的批量删除按上限分片；单发超限会被服务端 422 拒绝 */
   it("批量删除 120 个资产分 3 片提交并合并计数", async () => {
-    mocks.deleteAssetsBatch.mockResolvedValue({ count: 0, sourceUrls: [], counters });
+    mocks.deleteAssetsBatch.mockResolvedValue({ count: 0, fileKeys: [], counters });
     const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
 
     const result = await useAssetsStore.getState().removeAssetsBatch(ids);
@@ -141,7 +141,7 @@ describe("超限批量操作分片提交", () => {
 
   it("删除分片中途失败：保留已完成分片的计数并上报失败", async () => {
     mocks.deleteAssetsBatch
-      .mockResolvedValueOnce({ count: 50, sourceUrls: [], counters: { total: 80 } })
+      .mockResolvedValueOnce({ count: 50, fileKeys: [], counters: { total: 80 } })
       .mockRejectedValueOnce(new Error("network down"));
     const ids = Array.from({ length: 120 }, (_, i) => String(i + 1));
 

@@ -104,7 +104,8 @@ describe("上传管道的失败与落库行为", () => {
 
     const summary = await settled;
     expect(summary.succeeded).toBe(2);
-    expect(dataOf(nodeIds[0])?.src).toBe("https://cdn/slow.png");
+    // 落库值域：节点 src 写存储 key（url 仅为访问派生）
+    expect(dataOf(nodeIds[0])?.src).toBe("slow.png");
   });
 
   it("会话结束后不写回旧上传结果或开始队列里的文件", async () => {
@@ -336,7 +337,7 @@ describe("上传管道的失败与落库行为", () => {
     expect(summary.succeeded).toBe(1);
     expect(summary.failed).toBe(1);
     expect(dataOf(nodeIds[0])?.upload?.error).toBeTruthy();
-    expect(dataOf(nodeIds[1])?.src).toBe("https://cdn/good.png");
+    expect(dataOf(nodeIds[1])?.src).toBe("good.png");
     expect(useUploadProgressStore.getState().byNodeId.size).toBe(0);
   });
 });

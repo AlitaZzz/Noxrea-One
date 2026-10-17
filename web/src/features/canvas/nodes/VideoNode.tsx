@@ -64,8 +64,8 @@ import {
 } from "@/features/canvas/upload";
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
-import { withManagedFileWidth } from "@/lib/file-url";
-import { sanitizeFileName } from "@/lib/utils/file-name";
+import { fileRefUrl, withManagedFileWidth } from "@/lib/file-url";
+import { downloadManagedFile } from "@/lib/utils/download";
 import { formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, mediaAspect } from "@/lib/utils/media-utils";
 
@@ -195,10 +195,11 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // 画布交互状态（连线 / 拖动让位 hover 预览用，真相源在 store 状态机）
   const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = useAppFeedback();
-  // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）
+  // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）；
+  // 元素消费用派生 URL（key → /api/files/{key}），媒体接口入参再经 toFileKey 取回 key
   const src = data.src || "";
   const generating = isGenerating(data.taskBinding);
-  let loadingSrc = src;
+  let loadingSrc = fileRefUrl(src);
   if (data.upload?.uploading) loadingSrc = data.upload.previewUrl || "";
   else if (data.upload?.error || generating) loadingSrc = "";
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
@@ -801,28 +802,19 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const addAsset = useAssetsStore((s) => s.addAsset);
 
   const handleDownload = useCallback(() => {
-    if (!src) return;
-    const a = document.createElement("a");
-    const sep = src.includes("?") ? "&" : "?";
-    const params = new URLSearchParams({ download: "true" });
-    const fileName = sanitizeFileName(data.label);
-    if (fileName) params.set("filename", fileName);
-    a.href = `${src}${sep}${params.toString()}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
   const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
     const node = useCanvasStore.getState().nodes.find(n => n.id === id);
     const d = node?.data as VideoNodeData | undefined;
-    // 缩略图不再在保存时生成：素材库读取时通过 sourceUrl?w= 由后端按需抽帧
+    // 缩略图不再在保存时生成：素材库读取时通过 fileKey?w= 由后端按需抽帧
     await addAsset({
       name: data.label || t("node.video"),
       type: "other",
       mediaType: "video",
-      sourceUrl: src,
+      fileKey: src,
       sourceType: d?.source,
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
@@ -1088,7 +1080,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       {src && (
         <MediaPreviewOverlay
           open={previewOpen}
-          items={[{ url: src, mediaType: "video" }]}
+          items={[{ ref: src, mediaType: "video" }]}
           index={0}
           onClose={() => setPreviewOpen(false)}
         />

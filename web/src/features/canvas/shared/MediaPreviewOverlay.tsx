@@ -11,11 +11,14 @@ import { useCallback, useEffect } from "react";
 import { CloseOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { fileRefUrl, managedFileUrl } from "@/lib/file-url";
+import { downloadManagedFile } from "@/lib/utils/download";
 
 import VideoPlayer from "./VideoPlayer";
 
 export interface PreviewItem {
-  url: string;
+  /** 引用值：存储 key 或外部 URL；展示/下载时派生为可访问 URL */
+  ref: string;
   mediaType: "image" | "video";
 }
 
@@ -51,14 +54,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
   }, [count, go, open]);
 
   const handleDownload = () => {
-    if (!current?.url) return;
-    const sep = current.url.includes("?") ? "&" : "?";
-    const a = document.createElement("a");
-    a.href = `${current.url}${sep}${new URLSearchParams({ download: "true" }).toString()}`;
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    downloadManagedFile(current?.ref);
   };
 
   return (
@@ -111,16 +107,16 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
           </div>
         )}
 
-        {current?.url && (
+        {current?.ref && (
           current.mediaType === "video" ? (
             <VideoPlayer
-              key={current.url}
-              src={current.url}
+              key={current.ref}
+              src={fileRefUrl(current.ref)}
               className="shadow-[0_8px_40px_rgb(0_0_0_/_50%)]"
             />
           ) : (
             <img
-              src={current.url}
+              src={managedFileUrl(current.ref)}
               alt=""
               draggable={false}
               onClick={(event) => event.stopPropagation()}
@@ -163,16 +159,16 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
                 type="button"
                 variant="ghost"
                 size="icon-lg"
-                key={`${item.url}-${itemIndex}`}
+                key={`${item.ref}-${itemIndex}`}
                 onClick={(event) => { event.stopPropagation(); onIndexChange?.(itemIndex); }}
                 className={`size-14 shrink-0 overflow-hidden rounded-md p-0 transition ${
                     itemIndex === safeIndex ? "ring-2 ring-foreground" : "opacity-60 hover:opacity-100"
                 }`}
               >
                 {item.mediaType === "video" ? (
-                  <video src={item.url} muted preload="metadata" className="h-full w-full object-cover" />
+                  <video src={managedFileUrl(item.ref)} muted preload="metadata" className="h-full w-full object-cover" />
                 ) : (
-                  <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />
+                  <img src={managedFileUrl(item.ref)} alt="" className="h-full w-full object-cover" draggable={false} />
                 )}
               </Button>
             ))}

@@ -28,11 +28,11 @@ import { useProjectStore } from "@/features/project/store";
 import { useModelStore } from "@/lib/model-store";
 import { SessionChangedError } from "@/lib/session-lifecycle";
 
-const userA = { id: 1, username: "a", avatarUrl: null, theme: "dark", language: "zh" };
+const userA = { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "dark", language: "zh" };
 const userB = { ...userA, id: 2, username: "b" };
 function summary(id: number) {
   return { folders: [{ id, name: `Folder ${id}`, scope: "personal", kind: "normal", parentId: null,
-    createdAt: "2026-10-01T00:00:00Z", count: 1 }], sourceUrls: [`source-${id}`] };
+    createdAt: "2026-10-01T00:00:00Z", count: 1 }], fileKeys: [`source-${id}`] };
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -61,7 +61,7 @@ describe("account-owned state lifetime", () => {
     useProjectStore.setState({ activeProjectId: "a" });
     const logout = useAuthStore.getState().logout();
     expect(useAssetsStore.getState()).toMatchObject({ folders: [], initialized: false, libraryVersion: 0 });
-    expect(useAssetsStore.getState().knownAssetUrls.size).toBe(0);
+    expect(useAssetsStore.getState().knownAssetKeys.size).toBe(0);
     expect(useModelStore.getState()).toMatchObject({ providers: [], initialized: false, modelParamsCache: {} });
     expect(useProjectStore.getState().activeProjectId).toBeNull();
     await logout;
@@ -69,7 +69,7 @@ describe("account-owned state lifetime", () => {
     mocks.bootstrap.mockResolvedValue(summary(202));
     await useAssetsStore.getState().initialize();
     expect(useAssetsStore.getState().folders.map((folder) => folder.id)).toEqual(["202"]);
-    expect([...useAssetsStore.getState().knownAssetUrls]).toEqual(["source-202"]);
+    expect([...useAssetsStore.getState().knownAssetKeys]).toEqual(["source-202"]);
     expect(mocks.bootstrap).toHaveBeenCalledTimes(2);
   });
 
@@ -96,7 +96,7 @@ describe("account-owned state lifetime", () => {
     const batch = deferred<unknown>();
     mocks.createAsset.mockReturnValue(write.promise);
     mocks.createAssetsBatch.mockReturnValue(batch.promise);
-    const input = { name: "A asset", type: "other" as const, mediaType: "image" as const, sourceUrl: "a-url" };
+    const input = { name: "A asset", type: "other" as const, mediaType: "image" as const, fileKey: "a-url" };
     const pendingWrite = useAssetsStore.getState().addAsset(input);
     const pendingBatch = useAssetsStore.getState().addAssetsBatch([input, input]);
     await switchToB();
@@ -105,7 +105,7 @@ describe("account-owned state lifetime", () => {
     expect(await pendingWrite).toBeNull();
     expect(await pendingBatch).toEqual({ ok: false, items: [], skippedCount: 0 });
     expect(mocks.createAssetsBatch).toHaveBeenCalledTimes(1);
-    expect(useAssetsStore.getState().knownAssetUrls.size).toBe(0);
+    expect(useAssetsStore.getState().knownAssetKeys.size).toBe(0);
     expect(mocks.notify).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,6 @@
 /**
  * 项目列表摘要投影测试。
- * 覆盖：保存路径派生（deriveCanvasSummary）、封面优先级（coverUrl > 首图 src > null）、
+ * 覆盖：保存路径派生（deriveCanvasSummary）、封面优先级（coverKey > 首图 src > null）、
  * 脏数据降级为空摘要（列表不因单个项目脏数据整体失败）。
  */
 import { describe, expect, it } from "vitest";
@@ -12,7 +12,7 @@ const row = (overrides: Partial<ProjectSummaryRow> = {}): ProjectSummaryRow => (
   name: "A",
   revision: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
-  coverUrl: null,
+  coverKey: null,
   nodeCount: 0,
   thumbnailSrc: null,
   ...overrides,
@@ -24,13 +24,13 @@ describe("deriveCanvasSummary（保存路径派生）", () => {
       nodes: [
         { type: "text-node", data: {} },
         { type: "image-node", data: {} },
-        { type: "image-node", data: { src: "/api/files/1/aa/a.png" } },
-        { type: "image-node", data: { src: "/api/files/1/bb/b.png" } },
+        { type: "image-node", data: { src: "1/aa/a.png" } },
+        { type: "image-node", data: { src: "1/bb/b.png" } },
       ],
     });
 
     expect(summary.nodeCount).toBe(4);
-    expect(summary.thumbnailSrc).toBe("/api/files/1/aa/a.png");
+    expect(summary.thumbnailSrc).toBe("1/aa/a.png");
   });
 
   it("nodes 缺失或非数组时降级为空摘要", () => {
@@ -49,24 +49,24 @@ describe("deriveCanvasSummary（保存路径派生）", () => {
 
 describe("toProjectSummary（读取端投影）", () => {
   it("无封面时缩略图取冗余首图列", () => {
-    const summary = toProjectSummary(row({ nodeCount: 4, thumbnailSrc: "/api/files/1/aa/a.png" }));
+    const summary = toProjectSummary(row({ nodeCount: 4, thumbnailSrc: "1/aa/a.png" }));
 
-    expect(summary.thumbnail).toBe("/api/files/1/aa/a.png");
+    expect(summary.thumbnail).toBe("1/aa/a.png");
     expect(summary.nodeCount).toBe(4);
-    expect(summary.coverUrl).toBeNull();
+    expect(summary.coverKey).toBeNull();
   });
 
   it("自定义封面优先于画布首图", () => {
     const summary = toProjectSummary(
       row({
-        coverUrl: "/api/files/1/aa/cover.png",
+        coverKey: "1/aa/cover.png",
         nodeCount: 1,
-        thumbnailSrc: "/api/files/1/bb/b.png",
+        thumbnailSrc: "1/bb/b.png",
       }),
     );
 
-    expect(summary.thumbnail).toBe("/api/files/1/aa/cover.png");
-    expect(summary.coverUrl).toBe("/api/files/1/aa/cover.png");
+    expect(summary.thumbnail).toBe("1/aa/cover.png");
+    expect(summary.coverKey).toBe("1/aa/cover.png");
   });
 
   it("封面与首图皆无时缩略图为 null", () => {

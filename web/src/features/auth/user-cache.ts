@@ -7,6 +7,9 @@ export const USER_COOKIE = "noxrea-user";
 export interface UserInfo {
   id: number;
   username: string;
+  /** 头像引用：存储 key（{userId}/{hash[:2]}/{hash}{ext}，头像只来自上传；服务端 toPublicUser 派生 URL） */
+  avatarKey: string | null;
+  /** 头像访问 URL：托管 key → /api/files/{key}，外部 URL 原样 */
   avatarUrl: string | null;
   theme: string;
   language: string;
@@ -21,6 +24,7 @@ export function toUserInfo(user: UserInfo): UserInfo {
   return {
     id: user.id,
     username: user.username,
+    avatarKey: user.avatarKey,
     avatarUrl: user.avatarUrl,
     theme: user.theme,
     language: user.language,
@@ -33,6 +37,7 @@ function isUserInfo(value: unknown): value is UserInfo {
   return (
     typeof u.id === "number" &&
     typeof u.username === "string" &&
+    (u.avatarKey === null || typeof u.avatarKey === "string") &&
     (u.avatarUrl === null || typeof u.avatarUrl === "string") &&
     typeof u.theme === "string" &&
     typeof u.language === "string"

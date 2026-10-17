@@ -54,6 +54,9 @@ export async function streamGenerationTask(taskId: string, signal?: AbortSignal)
 export interface TaskStatusEvent {
   taskId: string;
   status: TaskStatus;
+  /** 产物存储 key（落库值域：写入节点 src / multiResultKeys 的就是它） */
+  resultKeys?: string[];
+  /** 与 resultKeys 逐位对齐的展示 URL（服务端派生 /api/files/{key}），仅用于即时预览 */
   resultUrls?: string[];
   /** 与 resultUrls 逐位对齐的产物大小（字节），服务端 stat 落盘文件得出，缺失为 null */
   resultSizes?: Array<number | null>;

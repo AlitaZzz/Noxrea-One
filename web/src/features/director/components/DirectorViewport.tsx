@@ -31,6 +31,7 @@ import { Prop } from "@/features/director/entities/prop";
 import { DIRECTOR_CAMERA_HEX, DIRECTOR_PRIMARY } from "@/features/director/theme";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
+import { fileRefUrl } from "@/lib/file-url";
 
 const XBOT = "/assets/Xbot.glb";
 const BODY_TYPES: Record<string, { url: string; height: number; girth: number }> = {
@@ -558,16 +559,17 @@ export default function DirectorViewport() {
             runtime._endCleanRender();
           }
 
-          // 上传（统一管道 raw sink：只拿远程地址，不碰画布）
+          // 上传（统一管道 raw sink：只拿存储 key，不碰画布；快照引用落 key，
+          // 展示 URL 由消费点派生）
           const blob = await (await fetch(dataURL)).blob();
           // notify：截图失败不再静默，交由管道统一提示
           uploadOne(blob, `shot_${Date.now()}.png`, "derived", { notify: true }).then((result) => {
-            const url = result?.url;
-            if (!url) { console.error("[captureShot] uploadOne returned null"); resolve(null); return; }
+            const ref = result?.key;
+            if (!ref) { console.error("[captureShot] uploadOne returned null"); resolve(null); return; }
             const n = (runtime._shotSeq = runtime._shotSeq || {});
             n[camEnt.id] = (n[camEnt.id] || 0) + 1;
             resolve({
-              url,
+              ref,
               name: translate("director.shotName", { camera: camEnt.name, n: String(n[camEnt.id]).padStart(2, "0") }),
               cameraId: camEnt.id,
             });
@@ -591,9 +593,10 @@ export default function DirectorViewport() {
             i.crossOrigin = "anonymous";
             i.onload = () => resolve(i);
             i.onerror = () => reject(new Error("Failed to load shot image"));
-            i.src = shot.url;
+            i.src = fileRefUrl(shot.ref);
           });
-          await createNodeFromUrl(nodeId, shot.url, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
+          // 节点 src 落快照引用原值（key）；展示由 CanvasImage 派生
+          await createNodeFromUrl(nodeId, shot.ref, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
           feedback.success({ title: translate("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
         } catch {
           feedback.error({ title: translate("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });

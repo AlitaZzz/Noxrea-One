@@ -4,6 +4,8 @@
  */
 import { z } from "zod";
 
+import { fileRefSchema } from "@server/schemas/file-ref";
+
 export const taskCreateSchema = z.object({
   // 模态白名单：与产品能力对齐（音频生成未开放，见 T3 决策）；text 为历史归一化输入
   type: z.enum(["image", "video", "llm", "text"]).optional(),
@@ -11,9 +13,11 @@ export const taskCreateSchema = z.object({
   providerId: z.number().int().positive().optional(),
   prompt: z.string().optional(),
   config: z.record(z.unknown()).optional(),
-  refImages: z.array(z.string()).optional(),
-  refAudios: z.array(z.string()).optional(),
-  refVideos: z.array(z.string()).optional(),
+  // 引用值域与资产 fileKey 同一规则（fileRefSchema）：来自画布媒体节点 src
+  // （上传 key / 外部 URL）或资产库，data:/blob: 预览形态不入引用
+  refImages: z.array(fileRefSchema).optional(),
+  refAudios: z.array(fileRefSchema).optional(),
+  refVideos: z.array(fileRefSchema).optional(),
   nodeId: z.string().optional(),
   // --- 白名单生成参数 ---
   resolution: z.string().optional(),

@@ -92,6 +92,8 @@ async function replaceUpload(nodeId: string) {
   return handle.settled;
 }
 
+const NEW_KEY = `1/ab/${"c".repeat(64)}.png`;
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.isOffline.mockReturnValue(false);
@@ -99,7 +101,7 @@ beforeEach(() => {
   mocks.classifyUploadError.mockReturnValue({ kind: "network", message: "boom" });
   mocks.loadUploadLimits.mockResolvedValue({ maxSizeMb: 100, maxBatchBytes: 128 * 1024 * 1024, maxBatchFiles: 20, maxFiles: 100 });
   mocks.uploadBatchWithRetry.mockResolvedValue([
-    { status: "fulfilled", value: { url: "http://new.png", width: 120, height: 90 } },
+    { status: "fulfilled", value: { url: `http://test/api/files/${NEW_KEY}`, key: NEW_KEY, width: 120, height: 90 } },
   ]);
   useHistoryStore.getState().clear();
   useUploadProgressStore.getState().clearAll();
@@ -119,7 +121,8 @@ describe("replace 上传的撤销语义", () => {
 
     // 仅压一条（上传开始时的替换前快照），瞬态与回填均不压栈
     expect(useHistoryStore.getState().undoStack.length).toBe(depth + 1);
-    expect(srcOf("n1")).toBe("http://new.png");
+    // 落库值域：节点 src 写存储 key（url 仅为访问派生）
+    expect(srcOf("n1")).toBe(NEW_KEY);
     expect((nodeOf("n1")!.data as { upload?: unknown }).upload).toBeUndefined();
 
     expect(undoAction()).toBe(true);
@@ -136,7 +139,7 @@ describe("replace 上传的撤销语义", () => {
     useHistoryStore.getState().push(takeCanvasSnapshot());
 
     await replaceUpload("n1");
-    expect(srcOf("n1")).toBe("http://new.png");
+    expect(srcOf("n1")).toBe(NEW_KEY);
 
     // 第一次撤销：撤销上传，空节点保留
     expect(undoAction()).toBe(true);

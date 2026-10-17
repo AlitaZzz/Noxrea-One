@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
       name: "Test1",
       revision: 1,
       updatedAt: Date.UTC(2026, 9, 9, 4, 0),
-      thumbnail: "/api/files/x.png",
+      thumbnail: "1/aa/x.png",
       nodeCount: 57,
     },
   ],
@@ -32,7 +32,7 @@ vi.mock("@/components/layout/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/features/auth/UserContext", () => ({
-  useCurrentUser: () => ({ username: "tester", avatarUrl: null }),
+  useCurrentUser: () => ({ username: "tester", avatarKey: null, avatarUrl: null }),
 }));
 vi.mock("@/features/auth/store", () => ({
   useAuthStore: {

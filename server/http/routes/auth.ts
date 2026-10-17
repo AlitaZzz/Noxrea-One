@@ -176,7 +176,7 @@ router.put("/api/auth/me", async (c) => {
 
   const updates: Record<string, unknown> = {};
 
-  if (parsed.data.avatarUrl !== undefined) updates.avatarUrl = parsed.data.avatarUrl;
+  if (parsed.data.avatarKey !== undefined) updates.avatarKey = parsed.data.avatarKey;
   if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
   if (parsed.data.language !== undefined) updates.language = parsed.data.language;
 

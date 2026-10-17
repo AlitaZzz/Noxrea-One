@@ -475,10 +475,10 @@ function markUploadFailed(nodeId: string, version: number, error: UploadErrorInf
   ));
 }
 
-/** 上传成功落库：写入远端地址并清除上传态，同时释放本地预览 */
+/** 上传成功落库：写入存储 key（URL 由渲染期派生）并清除上传态，同时释放本地预览 */
 function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryContext) {
   const data: Record<string, unknown> = {
-    src: result.url,
+    src: result.key,
     label: ctx.label,
     fileSize: ctx.size,
     upload: undefined,
@@ -636,7 +636,7 @@ async function runUploads(
         }
         const data: Record<string, unknown> = {
           ...(node.data as Record<string, unknown>),
-          src: r.value.url,
+          src: r.value.key,
           label: p.label,
           fileSize: p.file.size,
           upload: undefined,

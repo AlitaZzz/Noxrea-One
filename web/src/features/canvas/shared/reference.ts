@@ -4,9 +4,10 @@
  * 供各生成面板、提示词输入框与 chip 节点共用。
  */
 
+import { fileRefUrl, withManagedFileWidth } from "@/lib/file-url";
+
 export interface ReferenceItem {
   src: string;
-  thumbnail: string;
   index: number; // 0-based index within its kind list
   kind: "image" | "audio" | "video" | "preset";
   label?: string; // audio/video label (filename), unused for images
@@ -33,4 +34,9 @@ export function refLabelKey(item: ReferenceItem): string {
     : item.kind === "video"
       ? "common.refVideoLabel"
       : "common.refImageLabel";
+}
+
+/** 引用项缩略图 URL：视频取 0.1s 定帧，图片走托管缩略参数；chip 与下拉列表共用同一规则。 */
+export function refThumbnailUrl(value: string, kind: "image" | "video"): string {
+  return kind === "video" ? `${fileRefUrl(value)}#t=0.1` : withManagedFileWidth(value, 64);
 }

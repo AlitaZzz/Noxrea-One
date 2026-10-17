@@ -23,7 +23,9 @@ const router = new Hono();
 /**
  * 终态回填 payload 的统一映射：SSE 快照、SSE 推送与 batch-status 对账三处共用，
  * 保证同一任务的字段形状不会随入口漂移。
- * 产物大小由服务端 stat 落盘文件直接给出（与 resultUrls 逐位对齐，缺失为 null），
+ * resultUrls 为 key 派生的访问 URL（渲染用）；resultKeys 为存储 key 原值，
+ * 前端节点 data.src 等持久化字段写 key（specs/storage-reference-key-unification.md）。
+ * 产物大小由服务端 stat 落盘文件直接给出（与 key 逐位对齐，缺失为 null），
  * 前端据此回填节点 data.fileSize，无需二次探测。
  */
 async function toTaskPayload(state: TerminalTaskState) {
@@ -33,6 +35,7 @@ async function toTaskPayload(state: TerminalTaskState) {
   return {
     taskId: state.taskId,
     status: state.status,
+    resultKeys: state.resultUrls,
     resultUrls: state.resultUrls?.map(buildFileUrl),
     resultSizes,
     resultText: state.resultText,

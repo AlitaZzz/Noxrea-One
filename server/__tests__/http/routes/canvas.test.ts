@@ -70,7 +70,7 @@ const project = {
   canvasData: { nodes: [] },
   nodeCount: 0,
   thumbnailSrc: null,
-  coverUrl: null,
+  coverKey: null,
 };
 
 async function request<T = unknown>(path: string) {
@@ -317,7 +317,7 @@ describe("PUT /api/canvas/projects/:id（租约契约）", () => {
     expect(mocks.updateProject).toHaveBeenCalledWith(
       "p1234567890123",
       1,
-      { name: undefined, canvasData: { nodes: [] }, coverUrl: undefined },
+      { name: undefined, canvasData: { nodes: [] }, coverKey: undefined },
       { baseRevision: 3, lease: 42 },
     );
   });
@@ -329,7 +329,7 @@ describe("PUT /api/canvas/projects/:id（租约契约）", () => {
     expect(mocks.updateProject).toHaveBeenCalledWith(
       "p1234567890123",
       1,
-      { name: "renamed", canvasData: undefined, coverUrl: undefined },
+      { name: "renamed", canvasData: undefined, coverKey: undefined },
       { baseRevision: undefined, lease: undefined },
     );
   });

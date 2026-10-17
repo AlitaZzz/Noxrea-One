@@ -3,11 +3,11 @@
  *
  * 核心验证：
  *   - createNodeFromUrl 正确计算衍生节点位置、尺寸、label
- *   - save-manager.ts 的 _extractHashFromUrl 正确提取 hash
- *   - 引用收集按节点数量统计，且不再读取废弃的 data.images
  *
  * 注：原 uploadBlob / uploadAndAddNode 已随统一上传管道删除，
  * 上传与落库现由 runMediaUpload / uploadOne 承载，此处只保留纯函数与落库逻辑。
+ * 引用 hash 提取已收敛到服务端（server/services/canvas/extract-hashes.ts），
+ * 前端本地复刻实现与其安全网测试一并移除。
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -66,35 +66,6 @@ const mockStoreApi = {
   addNodes: vi.fn(),
   setEdges: vi.fn(),
 } as CanvasStoreApi;
-
-// ── Import pure functions from save-manager ─────────────────────
-// These aren't exported; we re-implement or extract. Extract them:
-
-function extractHashFromUrl(url: string): string | null {
-  if (!url || typeof url !== "string") return null;
-  const idx = url.indexOf("/api/files/");
-  if (idx === -1) return null;
-  const path = url.slice(idx + "/api/files/".length);
-  const parts = path.split("/");
-  if (parts.length !== 3) return null;
-  const fn = parts[2];
-  const dot = fn.lastIndexOf(".");
-  const h = dot > 0 ? fn.slice(0, dot) : fn;
-  return h.length === 64 ? h : null;
-}
-
-function collectCanvasHashCounts(nodes: unknown[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const node of (nodes as Array<{ data?: Record<string, unknown> }>)) {
-    const d = node?.data || {};
-    if (typeof d.src === "string") {
-      const h = extractHashFromUrl(d.src);
-      if (h) counts.set(h, (counts.get(h) ?? 0) + 1);
-    }
-  }
-  return counts;
-}
-
 
 describe("P0-4: CSS transform baking flow", () => {
 
@@ -162,61 +133,6 @@ describe("P0-4: CSS transform baking flow", () => {
       const node = createNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", mockStoreApi, undefined, pos);
       expect(node.position.x).toBe(50);
       expect(node.position.y).toBe(60);
-    });
-  });
-
-  // ── extractHashFromUrl ───────────────────────────────────────
-
-  describe("extractHashFromUrl", () => {
-    it("should extract 64-char hash from standard CAS URL", () => {
-      const hash = "a".repeat(64);
-      const url = `http://test/api/files/1/${hash.slice(0, 2)}/${hash}.png`;
-      expect(extractHashFromUrl(url)).toBe(hash);
-    });
-
-    it("should return null for URL without /api/files/", () => {
-      expect(extractHashFromUrl("http://example.com/file.png")).toBeNull();
-    });
-
-    it("should return null if hash is not 64 chars", () => {
-      expect(extractHashFromUrl("http://test/api/files/1/ab/short.png")).toBeNull();
-    });
-
-    it("should return null for non-string input", () => {
-      expect(extractHashFromUrl(null as unknown as string)).toBeNull();
-      expect(extractHashFromUrl(undefined as unknown as string)).toBeNull();
-      expect(extractHashFromUrl("")).toBeNull();
-    });
-
-    it("should handle URL with no extension", () => {
-      const hash = "b".repeat(64);
-      const url = `http://test/api/files/2/${hash.slice(0, 2)}/${hash}`;
-      expect(extractHashFromUrl(url)).toBe(hash);
-    });
-  });
-
-  // ── collectCanvasHashes ──────────────────────────────────────
-
-  describe("collectCanvasHashCounts", () => {
-    const hash1 = "1".repeat(64);
-    const hash2 = "2".repeat(64);
-
-    it("should collect src from image/video nodes", () => {
-      const nodes = [
-        { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
-      ];
-      const result = collectCanvasHashCounts(nodes);
-      expect(result).toEqual(new Map([[hash1, 1]]));
-    });
-
-    it("should count one reference per node", () => {
-      const nodes = [
-        { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
-        { data: { src: `/api/files/1/${hash1.slice(0, 2)}/${hash1}.png` } },
-        { data: { src: `/api/files/1/${hash2.slice(0, 2)}/${hash2}.png` } },
-      ];
-      const result = collectCanvasHashCounts(nodes);
-      expect(result).toEqual(new Map([[hash1, 2], [hash2, 1]]));
     });
   });
 });

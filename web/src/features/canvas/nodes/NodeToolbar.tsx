@@ -232,8 +232,8 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     文件引用是计数账本，画布节点的引用不受影响）。 */
 function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: string }) {
   const { t } = useTranslation();
-  const unsaveAssetsByUrls = useAssetsStore((s) => s.unsaveAssetsByUrls);
-  const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetUrls.has(assetSrc));
+  const unsaveAssetsByFileKeys = useAssetsStore((s) => s.unsaveAssetsByFileKeys);
+  const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetKeys.has(assetSrc));
   return (
     <Tooltip><TooltipTrigger asChild>
         <Button size="icon"
@@ -241,7 +241,7 @@ function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: stri
           disabled={!assetSrc}
           onClick={() => {
             if (!assetSrc) return;
-            if (isInAssets) void unsaveAssetsByUrls([assetSrc]);
+            if (isInAssets) void unsaveAssetsByFileKeys([assetSrc]);
             else dispatchNodeAction(nodeId, "save-asset");
           }}
         >

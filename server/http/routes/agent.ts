@@ -6,6 +6,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { authenticateRequest } from "@server/http/middleware/auth";
+import { fileRefSchema } from "@server/schemas/file-ref";
 import { ok, failCode } from "@server/core/response";
 import { createSseResponse } from "@server/http/sse";
 import { agentToolRegistry } from "@server/services/agent/tools/registry";
@@ -218,7 +219,8 @@ const streamSchema = z.object({
   /** 前端当前项目 ID：项目绑定校验用 */
   projectId: z.string().optional(),
   content: z.string().default(""),
-  refImages: z.array(z.string()).optional(),
+  // 引用值域同 task ref*（fileRefSchema）：key 严格形态或外部 http(s) URL
+  refImages: z.array(fileRefSchema).optional(),
   /** 前端序列化的画布状态快照（随用户消息与工具结果续轮发送，始终为最新状态） */
   canvasState: z.unknown().optional(),
   /** 自上一条消息以来用户在画布上的操作 diff */

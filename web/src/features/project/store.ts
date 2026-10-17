@@ -43,7 +43,7 @@ interface ServerProjectSummary {
   revision: number;
   updatedAt: string;
   thumbnail: string | null;
-  coverUrl: string | null;
+  coverKey: string | null;
   nodeCount: number;
 }
 
@@ -51,7 +51,7 @@ interface ServerProjectDetail {
   id: string;
   name: string;
   revision?: number;
-  coverUrl?: string | null;
+  coverKey?: string | null;
   canvasData?: CanvasData;
   updatedAt: string;
 }
@@ -68,7 +68,7 @@ function mapServerSummary(p: ServerProjectSummary): ProjectSummary {
     revision: p.revision,
     updatedAt: toTimestamp(p.updatedAt),
     thumbnail: p.thumbnail ?? undefined,
-    coverUrl: p.coverUrl ?? undefined,
+    coverKey: p.coverKey ?? undefined,
     nodeCount: p.nodeCount,
   };
 }
@@ -86,14 +86,14 @@ function firstImageSrc(nodes: AnyNode[]): string | undefined {
 
 function mapServerDetail(p: ServerProjectDetail): CanvasProject {
   const nodes = (p.canvasData?.nodes || []) as AnyNode[];
-  const coverUrl = p.coverUrl ?? undefined;
+  const coverKey = p.coverKey ?? undefined;
   return {
     id: p.id,
     name: p.name,
     revision: p.revision ?? 1,
     updatedAt: toTimestamp(p.updatedAt),
-    thumbnail: coverUrl ?? firstImageSrc(nodes),
-    coverUrl,
+    thumbnail: coverKey ?? firstImageSrc(nodes),
+    coverKey,
     nodeCount: nodes.length,
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
     minimapVisible: p.canvasData?.minimapVisible ?? true,
@@ -112,7 +112,7 @@ function toSummary(p: CanvasProject): ProjectSummary {
     revision: p.revision,
     updatedAt: p.updatedAt,
     thumbnail: p.thumbnail,
-    coverUrl: p.coverUrl,
+    coverKey: p.coverKey,
     nodeCount: p.nodeCount,
   };
 }
@@ -173,7 +173,7 @@ interface ProjectState {
   adoptProject: (payload: unknown) => CanvasProject | null;
   createProject: (name?: string) => Promise<CanvasProject>;
   renameProject: (id: string, name: string) => void;
-  updateCover: (id: string, coverUrl: string | null) => void;
+  updateCover: (id: string, coverKey: string | null) => void;
   deleteProject: (id: string) => Promise<boolean>;
   deleteProjects: (ids: string[]) => void;
   updateProjectRevision: (id: string, revision: number) => void;
@@ -258,20 +258,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     })();
   },
 
-  updateCover: (id, coverUrl) => {
+  updateCover: (id, coverKey) => {
     const session = captureSession();
     if (rejectOffline()) return;
     const prev = get().projects.find((p) => p.id === id);
     // 乐观更新，失败回滚；封面是纯元数据（同改名：不参与版本判定）
     set((s) => ({
       projects: s.projects.map((p) =>
-        p.id === id ? { ...p, coverUrl: coverUrl ?? undefined, thumbnail: coverUrl ?? undefined } : p
+        p.id === id ? { ...p, coverKey: coverKey ?? undefined, thumbnail: coverKey ?? undefined } : p
       ),
     }));
     void (async () => {
       try {
         const updated = await session.run(() => saveMutex.runExclusive(() =>
-          session.run(() => projectApi.updateProject(id, { coverUrl })),
+          session.run(() => projectApi.updateProject(id, { coverKey })),
         ));
         session.assertCurrent();
         if (typeof updated?.revision === "number") {
@@ -284,7 +284,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         if (prev) {
           set((s) => ({
             projects: s.projects.map((p) =>
-              p.id === id ? { ...p, coverUrl: prev.coverUrl, thumbnail: prev.thumbnail } : p
+              p.id === id ? { ...p, coverKey: prev.coverKey, thumbnail: prev.thumbnail } : p
             ),
           }));
         }

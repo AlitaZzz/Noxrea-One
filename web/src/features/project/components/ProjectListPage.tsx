@@ -98,7 +98,8 @@ export default function ProjectListPage() {
     setCoverUploadingId(targetId);
     try {
       const result = await uploadWithRetry(file);
-      useProjectStore.getState().updateCover(targetId, result.url);
+      // 封面落库存 key；展示 URL 由渲染期派生
+      useProjectStore.getState().updateCover(targetId, result.key);
     } catch (err) {
       const info = classifyUploadError(err);
       notification.error({ title: info.message, placement: "bottomRight", duration: 6 });

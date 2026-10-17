@@ -15,7 +15,7 @@ export function makeUser(overrides: Partial<User> = {}): User {
     emailVerifiedAt: null,
     displayName: null,
     lastLoginAt: null,
-    avatarUrl: null,
+    avatarKey: null,
     theme: "dark",
     language: "zh",
     isActive: true,

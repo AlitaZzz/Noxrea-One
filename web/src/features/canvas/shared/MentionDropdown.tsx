@@ -12,7 +12,7 @@ import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverAnchorPortal, PopoverContent } from "@/components/ui/popover";
 
-import { type ReferenceItem, refLabelKey } from "./reference";
+import { type ReferenceItem, refLabelKey, refThumbnailUrl } from "./reference";
 
 interface Props {
   items: ReferenceItem[];
@@ -83,7 +83,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
             </div>
           ) : item.kind === "video" ? (
             <video
-              src={`${item.thumbnail}#t=0.1`}
+              src={refThumbnailUrl(item.src, "video")}
               muted
               preload="metadata"
               playsInline
@@ -91,7 +91,7 @@ const MentionDropdown = memo(function MentionDropdown({ items, position, selecte
             />
           ) : (
             <img
-              src={item.thumbnail}
+              src={refThumbnailUrl(item.src, "image")}
               alt={t(refLabelKey(item), { index: item.index + 1 })}
               className="size-10 shrink-0 rounded border border-border object-cover"
             />

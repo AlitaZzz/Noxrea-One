@@ -80,7 +80,7 @@ export default function AssetCard({
   };
 
   const togglePlay = () => {
-    const url = asset.sourceUrl;
+    const url = asset.url;
     if (!url) return;
     if (!audioRef.current) {
       audioRef.current = new Audio(url);
@@ -113,12 +113,12 @@ export default function AssetCard({
 
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
-  const sourceUrl = asset.sourceUrl;
-  const thumbUrl = withManagedFileWidth(sourceUrl, 300);
+  // 缩略宽高比参数属渲染期派生：直接对存储 key 派生缩略 URL
+  const thumbUrl = withManagedFileWidth(asset.fileKey, 300);
 
   return (
     <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>
-      <AssetHoverPreview asset={asset} enabled={showHoverPreview && !dragging && Boolean(sourceUrl)}>
+      <AssetHoverPreview asset={asset} enabled={showHoverPreview && !dragging && Boolean(asset.fileKey)}>
         {/* 封面区：Card 只负责容器布局，主选择 / 插入行为由独立 Button 承担。 */}
         <div
           className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
@@ -141,7 +141,7 @@ export default function AssetCard({
             }
             e.dataTransfer.effectAllowed = "copy";
             e.dataTransfer.setData(ASSET_DRAG_TYPE, JSON.stringify(asset));
-            e.dataTransfer.setData("text/plain", asset.sourceUrl ?? asset.name);
+            e.dataTransfer.setData("text/plain", asset.fileKey ?? asset.name);
             setDragging(true);
             const cover = e.currentTarget.parentElement?.querySelector("img");
             if (cover instanceof HTMLImageElement) {

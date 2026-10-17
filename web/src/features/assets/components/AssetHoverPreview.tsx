@@ -10,7 +10,7 @@ import type { ReactElement } from "react";
 
 import { HoverCard, HoverCardContent, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { AssetItem } from "@/features/assets/types";
-import { withManagedFileWidth } from "@/lib/file-url";
+import { managedFileUrl, withManagedFileWidth } from "@/lib/file-url";
 
 const PREVIEW_MAX_WIDTH = 400;
 const HOVER_OPEN_DELAY = 600;
@@ -21,7 +21,8 @@ type AssetPreviewMediaType = AssetItem["mediaType"] | "text";
 type AssetPreviewItem = {
   name: string;
   mediaType: AssetPreviewMediaType;
-  sourceUrl?: string;
+  /** 来源引用：存储 key 或外部 URL；展示时派生访问 URL */
+  fileKey?: string;
   plainText?: string;
 };
 
@@ -32,13 +33,13 @@ interface Props {
 }
 
 export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
-  const sourceUrl = asset.sourceUrl;
+  const fileKey = asset.fileKey;
   const isVideo = asset.mediaType === "video";
   const isImage = asset.mediaType === "image";
   const isText = asset.mediaType === "text";
-  const bigUrl = withManagedFileWidth(sourceUrl, PREVIEW_MAX_WIDTH);
+  const bigUrl = withManagedFileWidth(fileKey, PREVIEW_MAX_WIDTH);
   const hasText = typeof asset.plainText === "string" && asset.plainText.trim().length > 0;
-  const hasPreviewContent = isText ? hasText : (isImage || isVideo) && Boolean(sourceUrl);
+  const hasPreviewContent = isText ? hasText : (isImage || isVideo) && Boolean(fileKey);
 
   if (!enabled || !hasPreviewContent) return children;
 
@@ -60,7 +61,7 @@ export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
       ) : (
         <HoverCardMediaContent
           mediaType={isVideo ? "video" : "image"}
-          src={(isVideo ? sourceUrl : bigUrl)!}
+          src={(isVideo ? managedFileUrl(fileKey) : bigUrl)!}
           alt={asset.name}
           side="right"
           align="start"

@@ -25,7 +25,10 @@ export interface AssetItemDto {
   userId: number;
   folderId: number;
   scope: string;
-  sourceUrl?: string | null;
+  /** 来源引用：存储 key 或外部 URL；收藏等入口写入的是节点 src 原值 */
+  fileKey?: string | null;
+  /** 服务端派生的访问 URL（托管 key → /api/files/{key}，外部 URL 原样） */
+  url?: string | null;
   sourceType?: string;
   name: string;
   type: string;
@@ -50,13 +53,13 @@ export interface AssetCountersDto {
 
 /** 批量创建时因重复被跳过的来源；重复属正常结果，不视为失败。 */
 export interface AssetSkippedDto {
-  sourceUrl: string;
+  fileKey: string;
   reason: "already_exists" | "duplicate_in_batch";
 }
 
 export interface AssetBootstrapDto {
   folders: AssetFolderDto[];
-  sourceUrls: string[];
+  fileKeys: string[];
   totalCount: number;
 }
 
@@ -81,7 +84,7 @@ export const assetApi = {
     }),
 
   deleteFolder: (id: number) =>
-    api<{ removedCount: number; sourceUrls: string[]; counters: AssetCountersDto }>(`/api/assets/folders/${id}`, {
+    api<{ removedCount: number; fileKeys: string[]; counters: AssetCountersDto }>(`/api/assets/folders/${id}`, {
       method: "DELETE",
     }),
 
@@ -100,7 +103,7 @@ export const assetApi = {
 
   createAsset: (data: {
     name: string; type: string; mediaType?: string;
-    sourceUrl?: string; sourceType?: string;
+    fileKey?: string; sourceType?: string;
     description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }) =>
     api<{ item: AssetItemDto; counters: AssetCountersDto }>("/api/assets/items", {
@@ -110,7 +113,7 @@ export const assetApi = {
 
   createAssetsBatch: (items: Array<{
     name: string; type: string; mediaType?: string;
-    sourceUrl?: string; sourceType?: string;
+    fileKey?: string; sourceType?: string;
     description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
   }>) =>
     api<{ items: AssetItemDto[]; counters: AssetCountersDto; skipped: AssetSkippedDto[] }>("/api/assets/items/batch", {
@@ -125,16 +128,16 @@ export const assetApi = {
     }),
 
   deleteAssetsBatch: (ids: number[]) =>
-    api<{ count: number; sourceUrls: string[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
+    api<{ count: number; fileKeys: string[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
       method: "DELETE",
       body: JSON.stringify({ ids }),
     }),
 
-  /** 画布「取消收藏」：按 sourceUrl 删除个人库条目（宽松语义，无匹配也成功）。 */
-  deleteAssetsBySource: (sourceUrls: string[]) =>
-    api<{ count: number; sourceUrls: string[]; counters: AssetCountersDto }>("/api/assets/items/by-source", {
+  /** 画布「取消收藏」：按 fileKey 删除个人库条目（宽松语义，无匹配也成功）。 */
+  deleteAssetsByFileKeys: (fileKeys: string[]) =>
+    api<{ count: number; fileKeys: string[]; counters: AssetCountersDto }>("/api/assets/items/by-file-keys", {
       method: "DELETE",
-      body: JSON.stringify({ sourceUrls }),
+      body: JSON.stringify({ fileKeys }),
     }),
 
   updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
@@ -143,6 +146,6 @@ export const assetApi = {
       body: JSON.stringify({ ids, updates }),
     }),
 
-  listSourceUrls: (scope = "personal") =>
-    api<string[]>(`/api/assets/items/source-urls?scope=${scope}`),
+  listFileKeys: (scope = "personal") =>
+    api<string[]>(`/api/assets/items/file-keys?scope=${scope}`),
 };

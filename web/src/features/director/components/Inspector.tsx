@@ -36,7 +36,7 @@ import { DIRECTOR_CHARACTER_COLOR, DIRECTOR_CHARACTER_HEX } from "@/features/dir
 import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";
-import { withManagedFileWidth } from "@/lib/file-url";
+import { managedFileUrl, withManagedFileWidth } from "@/lib/file-url";
 
 import PoseSliders from "./PoseSliders";
 
@@ -203,7 +203,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
   const toggleShotSelected = useDirectorStore((s) => s.toggleShotSelected);
   const removeShot = useDirectorStore((s) => s.removeShot);
   const runtime = useDirectorStore((s) => s.runtime);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewRef, setPreviewRef] = useState("");
 
   const shots = useMemo(() => {
     const seen = new Set<string>();
@@ -229,7 +229,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                     data-selected={shot.selected || undefined}
                     onClick={() => toggleShotSelected(shot.id)}
                   >
-                    <img src={withManagedFileWidth(shot.url, 320)} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                    <img src={withManagedFileWidth(shot.ref, 320)} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
                     <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-xs tabular-nums text-white">{shot.name}</span>
                   </Button>
                   <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-1.5 bg-black/55 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
@@ -244,7 +244,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                         </Button>
                       </TooltipTrigger><TooltipContent>{t("common.delete")}</TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger asChild>
-                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.enlargePreview")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); setPreviewUrl(shot.url); }}>
+                        <Button type="button" variant="ghost" size="icon-xs" aria-label={t("director.enlargePreview")} className="bg-background/80 text-foreground hover:bg-background" onClick={(e) => { e.stopPropagation(); setPreviewRef(shot.ref); }}>
                           <DirExpandIcon style={{ width: 14, height: 14 }} />
                         </Button>
                       </TooltipTrigger><TooltipContent>{t("director.enlargePreview")}</TooltipContent></Tooltip>
@@ -254,10 +254,11 @@ function CameraShots({ cameraId }: { cameraId: string }) {
           ))}
         </div>
       )}
-      <Dialog open={Boolean(previewUrl)} onOpenChange={(open) => { if (!open) setPreviewUrl(""); }}>
+      <Dialog open={Boolean(previewRef)} onOpenChange={(open) => { if (!open) setPreviewRef(""); }}>
         <DialogContent className="w-auto max-w-[90vw] p-3 sm:max-w-[90vw]">
           <DialogTitle className="sr-only">{t("director.preview")}</DialogTitle>
-          <img src={previewUrl} className="block max-h-[78vh] max-w-[86vw] rounded-lg" alt={t("director.preview")} />
+          {/* previewRef 存引用原值（key / 外部 URL）；img 消费派生 URL */}
+          <img src={managedFileUrl(previewRef)} className="block max-h-[78vh] max-w-[86vw] rounded-lg" alt={t("director.preview")} />
         </DialogContent>
       </Dialog>
     </div>

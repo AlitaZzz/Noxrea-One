@@ -321,8 +321,9 @@ function ElementItemImpl(props: ElementItemProps) {
   // 下方 `label || ...` 的右支永不可达，从而把 node 收窄成 never
   const label: string = rawLabel || typeLabel || nodeType;
   const src = node.type === NODE_TYPE.IMAGE ? (node.data as { src?: string }).src : undefined;
-  const sourceUrl = (node.data as { src?: string }).src;
-  const thumb = nodeType === NODE_TYPE.VIDEO ? withManagedFileWidth(sourceUrl, 64) : sourceUrl;
+  // 来源引用（存储 key / 外部 URL）；缩略与悬浮预览经派生 URL 展示
+  const fileKey = (node.data as { src?: string }).src;
+  const thumb = nodeType === NODE_TYPE.VIDEO ? withManagedFileWidth(fileKey, 64) : fileKey;
   const hasPreview = Boolean(
     (nodeType === NODE_TYPE.IMAGE && src) || (nodeType === NODE_TYPE.VIDEO && thumb),
   );
@@ -376,11 +377,11 @@ function ElementItemImpl(props: ElementItemProps) {
       asset={{
         name: label,
         mediaType: nodeType === NODE_TYPE.TEXT ? "text" : nodeType === NODE_TYPE.VIDEO ? "video" : "image",
-        sourceUrl,
+        fileKey,
         plainText,
       }}
       enabled={Boolean(
-        (sourceUrl && (nodeType === NODE_TYPE.IMAGE || nodeType === NODE_TYPE.VIDEO))
+        (fileKey && (nodeType === NODE_TYPE.IMAGE || nodeType === NODE_TYPE.VIDEO))
         || (plainText && nodeType === NODE_TYPE.TEXT),
       )}
     >

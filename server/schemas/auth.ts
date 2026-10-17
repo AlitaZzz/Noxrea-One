@@ -4,6 +4,8 @@
  */
 import { z } from "zod";
 
+import { isStorageKey } from "@noxrea/shared/url";
+
 export const loginRequestSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
@@ -20,7 +22,8 @@ export const loginResponseSchema = z.object({
 });
 
 export const updateMeSchema = z.object({
-  avatarUrl: z.string().max(500).optional(),
+  // 头像引用：存储 key（{userId}/{hash[:2]}/{hash}{ext}）；头像只来自上传，无外部 URL 值域
+  avatarKey: z.string().refine(isStorageKey, { message: "头像引用须为存储 key" }).optional(),
   theme: z.string().max(10).optional(),
   language: z.string().max(10).optional(),
   password: z.string().min(6).optional(),

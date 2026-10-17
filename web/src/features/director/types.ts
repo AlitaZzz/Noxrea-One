@@ -25,7 +25,8 @@ export interface DirectorEntityMeta {
 
 export interface Shot {
   id: string;
-  url: string;
+  /** 快照引用值：存储 key 或外部 URL；展示时派生访问 URL */
+  ref: string;
   name: string;
   cameraId: string;
   createdAt: number;

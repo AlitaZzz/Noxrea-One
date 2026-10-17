@@ -1046,7 +1046,8 @@
       "folder_not_found": "分类不存在",
       "invalid_asset_id": "素材 ID 非法",
       "asset_not_found": "素材不存在",
-      "duplicate_source_url": "该素材已在资产库中",
+      "duplicate_file_key": "该素材已在资产库中",
+      "invalid_file_key": "素材引用格式非法，请重新上传",
       "uncategorized_folder_protected": "「待分类资产」目录不可修改或删除",
       "batch_too_large": "一次最多提交 {{limit}} 个素材，请分批上传"
     },

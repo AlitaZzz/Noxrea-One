@@ -11,10 +11,11 @@
  */
 "use client";
 
+import { isStorageKey } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError, toFileKey } from "@/features/canvas/api/file-api";
-import { isManagedFilePath } from "@/lib/file-url";
+import { fileRefUrl } from "@/lib/file-url";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
     轨道容器宽度必须是它 + 24px（用 px 而非 rem，避免两边坐标系漂移） */
@@ -149,10 +150,10 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { re
     };
 
     void (async () => {
-      // 只有存储区里的文件才有 video_key，能请求服务端生成雪碧图；
-      // 本地预览地址（blob 等）没有对应键，直接走兜底读时长
+      // 只有存储 key 引用才能请求服务端生成雪碧图；
+      // 本地预览地址（blob 等）与外部 URL 没有对应键，直接走兜底读时长
       const videoKey = toFileKey(videoSrc);
-      const managed = isManagedFilePath(videoSrc) && videoKey.length > 0;
+      const managed = isStorageKey(videoKey);
       let fetchError: MediaRequestError | null = null;
 
       if (managed) {
@@ -203,7 +204,7 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { re
       // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
       // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴；
       // 服务端失败原因（fetchError）随状态带出，面板据此提示并重试
-      const duration = await probeDuration(videoSrc);
+      const duration = await probeDuration(fileRefUrl(videoSrc));
       apply(
         duration
           ? { ...INITIAL, duration, durationSource: "fallback", status: "ready", error: fetchError }

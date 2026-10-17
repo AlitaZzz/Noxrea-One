@@ -23,13 +23,14 @@ vi.mock("@server/services/storage/file-ref-ledger", () => ({
   removeSourceFileRefs: mocks.removeSourceFileRefs,
 }));
 
-import { updateProject, updateProjectDelta, deleteProject, projectExists, CanvasCoverUrlError, CanvasLeaseLostError } from "@server/crud/canvas";
+import { updateProject, updateProjectDelta, deleteProject, projectExists, CanvasCoverKeyError, CanvasLeaseLostError } from "@server/crud/canvas";
 import { joinCanvasRoom, resetCanvasPresence } from "@server/services/canvas/editor-lease";
 import { stringifyJson } from "@server/crud/json-column";
 
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
-const url = (hash: string) => `/api/files/1/${hash.slice(0, 2)}/${hash}.png`;
+// 引用值域 = 存储 key（节点 src 与封面同值域，specs/storage-reference-key-unification.md）
+const key = (hash: string) => `1/${hash.slice(0, 2)}/${hash}.png`;
 const canvas = (srcs: string[]) => stringifyJson({ nodes: srcs.map((src) => ({ data: { src } })) });
 
 /** 在项目 p1 的房间内取得真实租约令牌（编辑权语义由 editor-lease 提供） */
@@ -40,14 +41,14 @@ function joinAs(sid = "A") {
 beforeEach(() => {
   vi.clearAllMocks();
   resetCanvasPresence();
-  mocks.findFirst.mockResolvedValue({ id: "p1", revision: 3, canvasData: canvas([url(HASH_A)]) });
+  mocks.findFirst.mockResolvedValue({ id: "p1", revision: 3, canvasData: canvas([key(HASH_A)]) });
   mocks.directFindFirst.mockResolvedValue({ id: "p1", revision: 3 });
-  mocks.update.mockResolvedValue({ id: "p1", revision: 4, canvasData: canvas([url(HASH_A)]) });
+  mocks.update.mockResolvedValue({ id: "p1", revision: 4, canvasData: canvas([key(HASH_A)]) });
 });
 
 describe("updateProject 引用账本重算（服务端权威判定）", () => {
   it("引用集合变化时重算账本", async () => {
-    const newCanvas = { nodes: [{ data: { src: url(HASH_B) } }] };
+    const newCanvas = { nodes: [{ data: { src: key(HASH_B) } }] };
     await updateProject("p1", 1, { canvasData: newCanvas }, { baseRevision: 3, lease: joinAs() });
 
     expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
@@ -56,7 +57,7 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
   });
 
   it("引用数量变化（复制节点）时重算账本", async () => {
-    const newCanvas = { nodes: [{ data: { src: url(HASH_A) } }, { data: { src: url(HASH_A) } }] };
+    const newCanvas = { nodes: [{ data: { src: key(HASH_A) } }, { data: { src: key(HASH_A) } }] };
     await updateProject("p1", 1, { canvasData: newCanvas }, { baseRevision: 3, lease: joinAs() });
 
     expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
@@ -66,7 +67,7 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
 
   it("仅布局变化（引用集合与数量一致）不写账本", async () => {
     const newCanvas = {
-      nodes: [{ position: { x: 999, y: 999 }, data: { src: url(HASH_A) } }],
+      nodes: [{ position: { x: 999, y: 999 }, data: { src: key(HASH_A) } }],
     };
     await updateProject("p1", 1, { canvasData: newCanvas }, { baseRevision: 3, lease: joinAs() });
 
@@ -84,11 +85,11 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
   });
 
   it("设置封面：canvas_cover 来源登记 hash→1，与画布内容来源正交", async () => {
-    await updateProject("p1", 1, { coverUrl: url(HASH_B) });
+    await updateProject("p1", 1, { coverKey: key(HASH_B) });
 
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: "p1" },
-      data: { coverUrl: url(HASH_B) },
+      data: { coverKey: key(HASH_B) },
     });
     expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
     const [, source, counts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [
@@ -102,27 +103,27 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
   });
 
   it("清除封面（null）：canvas_cover 来源整替为空集", async () => {
-    await updateProject("p1", 1, { coverUrl: null });
+    await updateProject("p1", 1, { coverKey: null });
 
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: "p1" },
-      data: { coverUrl: null },
+      data: { coverKey: null },
     });
     const [, , counts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [unknown, unknown, Map<string, number>];
     expect(counts.size).toBe(0);
   });
 
-  it("封面不是本站 files URL：拒绝且不落库不写账本", async () => {
-    await expect(updateProject("p1", 1, { coverUrl: "https://evil.example/x.png" }))
-      .rejects.toBeInstanceOf(CanvasCoverUrlError);
+  it("封面不是合法存储 key（外部 URL）：拒绝且不落库不写账本", async () => {
+    await expect(updateProject("p1", 1, { coverKey: "https://evil.example/x.png" }))
+      .rejects.toBeInstanceOf(CanvasCoverKeyError);
 
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.replaceSourceFileRefs).not.toHaveBeenCalled();
   });
 
   it("封面与画布保存同时提交：两个来源各自登记互不覆盖", async () => {
-    const newCanvas = { nodes: [{ data: { src: url(HASH_B) } }] };
-    await updateProject("p1", 1, { canvasData: newCanvas, coverUrl: url(HASH_A) }, { baseRevision: 3, lease: joinAs() });
+    const newCanvas = { nodes: [{ data: { src: key(HASH_B) } }] };
+    await updateProject("p1", 1, { canvasData: newCanvas, coverKey: key(HASH_A) }, { baseRevision: 3, lease: joinAs() });
 
     const calls = mocks.replaceSourceFileRefs.mock.calls as unknown as Array<
       [unknown, { sourceType: string }, Map<string, number>]
@@ -150,7 +151,7 @@ describe("updateProjectDelta 原子合并", () => {
       id: "p1", revision: 3,
       canvasData: stringifyJson({
         nodes: [
-          { id: "n1", data: { src: url(HASH_A) } },
+          { id: "n1", data: { src: key(HASH_A) } },
           { id: "keep", data: {} },
           { id: "old", data: {} },
         ],
@@ -162,13 +163,13 @@ describe("updateProjectDelta 原子合并", () => {
       canvasData: stringifyJson({ nodes: [], edges: [] }),
     });
     await updateProjectDelta("p1", 1, {
-      nodes: { upsert: [{ id: "n1", data: { src: url(HASH_B) } }], delete: ["old"] },
+      nodes: { upsert: [{ id: "n1", data: { src: key(HASH_B) } }], delete: ["old"] },
       edges: { upsert: [], delete: ["e1"] },
     }, { baseRevision: 3, lease: joinAs() });
 
     const update = mocks.update.mock.calls[0]![0] as { data: { canvasData: string; revision: unknown } };
     expect(JSON.parse(update.data.canvasData)).toEqual({
-      nodes: [{ id: "n1", data: { src: url(HASH_B) } }, { id: "keep", data: {} }],
+      nodes: [{ id: "n1", data: { src: key(HASH_B) } }, { id: "keep", data: {} }],
       edges: [],
     });
     expect(update.data.revision).toEqual({ increment: 1 });

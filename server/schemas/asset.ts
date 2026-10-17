@@ -4,6 +4,8 @@
  */
 import { z } from "zod";
 
+import { fileRefSchema } from "@server/schemas/file-ref";
+
 // Folder
 export const folderCreateSchema = z.object({
   name: z.string().min(1).max(50),
@@ -38,7 +40,7 @@ export const assetCreateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   type: z.string().max(20).optional(),
   mediaType: z.enum(["image", "video", "audio", ""]).optional(),
-  sourceUrl: z.string().min(1).optional(),
+  fileKey: fileRefSchema.optional(),
   sourceType: z.string().max(20).optional(),
   description: z.string().optional(),
   tags: tagsSchema.optional(),
@@ -73,9 +75,9 @@ export const assetBatchDeleteSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(ASSET_BATCH_LIMIT),
 });
 
-/** 画布「取消收藏」：按 sourceUrl 删除个人库中的资产条目 */
-export const assetDeleteBySourceSchema = z.object({
-  sourceUrls: z.array(z.string().min(1)).min(1).max(50),
+/** 画布「取消收藏」：按 fileKey 删除个人库中的资产条目 */
+export const assetDeleteByFileKeysSchema = z.object({
+  fileKeys: z.array(fileRefSchema).min(1).max(50),
 });
 
 export const assetOutSchema = z.object({
@@ -83,14 +85,17 @@ export const assetOutSchema = z.object({
   userId: z.number(),
   folderId: z.number(),
   scope: z.string(),
-  sourceUrl: z.string().nullable(),
+  /** 来源引用：存储 key 或外部 URL */
+  fileKey: z.string().nullable(),
+  /** 访问 URL：托管 key 派生（/api/files/{key}），外部 URL 原样透传 */
+  url: z.string().nullable(),
   sourceType: z.string(),
   name: z.string(),
   type: z.string(),
   mediaType: z.string(),
   width: z.number(),
   height: z.number(),
-  /** 源文件大小（字节），按 sourceUrl 的内容 hash 关联 file_objects 得出；缺失为 0 */
+  /** 源文件大小（字节），按 fileKey 的内容 hash 关联 file_objects 得出；缺失为 0 */
   size: z.number(),
   /** 媒体元数据（宽高 / 时长）同出自 file_objects 的落盘探测；缺失为 0 */
   duration: z.number(),

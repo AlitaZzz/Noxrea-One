@@ -3,6 +3,7 @@
  * 聚合存储后端，提供上传保存、下载 URL 与密钥构建等统一访问入口。
  */
 
+import { buildManagedFileUrl } from "@noxrea/shared/url";
 import { localStorage } from "./backends/local";
 import type { StorageBackend } from "./backend";
 
@@ -33,5 +34,5 @@ export function buildStorageKey(
 
 /** 构建前端可访问的 URL（/api/files/<storageKey>） */
 export function buildFileUrl(storageKey: string): string {
-  return `/api/files/${storageKey}`;
+  return buildManagedFileUrl(storageKey);
 }

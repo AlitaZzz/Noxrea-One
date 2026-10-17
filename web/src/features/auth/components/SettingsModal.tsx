@@ -19,6 +19,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAuthStore } from "@/features/auth/store";
 import { toUserInfo, type UserInfo } from "@/features/auth/user-cache";
 import { api } from "@/lib/api/client";
+import { managedFileUrl } from "@/lib/file-url";
 
 import AvatarCropModal from "./AvatarCropModal";
 
@@ -33,7 +34,8 @@ export default function SettingsModal({ open, onClose }: Props) {
   const user = useAuthStore((s) => s.user);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [avatarUrl, setAvatarUrl] = useState("");
+  // 头像以存储 key 为真相：提交 key，展示 URL 由渲染期派生
+  const [avatarKey, setAvatarKey] = useState<string | null>(null);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [cropFile, setCropFile] = useState<File | null>(null);
@@ -47,17 +49,18 @@ export default function SettingsModal({ open, onClose }: Props) {
   if (userKey !== prevUserKey) {
     setPrevUserKey(userKey);
     if (userKey !== null && user) {
-      setAvatarUrl(user.avatarUrl || "");
+      setAvatarKey(user.avatarKey);
       setOldPw("");
       setNewPw("");
     }
   }
+  const avatarUrl = managedFileUrl(avatarKey);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       const body: Record<string, string> = {};
-      if (avatarUrl.trim() && avatarUrl !== user?.avatarUrl) body.avatarUrl = avatarUrl.trim();
+      if (avatarKey && avatarKey !== user?.avatarKey) body.avatarKey = avatarKey;
       if (newPw.trim()) {
         if (!oldPw) { message.error(t("auth.oldPwRequired")); return; }
         body.password = newPw;
@@ -154,7 +157,7 @@ export default function SettingsModal({ open, onClose }: Props) {
           </DialogClose>
           <Button type="button" variant="default" onClick={handleSave} loading={saving}>{t("auth.saveChanges")}</Button>
         </DialogFooter>
-        <AvatarCropModal open={cropOpen} file={cropFile} onDone={(url) => { setAvatarUrl(url); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
+        <AvatarCropModal open={cropOpen} file={cropFile} onDone={(key) => { setAvatarKey(key); setCropOpen(false); }} onClose={() => setCropOpen(false)} />
       </DialogContent>
     </Dialog>
   );

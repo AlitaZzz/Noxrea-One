@@ -15,7 +15,7 @@ export interface ProjectSummaryRow {
   name: string;
   revision: number;
   updatedAt: Date;
-  coverUrl: string | null;
+  coverKey: string | null;
   /** 保存时由画布 JSON 派生的冗余摘要列 */
   nodeCount: number;
   thumbnailSrc: string | null;
@@ -26,15 +26,15 @@ export interface ProjectSummary {
   name: string;
   revision: number;
   updatedAt: Date;
-  /** 封面：用户自定义 coverUrl 优先，否则首个带 src 的 image-node 的 src；两者皆无为 null */
+  /** 封面：用户自定义 coverKey 优先，否则首个带 src 的 image-node 的 src；两者皆无为 null */
   thumbnail: string | null;
-  /** 封面文件 URL（未设置为 null），改封面入口据此判断是否已有自定义封面 */
-  coverUrl: string | null;
+  /** 封面引用 key（未设置为 null），改封面入口据此判断是否已有自定义封面 */
+  coverKey: string | null;
   /** 节点总数（与画布 store 的节点计数语义一致） */
   nodeCount: number;
 }
 
-/** 首个带 src 的 image-node 的 src（与封面无关；coverUrl 优先级在读取时应用） */
+/** 首个带 src 的 image-node 的 src（与封面无关；coverKey 优先级在读取时应用） */
 function pickFirstImageSrc(nodes: SummaryNode[]): string | null {
   for (const node of nodes) {
     if (node?.type === "image-node") {
@@ -59,15 +59,15 @@ export function deriveCanvasSummary(canvasData: unknown): {
   return { nodeCount: nodes.length, thumbnailSrc: pickFirstImageSrc(nodes as SummaryNode[]) };
 }
 
-/** 冗余摘要行 → 列表摘要（缩略图 = 自定义封面优先，否则画布首图 src） */
+/** 冗余摘要行 → 列表摘要（缩略图 = 自定义封面优先，否则画布首图 src；均为 key 或外部 URL） */
 export function toProjectSummary(row: ProjectSummaryRow): ProjectSummary {
   return {
     id: row.id,
     name: row.name,
     revision: row.revision,
     updatedAt: row.updatedAt,
-    thumbnail: row.coverUrl ?? row.thumbnailSrc,
-    coverUrl: row.coverUrl,
+    thumbnail: row.coverKey ?? row.thumbnailSrc,
+    coverKey: row.coverKey,
     nodeCount: row.nodeCount,
   };
 }

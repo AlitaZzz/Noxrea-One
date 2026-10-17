@@ -6,7 +6,7 @@
 import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
 import { isUniqueConstraintError } from "@server/core/database/errors";
-import { extractHashFromUrl } from "@server/services/canvas/extract-hashes";
+import { hashFromStorageKey, isFileRefValue, resolveFileUrl } from "@noxrea/shared/url";
 import {
   replaceSourceFileRefs,
   removeSourceFileRefsBatch,
@@ -26,10 +26,50 @@ export class AssetOperationError extends Error {
     readonly code:
       | "folder_not_found"
       | "asset_not_found"
-      | "duplicate_source_url"
+      | "duplicate_file_key"
+      | "invalid_file_key"
       | "uncategorized_folder_protected"
   ) {
     super(code);
+  }
+}
+
+/**
+ * 资产行删除的账本不变量（唯一实现）：先清引用账本（账本层按 hash 聚合递减
+ * file_objects 计数，缺失的聚合行不阻塞删除），再删行，并按目录聚合递减直属计数。
+ * deleteAsset / deleteAssetsBatch / deleteAssetsByFileKeys 与 key 化迁移脚本共用，
+ * 保证「资产删除同步账本」只有一套规则。
+ */
+/** deleteAssetItemsTx 所需的资产条目最小字段集：账本清理与目录计数递减的定位键 */
+export interface AssetItemLedgerRef {
+  id: number;
+  userId: number;
+  folderId: number;
+}
+
+export async function deleteAssetItemsTx(
+  tx: TransactionClient,
+  rows: Array<AssetItemLedgerRef>,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const byUser = new Map<number, string[]>();
+  for (const row of rows) {
+    byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), String(row.id)]);
+  }
+  for (const [userId, sourceIds] of byUser) {
+    await removeSourceFileRefsBatch(tx, { userId, sourceType: "asset_item", sourceIds });
+  }
+  await tx.assetItem.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
+  // 同一直属目录被删多条时聚合成一次递减，避免逐条 update
+  const folderCounts = new Map<number, number>();
+  for (const row of rows) {
+    folderCounts.set(row.folderId, (folderCounts.get(row.folderId) ?? 0) + 1);
+  }
+  for (const [folderId, count] of folderCounts) {
+    await tx.assetFolder.update({
+      where: { id: folderId },
+      data: { directCount: { decrement: count } },
+    });
   }
 }
 
@@ -44,38 +84,38 @@ export type AssetSkipReason = "already_exists" | "duplicate_in_batch";
 
 /** 批量创建中被跳过的资产来源；重复属于正常结果，不再让整批失败。 */
 export interface SkippedAssetSource {
-  sourceUrl: string;
+  fileKey: string;
   reason: AssetSkipReason;
 }
 
-/** 库内唯一性以 (scope, sourceUrl) 为键；用不可见分隔符拼接，避免 URL 内容造成误判。 */
-function sourceKey(scope: string, sourceUrl: string): string {
-  return `${scope}\u0000${sourceUrl}`;
+/** 库内唯一性以 (scope, fileKey) 为键；用不可见分隔符拼接，避免引用值内容造成误判。 */
+function identityKey(scope: string, fileKey: string): string {
+  return `${scope}\u0000${fileKey}`;
 }
 
-/** 按 scope 分组查询库内已存在的来源 URL，返回 (scope, sourceUrl) 键集合。 */
-async function findExistingSourceKeys(
+/** 按 scope 分组查询库内已存在的来源引用，返回 (scope, fileKey) 键集合。 */
+async function findExistingIdentityKeys(
   tx: TransactionClient,
   userId: number,
-  items: Array<{ scope?: string; sourceUrl?: string | null }>
+  items: Array<{ scope?: string; fileKey?: string | null }>
 ): Promise<Set<string>> {
-  const urlsByScope = new Map<string, Set<string>>();
+  const keysByScope = new Map<string, Set<string>>();
   for (const item of items) {
-    if (!item.sourceUrl) continue;
+    if (!item.fileKey) continue;
     const scope = item.scope ?? "personal";
-    const urls = urlsByScope.get(scope) ?? new Set<string>();
-    urls.add(item.sourceUrl);
-    urlsByScope.set(scope, urls);
+    const keys = keysByScope.get(scope) ?? new Set<string>();
+    keys.add(item.fileKey);
+    keysByScope.set(scope, keys);
   }
 
   const existingKeys = new Set<string>();
-  for (const [scope, urls] of urlsByScope) {
+  for (const [scope, keys] of keysByScope) {
     const rows = await tx.assetItem.findMany({
-      where: { userId, scope, sourceUrl: { in: [...urls] } },
-      select: { sourceUrl: true },
+      where: { userId, scope, fileKey: { in: [...keys] } },
+      select: { fileKey: true },
     });
     for (const row of rows) {
-      if (row.sourceUrl) existingKeys.add(sourceKey(scope, row.sourceUrl));
+      if (row.fileKey) existingKeys.add(identityKey(scope, row.fileKey));
     }
   }
   return existingKeys;
@@ -98,18 +138,18 @@ export interface AssetMediaMeta {
 }
 
 /**
- * 批量取资产源文件的媒体元数据：从 sourceUrl 提取内容 hash，查 file_objects
+ * 批量取资产源文件的媒体元数据：从 fileKey 提取内容 hash，查 file_objects
  * （元数据由服务端落盘时统一探测入库）。返回 hash → 元数据映射，
  * 供各序列化出口经 withMediaMeta 附加 size / width / height / duration。
  */
 async function mediaMetaMapFor(
   db: Pick<Prisma.TransactionClient, "fileObject">,
   userId: number,
-  items: Array<{ sourceUrl?: string | null }>,
+  items: Array<{ fileKey?: string | null }>,
 ): Promise<Map<string, AssetMediaMeta>> {
   const hashes = new Set<string>();
   for (const item of items) {
-    const hash = item.sourceUrl ? extractHashFromUrl(item.sourceUrl) : null;
+    const hash = item.fileKey ? hashFromStorageKey(item.fileKey) : null;
     if (hash) hashes.add(hash);
   }
   if (hashes.size === 0) return new Map();
@@ -125,15 +165,20 @@ async function mediaMetaMapFor(
   }]));
 }
 
-/** 附加媒体元数据（源文件字节数与宽高时长；无 hash 或无对应文件记录时为 0） */
-function withMediaMeta<T extends { sourceUrl?: string | null }>(
+/**
+ * 附加媒体元数据（源文件字节数与宽高时长；无 hash 或无对应文件记录时为 0）
+ * 与访问 URL：引用值经 shared 的 resolveFileUrl 统一派生（key → 托管文件访问 URL，外部 URL 透传；
+ * DTO 同时携带 key 与 url）。
+ */
+function withMediaMeta<T extends { fileKey?: string | null }>(
   item: T,
   metas: Map<string, AssetMediaMeta>,
-): T & AssetMediaMeta {
-  const hash = item.sourceUrl ? extractHashFromUrl(item.sourceUrl) : null;
+): T & AssetMediaMeta & { url: string | null } {
+  const hash = item.fileKey ? hashFromStorageKey(item.fileKey) : null;
   const meta = hash ? metas.get(hash) : undefined;
   return {
     ...item,
+    url: resolveFileUrl(item.fileKey),
     size: meta?.size ?? 0,
     width: meta?.width ?? 0,
     height: meta?.height ?? 0,
@@ -283,7 +328,7 @@ export async function deleteFolder(userId: number, id: number) {
 
     const deletedAssets = await tx.assetItem.findMany({
       where: { userId, folderId: { in: subtreeIds } },
-      select: { id: true, sourceUrl: true },
+      select: { id: true, fileKey: true },
     });
     // 子树内资产可能引用同一文件，账本层会合并数量后递减聚合计数。
     await removeSourceFileRefsBatch(tx, {
@@ -298,9 +343,9 @@ export async function deleteFolder(userId: number, id: number) {
 
     return {
       removedCount: deletedAssets.length,
-      sourceUrls: deletedAssets
-        .map((asset) => asset.sourceUrl)
-        .filter((sourceUrl): sourceUrl is string => Boolean(sourceUrl)),
+      fileKeys: deletedAssets
+        .map((asset) => asset.fileKey)
+        .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, root.scope),
     };
   });
@@ -433,7 +478,7 @@ export async function createAssetsBatch(
     name?: string;
     type?: string;
     mediaType?: string;
-    sourceUrl?: string | null;
+    fileKey?: string | null;
     sourceType?: string;
     description?: string;
     tags?: string[];
@@ -451,17 +496,17 @@ export async function createAssetsBatch(
   }
 
   // 去重不再整批失败：批内重复保留首条，库内已存在直接跳过，其余资产照常入库。
-  // 来源 URL 精确保存即可去重；不额外落一列哈希。（纯内存去重，放事务外）
+  // 来源引用（key 或外部 URL）精确保存即可去重；不额外落一列哈希。（纯内存去重，放事务外）
   const skipped: SkippedAssetSource[] = [];
   const seenKeys = new Set<string>();
   const candidates: typeof items = [];
   for (const item of items) {
     const scope = item.scope ?? "personal";
-    const sourceUrl = item.sourceUrl ?? null;
-    if (sourceUrl) {
-      const key = sourceKey(scope, sourceUrl);
+    const fileKey = item.fileKey ?? null;
+    if (fileKey) {
+      const key = identityKey(scope, fileKey);
       if (seenKeys.has(key)) {
-        skipped.push({ sourceUrl, reason: "duplicate_in_batch" });
+        skipped.push({ fileKey, reason: "duplicate_in_batch" });
         continue;
       }
       seenKeys.add(key);
@@ -474,12 +519,12 @@ export async function createAssetsBatch(
     const uncategorizedByScope = new Map<string, number>();
 
     // 按 scope 分组查库内已存在来源；命中项跳过，不阻塞同批其他资产。
-    const existingKeys = await findExistingSourceKeys(tx, items[0].userId, candidates);
+    const existingKeys = await findExistingIdentityKeys(tx, items[0].userId, candidates);
     const pending = candidates.filter((item) => {
-      if (!item.sourceUrl) return true;
-      const key = sourceKey(item.scope ?? "personal", item.sourceUrl);
+      if (!item.fileKey) return true;
+      const key = identityKey(item.scope ?? "personal", item.fileKey);
       if (!existingKeys.has(key)) return true;
-      skipped.push({ sourceUrl: item.sourceUrl, reason: "already_exists" });
+      skipped.push({ fileKey: item.fileKey, reason: "already_exists" });
       return false;
     });
 
@@ -511,7 +556,7 @@ export async function createAssetsBatch(
           prompt: item.prompt ?? "",
           folderId,
           scope,
-          sourceUrl: item.sourceUrl ?? null,
+          fileKey: item.fileKey ?? null,
           sourceType: item.sourceType ?? "",
         },
       });
@@ -522,13 +567,20 @@ export async function createAssetsBatch(
       });
 
       // 资产创建与引用登记必须在同一事务内，避免出现已入库但未计数的资产。
-      const hash = record.sourceUrl ? extractHashFromUrl(record.sourceUrl) : null;
-      if (hash) {
-        await replaceSourceFileRefs(tx, {
-          userId: item.userId,
-          sourceType: "asset_item",
-          sourceId: String(record.id),
-        }, new Map([[hash, 1]]));
+      // 入库值域 = 存储 key 或外部 URL（schema 层已校验）：key 登记账本防 GC 误回收，
+      // 外部 URL 不入账本（既有语义）；其余形态 fail-closed 拒绝，不允许静默丢账本。
+      if (record.fileKey) {
+        if (!isFileRefValue(record.fileKey)) {
+          throw new AssetOperationError("invalid_file_key");
+        }
+        const hash = hashFromStorageKey(record.fileKey);
+        if (hash) {
+          await replaceSourceFileRefs(tx, {
+            userId: item.userId,
+            sourceType: "asset_item",
+            sourceId: String(record.id),
+          }, new Map([[hash, 1]]));
+        }
       }
     }
 
@@ -653,17 +705,8 @@ export async function deleteAsset(userId: number, id: number) {
     const current = await tx.assetItem.findFirst({ where: { id, userId } });
     if (!current) throw new AssetOperationError("asset_not_found");
 
-    // 账本删除和聚合计数递减先执行；缺失的聚合行不会阻塞资产删除。
-    await removeSourceFileRefsBatch(tx, {
-      userId,
-      sourceType: "asset_item",
-      sourceIds: [String(current.id)],
-    });
-    await tx.assetItem.delete({ where: { id } });
-    await tx.assetFolder.update({
-      where: { id: current.folderId },
-      data: { directCount: { decrement: 1 } },
-    });
+    // 资产删除统一走 deleteAssetItemsTx：清账本 → 删行 → 目录计数聚合递减
+    await deleteAssetItemsTx(tx, [{ id: current.id, userId, folderId: current.folderId }]);
 
     return {
       item: withMediaMeta(deserializeAsset(current), await mediaMetaMapFor(tx, userId, [current])),
@@ -676,7 +719,7 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
   return prisma.$transaction(async (tx) => {
     const currentItems = await tx.assetItem.findMany({
       where: { id: { in: ids }, userId },
-      select: { id: true, folderId: true, scope: true, sourceUrl: true },
+      select: { id: true, folderId: true, scope: true, fileKey: true },
     });
     if (currentItems.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
 
@@ -684,85 +727,51 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
     if (scopes.length > 1) throw new AssetOperationError("asset_not_found");
     const scope = scopes[0] ?? "personal";
 
-    await removeSourceFileRefsBatch(tx, {
-      userId,
-      sourceType: "asset_item",
-      sourceIds: currentItems.map((item) => String(item.id)),
-    });
-    await tx.assetItem.deleteMany({ where: { id: { in: ids }, userId } });
-
-    // 同一直属目录被删多条时聚合成一次递减，避免逐条 update。
-    const folderCounts = new Map<number, number>();
-    for (const item of currentItems) {
-      folderCounts.set(item.folderId, (folderCounts.get(item.folderId) ?? 0) + 1);
-    }
-    for (const [folderId, count] of folderCounts) {
-      await tx.assetFolder.update({
-        where: { id: folderId },
-        data: { directCount: { decrement: count } },
-      });
-    }
+    await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId, folderId: item.folderId })));
 
     return {
       count: currentItems.length,
-      sourceUrls: currentItems
-        .map((item) => item.sourceUrl)
-        .filter((sourceUrl): sourceUrl is string => Boolean(sourceUrl)),
+      fileKeys: currentItems
+        .map((item) => item.fileKey)
+        .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, scope),
     };
   });
 }
 
 /**
- * 按 sourceUrl 删除资产（画布节点「收藏 / 取消收藏」切换用）。
+ * 按 fileKey 删除资产（画布节点「收藏 / 取消收藏」切换用）。
  * 仅删个人库中 URL 精确匹配的条目（画布收藏只写个人库）；
  * 宽松语义：无匹配条目也算成功（count = 0），方便前端幂等取消。
  */
-export async function deleteAssetsBySourceUrls(userId: number, sourceUrls: string[]) {
+export async function deleteAssetsByFileKeys(userId: number, fileKeys: string[]) {
   return prisma.$transaction(async (tx) => {
     const currentItems = await tx.assetItem.findMany({
-      where: { userId, scope: "personal", sourceUrl: { in: sourceUrls } },
-      select: { id: true, folderId: true, scope: true, sourceUrl: true },
+      where: { userId, scope: "personal", fileKey: { in: fileKeys } },
+      select: { id: true, folderId: true, scope: true, fileKey: true },
     });
     if (currentItems.length === 0) {
-      return { count: 0, sourceUrls: [], counters: await readCounters(tx, userId, "personal") };
+      return { count: 0, fileKeys: [], counters: await readCounters(tx, userId, "personal") };
     }
 
-    await removeSourceFileRefsBatch(tx, {
-      userId,
-      sourceType: "asset_item",
-      sourceIds: currentItems.map((item) => String(item.id)),
-    });
-    await tx.assetItem.deleteMany({ where: { id: { in: currentItems.map((item) => item.id) }, userId } });
-
-    // 同一直属目录被删多条时聚合成一次递减，避免逐条 update。
-    const folderCounts = new Map<number, number>();
-    for (const item of currentItems) {
-      folderCounts.set(item.folderId, (folderCounts.get(item.folderId) ?? 0) + 1);
-    }
-    for (const [folderId, count] of folderCounts) {
-      await tx.assetFolder.update({
-        where: { id: folderId },
-        data: { directCount: { decrement: count } },
-      });
-    }
+    await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId, folderId: item.folderId })));
 
     return {
       count: currentItems.length,
-      sourceUrls: currentItems
-        .map((item) => item.sourceUrl)
-        .filter((sourceUrl): sourceUrl is string => Boolean(sourceUrl)),
+      fileKeys: currentItems
+        .map((item) => item.fileKey)
+        .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, "personal"),
     };
   });
 }
 
-export async function listSourceUrls(userId: number, scope = "personal") {
+export async function listFileKeys(userId: number, scope = "personal") {
   const items = await prisma.assetItem.findMany({
-    where: { userId, scope, sourceUrl: { not: null } },
-    select: { sourceUrl: true },
+    where: { userId, scope, fileKey: { not: null } },
+    select: { fileKey: true },
   });
-  return [...new Set(items.map((item) => item.sourceUrl).filter((url): url is string => Boolean(url)))];
+  return [...new Set(items.map((item) => item.fileKey).filter((key): key is string => Boolean(key)))];
 }
 
 /** 初始化资产库：固定目录、来源集合和总数一次返回。 */
@@ -773,7 +782,7 @@ export async function getAssetLibrarySummary(userId: number, scope = "personal")
     });
   }
   const folders = await getFolders(userId, scope);
-  const sourceUrls = await listSourceUrls(userId, scope);
+  const fileKeys = await listFileKeys(userId, scope);
   const totalCount = folders.reduce((total, folder) => total + folder.count, 0);
-  return { folders, sourceUrls, totalCount };
+  return { folders, fileKeys, totalCount };
 }

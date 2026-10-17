@@ -13,12 +13,13 @@ import { PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { managedFileUrl } from "@/lib/file-url";
 
 import { ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { useRevealCanvasNode } from "./reveal-node";
 
 export interface AudioRefCardProps {
-  /** 上游音频参考（节点 id / 音频地址 / 展示名） */
+  /** 上游音频参考（节点 id / 音频引用：存储 key 或外部 URL / 展示名） */
   audio: { id: string; src: string; label: string };
   /** 生成面板所属节点 id（用于 ✕ 断开对应连线） */
   nodeId: string;
@@ -161,7 +162,7 @@ function AudioRefCard({
       />
       <audio
         ref={audioRef}
-        src={audio.src}
+        src={managedFileUrl(audio.src)}
         preload="none"
         onEnded={() => setPlaying(false)}
         onPause={() => {

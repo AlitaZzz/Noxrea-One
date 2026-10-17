@@ -153,7 +153,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (key === "language") setAppLanguage(value === "en" ? "en" : "zh");
     set({ user: { ...user, [key]: value } });
     try {
-      // 前端用 avatarUrl / language，后端 updateMeSchema 也接受这些字段
+      // 前端用 avatarKey / language，后端 updateMeSchema 校验这些字段
       // 校验结果：此前无论成败都保留本地值，刷新后偏好会静默回退
       await session.run(() => authApi.updateMe({ [key]: value }));
       session.assertCurrent();

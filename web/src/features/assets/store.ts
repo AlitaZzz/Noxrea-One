@@ -32,7 +32,8 @@ function dtoToAsset(dto: AssetItemDto): AssetItem {
     prompt: dto.prompt || "",
     folderId: String(dto.folderId),
     scope: (dto.scope as AssetScope) || "personal",
-    sourceUrl: dto.sourceUrl || undefined,
+    fileKey: dto.fileKey || undefined,
+    url: dto.url ?? undefined,
     sourceType: dto.sourceType || undefined,
   };
 }
@@ -54,12 +55,12 @@ function toIntId(id: string): number | undefined {
   return Number.isNaN(n) ? undefined : n;
 }
 
-/** 把本次操作涉及的来源 URL 从本地已知集合移除（删除/取消收藏后同步收藏状态）。 */
-function removeKnownAssetUrls(sourceUrls: string[]): void {
-  if (sourceUrls.length === 0) return;
-  const removed = new Set(sourceUrls);
+/** 把本次操作涉及来源 key 从本地已知集合移除（删除/取消收藏后同步收藏状态）。 */
+function removeKnownAssetKeys(fileKeys: string[]): void {
+  if (fileKeys.length === 0) return;
+  const removed = new Set(fileKeys);
   useAssetsStore.setState((state) => ({
-    knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !removed.has(url))),
+    knownAssetKeys: new Set([...state.knownAssetKeys].filter((key) => !removed.has(key))),
   }));
 }
 
@@ -72,12 +73,12 @@ async function submitIdBatches(
   session: ReturnType<typeof captureSession>,
   ids: number[],
   failureKey: "asset.delete_failed" | "asset.update_failed",
-  submit: (chunk: number[]) => Promise<{ counters: AssetCountersDto; sourceUrls?: string[] }>,
+  submit: (chunk: number[]) => Promise<{ counters: AssetCountersDto; fileKeys?: string[] }>,
 ): Promise<{ ok: boolean; total?: number }> {
   let total: number | undefined;
   for (let offset = 0; offset < ids.length; offset += ASSET_BATCH_LIMIT) {
     const chunk = ids.slice(offset, offset + ASSET_BATCH_LIMIT);
-    let data: { counters: AssetCountersDto; sourceUrls?: string[] };
+    let data: { counters: AssetCountersDto; fileKeys?: string[] };
     try {
       data = await session.run(() => submit(chunk));
       session.assertCurrent();
@@ -88,7 +89,7 @@ async function submitIdBatches(
     useAssetsStore.getState().applyCounters(data.counters);
     total = data.counters.total;
     useAssetsStore.getState().noteLibraryChanged();
-    if (data.sourceUrls) removeKnownAssetUrls(data.sourceUrls);
+    if (data.fileKeys) removeKnownAssetKeys(data.fileKeys);
   }
   return { ok: true, total };
 }
@@ -175,8 +176,8 @@ interface AssetsState {
    * 吞掉失败置 true 会让空素材库与网络故障不可区分。
    */
   initialized: boolean;
-  /** 保存过的 sourceUrl 集合，用于画布节点保存按钮状态。 */
-  knownAssetUrls: Set<string>;
+  /** 保存过的来源 key 集合（与画布节点 src 同值域），用于节点收藏按钮状态。 */
+  knownAssetKeys: Set<string>;
   /**
    * 资产条目变更令牌（查询失效信号）：任何增删改成功后自增。
    * 资产视图（画布抽屉 / 管理弹窗）在打开期间订阅它触发重拉，
@@ -187,14 +188,14 @@ interface AssetsState {
 
   initialize: () => Promise<void>;
   applyCounters: (counters: AssetCountersDto) => void;
-  markAssetUrlSaved: (url: string) => void;
+  markAssetKeySaved: (key: string) => void;
 
   addAsset: (input: CreateAssetInput) => Promise<AssetItem | null>;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
   updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
   removeAssetsBatch: (ids: string[]) => Promise<{ ok: boolean; total?: number }>;
-  /** 画布「取消收藏」：按 sourceUrl 删除个人库条目，并同步 knownAssetUrls。 */
-  unsaveAssetsByUrls: (urls: string[]) => Promise<boolean>;
+  /** 画布「取消收藏」：按 fileKey 删除个人库条目，并同步 knownAssetKeys。 */
+  unsaveAssetsByFileKeys: (fileKeys: string[]) => Promise<boolean>;
   updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<{ ok: boolean; total?: number }>;
 
   addFolder: (name: string, scope: AssetScope, parentId?: string) => Promise<
@@ -217,7 +218,7 @@ let assetsInitInFlight: Promise<void> | null = null;
 export const useAssetsStore = create<AssetsState>((set, get) => ({
   folders: [],
   initialized: false,
-  knownAssetUrls: new Set(),
+  knownAssetKeys: new Set(),
   libraryVersion: 0,
   noteLibraryChanged: () => set((state) => ({ libraryVersion: state.libraryVersion + 1 })),
 
@@ -230,12 +231,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     }));
   },
 
-  markAssetUrlSaved: (url) => {
+  markAssetKeySaved: (key) => {
     set((state) => {
-      if (state.knownAssetUrls.has(url)) return { knownAssetUrls: state.knownAssetUrls };
-      const next = new Set(state.knownAssetUrls);
-      next.add(url);
-      return { knownAssetUrls: next };
+      if (state.knownAssetKeys.has(key)) return { knownAssetKeys: state.knownAssetKeys };
+      const next = new Set(state.knownAssetKeys);
+      next.add(key);
+      return { knownAssetKeys: next };
     });
   },
 
@@ -250,7 +251,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         set({
           folders: (summary?.folders || []).map(dtoToFolder),
           initialized: true,
-          knownAssetUrls: new Set(summary?.sourceUrls || []),
+          knownAssetKeys: new Set(summary?.fileKeys || []),
         });
       } catch {
         // 失败保持 initialized=false：门页在 settle 后凭它判失败并重试
@@ -276,7 +277,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
         description: input.description,
         tags: input.tags,
         prompt: input.prompt,
-        sourceUrl: input.sourceUrl,
+        fileKey: input.fileKey,
         sourceType: input.sourceType,
         folderId: toIntId(input.folderId || "") ?? null,
         scope,
@@ -289,7 +290,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
     const item = dtoToAsset(data.item);
     get().applyCounters(data.counters);
-    if (item.sourceUrl) get().markAssetUrlSaved(item.sourceUrl);
+    if (item.fileKey) get().markAssetKeySaved(item.fileKey);
     get().noteLibraryChanged();
     return item;
   },
@@ -316,7 +317,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
             description: input.description,
             tags: input.tags,
             prompt: input.prompt,
-            sourceUrl: input.sourceUrl,
+            fileKey: input.fileKey,
             sourceType: input.sourceType,
             folderId: toIntId(input.folderId || "") ?? null,
             scope: input.scope || "personal",
@@ -338,14 +339,14 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       // 每个成功分片即时失效：后续分片失败提前返回时，已入库的条目也能让视图刷新。
       if (chunkItems.length > 0) get().noteLibraryChanged();
 
-      const urls = new Set<string>();
+      const keys = new Set<string>();
       for (const item of chunkItems) {
-        if (item.sourceUrl) urls.add(item.sourceUrl);
+        if (item.fileKey) keys.add(item.fileKey);
       }
       // 被跳过的来源本就已在库中；本地已知集合可能因并发过期，一并补登记。
-      for (const skip of data.skipped ?? []) urls.add(skip.sourceUrl);
-      if (urls.size > 0) {
-        set((state) => ({ knownAssetUrls: new Set([...state.knownAssetUrls, ...urls]) }));
+      for (const skip of data.skipped ?? []) keys.add(skip.fileKey);
+      if (keys.size > 0) {
+        set((state) => ({ knownAssetKeys: new Set([...state.knownAssetKeys, ...keys]) }));
       }
     }
 
@@ -385,15 +386,15 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       assetApi.deleteAssetsBatch(chunk));
   },
 
-  unsaveAssetsByUrls: async (urls) => {
+  unsaveAssetsByFileKeys: async (fileKeys) => {
     const session = captureSession();
-    if (urls.length === 0) return false;
+    if (fileKeys.length === 0) return false;
     try {
-      const data = await session.run(() => assetApi.deleteAssetsBySource(urls));
+      const data = await session.run(() => assetApi.deleteAssetsByFileKeys(fileKeys));
       session.assertCurrent();
       get().applyCounters(data.counters);
       get().noteLibraryChanged();
-      removeKnownAssetUrls(data.sourceUrls);
+      removeKnownAssetKeys(data.fileKeys);
       return true;
     } catch (e) {
       notifyFailure(e, "asset.delete_failed");
@@ -471,7 +472,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const intId = toIntId(id);
     if (!intId) return false;
 
-    let data: { sourceUrls: string[]; counters: AssetCountersDto };
+    let data: { fileKeys: string[]; counters: AssetCountersDto };
     try {
       data = await session.run(() => assetApi.deleteFolder(intId));
       session.assertCurrent();
@@ -480,7 +481,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       return false;
     }
 
-    // 后端已删除子树资产，这里同步移除目录树、失效来源 URL 和计数快照。
+    // 后端已删除子树资产，这里同步移除目录树、失效来源 key 和计数快照。
     const subtree = new Set<string>([id]);
     const stack = [id];
     const { folders } = get();
@@ -498,10 +499,10 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
       }
     }
 
-    const deletedSourceUrls = new Set(data.sourceUrls || []);
+    const deletedFileKeys = new Set(data.fileKeys || []);
     set((state) => ({
       folders: state.folders.filter((folder) => !subtree.has(folder.id)),
-      knownAssetUrls: new Set([...state.knownAssetUrls].filter((url) => !deletedSourceUrls.has(url))),
+      knownAssetKeys: new Set([...state.knownAssetKeys].filter((key) => !deletedFileKeys.has(key))),
     }));
     get().applyCounters(data.counters);
     return true;
@@ -516,7 +517,7 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
 
 onSessionChange(() => {
   assetsInitInFlight = null;
-  useAssetsStore.setState({ folders: [], initialized: false, knownAssetUrls: new Set(), libraryVersion: 0 });
+  useAssetsStore.setState({ folders: [], initialized: false, knownAssetKeys: new Set(), libraryVersion: 0 });
 });
 
 /**

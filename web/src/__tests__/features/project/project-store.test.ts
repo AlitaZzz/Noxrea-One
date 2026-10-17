@@ -90,32 +90,32 @@ describe("project store 删除与列表", () => {
 
   it("改封面成功时乐观更新封面与缩略图", async () => {
     mocks.updateProject.mockResolvedValue({ revision: 1 });
-    const cover = "/api/files/1/ab/abcd.png";
+    const cover = "1/ab/abcd.png";
 
     useProjectStore.getState().updateCover("p1", cover);
 
     await vi.waitFor(() => {
       const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
-      expect(project?.coverUrl).toBe(cover);
+      expect(project?.coverKey).toBe(cover);
       expect(project?.thumbnail).toBe(cover);
     });
-    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { coverUrl: cover });
+    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { coverKey: cover });
     expect(mocks.notify.error).not.toHaveBeenCalled();
   });
 
   it("改封面失败时回滚并提示错误", async () => {
     useProjectStore.setState({
       projects: [
-        { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2, coverUrl: "/old.png", thumbnail: "/old.png" },
+        { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2, coverKey: "/old.png", thumbnail: "/old.png" },
       ],
     });
     mocks.updateProject.mockRejectedValue(new ApiError(500, "服务内部错误"));
 
-    useProjectStore.getState().updateCover("p1", "/api/files/1/ab/new.png");
+    useProjectStore.getState().updateCover("p1", "1/ab/new.png");
 
     await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
     const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
-    expect(project?.coverUrl).toBe("/old.png");
+    expect(project?.coverKey).toBe("/old.png");
     expect(project?.thumbnail).toBe("/old.png");
   });
 
@@ -185,7 +185,7 @@ describe("project store 采纳握手快照（adoptProject）", () => {
       name: "A",
       revision: 4,
       updatedAt: "2026-01-01T00:00:00Z",
-      coverUrl: "/api/files/1/ab/cover.png",
+      coverKey: "1/ab/cover.png",
       canvasData: { nodes: [{ type: "image-node", data: { src: "/img.png" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 } },
     });
 
@@ -193,7 +193,7 @@ describe("project store 采纳握手快照（adoptProject）", () => {
     const summary = useProjectStore.getState().projects.find((p) => p.id === "p1");
     // 列表项是摘要：不携带内容，缩略图自定义封面优先
     expect(summary).toMatchObject({ id: "p1", name: "A", revision: 4, nodeCount: 1 });
-    expect(summary?.thumbnail).toBe("/api/files/1/ab/cover.png");
+    expect(summary?.thumbnail).toBe("1/ab/cover.png");
     expect(summary && "nodes" in summary).toBe(false);
   });
 

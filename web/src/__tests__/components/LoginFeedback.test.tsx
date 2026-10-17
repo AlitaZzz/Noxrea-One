@@ -36,7 +36,7 @@ describe("login feedback lifetime", () => {
     render(<AppProviders><LoginAction /></AppProviders>);
     fireEvent.click(screen.getByRole("button", { name: "Login" }));
     await act(async () => {
-      complete({ user: { id: 1, username: "a", avatarUrl: null, theme: "dark", language: "zh" } });
+      complete({ user: { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "dark", language: "zh" } });
     });
     // Resume the old callback after React has committed the new account subtree.
     await act(async () => { resumeFeedback(); });

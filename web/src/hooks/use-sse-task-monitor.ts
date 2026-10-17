@@ -17,6 +17,7 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import type { MediaGenFields } from "@/features/canvas/types";
 import { TASK_STATUS_BATCH_SIZE } from "@/lib/constants";
 import type { NotificationApi, NotificationOptions } from "@/lib/feedback";
+import { fileRefUrl } from "@/lib/file-url";
 import i18n from "@/lib/i18n/config";
 import { readSseStream,SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -115,25 +116,26 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
         return;
       }
 
-      const completedUrls = evt.resultUrls || [];
-      if (evt.status === "completed" && completedUrls.length) {
-        const firstUrl = completedUrls[0];
+      // 产物落库值为存储 key（resultKeys）；探测尺寸用的访问 URL 由 key 派生
+      const completedKeys = evt.resultKeys ?? [];
+      if (evt.status === "completed" && completedKeys.length) {
+        const firstKey = completedKeys[0];
         // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
         // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
         // 一次性回填：图片 + 多图列表 + 产物大小 + 清除生成中状态（遮罩此时才消失）。
         // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
         // 异步探测到真实分辨率后再统一回填真实尺寸。
-        // fileSize 由服务端终态事件直接给出（resultSizes 与 resultUrls 对齐），重新生成时覆盖旧值。
+        // fileSize 由服务端终态事件直接给出（resultSizes 与 resultKeys 对齐），重新生成时覆盖旧值。
         runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
-          src: firstUrl,
+          src: firstKey,
           naturalWidth: 0, naturalHeight: 0,
           lockAspectRatio: true, taskBinding: undefined,
           source: "generate",
           fileSize: evt.resultSizes?.[0] ?? undefined,
-          // 多图结果：>=2 张写入 multiResultUrls 进入堆叠/网格模式；否则清空，回到单图
-          // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultUrls 会残留，导致仍层叠）
-          multiResultUrls: completedUrls.length >= 2 ? completedUrls : undefined,
-          multiResultTotalCount: completedUrls.length >= 2 ? completedUrls.length : undefined,
+          // 多图结果：>=2 张写入 multiResultKeys 进入堆叠/网格模式；否则清空，回到单图
+          // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultKeys 会残留，导致仍层叠）
+          multiResultKeys: completedKeys.length >= 2 ? completedKeys : undefined,
+          multiResultTotalCount: completedKeys.length >= 2 ? completedKeys.length : undefined,
         }, undefined, { skipHistory: true }));
         markDirtyImmediate();
         notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), placement: "bottomRight", duration: 5 });
@@ -141,14 +143,14 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
         // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
         // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；
         // 失败/节点内容已变更时静默放弃。
-        loadMediaDimensions(firstUrl, isVideoNode).then((dims) => {
+        loadMediaDimensions(fileRefUrl(firstKey), isVideoNode).then((dims) => {
           // effect 卸载后不再写 store（ disposed 只护 reconcile 路径，SSE 路径在此补防）
           if (disposed) return;
           if (dims.w <= 0 || dims.h <= 0) return;
           const s = useCanvasStore.getState();
           const n = s.nodes.find(x => x.id === nodeId);
           if (!n) return;
-          if ((n.data as { src?: string }).src !== firstUrl) return;
+          if ((n.data as { src?: string }).src !== firstKey) return;
           const natural = { naturalWidth: dims.w, naturalHeight: dims.h };
           const { width, height } = computeNodeSize(dims.w, dims.h);
           runSuppressed(() => s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true }));
@@ -157,7 +159,7 @@ export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "erro
         return;
       }
 
-      // 失败 / 取消 / completed 但无结果（上游未回传 resultText/resultUrls）：
+      // 失败 / 取消 / completed 但无结果（上游未回传 resultText/resultKeys）：
       // 三种情况都必须清理 taskBinding，否则节点永久停留在「生成中」遮罩，
       // 且 hasGeneratingNode() 会全局禁用撤销 / 重做，用户只能刷新页面才能恢复。
       useCanvasStore.getState().updateNodeData(nodeId, {

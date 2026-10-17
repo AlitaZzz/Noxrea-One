@@ -9,10 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useCanvasImage } from "@/features/canvas/hooks/use-canvas-image";
 import type { ImagePlacement } from "@/features/canvas/shared/image-visibility";
+import { fileRefUrl } from "@/lib/file-url";
 import { cn } from "@/lib/utils";
 
 type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "loading"> & {
   nodeId: string;
+  /** 引用值：存储 key 或外部 URL / data: / blob: 预览；URL 在此派生（渲染期唯一入口） */
   src: string;
   placement?: ImagePlacement;
   /** 加载中/失败占位图标：图片场景默认 PictureOutlined，视频海报等场景可覆盖 */
@@ -23,7 +25,7 @@ type Props = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "loading"> & {
 
 export default function CanvasImage({ nodeId, src, placement = {}, alt = "", className, style, placeholderIcon: PlaceholderIcon, aspect, ...props }: Props) {
   const { t } = useTranslation();
-  const { result, retry } = useCanvasImage(nodeId, src, placement);
+  const { result, retry } = useCanvasImage(nodeId, fileRefUrl(src), placement);
   const Icon = PlaceholderIcon ?? PictureOutlined;
   if (result?.status === "ready") return <img {...props} className={className} style={style} src={result.url} alt={alt} decoding="async" />;
   const failed = result?.status === "failed";

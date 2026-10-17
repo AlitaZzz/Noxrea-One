@@ -108,7 +108,7 @@ describe("useSseTaskMonitor", () => {
     mocks.streamGenerationTask.mockResolvedValue(
       sseResponse(terminalFrame({
         taskId: "t1", status: "completed",
-        resultUrls: ["/api/files/1/aa/x.png"], resultSizes: [123], prompt: "pp",
+        resultKeys: ["1/aa/x.png"], resultSizes: [123], prompt: "pp",
       })),
     );
 
@@ -116,7 +116,7 @@ describe("useSseTaskMonitor", () => {
 
     await waitFor(() => {
       const data = useCanvasStore.getState().nodes[0].data as Record<string, unknown>;
-      expect(data.src).toBe("/api/files/1/aa/x.png");
+      expect(data.src).toBe("1/aa/x.png");
       expect(data.taskBinding).toBeUndefined();
       expect(data.fileSize).toBe(123);
       expect(data.label).toBe(label);
@@ -185,7 +185,7 @@ describe("useSseTaskMonitor", () => {
     addWatchedNode("n3", "t4");
     mocks.streamGenerationTask.mockResolvedValue(stalledResponse());
     mocks.fetchTasksStatus.mockResolvedValue([
-      { type: "status", taskId: "t4", status: "completed", resultUrls: ["/api/files/1/bb/y.png"] },
+      { type: "status", taskId: "t4", status: "completed", resultKeys: ["1/bb/y.png"] },
     ]);
 
     renderHook(() => useSseTaskMonitor(notif));
@@ -196,7 +196,7 @@ describe("useSseTaskMonitor", () => {
 
     await waitFor(() => {
       const data = useCanvasStore.getState().nodes[0].data as Record<string, unknown>;
-      expect(data.src).toBe("/api/files/1/bb/y.png");
+      expect(data.src).toBe("1/bb/y.png");
       expect(data.taskBinding).toBeUndefined();
     });
     expect(mocks.fetchTasksStatus).toHaveBeenCalledWith(["t4"]);
@@ -269,7 +269,7 @@ describe("useSseTaskMonitor", () => {
         .mockResolvedValueOnce(
           sseResponse(terminalFrame({
             taskId: "t1", status: "completed",
-            resultUrls: ["/api/files/1/cc/z.png"], resultSizes: [9],
+            resultKeys: ["1/cc/z.png"], resultSizes: [9],
           })),
         );
       renderHook(() => useSseTaskMonitor(notif));
@@ -290,7 +290,7 @@ describe("useSseTaskMonitor", () => {
       await waitFor(() => expect(mocks.streamGenerationTask).toHaveBeenCalledTimes(2), { timeout: 6000 });
       await waitFor(() => {
         const data = useCanvasStore.getState().nodes[0].data as Record<string, unknown>;
-        expect(data.src).toBe("/api/files/1/cc/z.png");
+        expect(data.src).toBe("1/cc/z.png");
         expect(data.taskBinding).toBeUndefined();
       });
       expect(mocks.cancelGenerationTask).not.toHaveBeenCalled();

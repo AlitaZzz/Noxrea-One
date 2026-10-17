@@ -29,12 +29,13 @@ import {
 } from "@server/crud/asset";
 
 const HASH_A = "a".repeat(64);
-const sourceUrl = (hash: string) => `/api/files/1/${hash.slice(0, 2)}/${hash}.png`;
+// 资产源引用入库形态 = 存储 key（specs/storage-reference-key-unification.md）
+const fileKey = (hash: string) => `1/${hash.slice(0, 2)}/${hash}.png`;
 
 function assetRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 1, userId: 1, folderId: 2, scope: "personal",
-    sourceUrl: sourceUrl(HASH_A), sourceType: "upload",
+    fileKey: fileKey(HASH_A), sourceType: "upload",
     name: "n", type: "image", mediaType: "image",
     description: "", tags: "[]", prompt: "",
     createdAt: new Date("2026-09-01T00:00:00Z"),
@@ -114,7 +115,7 @@ describe("getAssets（mock prisma 编排）", () => {
     expect(result.total).toBe(1);
     expect(result.nextCursor).toBeNull();
 
-    // 宽高 join：sourceUrl 提取 hash 查 file_objects
+    // 宽高 join：fileKey 提取 hash 查 file_objects
     expect(result.items[0].width).toBe(100);
     expect(result.items[0].height).toBe(50);
     expect(result.items[0].size).toBe(10);
@@ -134,12 +135,12 @@ describe("getAssets（mock prisma 编排）", () => {
     const older = assetRow({
       id: 7,
       createdAt: new Date(1727000000000),
-      sourceUrl: null,
+      fileKey: null,
     });
     // take+1 条：满页 2 条 + 1 条说明还有更多
     mocks.assetItem.findMany.mockResolvedValue([
-      assetRow({ id: 9, createdAt: new Date(1728000000000), sourceUrl: null }),
-      assetRow({ id: 8, createdAt: new Date(1728000000000), sourceUrl: null }),
+      assetRow({ id: 9, createdAt: new Date(1728000000000), fileKey: null }),
+      assetRow({ id: 8, createdAt: new Date(1728000000000), fileKey: null }),
       older,
     ]);
     mocks.assetItem.count.mockResolvedValue(3);

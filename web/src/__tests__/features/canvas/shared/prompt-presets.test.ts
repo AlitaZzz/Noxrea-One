@@ -12,7 +12,6 @@ import type { ReferenceItem } from "@/features/canvas/shared/reference";
 const ref: ReferenceItem = {
   kind: "image",
   src: "/img/a.png",
-  thumbnail: "/img/a.thumb.png",
   index: 0,
 };
 

@@ -44,7 +44,8 @@ interface UploadFile {
   id: string;
   file: File;
   previewUrl: string;
-  url: string | null;
+  /** 服务端返回的存储 key（URL 渲染期派生）；未上传完成时为 null */
+  key: string | null;
   uploadProgress: number;
   errorMessage?: string;
   status: "ready" | "uploading" | "done" | "error";
@@ -167,7 +168,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
       id: uid(),
       file,
       previewUrl: trackUrl(URL.createObjectURL(file)),
-      url: null,
+      key: null,
       uploadProgress: 0,
       status: "ready",
     }));
@@ -195,7 +196,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     }
     pendingRef.current += 1;
 
-    // 上传交给管道（raw sink：只上传拿 URL，不碰画布；silent 由本组件自行标红/标失败）
+    // 上传交给管道（raw sink：只上传拿存储 key，不碰画布；silent 由本组件自行标红/标失败）
     const { settled } = await runMediaUpload({
       items: uploadable.map((e) => ({ blob: e.file, filename: e.file.name })),
       sink: { kind: "raw" },
@@ -211,14 +212,14 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
         for (let i = 0; i < uploadable.length; i++) {
           const entry = uploadable[i];
           const result = results[i];
-          if (!result?.url) {
+          if (!result?.key) {
             updateFile(entry.id, {
               status: "error",
               errorMessage: errors[i]?.message ?? t("file.uploadFailed"),
             });
             continue;
           }
-          updateFile(entry.id, { url: result.url, status: "done", uploadProgress: 100 });
+          updateFile(entry.id, { key: result.key, status: "done", uploadProgress: 100 });
         }
       })
       .finally(() => {
@@ -258,7 +259,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     }>((resolve) => {
       setFiles((f) => {
         resolve({
-          doneFiles: f.filter((x) => x.status === "done" && x.url),
+          doneFiles: f.filter((x) => x.status === "done" && x.key),
           errCount: f.filter((x) => x.status === "error").length,
         });
         return f;
@@ -278,7 +279,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
         type: category,
         mediaType: kind === "video" ? "video" : kind === "audio" ? "audio" : "image",
         description: "",
-        sourceUrl: f.url || undefined,
+        fileKey: f.key || undefined,
         folderId: saveFolderId && saveFolderId !== ROOT_FOLDER_ID ? saveFolderId : undefined,
       };
     });
@@ -384,12 +385,12 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
                   return (
                   <Card key={f.id} className="group relative size-[130px] shrink-0 gap-0 overflow-hidden rounded-md border-border/50 bg-popover p-0 shadow-none">
                     {kind === "image" ? (
-                      <img src={f.url ? withManagedFileWidth(f.url, 200) : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
+                      <img src={f.key ? withManagedFileWidth(f.key, 200) : f.previewUrl} alt="" draggable={false} className="w-full h-full object-cover" />
                     ) : kind === "video" ? (
                       <div className="w-full h-full relative flex items-center justify-center bg-black/50">
-                        {f.url ? (
+                        {f.key ? (
                           <img
-                            src={withManagedFileWidth(f.url, 200)}
+                            src={withManagedFileWidth(f.key, 200)}
                             alt=""
                             draggable={false}
                             className="absolute inset-0 w-full h-full object-cover"

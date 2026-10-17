@@ -15,7 +15,7 @@ import {
   projectExists,
   CanvasRevisionConflictError,
   CanvasLeaseLostError,
-  CanvasCoverUrlError,
+  CanvasCoverKeyError,
 } from "@server/crud/canvas";
 import { ok, failCode } from "@server/core/response";
 import { isValidId } from "@server/utils/id";
@@ -171,7 +171,7 @@ router.put("/api/canvas/projects/:id", async (c) => {
     const project = await updateProject(id, auth.user.id, {
       name: parsed.data.name,
       canvasData: parsed.data.canvasData,
-      coverUrl: parsed.data.coverUrl,
+      coverKey: parsed.data.coverKey,
     }, {
       baseRevision: parsed.data.baseRevision,
       lease: parsed.data.lease,
@@ -194,8 +194,8 @@ router.put("/api/canvas/projects/:id", async (c) => {
       return failCode(409, "canvas.project_revision_conflict",
         error.currentRevision !== null ? { revision: error.currentRevision } : undefined);
     }
-    // 封面不是本站 /api/files/ 地址：无法登记引用账本（GC 会回收），直接拒绝
-    if (error instanceof CanvasCoverUrlError) {
+    // 封面引用不是存储 key 严格形态：无法登记引用账本（GC 会回收），直接拒绝
+    if (error instanceof CanvasCoverKeyError) {
       return failCode(422, "common.invalid_request");
     }
     throw error;

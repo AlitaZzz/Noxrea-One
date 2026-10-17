@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { WaveIcon } from "@/components/ui/AppIcon";
 
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
-import { type ReferenceItemAttrs, refLabelKey } from "./reference";
+import { type ReferenceItemAttrs, refLabelKey, refThumbnailUrl } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
   const { i18n, t } = useTranslation();
@@ -43,14 +43,14 @@ export default function MentionChip({ node }: NodeViewProps) {
         </span>
       ) : item.kind === "video" ? (
         <video
-          src={`${item.thumbnail}#t=0.1`}
+          src={refThumbnailUrl(item.src, "video")}
           muted
           preload="metadata"
           playsInline
           className="mention-thumb"
         />
       ) : (
-        <img src={item.thumbnail} alt={label} className="mention-thumb" />
+        <img src={refThumbnailUrl(item.src, "image")} alt={label} className="mention-thumb" />
       )}
       <span>{label}</span>
     </NodeViewWrapper>

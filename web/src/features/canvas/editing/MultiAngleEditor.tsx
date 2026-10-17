@@ -22,6 +22,7 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
+import { fileRefUrl } from "@/lib/file-url";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import useEscapeToClose from "./use-escape-to-close";
@@ -172,7 +173,7 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
           <div className="min-h-0 flex-1">
             <OrbitScene3D
               variant="camera"
-              src={src}
+              src={fileRefUrl(src)}
               azimuth={azimuth}
               elevation={elevation}
               mode={viewMode}

@@ -8,8 +8,8 @@ afterEach(cleanup);
 
 describe("MediaPreviewOverlay", () => {
   const items = [
-    { url: "/one.png", mediaType: "image" as const },
-    { url: "/two.png", mediaType: "image" as const },
+    { ref: "/one.png", mediaType: "image" as const },
+    { ref: "/two.png", mediaType: "image" as const },
   ];
 
   it("uses the controlled Dialog and navigates with arrow keys", () => {

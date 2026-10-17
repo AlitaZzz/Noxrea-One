@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import { isManagedFileUrl, withManagedFileWidth } from "@/lib/file-url";
+import { isManagedFileUrl, managedFileUrl, withManagedFileWidth } from "@/lib/file-url";
+
+const HASH = "a".repeat(64);
+const KEY = `1/${HASH.slice(0, 2)}/${HASH}.png`;
+
+describe("storage key 派生访问 URL（持久化值域的唯一出口）", () => {
+  it("key 派生 /api/files/{key}", () => {
+    expect(managedFileUrl(KEY)).toBe(`/api/files/${KEY}`);
+  });
+
+  it("key 设置缩略宽度时先派生再拼参数", () => {
+    expect(withManagedFileWidth(KEY, 320)).toBe(`/api/files/${KEY}?w=320`);
+  });
+
+  it("key 不被 isManagedFileUrl 识别为 URL（key 与 URL 是不同值域）", () => {
+    expect(isManagedFileUrl(KEY)).toBe(false);
+  });
+
+  it("data:、blob: 与外部 URL 原样透传", () => {
+    expect(managedFileUrl("data:image/png;base64,xxx")).toBe("data:image/png;base64,xxx");
+    expect(managedFileUrl("blob:https://example.com/x")).toBe("blob:https://example.com/x");
+    expect(managedFileUrl("https://cdn.example.com/abc.png")).toBe("https://cdn.example.com/abc.png");
+  });
+});
 
 describe("managed file URLs", () => {
   it("识别托管文件并设置缩略宽度", () => {

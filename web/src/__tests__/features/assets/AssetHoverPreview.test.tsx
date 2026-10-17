@@ -15,7 +15,7 @@ describe("AssetHoverPreview", () => {
 
     render(
       <AssetHoverPreview
-        asset={{ name: "clip", mediaType: "video", sourceUrl: "/clip.mp4" }}
+        asset={{ name: "clip", mediaType: "video", fileKey: "/clip.mp4" }}
       >
         <button type="button">Asset</button>
       </AssetHoverPreview>,
@@ -49,7 +49,7 @@ describe("AssetHoverPreview", () => {
   it("keeps image previews hidden until decoding has completed", async () => {
     vi.useFakeTimers();
     render(
-      <AssetHoverPreview asset={{ name: "portrait", mediaType: "image", sourceUrl: "/portrait.png" }}>
+      <AssetHoverPreview asset={{ name: "portrait", mediaType: "image", fileKey: "/portrait.png" }}>
         <button type="button">Image</button>
       </AssetHoverPreview>,
     );
@@ -71,7 +71,7 @@ describe("AssetHoverPreview", () => {
   it("does not create a hover card for audio assets", () => {
     render(
       <AssetHoverPreview
-        asset={{ name: "song", mediaType: "audio", sourceUrl: "/song.mp3" }}
+        asset={{ name: "song", mediaType: "audio", fileKey: "/song.mp3" }}
       >
         <button type="button">Asset</button>
       </AssetHoverPreview>,
@@ -84,7 +84,7 @@ describe("AssetHoverPreview", () => {
   it("does not treat an unsupported media type as an image", () => {
     render(
       <AssetHoverPreview
-        asset={{ name: "document", mediaType: "", sourceUrl: "/document.pdf" }}
+        asset={{ name: "document", mediaType: "", fileKey: "/document.pdf" }}
       >
         <button type="button">Document</button>
       </AssetHoverPreview>,

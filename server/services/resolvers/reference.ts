@@ -3,7 +3,7 @@
  * 将用户传入的参考图路径或 URL 解析为可访问的资源，并做路径穿越防护。
  */
 
-import { MANAGED_FILE_PATH, stripTrailingSlash } from "@noxrea/shared/url";
+import { isStorageKey, buildManagedFileUrl, stripTrailingSlash } from "@noxrea/shared/url";
 import { logEvent } from "@server/core/logger/utils";
 import { getSetting } from "@server/core/settings";
 import { isPathWithinBase } from "@server/core/paths";
@@ -58,7 +58,7 @@ async function readSelfFile(relPath: string): Promise<string> {
 /**
  * 参考素材通用解析（对齐 Python resolve_refs 三档策略）：
  * 1) data: URL → 直接透传
- * 2) 同源 URL（/api/files/ 或纯存储路径） → 配置 network.public_base_url 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
+ * 2) 存储 key（任务 ref* 列持久化的托管引用形态） → 配置 network.public_base_url 时拼公网 URL 透传，否则读本机磁盘转 base64 data URL
  * 3) 外链 URL → 透传原串
  * 本地素材读取失败时抛 GenerationFailureError，外链透传不涉及读取、不会失败。
  *
@@ -77,16 +77,15 @@ async function resolveRefList(urls: string[]): Promise<string[]> {
       continue;
     }
 
-    // 同源 URL（/api/files/ 或纯存储路径）：
-    // 配置了 network.public_base_url → 拼公网 URL 透传（上游按 URL 拉取）；未配置 → 回退读盘转 base64
-    if (url.startsWith(MANAGED_FILE_PATH) || (!url.startsWith("http://") && !url.startsWith("https://"))) {
-      const relPath = url.startsWith(MANAGED_FILE_PATH) ? url.slice(MANAGED_FILE_PATH.length) : url;
+    // 存储 key：配置了 network.public_base_url → 拼公网 URL 透传（上游按 URL 拉取）；
+    // 未配置 → 回退读盘转 base64
+    if (isStorageKey(url)) {
       const publicUrl = stripTrailingSlash(getSetting("network.public_base_url"));
       if (publicUrl) {
-        resolved.push(`${publicUrl}${MANAGED_FILE_PATH}${relPath}`);
+        resolved.push(`${publicUrl}${buildManagedFileUrl(url)}`);
         continue;
       }
-      resolved.push(await readSelfFile(relPath));
+      resolved.push(await readSelfFile(url));
       continue;
     }
 

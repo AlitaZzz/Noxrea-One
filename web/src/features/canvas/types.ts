@@ -125,9 +125,9 @@ export type ImageNodeData = {
   taskBinding?: TaskBinding;
   upload?: UploadState;
   genSettings?: ImageGenSettings;
-  /** 多图结果：所有结果图的 URL 列表（children）。存在且长度>=2 时，节点以「堆叠卡片/展开网格」模式展示 */
-  multiResultUrls?: string[];
-  /** 多图结果：生成总张数（用于角标，缺省回退到 multiResultUrls.length） */
+  /** 多图结果：所有结果图的存储 key 列表（值域同 src：key 或外部 URL）。存在且长度>=2 时，节点以「堆叠卡片/展开网格」模式展示 */
+  multiResultKeys?: string[];
+  /** 多图结果：生成总张数（用于角标，缺省回退到 multiResultKeys.length） */
   multiResultTotalCount?: number;
   /** 内容来源：upload = 用户上传/资产库添加（素材），generate = AI 生成，derived = 从已有图片派生（裁剪/切分/标注等） */
   source?: "upload" | "generate" | "derived";
@@ -218,9 +218,10 @@ export interface DirectorStateData {
   ratio: string;
   cameraView: boolean;
   transformMode: string;
+  /** 快照引用值与节点 src 同值域：存储 key 或外部 URL；展示时派生访问 URL */
   shots: Array<{
     id: string;
-    url: string;
+    ref: string;
     name: string;
     cameraId: string;
     createdAt: number;

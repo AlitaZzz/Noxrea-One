@@ -17,7 +17,7 @@ describe("MentionDropdown", () => {
     render(
       <>
         <MentionDropdown
-          items={[{ kind: "image", src: "image-1", thumbnail: "thumb-1", index: 0 }]}
+          items={[{ kind: "image", src: "image-1", index: 0 }]}
           position={{ x: 12, y: 24 }}
           selectedIndex={0}
           onHover={vi.fn()}
@@ -38,7 +38,7 @@ describe("MentionDropdown", () => {
     const onSelect = vi.fn();
     render(
       <MentionDropdown
-        items={[{ kind: "image", src: "image-1", thumbnail: "thumb-1", index: 0 }]}
+        items={[{ kind: "image", src: "image-1", index: 0 }]}
         position={{ x: 12, y: 24 }}
         selectedIndex={0}
         onHover={vi.fn()}
@@ -50,7 +50,7 @@ describe("MentionDropdown", () => {
     const button = screen.getByRole("button", { name: /refImageLabel/ });
     fireEvent.click(button);
 
-    expect(onSelect).toHaveBeenCalledWith({ kind: "image", src: "image-1", thumbnail: "thumb-1", index: 0 });
+    expect(onSelect).toHaveBeenCalledWith({ kind: "image", src: "image-1", index: 0 });
   });
 
   it("keeps the editor focused when the suggestion is dismissed from the editor", async () => {
@@ -59,7 +59,7 @@ describe("MentionDropdown", () => {
       <>
         <input className="mention-editable" aria-label="Prompt" />
         <MentionDropdown
-          items={[{ kind: "image", src: "image-1", thumbnail: "thumb-1", index: 0 }]}
+          items={[{ kind: "image", src: "image-1", index: 0 }]}
           position={{ x: 12, y: 24 }}
           selectedIndex={0}
           onHover={vi.fn()}

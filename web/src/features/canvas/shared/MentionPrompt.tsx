@@ -84,7 +84,7 @@ export function textToDoc(text: string, references: ReferenceItem[]): JSONConten
         start: match.index,
         end: match.index + match[0].length,
         node: ref
-          ? { type: "mention", attrs: { src: ref.src, thumbnail: ref.thumbnail, index: ref.index, kind: ref.kind } }
+          ? { type: "mention", attrs: { src: ref.src, index: ref.index, kind: ref.kind } }
           : { type: "text", text: match[0] },
       });
     }
@@ -221,11 +221,11 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
         underline: false,
       }),
       Mention.extend({
-        // 扩展默认属性，承载引用素材信息（供 chip 渲染与纯文本序列化）
+        // 扩展默认属性，承载引用素材信息（供 chip 渲染与纯文本序列化）；
+        // 缩略图不落 attrs：URL 属渲染期派生（MentionChip 由 src 推导）
         addAttributes() {
           return {
             src: { default: "" },
-            thumbnail: { default: "" },
             index: { default: 0 },
             kind: { default: "image" },
             presetId: { default: "" },
