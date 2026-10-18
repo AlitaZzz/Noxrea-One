@@ -26,10 +26,11 @@ import {
   getStorageBackend,
   initStorageBackend,
 } from "@server/services/storage/service";
-import { STAGING_MAX_AGE_MS, STAGING_PREFIX } from "@server/services/storage/upload-direct";
+import { STAGING_MAX_AGE_MS } from "@server/services/storage/upload-direct";
+import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "@server/services/storage/backend";
 
-/** 派生产物前缀（与 derived-cleanup / 后端 delete 联动的前缀一致） */
-const DERIVED_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/", "_tmp/"] as const;
+/** 审计计数的前缀全集：派生产物四根 + `_tmp` 工作区（审计须覆盖临时区残留计数） */
+const AUDIT_COUNTED_PREFIXES = [...DERIVED_ROOT_PREFIXES, "_tmp/"] as const;
 
 async function main(): Promise<void> {
   // 与 bootstrap 同序的存储依赖引导（不含 gateway / GC / tmp 清理，见模块注释）
@@ -51,7 +52,7 @@ async function main(): Promise<void> {
   const stagingFresh: string[] = [];
   const stagingStale: string[] = [];
   const unknown: string[] = [];
-  const derivedCounts: Array<{ prefix: string; count: number }> = DERIVED_PREFIXES.map(
+  const derivedCounts: Array<{ prefix: string; count: number }> = AUDIT_COUNTED_PREFIXES.map(
     (prefix) => ({ prefix, count: 0 }),
   );
   const bucketMain = new Set<string>();

@@ -30,6 +30,24 @@ import { allocateTempPath, tmpDir } from "@server/services/storage/workspace";
 import { rmQuiet } from "@server/services/storage/fs-utils";
 import { extOfName, mimeByExt } from "@server/services/storage/mime";
 
+/** bucket 统一前缀归一化（去首尾斜杠）：前缀映射函数与后端构造共用单一实现 */
+export function normalizeS3Prefix(prefix: string): string {
+  return prefix.replace(/^\/+|\/+$/g, "");
+}
+
+/** 接口层 key → 带 bucket 统一前缀的对象 key（类与迁移脚本共用；前缀先归一化） */
+export function applyS3Prefix(prefix: string, key: string): string {
+  const p = normalizeS3Prefix(prefix);
+  return p ? `${p}/${key}` : key;
+}
+
+/** 带 bucket 统一前缀的对象 key → 接口层 key（仅本后端内部使用；前缀先归一化） */
+function stripS3Prefix(prefix: string, objectKey: string): string {
+  const p = normalizeS3Prefix(prefix);
+  if (!p) return objectKey;
+  return objectKey.startsWith(`${p}/`) ? objectKey.slice(p.length + 1) : objectKey;
+}
+
 export interface S3BackendOptions {
   endpoint: string;
   bucket: string;
@@ -60,7 +78,7 @@ export class S3Backend implements StorageBackend {
   constructor(opts: S3BackendOptions) {
     this.endpoint = opts.endpoint;
     this.bucket = opts.bucket;
-    this.prefix = opts.prefix.replace(/^\/+|\/+$/g, "");
+    this.prefix = normalizeS3Prefix(opts.prefix);
     this.ttlSeconds = opts.signedUrlTtlSeconds;
     this.client = new S3Client({
       endpoint: opts.endpoint,
@@ -76,14 +94,11 @@ export class S3Backend implements StorageBackend {
   /** 接口层 key → 带前缀的对象 key */
   private objectKey(key: string): string {
     guardKey(key);
-    return this.prefix ? `${this.prefix}/${key}` : key;
+    return applyS3Prefix(this.prefix, key);
   }
 
   private stripPrefix(objectKey: string): string {
-    if (!this.prefix) return objectKey;
-    return objectKey.startsWith(`${this.prefix}/`)
-      ? objectKey.slice(this.prefix.length + 1)
-      : objectKey;
+    return stripS3Prefix(this.prefix, objectKey);
   }
 
   async put(key: string, source: string | Buffer | ReadableStream): Promise<void> {

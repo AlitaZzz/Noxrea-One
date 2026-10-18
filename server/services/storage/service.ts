@@ -7,7 +7,7 @@
 import { buildManagedFileUrl } from "@noxrea/shared/url";
 import { getSetting } from "@server/core/settings";
 import { LocalStorageBackend } from "./backends/local";
-import { S3Backend } from "./backends/s3";
+import { S3Backend, type S3BackendOptions } from "./backends/s3";
 import type { StorageBackend } from "./backend";
 
 let backend: StorageBackend | null = null;
@@ -26,26 +26,9 @@ export function initStorageBackend(selected?: StorageBackend): void {
   backend = selected ?? buildBackendFromSettings();
 }
 
-/**
- * 跨项联合校验与构建：backend=s3 而必填键缺失/非法时，存储初始化即失败并指明键名。
- * 注册表维持各项独立校验的现状，联合校验单点放在存储初始化点（spec 规则 2）。
- */
-function buildBackendFromSettings(): StorageBackend {
-  if (getSetting("storage.backend") !== "s3") return new LocalStorageBackend();
-
-  const required: Array<[string, string]> = [
-    ["storage.s3.endpoint", getSetting("storage.s3.endpoint")],
-    ["storage.s3.bucket", getSetting("storage.s3.bucket")],
-    ["storage.s3.region", getSetting("storage.s3.region")],
-    ["storage.s3.access_key_id", getSetting("storage.s3.access_key_id")],
-    ["storage.s3.secret_access_key", getSetting("storage.s3.secret_access_key")],
-  ];
-  const missing = required.filter(([, value]) => value.trim() === "").map(([key]) => key);
-  if (missing.length > 0) {
-    throw new Error(`Storage backend s3 requires settings: ${missing.join(", ")}`);
-  }
-
-  return new S3Backend({
+/** S3 连接参数组装（规则 2 设置键 → S3BackendOptions）；后端构建与迁移脚本共用单一来源 */
+export function s3OptionsFromSettings(): S3BackendOptions {
+  return {
     endpoint: getSetting("storage.s3.endpoint"),
     bucket: getSetting("storage.s3.bucket"),
     region: getSetting("storage.s3.region"),
@@ -54,7 +37,38 @@ function buildBackendFromSettings(): StorageBackend {
     pathStyle: getSetting("storage.s3.path_style"),
     prefix: getSetting("storage.s3.prefix"),
     signedUrlTtlSeconds: getSetting("storage.s3.signed_url_ttl_seconds"),
-  });
+  };
+}
+
+function buildBackendFromSettings(): StorageBackend {
+  if (getSetting("storage.backend") !== "s3") return new LocalStorageBackend();
+
+  const missing = missingS3Settings();
+  if (missing.length > 0) {
+    throw new Error(`Storage backend s3 requires settings: ${missing.join(", ")}`);
+  }
+
+  return new S3Backend(s3OptionsFromSettings());
+}
+
+/**
+ * S3 连接必填键判定（单一来源，后端构建与迁移脚本共用）：任一键为空即视为连接配置
+ * 不完整，缺失键名以 `storage.s3.*` 形式返回。键值取自 s3OptionsFromSettings 组装
+ * 结果——键清单与参数组装同源，不会漂移失同步。
+ */
+export function missingS3Settings(): string[] {
+  const o = s3OptionsFromSettings();
+  return (
+    [
+      ["endpoint", o.endpoint],
+      ["bucket", o.bucket],
+      ["region", o.region],
+      ["access_key_id", o.accessKeyId],
+      ["secret_access_key", o.secretAccessKey],
+    ] as Array<[string, string]>
+  )
+    .filter(([, value]) => value.trim() === "")
+    .map(([key]) => `storage.s3.${key}`);
 }
 
 /** 进程级存储后端单例；未引导（bootstrap 之前）访问即抛错 */

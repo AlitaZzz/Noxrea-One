@@ -104,6 +104,10 @@ inference_service/.env
 
 # Generated assets（锚定根目录，避免误伤 server/services/storage 等同名源码目录）
 /storage/
+
+# 存储迁移脚本的续跑日志与报告（specs/storage-s3-backend.md 规则 11；不锚定根，
+# 覆盖 UPLOAD_DIR 配置为仓库内非默认布局时产物落在存储根旁的场景）
+storage-migration/
 /output/
 /outputs/
 

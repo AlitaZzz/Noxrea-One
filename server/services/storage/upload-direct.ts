@@ -24,12 +24,12 @@ import { persistFileObject } from "./persist";
 import { probeUploadVideo, type VideoUploadWarning } from "./media-probe";
 import { createXmlContentDetector } from "./xml-content";
 import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
-import { supportsDirectUpload } from "./backend";
+import { supportsDirectUpload, STAGING_PREFIX } from "./backend";
 
-/** staging 命名空间：staging/{userId}/{uuid}，归属编码在 key 里，complete 时校验 */
-export const STAGING_PREFIX = "staging/";
-const STAGING_KEY_RE =
-  /^staging\/(\d+)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** staging key 形态校验（由 STAGING_PREFIX 常量拼装，前缀调整不漂移）：{prefix}{userId}/{uuid} */
+const STAGING_KEY_RE = new RegExp(
+  `^${STAGING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
+);
 /** staging 超龄清扫阈值：完成流程很短，24h 足以覆盖一切中断场景 */
 export const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 

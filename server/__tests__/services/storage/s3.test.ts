@@ -56,7 +56,7 @@ vi.mock("@server/core/config", () => ({
   }),
 }));
 
-import { S3Backend } from "@server/services/storage/backends/s3";
+import { S3Backend, applyS3Prefix, normalizeS3Prefix } from "@server/services/storage/backends/s3";
 import { StorageTraversalError } from "@server/services/storage/backend";
 
 function makeBackend(prefix = "app"): S3Backend {
@@ -283,5 +283,15 @@ describe("copy / probe", () => {
     expect(err.message).toContain("403");
     expect(err.message).not.toContain("SECRET_TEST");
     expect(sentCommands()[0][0]).toBe("headBucket");
+  });
+});
+
+describe("前缀归一化与映射", () => {
+  it("首尾斜杠不产生错位 key：映射与构造共用 normalizeS3Prefix 单一实现", () => {
+    expect(normalizeS3Prefix("/noxrea/")).toBe("noxrea");
+    expect(normalizeS3Prefix("")).toBe("");
+    expect(applyS3Prefix("/noxrea/", "3/ab/abc.png")).toBe("noxrea/3/ab/abc.png");
+    expect(applyS3Prefix("noxrea", "3/ab/abc.png")).toBe("noxrea/3/ab/abc.png");
+    expect(applyS3Prefix("", "3/ab/abc.png")).toBe("3/ab/abc.png");
   });
 });

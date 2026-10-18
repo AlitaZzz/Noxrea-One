@@ -9,6 +9,17 @@ import type { Readable } from "stream";
 
 import { isStorageKey } from "@noxrea/shared/url";
 
+/** 直传在途暂存命名空间（staging/{userId}/{uuid}，归属编码在 key 里）；直传、staging 清扫、迁移/审计分类共用 */
+export const STAGING_PREFIX = "staging/";
+
+/**
+ * 派生产物命名空间前缀（本地与对象存储同构；迁移两侧枚举分类与审计计数共用）。
+ * `_tmp` 是工作区临时区，不属对象命名空间，不在此列（审计计数另行并入）。
+ * 注：delete 派生联动（listDerivedArtifactKeys）只按 stem 枚举 `_cache`/`_posters`，
+ * 不经此前缀常量——_sprite/_proxy 文件名由源键单向哈希派生，无法按源键枚举。
+ */
+export const DERIVED_ROOT_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/"] as const;
+
 export interface StorageBackend {
   /**
    * 保存（服务端直写：派生产物、AI 结果、local 中转上传）；S3 按 key 扩展名写 Content-Type。
