@@ -11,6 +11,7 @@ import { hashFromStorageKey } from "@noxrea/shared/url";
 import { deriveCanvasSummary, toProjectSummary } from "@server/services/canvas/project-summary";
 import {
   replaceSourceFileRefs,
+  replaceSourceFileRef,
   removeSourceFileRefs,
 } from "@server/services/storage/file-ref-ledger";
 import { stringifyJson, parseJsonObject } from "./json-column";
@@ -226,7 +227,6 @@ async function updateProjectRow(
     }
 
     const updateData: Record<string, unknown> = {};
-    let coverHash: string | null = null;
     if (data.name !== undefined) {
       updateData.name = data.name;
     }
@@ -240,8 +240,7 @@ async function updateProjectRow(
     }
     if (data.coverKey !== undefined) {
       // 封面必须是存储 key 严格形态：引用账本按 hash 登记，防 GC 回收封面文件
-      coverHash = data.coverKey === null ? null : hashFromStorageKey(data.coverKey);
-      if (data.coverKey !== null && !coverHash) {
+      if (data.coverKey !== null && !hashFromStorageKey(data.coverKey)) {
         throw new CanvasCoverKeyError();
       }
       updateData.coverKey = data.coverKey;
@@ -269,11 +268,11 @@ async function updateProjectRow(
     // 封面引用走独立来源（canvas_cover），与画布内容（canvas）正交：
     // 画布保存整替 canvas 来源集合，封面混入会被冲掉。清除封面（null）即清空该来源。
     if (data.coverKey !== undefined) {
-      await replaceSourceFileRefs(tx, {
+      await replaceSourceFileRef(tx, {
         userId,
         sourceType: "canvas_cover",
         sourceId: id,
-      }, coverHash ? new Map([[coverHash, 1]]) : new Map());
+      }, data.coverKey ?? null);
     }
 
     return {

@@ -54,8 +54,10 @@ export function isExternalFileUrl(value: string): boolean {
 }
 
 /**
- * 托管文件引用值的入库值域（资产 fileKey / 头像 avatarKey 等写入边界的唯一校验规则）：
+ * 托管文件引用值的入库值域（资产 fileKey 等写入边界的唯一校验规则）：
  * 存储 key 严格形态，或外部 http(s) URL（原样保留、不入引用账本）。
+ * 头像 avatarKey 按产品值域仅存储 key（specs/storage-reference-key-unification.md），
+ * 不走本谓词（isStorageKey 判别）。
  * data: / blob: 仅存在于渲染期，不持久化，不在入库值域。
  */
 export function isFileRefValue(value: string): boolean {

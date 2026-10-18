@@ -5,7 +5,16 @@
 import { prisma } from "@server/core/database/client";
 import { isUniqueConstraintError } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
-import { resolveFileUrl } from "@noxrea/shared/url";
+import { hashFromStorageKey, resolveFileUrl } from "@noxrea/shared/url";
+import { replaceSourceFileRef } from "@server/services/storage/file-ref-ledger";
+
+/** 头像引用值域错误：avatarKey 须为存储 key 严格形态（与 updateMeSchema 同值域）。 */
+export class UserAvatarKeyError extends Error {
+  constructor() {
+    super("avatar 引用须为存储 key");
+    this.name = "UserAvatarKeyError";
+  }
+}
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -47,7 +56,7 @@ export async function touchLastLogin(id: number) {
 
 /** 用户可更新字段白名单 */
 type UpdatableUserFields = {
-  avatarKey?: string;
+  avatarKey?: string | null;
   theme?: string;
   language?: string;
   isActive?: boolean;
@@ -87,7 +96,9 @@ export async function updateUser(
   id: number,
   data: UpdatableUserFields
 ) {
-  // 白名单过滤：仅允许安全字段更新，防止直接设置 hashedPassword 等敏感字段
+  // 白名单过滤收敛于此：仅允许安全字段更新，防止直接设置 hashedPassword 等敏感字段；
+  // avatarKey 在过滤前带类型捕获，账本分支免 Record 断言
+  const avatarKey = data.avatarKey;
   const allowed: Record<string, unknown> = {};
   const allowedKeys = new Set(["avatarKey", "theme", "language", "isActive"]);
   for (const [key, val] of Object.entries(data)) {
@@ -96,8 +107,19 @@ export async function updateUser(
     }
   }
 
-  return prisma.user.update({
-    where: { id },
-    data: allowed,
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({ where: { id }, data: allowed });
+    // avatarKey 是托管引用：与引用账本（avatar 来源，sourceId=用户 id，每用户至多一行）
+    // 同事务整替，防止头像对象因账本无行被 GC 当孤儿回收。产品值域 = 存储 key 严格
+    // 形态（与统一 Spec 的 avatarKey 决策一致，判别单点 hashFromStorageKey，与封面同
+    // 规则）：key → {hash:1}；null → 清空该来源；非 key 形态（含外部 URL）fail-closed
+    // 抛错，不允许静默丢账本。avatarKey 未出现在更新里则不碰账本。
+    if (avatarKey !== undefined) {
+      if (avatarKey !== null && !hashFromStorageKey(avatarKey)) {
+        throw new UserAvatarKeyError();
+      }
+      await replaceSourceFileRef(tx, { userId: id, sourceType: "avatar", sourceId: String(id) }, avatarKey);
+    }
+    return user;
   });
 }

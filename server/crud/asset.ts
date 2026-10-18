@@ -8,7 +8,7 @@ import { prisma } from "@server/core/database/client";
 import { isUniqueConstraintError } from "@server/core/database/errors";
 import { hashFromStorageKey, isFileRefValue, resolveFileUrl } from "@noxrea/shared/url";
 import {
-  replaceSourceFileRefs,
+  replaceSourceFileRef,
   removeSourceFileRefsBatch,
 } from "@server/services/storage/file-ref-ledger";
 import { stringifyJson, parseJsonArray } from "./json-column";
@@ -573,14 +573,11 @@ export async function createAssetsBatch(
         if (!isFileRefValue(record.fileKey)) {
           throw new AssetOperationError("invalid_file_key");
         }
-        const hash = hashFromStorageKey(record.fileKey);
-        if (hash) {
-          await replaceSourceFileRefs(tx, {
-            userId: item.userId,
-            sourceType: "asset_item",
-            sourceId: String(record.id),
-          }, new Map([[hash, 1]]));
-        }
+        await replaceSourceFileRef(tx, {
+          userId: item.userId,
+          sourceType: "asset_item",
+          sourceId: String(record.id),
+        }, record.fileKey);
       }
     }
 

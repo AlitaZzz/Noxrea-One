@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   deleteMany: vi.fn(),
   directFindFirst: vi.fn(),
   replaceSourceFileRefs: vi.fn(),
+  replaceSourceFileRef: vi.fn(),
   removeSourceFileRefs: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock("@server/core/database/client", () => ({
 }));
 vi.mock("@server/services/storage/file-ref-ledger", () => ({
   replaceSourceFileRefs: mocks.replaceSourceFileRefs,
+  replaceSourceFileRef: mocks.replaceSourceFileRef,
   removeSourceFileRefs: mocks.removeSourceFileRefs,
 }));
 
@@ -91,15 +93,16 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
       where: { id: "p1" },
       data: { coverKey: key(HASH_B) },
     });
-    expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
-    const [, source, counts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [
+    expect(mocks.replaceSourceFileRef).toHaveBeenCalledTimes(1);
+    expect(mocks.replaceSourceFileRefs).not.toHaveBeenCalled();
+    const [, source, value] = mocks.replaceSourceFileRef.mock.calls[0] as unknown as [
       unknown,
       { sourceType: string; sourceId: string },
-      Map<string, number>,
+      string,
     ];
     expect(source.sourceType).toBe("canvas_cover");
     expect(source.sourceId).toBe("p1");
-    expect(Object.fromEntries(counts)).toEqual({ [HASH_B]: 1 });
+    expect(value).toBe(key(HASH_B));
   });
 
   it("清除封面（null）：canvas_cover 来源整替为空集", async () => {
@@ -109,8 +112,8 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
       where: { id: "p1" },
       data: { coverKey: null },
     });
-    const [, , counts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [unknown, unknown, Map<string, number>];
-    expect(counts.size).toBe(0);
+    expect(mocks.replaceSourceFileRef).toHaveBeenCalledTimes(1);
+    expect(mocks.replaceSourceFileRef.mock.calls[0][2]).toBeNull();
   });
 
   it("封面不是合法存储 key（外部 URL）：拒绝且不落库不写账本", async () => {
@@ -119,19 +122,29 @@ describe("updateProject 引用账本重算（服务端权威判定）", () => {
 
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.replaceSourceFileRefs).not.toHaveBeenCalled();
+    expect(mocks.replaceSourceFileRef).not.toHaveBeenCalled();
   });
 
   it("封面与画布保存同时提交：两个来源各自登记互不覆盖", async () => {
     const newCanvas = { nodes: [{ data: { src: key(HASH_B) } }] };
     await updateProject("p1", 1, { canvasData: newCanvas, coverKey: key(HASH_A) }, { baseRevision: 3, lease: joinAs() });
 
-    const calls = mocks.replaceSourceFileRefs.mock.calls as unknown as Array<
-      [unknown, { sourceType: string }, Map<string, number>]
-    >;
-    expect(calls).toHaveLength(2);
-    const bySource = new Map(calls.map(([, source, counts]) => [source.sourceType, Object.fromEntries(counts)]));
-    expect(bySource.get("canvas")).toEqual({ [HASH_B]: 1 });
-    expect(bySource.get("canvas_cover")).toEqual({ [HASH_A]: 1 });
+    expect(mocks.replaceSourceFileRefs).toHaveBeenCalledTimes(1);
+    const [, contentSource, contentCounts] = mocks.replaceSourceFileRefs.mock.calls[0] as unknown as [
+      unknown,
+      { sourceType: string },
+      Map<string, number>,
+    ];
+    expect(contentSource.sourceType).toBe("canvas");
+    expect(Object.fromEntries(contentCounts)).toEqual({ [HASH_B]: 1 });
+    expect(mocks.replaceSourceFileRef).toHaveBeenCalledTimes(1);
+    const [, coverSource, coverValue] = mocks.replaceSourceFileRef.mock.calls[0] as unknown as [
+      unknown,
+      { sourceType: string },
+      string,
+    ];
+    expect(coverSource.sourceType).toBe("canvas_cover");
+    expect(coverValue).toBe(key(HASH_A));
   });
 
   it("删除项目：canvas 与 canvas_cover 两个来源的账本引用一并清理", async () => {

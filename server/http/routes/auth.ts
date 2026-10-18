@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
-import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser } from "@server/crud/user";
+import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser, UserAvatarKeyError } from "@server/crud/user";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getSetting } from "@server/core/settings";
@@ -174,12 +174,7 @@ router.put("/api/auth/me", async (c) => {
     return failCode(422, "common.invalid_request");
   }
 
-  const updates: Record<string, unknown> = {};
-
-  if (parsed.data.avatarKey !== undefined) updates.avatarKey = parsed.data.avatarKey;
-  if (parsed.data.theme !== undefined) updates.theme = parsed.data.theme;
-  if (parsed.data.language !== undefined) updates.language = parsed.data.language;
-
+  // password/oldPassword 由下方分支单独处理；画像字段在 updateUser 白名单过滤后落库
   let passwordChanged = false;
   if (parsed.data.password !== undefined) {
     const user = await getUserById(auth.user.id);
@@ -199,7 +194,18 @@ router.put("/api/auth/me", async (c) => {
     passwordChanged = true;
   }
 
-  await updateUser(auth.user.id, updates);
+  // 画像字段显式透传（password/oldPassword 不入此通道）；crud 层 fail-closed 兜底
+  // 与资产/封面错误映射同风格（schema refine 已拦，此处为纵深防线）
+  try {
+    await updateUser(auth.user.id, {
+      avatarKey: parsed.data.avatarKey,
+      theme: parsed.data.theme,
+      language: parsed.data.language,
+    });
+  } catch (err) {
+    if (err instanceof UserAvatarKeyError) return failCode(422, "common.invalid_request");
+    throw err;
+  }
   // 密码分支已改库，重新取一遍保证返回值与 cookie 中版本号一致
   const fresh = await getUserById(auth.user.id);
   if (!fresh) return failCode(404, "auth.user_not_found");
