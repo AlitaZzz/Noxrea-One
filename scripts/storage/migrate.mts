@@ -25,9 +25,8 @@ import fs from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { loadConfig } from "@server/core/config";
-import { ensureLocalMigrations, prisma } from "@server/core/database/client";
-import { initSettings } from "@server/core/settings";
+import { prisma } from "@server/core/database/client";
+import { bootstrapCliCore } from "./cli-bootstrap.mts";
 import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/backend";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { S3Backend, applyS3Prefix } from "@server/services/storage/backends/s3";
@@ -89,10 +88,9 @@ async function main(): Promise<void> {
   console.log(`direction=${args.direction} dryRun=${args.dryRun}`);
   console.warn("[前置确认] 应用已停止（切换流程第 1 步）——迁移期间的任何写入都是迁移盲区。");
 
-  // 与 bootstrap 同序的存储依赖引导（不含 gateway / GC / tmp 清理，与 audit 同口径）
-  loadConfig();
-  await ensureLocalMigrations();
-  await initSettings();
+  // 部分引导（core 三步，与 audit 同源；存储后端单例不参与——脚本直连 S3，与
+  // storage.backend 当前值无涉，见模块注释）
+  await bootstrapCliCore();
 
   const s3opts = s3OptionsFromSettings();
   const missing = missingS3Settings();

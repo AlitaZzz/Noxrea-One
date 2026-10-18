@@ -17,15 +17,11 @@
  *
  * 用法：npm run storage:audit；发现异常时退出码 1（可脚本化感知）。
  */
-import { loadConfig } from "@server/core/config";
-import { ensureLocalMigrations, prisma } from "@server/core/database/client";
-import { getSetting, initSettings } from "@server/core/settings";
+import { prisma } from "@server/core/database/client";
+import { getSetting } from "@server/core/settings";
+import { bootstrapCliStorage } from "./cli-bootstrap.mts";
 import { isStorageKey } from "@noxrea/shared/url";
-import {
-  buildStorageKey,
-  getStorageBackend,
-  initStorageBackend,
-} from "@server/services/storage/service";
+import { buildStorageKey, getStorageBackend } from "@server/services/storage/service";
 import { STAGING_MAX_AGE_MS } from "@server/services/storage/upload-direct";
 import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "@server/services/storage/backend";
 
@@ -33,12 +29,7 @@ import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "@server/services/storage/
 const AUDIT_COUNTED_PREFIXES = [...DERIVED_ROOT_PREFIXES, "_tmp/"] as const;
 
 async function main(): Promise<void> {
-  // 与 bootstrap 同序的存储依赖引导（不含 gateway / GC / tmp 清理，见模块注释）
-  loadConfig();
-  await ensureLocalMigrations();
-  await initSettings();
-  initStorageBackend();
-  await getStorageBackend().probe?.();
+  await bootstrapCliStorage();
   const backend = getStorageBackend();
 
   const objects = await backend.list("");

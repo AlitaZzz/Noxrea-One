@@ -1,0 +1,7 @@
+rg: proxy|trustProxy|proxy|helmet|origin|SameSite|sameSite|jwt|JWT|session|cookie|rateLimit|rate-limit|rate: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: limiter|direct: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: upload|directUpload|upload/direct|presign|signedUrl|path: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: traversal|\.\.|sendFile|createReadStream|fetch\(|axios|http\.request|https\.request|new: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: URL\(": 系统找不到指定的路径。 (os error 3)
+rg: web/next.config.*: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: web/src/lib/proxy.ts: 系统找不到指定的文件。 (os error 2)

@@ -24,6 +24,7 @@
     "prisma:generate": "prisma generate",
     "db:migrate:new": "tsx scripts/db/author-migration.mts",
     "storage:audit": "tsx --env-file=.env scripts/storage/audit.mts",
+    "storage:gc": "tsx --env-file=.env scripts/storage/gc.mts",
     "storage:migrate": "tsx --env-file=.env scripts/storage/migrate.mts",
     "postinstall": "prisma generate"
   },
