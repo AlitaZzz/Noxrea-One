@@ -6,8 +6,9 @@
  * 与同一套临时目录生命周期、错误映射，历史上各自复制粘贴，校验细节逐渐漂移。
  * 本工厂把这条链路收敛为单一实现，路由只声明 schema、源键取法与业务执行体。
  *
- * 归属校验：存储键格式为 {userId}/{hash[:2]}/{hash}{ext}，首段即属主；
- * 源键必须属于当前登录用户（_sprite/_proxy/_cache 等派生物与他人的文件一律 403）。
+ * 归属校验：与 files 读路由共用同一解析器（ownership.ts，specs/file-access-ownership.md
+ * 规则 3）——源键解析不出属主（畸形/非托管命名空间）或属主非当前用户一律 403；
+ * 本人派生/暂存键内嵌自身属主，放行。
  *
  * 统一错误码（media.*）：
  * - 源文件不存在 → 404 media.source_not_found
@@ -27,6 +28,7 @@ import { StorageTraversalError } from "@server/services/storage/backend";
 import { computeFileHash } from "@server/services/storage/hash";
 import { buildFileUrl, buildStorageKey, getStorageBackend } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
+import { isKeyOwner } from "@server/services/storage/ownership";
 import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
 import { failClientDisconnected, failCode } from "@server/core/response";
@@ -82,12 +84,6 @@ export interface MediaEditRouteOptions<T> {
   /** 路由特有的错误映射，返回 Response 时优先采用；返回 undefined 走默认映射 */
   mapError?: (err: unknown) => Response | undefined;
   run: (ctx: MediaEditContext<T>) => Promise<Response>;
-}
-
-/** 源存储键是否属于该用户（键首段为属主 userId） */
-function keyBelongsTo(storageKey: string, userId: number): boolean {
-  const owner = storageKey.split("/", 1)[0];
-  return owner === String(userId);
 }
 
 /**
@@ -180,8 +176,10 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
 
     const sourceKey = opts.resolveKey(parsed.data);
 
-    // 归属防护：源键必须属于当前用户（他人文件与派生物一律拒绝）
-    if (!keyBelongsTo(sourceKey, auth.user.id)) {
+    // 归属防护（specs/file-access-ownership.md 规则 3，与 files 读路由、avatarKey
+    // 接受边界共用同一判定）：源键无归属（畸形/非托管命名空间，fail-closed）或
+    // 属主非当前用户 → 403。本人的派生/暂存键内嵌自身属主，放行（操作自己的数据）
+    if (!isKeyOwner(sourceKey, auth.user.id)) {
       return failCode(403, "files.access_denied");
     }
 

@@ -7,16 +7,25 @@
 
 import type { Readable } from "stream";
 
-import { isStorageKey } from "@noxrea/shared/url";
+import { isStorageKey, storageKeyStem } from "@noxrea/shared/url";
 
 /** 直传在途暂存命名空间（staging/{userId}/{uuid}，归属编码在 key 里）；直传、staging 清扫、迁移/审计分类共用 */
 export const STAGING_PREFIX = "staging/";
 
 /**
+ * staging key 严格形态：{prefix}{userId}/{uuid-v4}。
+ * 直传 ticket 校验与归属解析（ownership.ts）共用同一形态知识，防止两份拷贝漂移。
+ */
+export const STAGING_KEY_PATTERN = new RegExp(
+  `^${STAGING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
+);
+
+/**
  * 派生产物命名空间前缀（本地与对象存储同构；迁移两侧枚举分类与审计计数共用）。
  * `_tmp` 是工作区临时区，不属对象命名空间，不在此列（审计计数另行并入）。
  * 注：delete 派生联动（listDerivedArtifactKeys）只按 stem 枚举 `_cache`/`_posters`，
- * 不经此前缀常量——_sprite/_proxy 文件名由源键单向哈希派生，无法按源键枚举。
+ * 不经此前缀常量——_sprite/_proxy 旧形态为单向哈希文件名无法枚举；新形态（specs/file-access-ownership.md
+ * 规则 7）内嵌源键后已可枚举，纳入联动为后续可选项，TTL 清扫兜底不变。
  */
 export const DERIVED_ROOT_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/"] as const;
 
@@ -100,7 +109,8 @@ export class StorageTraversalError extends Error {
 /**
  * 业务规则 9 的枚举半边（接口级规则，各后端共享不变量：「派生产物只挂内容寻址 key」）：
  * 源 key 的派生产物——`_cache` / `_posters` 下以 `/<stem>.webp` 结尾的对象。删除力学（含空目录回收）由各后端自理；
- * `_sprite` / `_proxy` 文件名由源键单向哈希派生、无法反查，不在此列，由 TTL 清扫兜底。
+ * `_sprite` / `_proxy` 新形态（specs/file-access-ownership.md 规则 7）内嵌源键后同样可枚举，
+ * 纳入删除联动为后续可选项，当前仍由 TTL 清扫兜底。
  */
 export async function listDerivedArtifactKeys(
   backend: StorageBackend,
@@ -110,7 +120,7 @@ export async function listDerivedArtifactKeys(
   // staging 清扫等逐 key 删除不再为每个 key 付两次全前缀 list 的流量。
   // （会话内对 staging key ?w= 生成的缓存条目属可再派生数据，由 TTL 清扫兜底，不丢内容。）
   if (!isStorageKey(key)) return [];
-  const stem = key.replace(/\.[^.]+$/, "");
+  const stem = storageKeyStem(key);
   const hits: string[] = [];
   for (const root of ["_cache", "_posters"]) {
     for (const entry of await backend.list(`${root}/`)) {

@@ -9,18 +9,19 @@
  * 视频代理再逐时间点 seek，产物是 MB 级且抽帧更慢。因此雪碧图与
  * /api/files/video-proxy 的 scrub 代理是两套独立产物，各司其职。
  *
- * 雪碧图按「源键 + 格宽 + 帧数」派生文件名，生成一次后长期复用。
+ * 雪碧图文件名内嵌源键并携带帧数与参数版本（`_sprite/{源键去ext}_c{帧数}v{版本}.webp`），
+ * 生成一次后长期复用；归属可按内嵌源键解析（specs/file-access-ownership.md）。
  */
 import { Hono } from "hono";
 import { z } from "zod";
 import { createFrameSprite } from "@server/services/storage/video-frames";
 import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ensureArtifact } from "@server/services/storage/artifact";
+import { spriteKeyOf } from "@server/services/storage/derived-keys";
 import { buildFileUrl } from "@server/services/storage/service";
 import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
-import { createHash } from "crypto";
 
 const frameSpriteSchema = z.object({
   video_key: z.string().min(1),
@@ -85,12 +86,10 @@ router.post(
       const count = clamp(Math.ceil(duration / TARGET_SEC_PER_FRAME), MIN_FRAMES, MAX_FRAMES);
       const fps = meta?.fps ?? null;
 
-      // 图名由源键、格宽与帧数共同派生：格宽与帧数并入哈希后，调整参数会自动生成
-      // 新图，不会命中旧规格的缓存
-      const spriteKey = `_sprite/${createHash("sha1")
-        .update(`${sourceKey}|${CELL_WIDTH}|${count}|v${SPRITE_VERSION}`)
-        .digest("hex")
-        .slice(0, 32)}.webp`;
+      // 图名内嵌源键并携带帧数与参数版本（_c{count}v{N}）：调整任一参数自动生成
+      // 新图，不命中旧规格缓存；构造与解析同址于 derived-keys，归属可解析
+      // （specs/file-access-ownership.md 规则 7）
+      const spriteKey = spriteKeyOf(sourceKey, count, SPRITE_VERSION);
 
       // 顺带做一次低频清理，不阻塞本次请求
       void cleanupStaleDerived("_sprite/", SPRITE_TTL_MS);

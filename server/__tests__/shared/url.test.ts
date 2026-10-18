@@ -11,6 +11,8 @@ import {
   isExternalFileUrl,
   isFileRefValue,
   isStorageKey,
+  STORAGE_KEY_STEM_PATTERN,
+  storageKeyStem,
 } from "@noxrea/shared/url";
 
 const HASH_A = "a".repeat(64);
@@ -56,5 +58,34 @@ describe("isFileRefValue（入库值域：key 或外部 http(s) URL）", () => {
     expect(isExternalFileUrl("HTTPS://EXAMPLE.COM/A.PNG")).toBe(true);
     expect(isExternalFileUrl("data:image/png;base64,AAAA")).toBe(false);
     expect(isExternalFileUrl(key(HASH_A))).toBe(false);
+  });
+});
+
+describe("整键与 stem 模式一致性（hash 对片段单源派生，防双份正则漂移）", () => {
+  const H = "b".repeat(64);
+
+  it("内容键整键与 stem 形态互相归一，hash 提取与 stem 捕获组一致", () => {
+    for (const ext of ["", ".png", ".abcdefghi"]) {
+      const full = `7/${H.slice(0, 2)}/${H}${ext}`;
+      const stem = `7/${H.slice(0, 2)}/${H}`;
+      expect(isStorageKey(full)).toBe(true);
+      expect(STORAGE_KEY_STEM_PATTERN.test(storageKeyStem(full))).toBe(true);
+      // stem 捕获组（userId, hash2, hash）与 hashFromStorageKey 同源一致
+      expect(STORAGE_KEY_STEM_PATTERN.exec(stem)?.[3]).toBe(H);
+      expect(hashFromStorageKey(full)).toBe(H);
+    }
+  });
+
+  it("非法段在整键与 stem 两种形态下同样拒绝", () => {
+    for (const bad of [
+      `7/zz/${H}.png`, // hash[:2] 非 hex
+      `7/aa/${"g".repeat(64)}`, // hash 段非 hex
+      `7/aa/${H.slice(1)}`, // hash 不足 64 位
+      "staging/7/123e4567-e89b-12d3-a456-426614174000", // staging 不是内容键
+      `_cache/320/7/aa/${H}.webp`, // 派生 key 不是内容键
+    ]) {
+      expect(isStorageKey(bad), bad).toBe(false);
+      expect(STORAGE_KEY_STEM_PATTERN.test(storageKeyStem(bad)), bad).toBe(false);
+    }
   });
 });

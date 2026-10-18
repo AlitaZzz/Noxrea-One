@@ -32,6 +32,10 @@ import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 const USER_ID = 3;
+// 归属校验（specs/file-access-ownership.md）要求源键为严格形态：规范内容 key
+const HASH = "ab".repeat(32);
+const HASH_MISSING = "cd".repeat(32);
+const contentKey = (userId: number, hash = HASH) => `${userId}/${hash.slice(0, 2)}/${hash}.png`;
 const schema = z.object({ video_key: z.string().min(1) });
 
 type Ctx = MediaEditContext<{ video_key: string }>;
@@ -81,8 +85,9 @@ const post = (app: Hono, body: unknown) =>
   });
 
 async function writeSource(userId = 3): Promise<void> {
-  await fs.mkdir(path.join(root, `${userId}/ab`), { recursive: true });
-  await fs.writeFile(path.join(root, `${userId}/ab/ok.png`), "x");
+  const key = contentKey(userId);
+  await fs.mkdir(path.dirname(path.join(root, key)), { recursive: true });
+  await fs.writeFile(path.join(root, key), "x");
 }
 
 describe("createMediaEditRoute 前置链路", () => {
@@ -97,19 +102,33 @@ describe("createMediaEditRoute 前置链路", () => {
   });
 
   it("源键不属于当前用户时 403（归属校验）", async () => {
-    const res = await post(buildApp(vi.fn()), { video_key: "999/ab/hash.png" });
+    const res = await post(buildApp(vi.fn()), { video_key: contentKey(999) });
     expect(res.status).toBe(403);
     expect(await errorOf(res)).toBe("files.access_denied");
   });
 
-  it("源键首段合法但解析后逃出存储根时 403（穿越校验）", async () => {
-    const res = await post(buildApp(vi.fn()), { video_key: "3/../../outside.png" });
-    expect(res.status).toBe(403);
-    expect(await errorOf(res)).toBe("files.invalid_path");
+  it("解析不出属主的畸形 key（含穿越形态）一律 403（fail-closed）", async () => {
+    // 严格形态 key 不可能包含 ..：穿越/畸形键在归属处即被拒，到不了后端穿越守卫
+    for (const key of ["3/../../outside.png", "3/ab/notahash.png", "_unknown/3/foo"]) {
+      const res = await post(buildApp(vi.fn()), { video_key: key });
+      expect(res.status, key).toBe(403);
+      expect(await errorOf(res), key).toBe("files.access_denied");
+    }
+  });
+
+  it("本人派生 key（内嵌自身属主）放行", async () => {
+    const derivedKey = `_cache/100/${contentKey(USER_ID).replace(/\.png$/, "")}.webp`;
+    await fs.mkdir(path.dirname(path.join(root, derivedKey)), { recursive: true });
+    await fs.writeFile(path.join(root, derivedKey), "x");
+
+    const run = vi.fn(async ({ c, sourceKey }: Ctx) => c.json({ sourceKey }));
+    const res = await post(buildApp(run), { video_key: derivedKey });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { sourceKey: string }).sourceKey).toBe(derivedKey);
   });
 
   it("源文件不存在时 404", async () => {
-    const res = await post(buildApp(vi.fn()), { video_key: "3/ab/missing.png" });
+    const res = await post(buildApp(vi.fn()), { video_key: contentKey(USER_ID, HASH_MISSING) });
     expect(res.status).toBe(404);
     expect(await errorOf(res)).toBe("media.source_not_found");
   });
@@ -124,12 +143,12 @@ describe("createMediaEditRoute 前置链路", () => {
       expect(await tmpDir()).toBe(dir);
       return c.json({ ok: true });
     });
-    const res = await post(buildApp(run), { video_key: "3/ab/ok.png" });
+    const res = await post(buildApp(run), { video_key: contentKey(USER_ID) });
 
     expect(res.status).toBe(200);
     const ctx = run.mock.calls[0][0];
-    expect(ctx.sourceKey).toBe("3/ab/ok.png");
-    expect(ctx.sourceInput).toBe(path.resolve(root, "3/ab/ok.png"));
+    expect(ctx.sourceKey).toBe(contentKey(USER_ID));
+    expect(ctx.sourceInput).toBe(path.resolve(root, contentKey(USER_ID)));
     expect(ctx.userId).toBe(USER_ID);
   });
 
@@ -139,7 +158,7 @@ describe("createMediaEditRoute 前置链路", () => {
       await fs.writeFile(path.join(await tmpDir(), "out.bin"), "y");
       return c.json({ ok: true });
     });
-    await post(buildApp(run), { video_key: "3/ab/ok.png" });
+    await post(buildApp(run), { video_key: contentKey(USER_ID) });
 
     expect(await fs.readdir(path.join(root, "_tmp"))).toEqual([]);
   });
@@ -149,7 +168,7 @@ describe("createMediaEditRoute 前置链路", () => {
     await fs.rm(path.join(root, "_tmp"), { recursive: true, force: true });
     const run = vi.fn(async ({ c }: Ctx) => c.json({ ok: true }));
 
-    expect((await post(buildApp(run), { video_key: "3/ab/ok.png" })).status).toBe(200);
+    expect((await post(buildApp(run), { video_key: contentKey(USER_ID) })).status).toBe(200);
     await expect(fs.access(path.join(root, "_tmp"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
@@ -158,12 +177,11 @@ describe("createMediaEditRoute 请求次数限流（specs/media-processing-concu
   // 独立用户与源文件：与前面用例的 user 3 共享同一限流键会互相消耗额度，
   // 源键归属也必须与请求者一致（否则 403 先于限流触发）
   const RATE_LIMIT_USER = 42;
-  const RATE_LIMIT_KEY = "42/ab/ok.png";
+  const RATE_LIMIT_KEY = contentKey(RATE_LIMIT_USER);
 
   beforeEach(async () => {
     mocks.authenticate.mockResolvedValue({ user: { id: RATE_LIMIT_USER } });
-    await fs.mkdir(path.join(root, "42/ab"), { recursive: true });
-    await fs.writeFile(path.join(root, "42/ab/ok.png"), "x");
+    await writeSource(RATE_LIMIT_USER);
   });
 
   it("产出类编辑超过 20 次/60 秒返回 429，带 Retry-After 并禁止缓存", async () => {
@@ -197,7 +215,7 @@ describe("createMediaEditRoute 错误映射", () => {
   // 独立用户与源文件：限流键按「业务名 + userId」隔离，避免与其他 describe
   // 共享 user 3 的 20 次/60 秒窗口（其计数已贴近上限）
   const ERROR_USER = 5;
-  const ERROR_KEY = "5/ab/ok.png";
+  const ERROR_KEY = contentKey(ERROR_USER);
 
   beforeEach(async () => {
     mocks.authenticate.mockResolvedValue({ user: { id: ERROR_USER } });
@@ -255,7 +273,7 @@ describe("createMediaEditRoute 错误映射", () => {
     mocks.authenticate.mockResolvedValue({
       error: Response.json({ error: "auth.token_invalid" }, { status: 401 }),
     });
-    const res = await post(buildApp(vi.fn()), { video_key: "3/ab/ok.png" });
+    const res = await post(buildApp(vi.fn()), { video_key: contentKey(3) });
     expect(res.status).toBe(401);
   });
 });

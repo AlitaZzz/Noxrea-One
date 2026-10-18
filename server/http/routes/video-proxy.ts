@@ -14,7 +14,8 @@
  * 转出的代理天然只含可解码前缀，与雪碧图收敛后的时长（见 probeVideoIntegrity）
  * 一致，因此这里不做额外校验。
  *
- * 代理按「源键 + 宽度」派生文件名，生成一次后长期复用；成片抽帧仍走原视频。
+ * 代理文件名内嵌源键并携带宽度与参数版本（`_proxy/{源键去ext}_w{宽度}v{版本}.mp4`），
+ * 生成一次后长期复用；成片抽帧仍走原视频。归属可按内嵌源键解析（specs/file-access-ownership.md）。
  * v3：宽度从 720 降到 480——刻意压低代理画质，模糊即可肉眼分辨当前播放源。
  */
 import { Hono } from "hono";
@@ -22,12 +23,12 @@ import { z } from "zod";
 import { createScrubProxy } from "@server/services/storage/video-frames";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ensureArtifact } from "@server/services/storage/artifact";
+import { proxyKeyOf } from "@server/services/storage/derived-keys";
 import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
 import { mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { buildFileUrl } from "@server/services/storage/service";
 import { ok } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
-import { createHash } from "crypto";
 
 const videoProxySchema = z.object({
   video_key: z.string().min(1),
@@ -68,9 +69,10 @@ router.post(
         ? Math.min(PROXY_WIDTH, meta.width)
         : PROXY_WIDTH;
 
-      // 代理名由源键与宽度共同派生：同一视频反复打开面板直接命中缓存；
-      // 宽度并入哈希后，调整参数会自动生成新代理，不会命中旧尺寸的缓存
-      const proxyKey = `_proxy/${createHash("sha1").update(`${sourceKey}|${width}|v${PROXY_VERSION}`).digest("hex").slice(0, 32)}.mp4`;
+      // 代理名内嵌源键并携带宽度与参数版本（_w{width}v{N}）：同一视频反复打开面板
+      // 直接命中缓存；宽度或版本变化自动生成新代理，不命中旧缓存；构造与解析同址
+      // 于 derived-keys，归属可解析（specs/file-access-ownership.md 规则 7）
+      const proxyKey = proxyKeyOf(sourceKey, width, PROXY_VERSION);
       const fps = meta?.fps ?? null;
 
       // 顺带做一次低频清理，不阻塞本次请求

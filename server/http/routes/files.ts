@@ -6,7 +6,9 @@ import { Hono } from "hono";
 import { getResizedWebP, getVideoPosterWebP } from "@server/services/storage/resize-cache";
 import { StorageTraversalError } from "@server/services/storage/backend";
 import { getStorageBackend } from "@server/services/storage/service";
+import { isKeyOwner } from "@server/services/storage/ownership";
 import { failCode } from "@server/core/response";
+import { logEvent } from "@server/core/logger/utils";
 import { getSetting } from "@server/core/settings";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import { verifyFileUrlSignature } from "@server/services/storage/file-url-signature";
@@ -44,7 +46,19 @@ router.get("/api/files/*", async (c) => {
     return auth.error;
   }
 
-  // 路径穿越防护（鉴权之后：key 形态的 403 信息只暴露给通过凭据校验的调用方）
+  // 归属防护（specs/file-access-ownership.md 业务规则 1/2）：会话凭据要求 key 归属
+  // 当前用户；签名 URL 是签发侧授权的能力凭据，不叠加归属比对。拒绝（含 key 结构
+  // 解析不出属主的畸形 key，fail-closed）与「对象不存在」同响应，不暴露归属差异；
+  // 置于穿越检查与 w= 缩放之前——无权请求不触发媒体生成，穿越键也解析不出属主
+  if (!("error" in auth)) {
+    if (!isKeyOwner(requestedKey, auth.user.id)) {
+      logEvent("files", { level: "warn", stage: "ownership_denied", userId: auth.user.id, key: requestedKey });
+      return failCode(404, "files.file_not_found");
+    }
+  }
+
+  // 路径穿越防护（鉴权之后：key 形态的 403 信息只暴露给通过凭据校验的调用方；
+  // 会话路径下穿越键已在归属守卫被 404 吸收，此检查服务签名路径）
   const pathSegments = requestedKey.split("/");
   if (pathSegments.some((seg) => seg.includes(".."))) {
     return failCode(403, "files.invalid_path");

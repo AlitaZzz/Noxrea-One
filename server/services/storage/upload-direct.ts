@@ -24,12 +24,8 @@ import { persistFileObject } from "./persist";
 import { probeUploadVideo, type VideoUploadWarning } from "./media-probe";
 import { createXmlContentDetector } from "./xml-content";
 import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
-import { supportsDirectUpload, STAGING_PREFIX } from "./backend";
+import { supportsDirectUpload, STAGING_PREFIX, STAGING_KEY_PATTERN } from "./backend";
 
-/** staging key 形态校验（由 STAGING_PREFIX 常量拼装，前缀调整不漂移）：{prefix}{userId}/{uuid} */
-const STAGING_KEY_RE = new RegExp(
-  `^${STAGING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
-);
 /** staging 超龄清扫阈值：完成流程很短，24h 足以覆盖一切中断场景 */
 export const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -127,7 +123,7 @@ export async function completeDirectUpload(
     throw new UploadDirectError(409, "upload.direct_unavailable");
   }
 
-  const match = STAGING_KEY_RE.exec(input.stagingKey);
+  const match = STAGING_KEY_PATTERN.exec(input.stagingKey);
   if (!match || Number(match[1]) !== userId) {
     throw new UploadDirectError(404, "upload.staging_missing");
   }

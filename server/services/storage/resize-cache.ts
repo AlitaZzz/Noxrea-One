@@ -11,6 +11,7 @@
 import path from "path";
 import { createReadStream, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
+import { cacheKeyOf, posterMasterKey } from "./derived-keys";
 import { acquireMediaFile } from "./media-source";
 import { logEvent } from "@server/core/logger/utils";
 import { ensureArtifact } from "./artifact";
@@ -34,14 +35,6 @@ export function normalizeResizeWidth(width: number): number {
     if (width <= tier) return tier;
   }
   return RESIZE_WIDTH_TIERS[RESIZE_WIDTH_TIERS.length - 1];
-}
-
-function cacheKeyOf(storageKey: string, tier: number): string {
-  return `_cache/${tier}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
-}
-
-function posterMasterKey(storageKey: string): string {
-  return `_posters/v${POSTER_VERSION}/${storageKey.replace(/\.[^.]+$/, "")}.webp`;
 }
 
 /**
@@ -111,7 +104,7 @@ export async function getVideoPosterWebP(
  */
 export async function ensureVideoMasterPoster(storageKey: string): Promise<void> {
   await ensureArtifact({
-    key: posterMasterKey(storageKey),
+    key: posterMasterKey(storageKey, POSTER_VERSION),
     produce: (tmpPath, genSignal) => producePosterMaster(storageKey, tmpPath, genSignal),
   });
 }
@@ -167,7 +160,7 @@ async function producePosterTier(
   tier: number,
   signal: AbortSignal
 ): Promise<void> {
-  const masterKey = posterMasterKey(storageKey);
+  const masterKey = posterMasterKey(storageKey, POSTER_VERSION);
   await ensureArtifact({
     key: masterKey,
     signal,

@@ -153,6 +153,34 @@ describe("updateUser 头像账本同步（真实 PGlite 库）", () => {
     expect(await ledgerRow(u.id, H1)).toMatchObject({ count: 1 });
     expect((await objectRow(u.id, H1))?.refCount).toBe(1);
   });
+
+  it("他人命名空间 key（内嵌属主 ≠ 当前用户）：fail-closed 拒绝且零变更", async () => {
+    const u = await setupUserWithObjects();
+    await updateUser(u.id, { avatarKey: u.key1 });
+
+    const [, pair, hash] = u.key1.split("/");
+    const foreignKey = `999/${pair}/${hash}`;
+    await expect(updateUser(u.id, { avatarKey: foreignKey })).rejects.toBeInstanceOf(
+      UserAvatarKeyError,
+    );
+
+    expect((await prisma!.user.findUnique({ where: { id: u.id } }))?.avatarKey).toBe(u.key1);
+    expect(await ledgerRow(u.id, H1)).toMatchObject({ count: 1 });
+  });
+
+  it("key 形态合法但对象行缺失：fail-closed 拒绝，不造 GC 不可见惰性聚合行", async () => {
+    const u = await setupUserWithObjects();
+    const ghostHash = "d".repeat(64);
+    const ghostKey = `${u.id}/${ghostHash.slice(0, 2)}/${ghostHash}.png`;
+
+    await expect(updateUser(u.id, { avatarKey: ghostKey })).rejects.toBeInstanceOf(
+      UserAvatarKeyError,
+    );
+
+    // 事务整体回滚：user 行未落 ghost key，账本零写入
+    expect((await prisma!.user.findUnique({ where: { id: u.id } }))?.avatarKey).toBeNull();
+    expect(await prisma!.fileRef.count({ where: { userId: u.id } })).toBe(0);
+  });
 });
 
 describe("存量回填迁移 × 运行时判别交叉验证（20261018160000）", () => {

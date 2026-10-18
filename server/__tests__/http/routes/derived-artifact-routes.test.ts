@@ -43,11 +43,29 @@ import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 const USER_ID = 3;
-const SOURCE_KEY = "3/ab/video.mp4";
+// 归属校验（specs/file-access-ownership.md）要求源键为严格形态
+const SOURCE_KEY = `3/ab/${"ab".repeat(32)}.mp4`;
 
 const routes = [
-  { name: "frame-sprite", router: spriteRouter, url: "/api/files/frame-sprite", generate: mocks.createSprite, outDir: "_sprite", failure: "frame_sprite.generation_failed" },
-  { name: "video-proxy", router: proxyRouter, url: "/api/files/video-proxy", generate: mocks.createProxy, outDir: "_proxy", failure: "video_proxy.generation_failed" },
+  {
+    name: "frame-sprite",
+    router: spriteRouter,
+    url: "/api/files/frame-sprite",
+    generate: mocks.createSprite,
+    outDir: "_sprite",
+    failure: "frame_sprite.generation_failed",
+    // 新形态产物文件名（specs/file-access-ownership.md 规则 7）：内嵌源键 + 参数段
+    artifactKeyRe: /^\/api\/files\/_sprite\/3\/ab\/[0-9a-f]{64}_c\d+v\d+\.webp$/,
+  },
+  {
+    name: "video-proxy",
+    router: proxyRouter,
+    url: "/api/files/video-proxy",
+    generate: mocks.createProxy,
+    outDir: "_proxy",
+    failure: "video_proxy.generation_failed",
+    artifactKeyRe: /^\/api\/files\/_proxy\/3\/ab\/[0-9a-f]{64}_w\d+v\d+\.mp4$/,
+  },
 ] as const;
 
 function deferred<T = void>() {
@@ -92,7 +110,7 @@ const post = (router: typeof spriteRouter, url: string, signal?: AbortSignal) =>
 const listDir = (dir: string) => fs.readdir(path.join(root, dir)).catch(() => [] as string[]);
 const jsonOf = async (res: Response) => (await res.json()) as { data?: { url: string }; error?: string };
 
-describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure }) => {
+describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure, artifactKeyRe }) => {
   it("首次请求生成并落盘，再次请求直接复用，临时文件不残留", async () => {
     generate.mockImplementation(async (_video: string, out: string) => { await fs.writeFile(out, "artifact"); });
 
@@ -101,7 +119,10 @@ describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure 
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect((await jsonOf(first)).data?.url).toBe((await jsonOf(second)).data?.url);
+    const firstUrl = (await jsonOf(first)).data?.url;
+    // 产物 key 为内嵌源键 + 参数段的新形态（构造端漂移在此被测试锁捕获）
+    expect(firstUrl).toMatch(artifactKeyRe);
+    expect((await jsonOf(second)).data?.url).toBe(firstUrl);
     expect(generate).toHaveBeenCalledTimes(1);
     expect(await listDir(outDir)).toHaveLength(1);
     expect(await listDir("_tmp")).toEqual([]);

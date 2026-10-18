@@ -7,6 +7,7 @@ import { isUniqueConstraintError } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
 import { hashFromStorageKey, resolveFileUrl } from "@noxrea/shared/url";
 import { replaceSourceFileRef } from "@server/services/storage/file-ref-ledger";
+import { isKeyOwner } from "@server/services/storage/ownership";
 
 /** 头像引用值域错误：avatarKey 须为存储 key 严格形态（与 updateMeSchema 同值域）。 */
 export class UserAvatarKeyError extends Error {
@@ -115,8 +116,20 @@ export async function updateUser(
     // 规则）：key → {hash:1}；null → 清空该来源；非 key 形态（含外部 URL）fail-closed
     // 抛错，不允许静默丢账本。avatarKey 未出现在更新里则不碰账本。
     if (avatarKey !== undefined) {
-      if (avatarKey !== null && !hashFromStorageKey(avatarKey)) {
-        throw new UserAvatarKeyError();
+      if (avatarKey !== null) {
+        const hash = hashFromStorageKey(avatarKey);
+        // 引用接受边界（specs/file-access-ownership.md 规则 5）：key 必须内嵌当前用户
+        // （归属，isKeyOwner 与读路由同一判定），且对象行已存在（存在性）——否则账本/
+        // 聚合要么写不进（无行可加）要么 upsert 出 GC 不可见的惰性聚合行。
+        // 与账本整替同事务，检查与写入同生共死
+        if (!hash || !isKeyOwner(avatarKey, id)) {
+          throw new UserAvatarKeyError();
+        }
+        const object = await tx.fileObject.findUnique({
+          where: { userId_hash: { userId: id, hash } },
+          select: { hash: true },
+        });
+        if (!object) throw new UserAvatarKeyError();
       }
       await replaceSourceFileRef(tx, { userId: id, sourceType: "avatar", sourceId: String(id) }, avatarKey);
     }

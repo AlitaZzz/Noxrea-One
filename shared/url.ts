@@ -24,6 +24,9 @@ export function stripTrailingSlash(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
+/** 内容键的 hash 对片段（`hash[:2]/hash`）：整键与 stem 两种形态由同一片段派生，防双份正则漂移 */
+const STORAGE_KEY_HASH_PAIR = "([0-9a-f]{2})/([0-9a-f]{64})";
+
 /**
  * 存储 key 的严格形态：`{userId}/{hash[:2]}/{hash}{ext}`。
  * userId 为十进制数字，hash 为 64 位十六进制 SHA256，扩展名可有可无（含前导点）。
@@ -31,7 +34,23 @@ export function stripTrailingSlash(url: string): string {
  * 派生物（DTO 与前端渲染时由 buildManagedFileUrl 构造），不得入库。
  * 捕获组供 hashFromStorageKey 提取 hash，key 段结构知识单点于此。
  */
-export const STORAGE_KEY_PATTERN = /^(?:\d+)\/([0-9a-f]{2})\/([0-9a-f]{64})(?:\.[A-Za-z0-9]+)?$/;
+export const STORAGE_KEY_PATTERN = new RegExp(
+  `^(?:\\d+)/${STORAGE_KEY_HASH_PAIR}(?:\\.[A-Za-z0-9]+)?$`,
+);
+
+/**
+ * 存储 key 去扩展名的 stem（`{userId}/{hash[:2]}/{hash}`）：派生 key 内嵌源键
+ * 与派生删除联动共用。扩展名结构知识单点于此。
+ */
+export function storageKeyStem(key: string): string {
+  return key.replace(/\.[^.]+$/, "");
+}
+
+/**
+ * 存储 key 的 stem 形态（内容键去掉扩展名，捕获组 1 = 属主 userId）：
+ * 派生 key 内嵌源键与归属解析共用；内容键整键经 storageKeyStem 归一后同判。
+ */
+export const STORAGE_KEY_STEM_PATTERN = new RegExp(`^(\\d+)/${STORAGE_KEY_HASH_PAIR}$`);
 
 /** 判断值是否为存储 key 严格形态（外部 URL、data: URL、blob: URL 均不匹配）。 */
 export function isStorageKey(value: unknown): value is string {
