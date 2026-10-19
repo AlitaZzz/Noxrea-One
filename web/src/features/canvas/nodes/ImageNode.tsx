@@ -37,6 +37,7 @@ import { useUploadProgress } from "@/features/canvas/upload/upload-progress-stor
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { fileRefUrl } from "@/lib/file-url";
 import { downloadManagedFile } from "@/lib/utils/download";
+import { formatBytes } from "@/lib/utils/format";
 import { canvasToBlob, computeNodeSize } from "@/lib/utils/image-utils";
 import { mediaAspect } from "@/lib/utils/media-utils";
 
@@ -52,6 +53,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const uploadProgress = useUploadProgress(id);
+  const uploadPct = uploadProgress?.phase === "uploading" ? uploadProgress.pct : null;
+  const uploadHashBytes = uploadProgress?.phase === "hashing" && uploadProgress.loadedBytes > 0
+    ? formatBytes(uploadProgress.loadedBytes)
+    : null;
   // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选。
   // 返回布尔原语，Zustand 默认 Object.is 比较，仅在选择数跨过阈值时才重渲染；
   // 用循环累加避免每次 nodes 变更都分配 filter 临时数组。
@@ -367,18 +372,16 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                 <CanvasImage nodeId={id} src={data.upload.previewUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/35 px-8">
-                {uploadProgress != null ? (
-                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                  </div>
-                ) : (
-                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
-                  </div>
-                )}
+                {/* 哈希/未开始阶段只有空轨道：确定态填充只随真实传输出现，进度永不回退 */}
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  {uploadPct != null && (
+                    <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadPct}%` }} />
+                  )}
+                </div>
                 <span className="text-sm text-white/60 tabular-nums">
-                  {t("common.uploading")}
-                  {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
+                  {uploadProgress?.phase === "hashing"
+                    ? t("common.verifying") + (uploadHashBytes ? ` · ${uploadHashBytes}` : "")
+                    : t("common.uploading") + (uploadPct != null ? ` ${Math.round(uploadPct)}%` : "")}
                 </span>
               </div>
             </div>

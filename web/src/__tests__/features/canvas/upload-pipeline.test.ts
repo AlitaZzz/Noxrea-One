@@ -16,7 +16,12 @@ import { retryNodeUpload, runMediaUpload } from "@/features/canvas/upload";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import { changeSession } from "@/lib/session-lifecycle";
 import { loadUploadLimits } from "@/lib/upload-formats";
-import { uploadBatchWithRetry, type UploadErrorInfo, uploadWithRetry } from "@/lib/utils/upload";
+import {
+  uploadBatchWithRetry,
+  type UploadErrorInfo,
+  type UploadProgressValue,
+  uploadWithRetry,
+} from "@/lib/utils/upload";
 
 // ── 隔离浏览器 / 副作用依赖：本测试只验证「管道 ↔ 画布状态」的交互 ──
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (k: string) => k, exists: () => true } }));
@@ -260,7 +265,7 @@ describe("上传管道的失败与落库行为", () => {
   });
 
   it("批次进度按批内下标转发（归因由模式层完成）", async () => {
-    let captured: ((index: number, pct: number) => void) | undefined;
+    let captured: ((index: number, progress: UploadProgressValue) => void) | undefined;
     vi.mocked(uploadBatchWithRetry).mockImplementation(async (_files, onProgress) => {
       captured = onProgress;
       return [
@@ -279,15 +284,16 @@ describe("上传管道的失败与落库行为", () => {
     });
     await settled;
 
-    // 模式层已归因到单文件（relay 按 FormData 区间 / direct 按工作量），管线只按下标转发
-    captured?.(0, 100);
-    captured?.(1, 33);
-    expect(onProgress).toHaveBeenCalledWith(0, 100);
-    expect(onProgress).toHaveBeenCalledWith(1, 33);
+    // 模式层已归因到单文件并划分阶段（relay 按 FormData 区间 / direct 区分哈希与传输），
+    // 管线只按下标转发进度值本身
+    captured?.(0, { phase: "uploading", pct: 100 });
+    captured?.(1, { phase: "uploading", pct: 33 });
+    expect(onProgress).toHaveBeenCalledWith(0, { phase: "uploading", pct: 100 });
+    expect(onProgress).toHaveBeenCalledWith(1, { phase: "uploading", pct: 33 });
     // 模式层重试前的重置：逐文件归零
-    captured?.(0, 0);
-    captured?.(1, 0);
-    expect(onProgress).toHaveBeenLastCalledWith(1, 0);
+    captured?.(0, { phase: "uploading", pct: 0 });
+    captured?.(1, { phase: "uploading", pct: 0 });
+    expect(onProgress).toHaveBeenLastCalledWith(1, { phase: "uploading", pct: 0 });
   });
 
   it("断网后未开始的批次不发送，剩余文件都结算为失败而非一直排队", async () => {

@@ -1,6 +1,6 @@
 /**
  * 直传批次（direct 模式）单测：模式分派、秒传短路、业务失败不重试、
- * 429 退避重试、direct_unavailable 清缓存、进度按工作量逐文件归因、source 透传。
+ * 429 退避重试、direct_unavailable 清缓存、进度按阶段逐文件归因、source 透传。
  */
 import { createHash } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,7 +148,7 @@ describe("直传批次 uploadBatchWithRetry(direct)", () => {
     expect(mocks.invalidateUploadLimits).toHaveBeenCalled();
   });
 
-  it("进度按工作量逐文件归因：哈希阶段 0→50%，PUT 按字节 50%→100%", async () => {
+  it("进度按阶段逐文件归因：哈希阶段报已读字节，PUT 阶段报传输百分比", async () => {
     stubApi(() => Promise.resolve(TICKET), () => Promise.resolve(COMPLETE));
     const files = [new File(["hello"], "a.png", { type: "image/png" }), new File(["hello"], "b.png", { type: "image/png" })];
     const onProgress = vi.fn();
@@ -163,15 +163,17 @@ describe("直传批次 uploadBatchWithRetry(direct)", () => {
     const results = await uploadBatchWithRetry(files, onProgress);
 
     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
-    // 每文件工作量 = 哈希 5B + PUT 5B = 10B：哈希完成即 50%，PUT 到 3B 为 (5+3)/10 = 80%；
-    // 若回归为「把百分比当字节」，80% 处会变成 650 一类的值，此断言即防线
-    const pctsOf = (index: number) => onProgress.mock.calls.filter(([i]) => i === index).map(([, pct]) => pct);
-    expect(pctsOf(0)).toContain(50);
-    expect(pctsOf(0)).toContain(80);
-    expect(pctsOf(1)).toContain(50);
-    expect(pctsOf(1)).toContain(80);
-    expect(pctsOf(0).at(-1)).toBe(100);
-    expect(pctsOf(1).at(-1)).toBe(100);
+    // 阶段契约：哈希阶段报 { hashing, 已读字节 }（含同步首报 0，UI 走不定态），
+    // PUT 阶段报 { uploading, 百分比 }——3/5 字节即 60%（pct 单位错位回归防线）
+    const valuesOf = (index: number) => onProgress.mock.calls.filter(([i]) => i === index).map(([, v]) => v);
+    expect(valuesOf(0)).toContainEqual({ phase: "hashing", loadedBytes: 0 });
+    expect(valuesOf(0)).toContainEqual({ phase: "hashing", loadedBytes: 5 });
+    expect(valuesOf(0)).toContainEqual({ phase: "uploading", pct: 60 });
+    expect(valuesOf(1)).toContainEqual({ phase: "hashing", loadedBytes: 0 });
+    expect(valuesOf(1)).toContainEqual({ phase: "hashing", loadedBytes: 5 });
+    expect(valuesOf(1)).toContainEqual({ phase: "uploading", pct: 60 });
+    expect(valuesOf(0).at(-1)).toEqual({ phase: "uploading", pct: 100 });
+    expect(valuesOf(1).at(-1)).toEqual({ phase: "uploading", pct: 100 });
   });
 
   it("PUT 网络中断：同 URL 同内容退避重试（spec 规则 6），不重开票据", async () => {

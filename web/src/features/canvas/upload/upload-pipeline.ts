@@ -52,6 +52,7 @@ import {
   uploadBatchWithRetry,
   UploadBusinessError,
   type UploadErrorInfo,
+  type UploadProgressValue,
   type UploadResult,
   type UploadSession,
   uploadWithRetry,
@@ -67,14 +68,14 @@ function nextVersion(): number {
 }
 
 interface ProgressReporter {
-  report: (progress: number) => void;
+  report: (progress: UploadProgressValue) => void;
   flush: () => void;
   cancel: () => void;
 }
 
 /** Coalesce transport progress so the canvas document is never updated per XHR event. */
 function createProgressReporter(nodeId: string, version: number): ProgressReporter {
-  let pending: number | null = null;
+  let pending: UploadProgressValue | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
   const flush = () => {
@@ -87,7 +88,8 @@ function createProgressReporter(nodeId: string, version: number): ProgressReport
   return {
     report(progress) {
       pending = progress;
-      if (progress === 0 || progress >= 100) {
+      // 传输起止即时落账（重置归零 / 完成补满）；阶段切换等其余更新合并进 100ms 窗口
+      if (progress.phase === "uploading" && (progress.pct === 0 || progress.pct >= 100)) {
         if (timer !== null) clearTimeout(timer);
         flush();
         return;
@@ -519,20 +521,20 @@ function splitRawUploadBatches(prepared: Prepared[], maxFiles: number, maxBytes:
 }
 
 /**
- * 上传一个批次：批次层已把进度归因到单文件（relay 按 FormData 区间、
- * direct 按哈希+PUT 工作量），这里按批内下标转发即可。
+ * 上传一个批次：批次层已把进度按阶段归因到单文件（relay 只有传输阶段，
+ * 按 FormData 字节区间归因；direct 区分哈希/传输两阶段），这里按批内下标转发。
  */
 async function uploadPreparedBatch(
   batch: Prepared[],
   source: "upload" | "derived",
   session: UploadSession,
-  onFileProgress: (p: Prepared, index: number, pct: number) => void,
+  onFileProgress: (p: Prepared, index: number, progress: UploadProgressValue) => void,
 ): Promise<PromiseSettledResult<UploadResult>[]> {
   return uploadBatchWithRetry(
     batch.map((p) => p.file),
-    (index, pct) => {
+    (index, progress) => {
       if (session.signal.aborted) return;
-      onFileProgress(batch[index], index, pct);
+      onFileProgress(batch[index], index, progress);
     },
     UPLOAD_MAX_RETRIES,
     source,
@@ -726,10 +728,10 @@ async function runUploads(
         if (targetId) useUploadProgressStore.getState().begin(targetId, p.version);
         return { targetId, reporter };
       });
-      const batchResults = await uploadPreparedBatch(batch, source, session, (p, i, pct) => {
-        plan.onProgress?.(p.itemIndex, pct);
+      const batchResults = await uploadPreparedBatch(batch, source, session, (p, i, progress) => {
+        plan.onProgress?.(p.itemIndex, progress);
         const { targetId, reporter } = reporters[i];
-        if (targetId && isCurrentUpload(findNode(targetId), p.version)) reporter?.report(pct);
+        if (targetId && isCurrentUpload(findNode(targetId), p.version)) reporter?.report(progress);
       });
       for (let i = 0; i < batch.length; i++) {
         const { targetId, reporter } = reporters[i];
@@ -819,10 +821,10 @@ export async function retryNodeUpload(nodeId: string): Promise<boolean> {
   try {
     const result = await uploadWithRetry(
       toFile(ctx.item),
-      (pct) => {
+      (progress) => {
         if (session.signal.aborted) return;
         if (!isCurrentUpload(findNode(nodeId), version)) return;
-        reporter.report(pct);
+        reporter.report(progress);
       },
       UPLOAD_MAX_RETRIES,
       ctx.source,

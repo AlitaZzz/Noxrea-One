@@ -33,7 +33,7 @@ import { useUploadProgress } from "@/features/canvas/upload/upload-progress-stor
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating } from "@/lib/constants";
 import { fileRefUrl } from "@/lib/file-url";
 import { downloadManagedFile } from "@/lib/utils/download";
-import { formatTime } from "@/lib/utils/format";
+import { formatBytes, formatTime } from "@/lib/utils/format";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import BusyOverlay from "./BusyOverlay";
@@ -48,6 +48,10 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const uploadProgress = useUploadProgress(id);
+  const uploadPct = uploadProgress?.phase === "uploading" ? uploadProgress.pct : null;
+  const uploadHashBytes = uploadProgress?.phase === "hashing" && uploadProgress.loadedBytes > 0
+    ? formatBytes(uploadProgress.loadedBytes)
+    : null;
   const { notification } = useAppFeedback();
   // src / duration 唯一真相是 data（撤销/清除整体替换 data，无需本地镜像与对账）
   const src = data.src || "";
@@ -230,18 +234,16 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
           <div className="relative h-full w-full flex flex-col items-center justify-center gap-2 px-8">
-            {uploadProgress != null ? (
-              <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-              </div>
-            ) : (
-              <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
-              </div>
-            )}
+            {/* 哈希/未开始阶段只有空轨道：确定态填充只随真实传输出现，进度永不回退 */}
+            <div className="w-3/4 h-1.5 rounded-full bg-muted overflow-hidden">
+              {uploadPct != null && (
+                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadPct}%` }} />
+              )}
+            </div>
             <span className="text-sm text-muted-foreground font-medium tabular-nums">
-              {t("common.uploading")}
-              {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
+              {uploadProgress?.phase === "hashing"
+                ? t("common.verifying") + (uploadHashBytes ? ` · ${uploadHashBytes}` : "")
+                : t("common.uploading") + (uploadPct != null ? ` ${Math.round(uploadPct)}%` : "")}
             </span>
           </div>
         ) : data.upload?.error ? (

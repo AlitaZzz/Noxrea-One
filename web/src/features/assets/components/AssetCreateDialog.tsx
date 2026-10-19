@@ -202,8 +202,11 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
       sink: { kind: "raw" },
       source: "upload",
       silent: true,
-      onProgress: (index, pct) => {
-        updateFile(uploadable[index].id, { status: "uploading", uploadProgress: pct });
+      onProgress: (index, progress) => {
+        // 哈希阶段不动环形进度（保持 0），传输阶段才推进百分比
+        if (progress.phase === "uploading") {
+          updateFile(uploadable[index].id, { status: "uploading", uploadProgress: progress.pct });
+        }
       },
     });
 

@@ -47,6 +47,7 @@
     "refAudioLabel": "Audio {{index}}",
     "assets": "Assets",
     "uploading": "Uploading...",
+    "verifying": "Verifying...",
     "generating": "Generating...",
     "enabled": "Enabled",
     "available": "Available (click to enable)",

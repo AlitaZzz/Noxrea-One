@@ -135,26 +135,31 @@ async function waitBackoff(session: UploadSession, attempt: number, retryAfterMs
   });
 }
 
+/** 逐文件进度值：哈希校验阶段（UI 走不定态，附已读字节数）与字节传输阶段（百分比） */
+export type UploadProgressValue =
+  | { phase: "hashing"; loadedBytes: number }
+  | { phase: "uploading"; pct: number };
+
 /**
  * 上传单个文件，网络错误自动重试。
- * - 网络错误 -> 重试，重试前通过 onProgress(0) 通知调用方重置进度
+ * - 网络错误 -> 重试，重试前通过 onProgress 重置传输进度
  * - 业务错误（code !== 200）-> 不重试，直接抛出 UploadBusinessError
  * - 鉴权错误（401）-> 不重试，直接抛出 UnauthorizedError（由全局处理器跳转登录）
  *
  * @param file       要上传的文件
- * @param onProgress 进度回调
+ * @param onProgress 进度回调（含阶段，见 UploadProgressValue）
  * @param maxRetries 最大重试次数（默认 1）
  * @param source     文件归属标记（upload=原始上传 / derived=画布加工派生），写入 file_object.source
  * @returns UploadResult 包含 url 和 key
  */
 export async function uploadWithRetry(
   file: File,
-  onProgress?: (pct: number) => void,
+  onProgress?: (progress: UploadProgressValue) => void,
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
 ): Promise<UploadResult> {
-  // 批次层契约是逐文件 (index, pct)：单文件入口适配为只回传 pct
-  const [result] = await uploadBatchWithRetry([file], onProgress ? (_index, pct) => onProgress(pct) : undefined, maxRetries, source);
+  // 批次层契约是逐文件 (index, progress)：单文件入口只回传自身的进度值
+  const [result] = await uploadBatchWithRetry([file], onProgress ? (_index, progress) => onProgress(progress) : undefined, maxRetries, source);
   if (result.status === "fulfilled") return result.value;
   throw result.reason;
 }
@@ -162,12 +167,13 @@ export async function uploadWithRetry(
 /**
  * 上传一个批次并按文件返回 PromiseSettledResult。
  * 模式分派后各自执行：传输层失败按退避重试；业务层单文件失败只影响自身。
- * 进度契约是逐文件 (index, pct)：归因由各模式用自己的真实语义完成
- * （relay 按 FormData 字节区间、direct 按哈希+PUT 工作量），批次层不猜 loaded 的含义。
+ * 进度契约是逐文件 (index, progress)：阶段划分与归因由各模式用自己的真实语义
+ * 完成（relay 只有传输阶段，按 FormData 字节区间归因；direct 区分哈希/传输
+ * 两阶段），批次层不解释进度值的含义。
  */
 export async function uploadBatchWithRetry(
   files: File[],
-  onProgress?: (index: number, pct: number) => void,
+  onProgress?: (index: number, progress: UploadProgressValue) => void,
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
   sessionOverride?: UploadSession,
@@ -190,14 +196,14 @@ export async function uploadBatchWithRetry(
 /** 批次上下文参数束：分派入口与两条模式路径共用 */
 interface BatchUploadParams {
   files: File[];
-  /** 逐文件进度：(批内下标, 该文件自己的百分比) */
-  onProgress?: (index: number, pct: number) => void;
+  /** 逐文件进度：(批内下标, 阶段化进度值) */
+  onProgress?: (index: number, progress: UploadProgressValue) => void;
   maxRetries: number;
   source?: "upload" | "derived";
   session: UploadSession;
 }
 
-/** 把 FormData 累计字节归因到单个文件：浏览器按 append 顺序发送各 part，该文件区间占其自身体积的百分比 */
+/** 把累计已传字节按区间归因到单个文件：[offset, offset+size) 内已传部分占该文件自身体积的百分比 */
 function filePctOf(loaded: number, size: number, offset: number): number {
   if (size <= 0) return 100;
   const uploaded = Math.min(Math.max(loaded - offset, 0), size);
@@ -218,7 +224,9 @@ async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettl
   }
   const reportAll = (loaded: number) => {
     if (!onProgress) return;
-    for (let i = 0; i < files.length; i++) onProgress(i, filePctOf(loaded, files[i].size, offsets[i]));
+    for (let i = 0; i < files.length; i++) {
+      onProgress(i, { phase: "uploading", pct: filePctOf(loaded, files[i].size, offsets[i]) });
+    }
   };
   let lastErr: unknown;
   const rejected = (reason: unknown): PromiseSettledResult<UploadResult>[] =>
@@ -391,9 +399,8 @@ async function directUploadFile(
 
 /**
  * direct 模式：逐文件独立上传（小并发池）。
- * 进度按工作量计量并归因到单文件：每文件工作量 = 哈希读一遍 + PUT 传一遍
- * （2×size），哈希阶段 0→50%、PUT 阶段 50%→100%——哈希是大文件直传的
- * 真实首阶段，只计传输会让进度条在哈希期间停在 0%。
+ * 进度按阶段归因到单文件：哈希校验阶段上报已读字节数（UI 走不定态），
+ * PUT 阶段上报传输百分比——进度条全程属于真实传输，哈希不再折算成百分比。
  */
 async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSettledResult<UploadResult>[]> {
   const { files, onProgress, maxRetries, source, session: currentSession } = params;
@@ -404,17 +411,15 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
 
   const runOne = async (index: number): Promise<void> => {
     let lastErr: unknown;
-    // 工作量进度：哈希已读字节 + 本次 PUT 已传字节；秒传（无 PUT）落账时直接补满
-    const fileWork = files[index].size * 2;
-    let hashDone = 0;
-    let putDone = 0;
-    const reportItem = () => {
-      onProgress?.(index, fileWork > 0 ? Math.round(((hashDone + putDone) / fileWork) * 100) : 100);
-    };
-    // 哈希每文件只算一次：重试不重算（逐块 signal 检查保证中止语义）
+    const size = files[index].size;
+    const reportItem = (progress: UploadProgressValue) => onProgress?.(index, progress);
+    // 哈希每文件只算一次：重试不重算（逐块 signal 检查保证中止语义）。
+    // 先同步报一次哈希初值：worker 池在 Promise.all 内同步起跑，该值与 store 的
+    // begin 初值（同为哈希态）同批渲染，不会闪出 0% 帧
+    reportItem({ phase: "hashing", loadedBytes: 0 });
     const hash = await computeFileSha256(files[index], {
       signal: currentSession.signal,
-      onProgress: (loaded) => { hashDone = loaded; reportItem(); },
+      onProgress: (loadedBytes) => reportItem({ phase: "hashing", loadedBytes }),
     });
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (isOffline()) {
@@ -425,9 +430,9 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
           session: currentSession,
           hash,
           source,
-          onPutProgress: (_pct, loaded) => { putDone = loaded; reportItem(); },
+          onPutProgress: (_pct, loaded) => reportItem({ phase: "uploading", pct: filePctOf(loaded, size, 0) }),
         });
-        onProgress?.(index, 100);
+        reportItem({ phase: "uploading", pct: 100 });
         results[index] = { status: "fulfilled", value };
         return;
       } catch (err) {
@@ -442,8 +447,7 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
         if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
         lastErr = err;
         if (attempt >= maxRetries) break;
-        putDone = 0;
-        reportItem();
+        reportItem({ phase: "uploading", pct: 0 });
         await waitBackoff(currentSession, attempt, err.retryAfterMs);
       }
     }

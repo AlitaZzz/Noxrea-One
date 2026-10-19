@@ -66,7 +66,7 @@ import { useUploadProgress } from "@/features/canvas/upload/upload-progress-stor
 import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { fileRefUrl, withManagedFileWidth } from "@/lib/file-url";
 import { downloadManagedFile } from "@/lib/utils/download";
-import { formatTime } from "@/lib/utils/format";
+import { formatBytes, formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, mediaAspect } from "@/lib/utils/media-utils";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
@@ -192,6 +192,10 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   const uploadProgress = useUploadProgress(id);
+  const uploadPct = uploadProgress?.phase === "uploading" ? uploadProgress.pct : null;
+  const uploadHashBytes = uploadProgress?.phase === "hashing" && uploadProgress.loadedBytes > 0
+    ? formatBytes(uploadProgress.loadedBytes)
+    : null;
   // 画布交互状态（连线 / 拖动让位 hover 预览用，真相源在 store 状态机）
   const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = useAppFeedback();
@@ -952,18 +956,16 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
               <video src={data.upload.previewUrl} crossOrigin="anonymous" muted playsInline className="absolute inset-0 w-full h-full object-cover" style={{ filter: "blur(24px)", animation: "breathe 3s ease-in-out infinite" }} />
             )}
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/35 px-8">
-              {uploadProgress != null ? (
-                <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
-                </div>
-              ) : (
-                <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
-                </div>
-              )}
+              {/* 哈希/未开始阶段只有空轨道：确定态填充只随真实传输出现，进度永不回退 */}
+              <div className="w-3/4 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                {uploadPct != null && (
+                  <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${uploadPct}%` }} />
+                )}
+              </div>
               <span className="text-sm text-white/70 font-medium tabular-nums">
-                {t("common.uploading")}
-                {uploadProgress != null ? ` ${Math.round(uploadProgress)}%` : ""}
+                {uploadProgress?.phase === "hashing"
+                  ? t("common.verifying") + (uploadHashBytes ? ` · ${uploadHashBytes}` : "")
+                  : t("common.uploading") + (uploadPct != null ? ` ${Math.round(uploadPct)}%` : "")}
               </span>
             </div>
           </div>

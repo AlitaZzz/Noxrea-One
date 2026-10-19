@@ -94,9 +94,9 @@ describe("uploadBatchWithRetry", () => {
 
     await uploadBatchWithRetry(files, onProgress);
 
-    // 4 字节批次：小文件 [0,1) 已传完，大文件 [1,4) 传了 1/3
-    expect(onProgress).toHaveBeenCalledWith(0, 100);
-    expect(onProgress).toHaveBeenCalledWith(1, 33);
+    // 4 字节批次：小文件 [0,1) 已传完，大文件 [1,4) 传了 1/3；relay 只有传输阶段
+    expect(onProgress).toHaveBeenCalledWith(0, { phase: "uploading", pct: 100 });
+    expect(onProgress).toHaveBeenCalledWith(1, { phase: "uploading", pct: 33 });
   });
 
   it("批次成功项缺少 URL 时按业务失败处理", async () => {

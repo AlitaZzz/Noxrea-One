@@ -6,7 +6,7 @@
  * 共用同一条管道：调用方只描述「待上传数据」与「落库策略（sink）」，
  * 管道负责探测尺寸、建占位、并发上传、进度回写、成功落库与失败回滚。
  */
-import type { UploadErrorInfo, UploadResult } from "@/lib/utils/upload";
+import type { UploadErrorInfo, UploadProgressValue, UploadResult } from "@/lib/utils/upload";
 
 /** 媒体类型：决定创建哪种画布节点 */
 export type MediaKind = "image" | "video" | "audio";
@@ -70,8 +70,8 @@ export interface UploadPlan {
   source?: "upload" | "derived";
   /** 为 true 时管道不弹任何提示，由调用方自行处理 */
   silent?: boolean;
-  /** 单文件进度回调（index 对应 plan.items 下标） */
-  onProgress?: (index: number, pct: number) => void;
+  /** 单文件进度回调（index 对应 plan.items 下标；进度值含阶段，见 UploadProgressValue） */
+  onProgress?: (index: number, progress: UploadProgressValue) => void;
 }
 
 export interface UploadSummary {
