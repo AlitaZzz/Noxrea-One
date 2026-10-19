@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
   list: vi.fn(),
   findUnique: vi.fn(),
+  aggregate: vi.fn(),
   persist: vi.fn(),
   probe: vi.fn(),
   getStorageBackend: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock("@server/core/config", () => ({
   }),
 }));
 vi.mock("@server/core/database/client", () => ({
-  prisma: { fileObject: { findUnique: mocks.findUnique } },
+  prisma: { fileObject: { findUnique: mocks.findUnique, aggregate: mocks.aggregate } },
 }));
 vi.mock("@server/core/logger", () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
@@ -79,6 +80,7 @@ beforeEach(() => {
   mocks.list.mockResolvedValue([]);
   mocks.stat.mockResolvedValue(null);
   mocks.findUnique.mockResolvedValue(null);
+  mocks.aggregate.mockResolvedValue({ _sum: { size: null } });
   mocks.persist.mockResolvedValue({ width: 10, height: 20, duration: null });
   mocks.probe.mockResolvedValue(undefined);
 });
@@ -162,6 +164,40 @@ describe("createUploadTicket", () => {
     expect(mocks.presignPut).not.toHaveBeenCalled();
   });
 
+  it("配额超限：409 quota_exceeded 携带用量上下文，无 staging 签发", async () => {
+    resetTestSettings({ "upload.max_file_mb": 1, "storage.quota.default_mb": 1, "storage.gc_dry_run": false });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: BigInt(1048576) } });
+    await expect(createUploadTicket(USER, input)).rejects.toMatchObject({
+      status: 409,
+      code: "upload.quota_exceeded",
+      ctx: { usedBytes: 1048576, quotaBytes: 1048576 },
+    });
+    expect(mocks.presignPut).not.toHaveBeenCalled();
+  });
+
+  it("配额边界相等（used + size == quota）放行签发", async () => {
+    resetTestSettings({ "upload.max_file_mb": 1, "storage.quota.default_mb": 1, "storage.gc_dry_run": false });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: BigInt(1048576 - 5) } });
+    const result = await createUploadTicket(USER, input);
+    expect(result.duplicate).toBe(false);
+  });
+
+  it("秒传命中不做配额判定：超限用户的既有内容永远可访问", async () => {
+    resetTestSettings({ "upload.max_file_mb": 1, "storage.quota.default_mb": 1, "storage.gc_dry_run": false });
+    mocks.findUnique.mockResolvedValueOnce({
+      userId: USER,
+      hash: input.hash,
+      ext: ".png",
+      size: 5n,
+      mimeType: "image/png",
+      width: 1,
+      height: 1,
+    });
+    const result = await createUploadTicket(USER, input);
+    expect(result.duplicate).toBe(true);
+    expect(mocks.aggregate).not.toHaveBeenCalled();
+  });
+
   it("未命中：签发 staging 预签名 PUT，MIME 白名单外由扩展名推导", async () => {
     const result = await createUploadTicket(USER, input);
     expect(result).toMatchObject({
@@ -201,6 +237,34 @@ describe("completeDirectUpload", () => {
       completeDirectUpload(USER, { stagingKey: STAGING, hash, name: "a.png" }),
     ).rejects.toMatchObject({ status: 413, code: "upload.file_too_large" });
     expect(mocks.delete).toHaveBeenCalledWith(STAGING);
+  });
+
+  it("配额权威复检：staging 真实字节数超限（票面失真申报的兜底）409 并清走 staging，不提升不落库", async () => {
+    // 申报 5 字节可通过票面预检（819205 ≤ 1MB），staging 实为 614400 字节：
+    // 819200 + 614400 > 1MB，以真实字节数为准拒绝
+    resetTestSettings({ "upload.max_file_mb": 1, "storage.quota.default_mb": 1, "storage.gc_dry_run": false });
+    mocks.stat.mockResolvedValueOnce({ size: 614400, mtimeMs: 1 });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: BigInt(819200) } });
+    await expect(
+      completeDirectUpload(USER, { stagingKey: STAGING, hash, name: "a.png" }),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "upload.quota_exceeded",
+      ctx: { usedBytes: 819200, quotaBytes: 1048576 },
+    });
+    expect(mocks.delete).toHaveBeenCalledWith(STAGING);
+    expect(mocks.copy).not.toHaveBeenCalled();
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+
+  it("配额拒绝路径 staging 清理失败不掩盖 409（cleanupStaging 留痕，超龄清扫兜底）", async () => {
+    resetTestSettings({ "upload.max_file_mb": 1, "storage.quota.default_mb": 1, "storage.gc_dry_run": false });
+    mocks.stat.mockResolvedValueOnce({ size: 614400, mtimeMs: 1 });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: BigInt(819200) } });
+    mocks.delete.mockRejectedValueOnce(new Error("backend unavailable"));
+    await expect(
+      completeDirectUpload(USER, { stagingKey: STAGING, hash, name: "a.png" }),
+    ).rejects.toMatchObject({ status: 409, code: "upload.quota_exceeded" });
   });
 
   it("正常完成：复验通过 → 复制提升 → 落库 → 清 staging", async () => {

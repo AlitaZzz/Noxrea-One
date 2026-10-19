@@ -279,6 +279,8 @@
     "logoutConfirm": "Are you sure you want to logout?",
     "accountSettings": "Account Settings",
     "username": "Username",
+    "storageUsage": "Storage usage",
+    "storageUnlimited": "Unlimited",
     "defaultUser": "User",
     "newPassword": "New Password (leave blank)",
     "currentPassword": "Current Password",
@@ -966,7 +968,8 @@
       "offline": "You are offline, please restore the connection and retry",
       "staging_missing": "Direct upload object not found or expired, please upload again",
       "verify_failed": "Upload verification failed, please try again",
-      "direct_unavailable": "Direct upload is not available with the current storage, please use the standard upload"
+      "direct_unavailable": "Direct upload is not available with the current storage, please use the standard upload",
+      "quota_exceeded": "Storage quota is full. New content cannot be added"
     },
     "files": {
       "invalid_path": "Invalid file path",
@@ -979,7 +982,8 @@
       "ffmpeg_missing": "ffmpeg is not installed on the server; media cannot be processed",
       "timeout": "Processing timed out, please try again later",
       "busy": "Media processing is busy. Please try again shortly.",
-      "user_busy": "You already have a media task in progress. Please wait for it to finish and try again."
+      "user_busy": "You already have a media task in progress. Please wait for it to finish and try again.",
+      "quota_exceeded": "Storage quota is full. New content cannot be added"
     },
     "capture_frame": {
       "capture_failed": "Frame capture failed, please try again later"
@@ -1013,6 +1017,7 @@
       "provider_protocol_missing": "Provider has no protocol configured",
       "task_not_found": "Task not found",
       "task_already_finished": "Task already finished",
+      "quota_exceeded": "Storage quota is full. New content cannot be added",
       "submit_failed": "Failed to submit the generation task",
       "no_task_id": "The server did not return a task ID"
     },

@@ -1,9 +1,10 @@
 /**
- * auth store initialize 并发去重回归测试。
+ * auth store 并发去重回归测试（initialize / refreshStorage）。
  *
  * 背景：(app)/layout 的会话恢复 effect 在 React StrictMode 下双挂载，
  * 同步标志位守卫拦不住在途窗口，/me 会真的发两次——
  * 在途 promise 去重后，并发调用必须共享同一次拉取。
+ * refreshStorage 同理：设置弹窗打开 effect 受 StrictMode 双触发，快速关-开亦会并发。
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,6 +104,39 @@ describe("auth store initialize 并发去重", () => {
     await useAuthStore.getState().initialize();
 
     expect(mocks.me).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("auth store refreshStorage 并发去重", () => {
+  beforeEach(() => {
+    mocks.me.mockReset();
+    useAuthStore.setState({ storage: null });
+  });
+
+  it("并发 refreshStorage 共享同一次 /me（弹窗快速关-开 / StrictMode 双触发不双发请求）", async () => {
+    let resolveMe!: (v: unknown) => void;
+    mocks.me.mockImplementation(
+      () => new Promise((resolve) => { resolveMe = resolve; }),
+    );
+
+    const a = useAuthStore.getState().refreshStorage();
+    const b = useAuthStore.getState().refreshStorage();
+    expect(mocks.me).toHaveBeenCalledTimes(1);
+
+    resolveMe({ ...USER, storage: { usedBytes: 1234, quotaBytes: 2048 } });
+    await Promise.all([a, b]);
+
+    expect(mocks.me).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().storage).toEqual({ usedBytes: 1234, quotaBytes: 2048 });
+  });
+
+  it("刷新失败保留现值（展示型数据，不打断弹窗打开）", async () => {
+    useAuthStore.setState({ storage: { usedBytes: 7, quotaBytes: null } });
+    mocks.me.mockRejectedValueOnce(new Error("network down"));
+
+    await useAuthStore.getState().refreshStorage();
+
+    expect(useAuthStore.getState().storage).toEqual({ usedBytes: 7, quotaBytes: null });
   });
 });
 

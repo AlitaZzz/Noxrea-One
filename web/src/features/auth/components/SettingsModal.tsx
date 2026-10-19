@@ -1,12 +1,12 @@
 /**
  * 账户设置弹窗。
- * 展示当前登录用户的用户名（登录身份，不可修改），修改头像（经裁剪弹窗上传）与登录密码，
- * 保存后同步更新 auth store 中的用户信息。与模型 / 渠道配置无关。
+ * 展示当前登录用户的用户名（登录身份，不可修改）与存储用量，修改头像（经裁剪弹窗上传）
+ * 与登录密码，保存后同步更新 auth store 中的用户信息与存储摘要。与模型 / 渠道配置无关。
  */
 
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CameraOutlined } from "@/components/ui/AppIcon";
@@ -16,10 +16,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
+import { authApi } from "@/features/auth/api";
 import { useAuthStore } from "@/features/auth/store";
-import { toUserInfo, type UserInfo } from "@/features/auth/user-cache";
-import { api } from "@/lib/api/client";
+import { toUserInfo } from "@/features/auth/user-cache";
 import { managedFileUrl } from "@/lib/file-url";
+import { formatBytes } from "@/lib/utils/format";
 
 import AvatarCropModal from "./AvatarCropModal";
 
@@ -32,6 +33,8 @@ export default function SettingsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const user = useAuthStore((s) => s.user);
+  const storage = useAuthStore((s) => s.storage);
+  const refreshStorage = useAuthStore((s) => s.refreshStorage);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 头像以存储 key 为真相：提交 key，展示 URL 由渲染期派生
@@ -56,6 +59,17 @@ export default function SettingsModal({ open, onClose }: Props) {
   }
   const avatarUrl = managedFileUrl(avatarKey);
 
+  // 打开时拉新存储摘要：登录后未整页刷新（initialize 一次性）或页面加载后
+  // 用量已变化（如其他标签页上传）时，仍能看到当前真实用量
+  useEffect(() => {
+    if (open) void refreshStorage();
+  }, [open, refreshStorage]);
+
+  // formatBytes 对 0 / null 返回空串：0 归一为 "0 B"；quotaBytes 为 null 即不限量
+  const storageText = storage
+    ? `${formatBytes(storage.usedBytes) || "0 B"} / ${storage.quotaBytes === null ? t("auth.storageUnlimited") : formatBytes(storage.quotaBytes)}`
+    : "—";
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -67,10 +81,10 @@ export default function SettingsModal({ open, onClose }: Props) {
         body.oldPassword = oldPw;
       }
       if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); return; }
-      const updated = await api<UserInfo>("/api/auth/me", { method: "PUT", body: JSON.stringify(body) });
+      const updated = await authApi.updateMe(body);
       // 保存失败时 api() 抛 ApiError，由外层 catch 提示且不关弹窗
       if (!updated) { message.error(t("auth.saveFailed")); return; }
-      useAuthStore.setState({ user: toUserInfo(updated) }); // immediate update, no refetch needed
+      useAuthStore.setState({ user: toUserInfo(updated), storage: updated.storage });
       message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }
@@ -124,6 +138,10 @@ export default function SettingsModal({ open, onClose }: Props) {
             <div className="space-y-2">
               <Label htmlFor="settings-username" className="text-xs text-muted-foreground">{t("auth.username")}</Label>
               <Input id="settings-username" value={user?.username ?? ""} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="settings-storage" className="text-xs text-muted-foreground">{t("auth.storageUsage")}</Label>
+              <Input id="settings-storage" value={storageText} disabled readOnly />
             </div>
             <div className="space-y-4">
               <div className="space-y-2">

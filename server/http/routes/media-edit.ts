@@ -28,6 +28,7 @@ import { StorageTraversalError } from "@server/services/storage/backend";
 import { computeFileHash } from "@server/services/storage/hash";
 import { buildFileUrl, buildStorageKey, getStorageBackend } from "@server/services/storage/service";
 import { persistFileObject } from "@server/services/storage/persist";
+import { findQuotaGateViolation } from "@server/services/storage/quota";
 import { isKeyOwner } from "@server/services/storage/ownership";
 import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
@@ -160,6 +161,12 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
           "Cache-Control": "no-store",
         });
       }
+
+      // 存储配额二元门槛（specs/storage-user-quota.md 规则 3）：产出类编辑将落库新对象，
+      // 已达/超限拒绝发起新编辑；不限量配置下永不触发。派生产物类路由（false）不设门槛，
+      // 超限用户的既有内容代理 / 雪碧图生成不受影响
+      const quotaGate = await findQuotaGateViolation(auth.user.id);
+      if (quotaGate) return failCode(409, "media.quota_exceeded", quotaGate);
     }
 
     let body: unknown;

@@ -45,6 +45,9 @@ const positive = (value: number, max: number): SettingDef<number> => ({
  */
 const MAX_TIMER_SECONDS = 24 * 60 * 60;
 
+/** 配额 MB 上限：换算字节后仍在 Number 安全域（MB × 1024² ≤ MAX_SAFE_INTEGER） */
+const MAX_QUOTA_MB = Math.floor(Number.MAX_SAFE_INTEGER / 1024 ** 2);
+
 /** 用作定时器延迟的秒数；integer 为 true 时只接受整数秒 */
 const timerSeconds = (value: number, { integer = false } = {}): SettingDef<number> =>
   integer ? int(value, 1, MAX_TIMER_SECONDS) : positive(value, MAX_TIMER_SECONDS);
@@ -180,6 +183,9 @@ export const SETTING_DEFS = {
   "storage.s3.delivery": enumText(["redirect", "proxy"] as const, "redirect"),
   /** 上游 AI 引用下发：signed-url（默认）| base64（无公网可达性兜底） */
   "storage.upstream_ref_delivery": enumText(["signed-url", "base64"] as const, "signed-url"),
+  // 存储配额（specs/storage-user-quota.md）：MB 与同族 upload.max_file_mb 同口径，读取时换算字节
+  /** 每用户存储配额（MB）；0 = 不限量。上限保证换算字节后仍在 Number 安全域 */
+  "storage.quota.default_mb": int(0, 0, MAX_QUOTA_MB),
 };
 
 export type SettingKey = keyof typeof SETTING_DEFS;

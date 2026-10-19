@@ -15,6 +15,7 @@ import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
 import { buildFileUrl, getStorageBackend } from "@server/services/storage/service";
+import { findQuotaGateViolation } from "@server/services/storage/quota";
 import { checkUserRateLimit } from "@server/core/ratelimit";
 
 const router = new Hono();
@@ -147,6 +148,11 @@ router.post("/api/generate/task", async (c) => {
   }
 
   const prompt = data.prompt ?? (config.prompt as string) ?? "";
+
+  // 存储配额二元门槛（specs/storage-user-quota.md 规则 3）：生成结果产出大小不可预知，
+  // 提交时按「配额启用且已无余量」拒绝；不限量配置下永不触发
+  const quotaGate = await findQuotaGateViolation(auth.user.id);
+  if (quotaGate) return failCode(409, "generate.quota_exceeded", quotaGate);
 
   const task = await createTask({
     userId: auth.user.id,

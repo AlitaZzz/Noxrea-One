@@ -8,6 +8,7 @@ import { Hono } from "hono";
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
   root: "",
+  quotaGate: vi.fn(),
 }));
 
 vi.mock("@server/core/config", () => ({
@@ -24,6 +25,10 @@ vi.mock("@server/core/config", () => ({
 
 vi.mock("@server/http/middleware/auth", () => ({
   authenticateRequest: mocks.authenticate,
+}));
+
+vi.mock("@server/services/storage/quota", () => ({
+  findQuotaGateViolation: mocks.quotaGate,
 }));
 
 import { createMediaEditRoute, type MediaEditContext } from "@server/http/routes/media-edit";
@@ -72,6 +77,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authenticate.mockResolvedValue({ user: { id: USER_ID } });
+  mocks.quotaGate.mockResolvedValue(null);
 });
 
 const errorOf = async (res: Response): Promise<string> =>
@@ -208,6 +214,41 @@ describe("createMediaEditRoute 请求次数限流（specs/media-processing-concu
       const res = await post(app, { video_key: RATE_LIMIT_KEY });
       expect(res.status).toBe(200);
     }
+  });
+});
+
+describe("createMediaEditRoute 存储配额二元门槛（specs/storage-user-quota.md 规则 3）", () => {
+  // 独立用户：与前述 describe 共享限流键会互相消耗额度；源键归属须与请求者一致
+  const QUOTA_USER = 44;
+
+  beforeEach(() => {
+    mocks.authenticate.mockResolvedValue({ user: { id: QUOTA_USER } });
+  });
+
+  it("产出类编辑（默认）超限 409 media.quota_exceeded，run 不执行", async () => {
+    const run = vi.fn(async ({ c }: Ctx) => c.json({ ok: true }));
+    const app = buildApp(run);
+    mocks.quotaGate.mockResolvedValueOnce({ usedBytes: 10, quotaBytes: 5 });
+
+    const res = await post(app, { video_key: contentKey(QUOTA_USER) });
+
+    expect(res.status).toBe(409);
+    expect(await errorOf(res)).toBe("media.quota_exceeded");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("派生产物类路由（persistsFileObject: false）不设门槛，超限用户既有内容代理不受影响", async () => {
+    await writeSource(QUOTA_USER);
+    const run = vi.fn(async ({ c }: Ctx) => c.json({ ok: true }));
+    const app = buildApp(run, undefined, { persistsFileObject: false });
+    // 持久违规值（非 Once）：本用例门控按设计不触发、断言未被咨询；
+    // Once 队列若未被消费会泄漏到后续用例（clearAllMocks 不清 Once 队列）
+    mocks.quotaGate.mockResolvedValue({ usedBytes: 10, quotaBytes: 5 });
+
+    const res = await post(app, { video_key: contentKey(QUOTA_USER) });
+
+    expect(res.status).toBe(200);
+    expect(mocks.quotaGate).not.toHaveBeenCalled();
   });
 });
 

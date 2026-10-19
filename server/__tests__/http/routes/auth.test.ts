@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   getConnInfo: vi.fn(),
   loginCheck: vi.fn(),
   loggerWarn: vi.fn(),
+  aggregate: vi.fn(),
 }));
 
 vi.mock("@server/http/middleware/auth", () => ({
@@ -45,6 +46,9 @@ vi.mock("@server/core/ratelimit", () => ({
   getRegisterRateLimiter: mocks.getRegisterRateLimiter,
 }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
+vi.mock("@server/core/database/client", () => ({
+  prisma: { fileObject: { aggregate: mocks.aggregate } },
+}));
 vi.mock("@hono/node-server/conninfo", () => ({
   getConnInfo: mocks.getConnInfo,
 }));
@@ -222,5 +226,56 @@ describe("登录写入最后登录时间", () => {
 
     expect(response.status).toBe(401);
     expect(mocks.touchLastLogin).not.toHaveBeenCalled();
+  });
+});
+
+describe("me 存储摘要（specs/storage-user-quota.md 规则 5）", () => {
+  beforeEach(() => {
+    mocks.authenticateRequest.mockResolvedValue({ user: { id: 7 } });
+    mocks.getUserById.mockResolvedValue(makeUser());
+    mocks.updateUser.mockResolvedValue(undefined);
+    mocks.toPublicUser.mockImplementation((user: { id: number; username: string }) => ({
+      id: user.id,
+      username: user.username,
+    }));
+    mocks.aggregate.mockResolvedValue({ _sum: { size: null } });
+  });
+
+  const storageOf = async (res: Response): Promise<{ usedBytes: number; quotaBytes: number | null }> => {
+    const body = (await res.json()) as { data: { storage: { usedBytes: number; quotaBytes: number | null } } };
+    return body.data.storage;
+  };
+
+  it("GET：组合 storage 摘要（SUM 聚合 + MB→字节）", async () => {
+    resetTestSettings({ "storage.quota.default_mb": 2 });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: 1000n } });
+
+    const res = await router.request("/api/auth/me");
+
+    expect(res.status).toBe(200);
+    await expect(storageOf(res)).resolves.toEqual({ usedBytes: 1000, quotaBytes: 2 * 1024 * 1024 });
+  });
+
+  it("GET：不限量（配置 0）序列化为 quotaBytes null，配置哨兵不出配置域", async () => {
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: 1000n } });
+
+    const res = await router.request("/api/auth/me");
+
+    expect(res.status).toBe(200);
+    await expect(storageOf(res)).resolves.toEqual({ usedBytes: 1000, quotaBytes: null });
+  });
+
+  it("PUT：与 GET 同组合（同资源表示一致）", async () => {
+    resetTestSettings({ "storage.quota.default_mb": 1 });
+    mocks.aggregate.mockResolvedValueOnce({ _sum: { size: 5n } });
+
+    const res = await router.request("/api/auth/me", {
+      method: "PUT",
+      body: JSON.stringify({ theme: "dark" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(res.status).toBe(200);
+    await expect(storageOf(res)).resolves.toEqual({ usedBytes: 5, quotaBytes: 1024 * 1024 });
   });
 });

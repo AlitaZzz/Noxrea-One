@@ -5,7 +5,7 @@
  */
 import { create } from "zustand";
 
-import { authApi } from "@/features/auth/api";
+import { authApi, type StorageSummary } from "@/features/auth/api";
 import { ApiError, UnauthorizedError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
 import { showGlobalNotification } from "@/lib/global-notification";
@@ -46,12 +46,19 @@ const LOGOUT_CLEAR_TIMEOUT_MS = 3000;
  */
 let authInitInFlight: Promise<void> | null = null;
 
+/** refreshStorage 的在途 promise：并发调用（弹窗快速关-开、StrictMode 双触发 effect）共享同一次 /me */
+let storageRefreshInFlight: Promise<void> | null = null;
+
 interface AuthState {
   user: UserInfo | null;
+  /** 存储摘要：会话内存态，不进 UserInfo / 持久 cookie（契约只含身份字段）；GET/PUT /me 响应刷新 */
+  storage: StorageSummary | null;
   loading: boolean;
   initialized: boolean;
 
   initialize: () => Promise<void>;
+  /** 拉取最新存储摘要：设置弹窗打开时调用，避免展示页面加载时的陈旧用量 */
+  refreshStorage: () => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -60,6 +67,7 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: readCachedUser(),
+  storage: null,
   loading: false,
   initialized: false,
 
@@ -71,12 +79,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: true });
       try {
         // api() 对空/无法解析的响应体返回 null：视为无登录用户，与其余入口一样先判空再转换
-        const me = await session.run(() => authApi.me<UserInfo | null>());
+        const me = await session.run(() => authApi.me());
         session.assertCurrent();
-        set({ user: me ? toUserInfo(me) : null, loading: false, initialized: true });
+        set({
+          user: me ? toUserInfo(me) : null,
+          storage: me?.storage ?? null,
+          loading: false,
+          initialized: true,
+        });
       } catch (e) {
         if (session.signal.aborted) return;
-        set({ ...(e instanceof UnauthorizedError ? { user: null } : {}), loading: false, initialized: true });
+        set({
+          ...(e instanceof UnauthorizedError ? { user: null, storage: null } : {}),
+          loading: false,
+          initialized: true,
+        });
       }
     })().finally(() => {
       if (authInitInFlight === pending) authInitInFlight = null;
@@ -102,7 +119,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       );
     }
     if (data?.user) {
-      set({ user: toUserInfo(data.user), loading: false, initialized: true });
+      // 登录响应不含存储摘要：置空防止串号，设置弹窗打开时经 refreshStorage 拉新
+      set({ user: toUserInfo(data.user), storage: null, loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.login_failed"));
     }
@@ -123,17 +141,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       );
     }
     if (data?.user) {
-      set({ user: toUserInfo(data.user), loading: false, initialized: true });
+      // 同 login：响应不含存储摘要，置空待 refreshStorage 拉新
+      set({ user: toUserInfo(data.user), storage: null, loading: false, initialized: true });
     } else {
       throw new Error(resolveApiError(null, undefined, "auth.register_failed"));
     }
+  },
+
+  refreshStorage: () => {
+    if (storageRefreshInFlight) return storageRefreshInFlight;
+    const session = captureSession();
+    const pending = (async () => {
+      try {
+        const me = await session.run(() => authApi.me());
+        session.assertCurrent();
+        if (me?.storage) set({ storage: me.storage });
+      } catch {
+        // 展示型数据：刷新失败保留现值，不打断弹窗打开
+      }
+    })().finally(() => {
+      if (storageRefreshInFlight === pending) storageRefreshInFlight = null;
+    });
+    storageRefreshInFlight = pending;
+    return pending;
   },
 
   logout: () => {
     // 服务端过期 httpOnly cookie（JS 无法清除）；本地同步清用户态与缓存。
     // 返回 promise 供调用方等待：cookie 未清除前导航，proxy.ts 会按 cookie 有效性放行/拦截。
     if (!get().user) changeSession();
-    set({ user: null, loading: false, initialized: true });
+    set({ user: null, storage: null, loading: false, initialized: true });
     const done = authApi.logout();
     // 请求挂起时超时放行；登出失败（网络错误等）不影响本地清态，静默吞掉
     let timeout: ReturnType<typeof setTimeout>;
@@ -155,8 +192,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // 前端用 avatarKey / language，后端 updateMeSchema 校验这些字段
       // 校验结果：此前无论成败都保留本地值，刷新后偏好会静默回退
-      await session.run(() => authApi.updateMe({ [key]: value }));
+      const updated = await session.run(() => authApi.updateMe({ [key]: value }));
       session.assertCurrent();
+      // PUT 与 GET 同组合存储摘要：顺带刷新，用量随保存保持最新
+      if (updated?.storage) set({ storage: updated.storage });
     } catch (e) {
       if (session.signal.aborted) return;
       // 仅当失败的是最新一次修改时才回滚：并发保存（如双击切换）后，
@@ -180,4 +219,4 @@ useAuthStore.subscribe((state, previous) => {
   if (state.user?.id !== previous.user?.id) changeSession();
   cacheUser(state.user);
 });
-onSessionChange(() => { authInitInFlight = null; });
+onSessionChange(() => { authInitInFlight = null; storageRefreshInFlight = null; });

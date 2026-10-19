@@ -5,9 +5,15 @@ const mocks = vi.hoisted(() => ({
   persist: vi.fn(),
   save: vi.fn(),
   probeUpload: vi.fn(),
+  aggregate: vi.fn(),
+  findUnique: vi.fn(),
 }));
 
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
+
+vi.mock("@server/core/database/client", () => ({
+  prisma: { fileObject: { findUnique: mocks.findUnique, aggregate: mocks.aggregate } },
+}));
 
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
@@ -59,6 +65,9 @@ beforeEach(() => {
   mocks.authenticate.mockResolvedValue({ user: { id: 1 } });
   mocks.persist.mockResolvedValue({ width: null, height: null, duration: null });
   mocks.probeUpload.mockResolvedValue(undefined);
+  mocks.aggregate.mockResolvedValue({ _sum: { size: null } });
+  // 配额判定去重感知（quota.ts findQuotaViolation）：中转通道净增内容预检会查既有行，默认未命中
+  mocks.findUnique.mockResolvedValue(null);
 });
 
 const errorOf = async (res: Response): Promise<{ error: string; ctx?: unknown }> =>
@@ -343,5 +352,80 @@ describe("POST /api/files/upload 体积校验", () => {
     const body = (await res.json()) as { data: { items: Array<{ ok: boolean; data?: { media_warning?: unknown } }> } };
     expect(body.data.items[0].ok).toBe(true);
     expect(body.data.items[0].data?.media_warning).toBeUndefined();
+  });
+});
+
+describe("POST /api/files/upload 存储配额（specs/storage-user-quota.md 规则 3）", () => {
+  const quotaSettings = {
+    "upload.max_file_mb": 1,
+    "upload.batch_max_files": 20,
+    "upload.batch_max_concurrent": 1,
+    "upload.batch_max_pending": 2,
+    "storage.quota.default_mb": 1,
+  };
+
+  it("配额启用时超限文件被隔离拒绝并携带用量上下文，同批其余文件正常落盘", async () => {
+    resetTestSettings(quotaSettings);
+    // 块内并发共享用量快照（FILE_PROCESS_CONCURRENCY=3）：两文件同块，均按 used=819200 预检
+    mocks.aggregate.mockResolvedValue({ _sum: { size: BigInt(819200) } });
+    const form = new FormData();
+    form.append("file", new File([new Uint8Array(100000)], "small.png", { type: "image/png" }));
+    form.append("file", new File([new Uint8Array(300000)], "big.png", { type: "image/png" }));
+
+    const res = await router.request("/api/files/upload", { method: "POST", body: form });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ index: number; ok: boolean; error?: { code: string; ctx?: Record<string, number> } }> };
+    };
+    expect(body.data.items[0]).toMatchObject({ index: 0, ok: true });
+    expect(body.data.items[1]).toMatchObject({
+      index: 1,
+      ok: false,
+      error: { code: "upload.quota_exceeded", ctx: { usedBytes: 819200, quotaBytes: 1048576 } },
+    });
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("跨块顺序推进：先前块的落库增量计入后续块预检", async () => {
+    resetTestSettings(quotaSettings);
+    let used = 0;
+    mocks.aggregate.mockImplementation(async () => ({ _sum: { size: BigInt(used) } }));
+    mocks.persist.mockImplementation(async (p: { size: number }) => {
+      used += p.size;
+      return { width: null, height: null, duration: null };
+    });
+    const form = new FormData();
+    // 0.25MB × 4 + 0.375MB、配额 1MB：块1（0-2）快照 used=0 全放行 → 落库至 0.75MB；
+    // 块2（3-4）共享快照 used=0.75：文件3 相等放行（1.0MB == quota）、文件4 超限拒绝
+    for (let i = 0; i < 4; i++) {
+      form.append("file", new File([new Uint8Array(262144)], `${i}.png`, { type: "image/png" }));
+    }
+    form.append("file", new File([new Uint8Array(393216)], "big.png", { type: "image/png" }));
+
+    const res = await router.request("/api/files/upload", { method: "POST", body: form });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      data: { items: Array<{ index: number; ok: boolean; error?: { code: string } }> };
+    };
+    expect(body.data.items.map((item) => item.ok)).toEqual([true, true, true, true, false]);
+    expect(body.data.items[4].error?.code).toBe("upload.quota_exceeded");
+    expect(mocks.save).toHaveBeenCalledTimes(4);
+  });
+
+  it("超限用户重复添加既有内容：幂等重添加不产生净增占用，跳过判定直接落盘", async () => {
+    resetTestSettings(quotaSettings);
+    // findUnique 命中既有行（任意 hash 即视为同内容重添加），即便用量已恰好占满也放行
+    mocks.findUnique.mockResolvedValue({ userId: 1, hash: "dup", size: BigInt(100000) });
+    mocks.aggregate.mockResolvedValue({ _sum: { size: BigInt(1048576) } });
+    const form = new FormData();
+    form.append("file", new File([new Uint8Array(100000)], "dup.png", { type: "image/png" }));
+
+    const res = await router.request("/api/files/upload", { method: "POST", body: form });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { items: Array<{ ok: boolean }> } };
+    expect(body.data.items[0]?.ok).toBe(true);
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    // 命中既有行即豁免：连用量聚合都不需要
+    expect(mocks.aggregate).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,7 @@ import { getSetting } from "@server/core/settings";
 import { evaluateUploadIdentity, resolveUploadMime } from "./formats";
 import { mimeByExt, sniffMime, normalizeExt, SNIFF_WINDOW_BYTES } from "./mime";
 import { persistFileObject } from "./persist";
+import { findQuotaViolation } from "./quota";
 import { probeUploadVideo, type VideoUploadWarning } from "./media-probe";
 import { createXmlContentDetector } from "./xml-content";
 import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
@@ -98,6 +99,13 @@ export async function createUploadTicket(
     return { duplicate: true, file: storedFileView(existing) };
   }
 
+  // 存储配额预检（specs/storage-user-quota.md 规则 3）：秒传判定之后、签发之前——
+  // 既有内容永远可访问（重复添加不做配额判定），新占用在客户端字节出发前拒绝
+  const quotaViolation = await findQuotaViolation(userId, input.size);
+  if (quotaViolation) {
+    throw new UploadDirectError(409, "upload.quota_exceeded", quotaViolation);
+  }
+
   const contentType = identity.whitelistedMime ?? mimeByExt(identity.nameExt);
   const stagingKey = `${STAGING_PREFIX}${userId}/${randomUUID()}`;
   const uploadUrl = await backend.presignPut(stagingKey, { contentType });
@@ -145,8 +153,17 @@ export async function completeDirectUpload(
   }
   const maxSizeMb = getSetting("upload.max_file_mb");
   if (stat.size > maxSizeMb * 1024 * 1024) {
-    await backend.delete(input.stagingKey);
+    await cleanupStaging(input.stagingKey);
     throw new UploadDirectError(413, "upload.file_too_large", { limit: maxSizeMb });
+  }
+
+  // 存储配额权威复检（specs/storage-user-quota.md 规则 3）：staging 真实字节数为唯一执行依据，
+  // 票面申报失真无法绕过 ticket 预检。超限拒绝并尽力清走 staging——拒绝路径的清理是收尾
+  // 而非正确性步骤（cleanupStaging：失败留痕，超龄清扫兜底），不得让清理异常把 409 掩盖为 500
+  const quotaViolation = await findQuotaViolation(userId, stat.size);
+  if (quotaViolation) {
+    await cleanupStaging(input.stagingKey);
+    throw new UploadDirectError(409, "upload.quota_exceeded", quotaViolation);
   }
 
   // 准入与中转同口径（evaluateUploadIdentity）；票据阶段已做同一判定，此处对直连 API 调用方兜底

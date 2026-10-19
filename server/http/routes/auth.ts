@@ -6,7 +6,9 @@ import { Hono } from "hono";
 import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
 import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser, UserAvatarKeyError } from "@server/crud/user";
+import type { User } from "@server/core/database/generated/client";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
+import { getStorageSummary } from "@server/services/storage/quota";
 import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
 import { getSetting } from "@server/core/settings";
 import { logger } from "@server/core/logger";
@@ -144,6 +146,11 @@ router.post("/api/auth/logout", (c) => {
   return c.json(ok(null, "Logged out"));
 });
 
+/** me 资源表示单点：GET/PUT 同组合（specs/storage-user-quota.md 规则 5）——同资源表示一致由结构保证，而非两处理器各自书写 */
+async function meRepresentation(user: User) {
+  return { ...toPublicUser(user), storage: await getStorageSummary(user.id) };
+}
+
 // GET /api/auth/me
 router.get("/api/auth/me", async (c) => {
   const request = c.req.raw;
@@ -153,7 +160,7 @@ router.get("/api/auth/me", async (c) => {
   const user = await getUserById(auth.user.id);
   if (!user) return failCode(404, "auth.user_not_found");
 
-  return c.json(ok(toPublicUser(user)));
+  return c.json(ok(await meRepresentation(user)));
 });
 
 // PUT /api/auth/me
@@ -214,7 +221,7 @@ router.put("/api/auth/me", async (c) => {
     const token = await createAccessToken(fresh.id, fresh.username, fresh.tokenVersion);
     setAuthCookie(c, token);
   }
-  return c.json(ok(toPublicUser(fresh)));
+  return c.json(ok(await meRepresentation(fresh)));
 });
 
 export { router };

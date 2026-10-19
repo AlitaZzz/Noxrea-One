@@ -279,6 +279,8 @@
     "logoutConfirm": "确定退出登录？",
     "accountSettings": "账号设置",
     "username": "用户名",
+    "storageUsage": "存储用量",
+    "storageUnlimited": "不限量",
     "defaultUser": "用户",
     "newPassword": "新密码（留空保持不变）",
     "currentPassword": "当前密码",
@@ -966,7 +968,8 @@
       "offline": "网络已断开，请恢复网络后重试",
       "staging_missing": "直传对象不存在或已过期，请重新上传",
       "verify_failed": "上传内容校验未通过，请重新上传",
-      "direct_unavailable": "当前存储不支持直传，请改用普通上传"
+      "direct_unavailable": "当前存储不支持直传，请改用普通上传",
+      "quota_exceeded": "存储空间已满，无法添加新内容"
     },
     "files": {
       "invalid_path": "文件路径非法",
@@ -979,7 +982,8 @@
       "ffmpeg_missing": "服务器未安装 ffmpeg，无法处理媒体",
       "timeout": "处理超时，请稍后重试",
       "busy": "媒体处理繁忙，请稍后重试",
-      "user_busy": "你已有媒体处理任务在进行，请等待完成后再试"
+      "user_busy": "你已有媒体处理任务在进行，请等待完成后再试",
+      "quota_exceeded": "存储空间已满，无法添加新内容"
     },
     "capture_frame": {
       "capture_failed": "抽帧失败，请稍后重试"
@@ -1013,6 +1017,7 @@
       "provider_protocol_missing": "供应商未配置协议",
       "task_not_found": "任务不存在",
       "task_already_finished": "任务已结束",
+      "quota_exceeded": "存储空间已满，无法添加新内容",
       "submit_failed": "提交生成任务失败",
       "no_task_id": "服务端未返回任务 ID"
     },

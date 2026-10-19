@@ -144,6 +144,8 @@ export const ERROR_CODES = [
   "generate.task_not_found",
   /** 任务已处于终态 */
   "generate.task_already_finished",
+  /** 用户存储配额已满，无法发起新的生成任务 */
+  "generate.quota_exceeded",
 
   // ── 上传 ──
   /** 表单数据解析失败 */
@@ -168,6 +170,8 @@ export const ERROR_CODES = [
   "upload.verify_failed",
   /** 当前存储后端不支持直传（mode=relay） */
   "upload.direct_unavailable",
+  /** 用户存储配额已满，无法接收新内容 */
+  "upload.quota_exceeded",
 
   // ── 文件 ──
   /** 文件路径非法 */
@@ -190,6 +194,8 @@ export const ERROR_CODES = [
   "media.busy",
   /** 该用户超出了自己的重型媒体处理名额（已有任务在运行 / 个人队列满） */
   "media.user_busy",
+  /** 用户存储配额已满，无法发起产出类媒体编辑 */
+  "media.quota_exceeded",
 
   // ── 视频抽帧 ──
   /** 抽帧处理失败 */

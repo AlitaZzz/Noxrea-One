@@ -6,6 +6,7 @@
 import { getSetting } from "@server/core/settings";
 import type { ErrorCode } from "@server/core/errors/codes";
 import { computeBufferHash } from "./hash";
+import { findQuotaViolation } from "./quota";
 import { sniffMime, normalizeExt, SNIFF_WINDOW_BYTES } from "./mime";
 import { isXmlContent } from "./xml-content";
 import { evaluateUploadIdentity, resolveUploadMime } from "./formats";
@@ -62,6 +63,12 @@ async function processFile(
       return itemError(index, "upload.unsupported_type", { type: identity.type });
     }
     const hash = await computeBufferHash(buffer);
+
+    // 存储配额预检（specs/storage-user-quota.md 规则 3）：去重感知判定——内容哈希算出后携带
+    // dedupeHash，同 hash 既有行即幂等重添加（不产生净增占用）跳过判定，与直传秒传豁免同口径；
+    // 净增内容按 file.size（multipart 真实接收字节数）判定，超限 itemError 隔离，批次不受牵连
+    const quotaViolation = await findQuotaViolation(userId, file.size, { dedupeHash: hash });
+    if (quotaViolation) return itemError(index, "upload.quota_exceeded", quotaViolation);
     const sniffed = sniffMime(buffer.subarray(0, SNIFF_WINDOW_BYTES));
     const mime = resolveUploadMime(identity.whitelistedMime, identity.nameExt, sniffed.mime);
     const finalExt = identity.extOk ? identity.nameExt : normalizeExt(sniffed.ext);
