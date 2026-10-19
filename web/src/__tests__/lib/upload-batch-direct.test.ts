@@ -1,6 +1,6 @@
 /**
  * 直传批次（direct 模式）单测：模式分派、秒传短路、业务失败不重试、
- * 429 退避重试、direct_unavailable 清缓存、进度按字节聚合、source 透传。
+ * 429 退避重试、direct_unavailable 清缓存、进度按工作量逐文件归因、source 透传。
  */
 import { createHash } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -148,13 +148,14 @@ describe("直传批次 uploadBatchWithRetry(direct)", () => {
     expect(mocks.invalidateUploadLimits).toHaveBeenCalled();
   });
 
-  it("进度按整批字节聚合", async () => {
+  it("进度按工作量逐文件归因：哈希阶段 0→50%，PUT 按字节 50%→100%", async () => {
     stubApi(() => Promise.resolve(TICKET), () => Promise.resolve(COMPLETE));
     const files = [new File(["hello"], "a.png", { type: "image/png" }), new File(["hello"], "b.png", { type: "image/png" })];
     const onProgress = vi.fn();
     mocks.put.mockImplementation(
-      (_url: string, _body: File, _type: string | undefined, onProgressArg?: (loaded: number) => void) => {
-        onProgressArg?.(3);
+      (_url: string, _body: File, _type: string | undefined, onProgressArg?: (pct: number, loaded: number) => void) => {
+        // 传输层契约 (pct, loaded)：5 字节文件传到 3 字节时 pct=60、loaded=3
+        onProgressArg?.(60, 3);
         return Promise.resolve();
       },
     );
@@ -162,8 +163,15 @@ describe("直传批次 uploadBatchWithRetry(direct)", () => {
     const results = await uploadBatchWithRetry(files, onProgress);
 
     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
-    expect(onProgress).toHaveBeenLastCalledWith(100, 10);
-    expect(onProgress.mock.calls.some(([pct, loaded]) => pct === 30 && loaded === 3)).toBe(true);
+    // 每文件工作量 = 哈希 5B + PUT 5B = 10B：哈希完成即 50%，PUT 到 3B 为 (5+3)/10 = 80%；
+    // 若回归为「把百分比当字节」，80% 处会变成 650 一类的值，此断言即防线
+    const pctsOf = (index: number) => onProgress.mock.calls.filter(([i]) => i === index).map(([, pct]) => pct);
+    expect(pctsOf(0)).toContain(50);
+    expect(pctsOf(0)).toContain(80);
+    expect(pctsOf(1)).toContain(50);
+    expect(pctsOf(1)).toContain(80);
+    expect(pctsOf(0).at(-1)).toBe(100);
+    expect(pctsOf(1).at(-1)).toBe(100);
   });
 
   it("PUT 网络中断：同 URL 同内容退避重试（spec 规则 6），不重开票据", async () => {

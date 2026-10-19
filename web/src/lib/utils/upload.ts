@@ -153,7 +153,8 @@ export async function uploadWithRetry(
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
 ): Promise<UploadResult> {
-  const [result] = await uploadBatchWithRetry([file], onProgress, maxRetries, source);
+  // 批次层契约是逐文件 (index, pct)：单文件入口适配为只回传 pct
+  const [result] = await uploadBatchWithRetry([file], onProgress ? (_index, pct) => onProgress(pct) : undefined, maxRetries, source);
   if (result.status === "fulfilled") return result.value;
   throw result.reason;
 }
@@ -161,10 +162,12 @@ export async function uploadWithRetry(
 /**
  * 上传一个批次并按文件返回 PromiseSettledResult。
  * 模式分派后各自执行：传输层失败按退避重试；业务层单文件失败只影响自身。
+ * 进度契约是逐文件 (index, pct)：归因由各模式用自己的真实语义完成
+ * （relay 按 FormData 字节区间、direct 按哈希+PUT 工作量），批次层不猜 loaded 的含义。
  */
 export async function uploadBatchWithRetry(
   files: File[],
-  onProgress?: (pct: number, loaded: number) => void,
+  onProgress?: (index: number, pct: number) => void,
   maxRetries: number = UPLOAD_MAX_RETRIES,
   source?: "upload" | "derived",
   sessionOverride?: UploadSession,
@@ -184,19 +187,39 @@ export async function uploadBatchWithRetry(
   return uploadBatchRelay(params);
 }
 
-/** 批次上下文参数束：分派入口与两条模式路径共用（公开 API 签名不变） */
+/** 批次上下文参数束：分派入口与两条模式路径共用 */
 interface BatchUploadParams {
   files: File[];
-  onProgress?: (pct: number, loaded: number) => void;
+  /** 逐文件进度：(批内下标, 该文件自己的百分比) */
+  onProgress?: (index: number, pct: number) => void;
   maxRetries: number;
   source?: "upload" | "derived";
   session: UploadSession;
+}
+
+/** 把 FormData 累计字节归因到单个文件：浏览器按 append 顺序发送各 part，该文件区间占其自身体积的百分比 */
+function filePctOf(loaded: number, size: number, offset: number): number {
+  if (size <= 0) return 100;
+  const uploaded = Math.min(Math.max(loaded - offset, 0), size);
+  return Math.round((uploaded / size) * 100);
 }
 
 /** relay 模式：multipart 中转批次（一个请求承载全部文件） */
 async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettledResult<UploadResult>[]> {
   const { files, onProgress, maxRetries, source, session: currentSession } = params;
   const sourceQuery = source ? `?source=${source}` : "";
+  // 浏览器按 FormData append 顺序发送各 part：按体积预计算每个文件的字节区间，
+  // XHR 的累计已传字节据此归因到单文件（该区间语义只在此处成立，故归因留在 relay 内部）
+  const offsets: number[] = [];
+  let batchBytes = 0;
+  for (const file of files) {
+    offsets.push(batchBytes);
+    batchBytes += file.size;
+  }
+  const reportAll = (loaded: number) => {
+    if (!onProgress) return;
+    for (let i = 0; i < files.length; i++) onProgress(i, filePctOf(loaded, files[i].size, offsets[i]));
+  };
   let lastErr: unknown;
   const rejected = (reason: unknown): PromiseSettledResult<UploadResult>[] =>
     files.map(() => ({ status: "rejected", reason }));
@@ -211,7 +234,7 @@ async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettl
       const data = await currentSession.run(() => apiUploadWithProgress<UploadBatchResponse>(
         `/api/files/upload${sourceQuery}`,
         formData,
-        onProgress,
+        (_pct, loaded) => reportAll(loaded),
       ));
       currentSession.assertCurrent();
 
@@ -247,7 +270,7 @@ async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettl
 
       lastErr = err;
       if (attempt >= maxRetries) break;
-      onProgress?.(0, 0);
+      reportAll(0);
       try {
         await waitBackoff(currentSession, attempt, err instanceof UploadTransportError ? err.retryAfterMs : undefined);
       } catch (waitError) {
@@ -316,7 +339,7 @@ async function directUploadFile(
     session: UploadSession;
     hash: string;
     source?: "upload" | "derived";
-    onPutProgress?: (loaded: number) => void;
+    onPutProgress?: (pct: number, loaded: number) => void;
   },
 ): Promise<UploadResult> {
   const { hash } = opts;
@@ -345,7 +368,7 @@ async function directUploadFile(
     } catch (err) {
       if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
       if (putAttempt >= PUT_MAX_RETRIES || isOffline()) throw err;
-      opts.onPutProgress?.(0);
+      opts.onPutProgress?.(0, 0);
       await waitBackoff(opts.session, putAttempt, err.retryAfterMs);
       putAttempt += 1;
     }
@@ -366,26 +389,33 @@ async function directUploadFile(
   return { ...done.file, media_warning: done.media_warning ?? null };
 }
 
-/** direct 模式：逐文件独立上传（小并发池），进度聚合为整批字节 */
+/**
+ * direct 模式：逐文件独立上传（小并发池）。
+ * 进度按工作量计量并归因到单文件：每文件工作量 = 哈希读一遍 + PUT 传一遍
+ * （2×size），哈希阶段 0→50%、PUT 阶段 50%→100%——哈希是大文件直传的
+ * 真实首阶段，只计传输会让进度条在哈希期间停在 0%。
+ */
 async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSettledResult<UploadResult>[]> {
   const { files, onProgress, maxRetries, source, session: currentSession } = params;
   const results: PromiseSettledResult<UploadResult>[] = files.map(() => ({
     status: "rejected",
     reason: new UploadBusinessError(i18n.t("error.upload.upload_failed")),
   }));
-  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-  /** 进度聚合：已完成文件字节 + 在途文件已 PUT 字节 */
-  const settledBytes = new Array<number>(files.length).fill(0);
-  const inflightBytes = new Array<number>(files.length).fill(0);
-  const report = () => {
-    const loaded = settledBytes.reduce((a, b) => a + b, 0) + inflightBytes.reduce((a, b) => a + b, 0);
-    onProgress?.(totalBytes > 0 ? Math.round((loaded / totalBytes) * 100) : 100, loaded);
-  };
 
   const runOne = async (index: number): Promise<void> => {
     let lastErr: unknown;
-    // 哈希每文件只算一次：重试直接复用（逐块 signal 检查保证中止语义）
-    const hash = await computeFileSha256(files[index], currentSession.signal);
+    // 工作量进度：哈希已读字节 + 本次 PUT 已传字节；秒传（无 PUT）落账时直接补满
+    const fileWork = files[index].size * 2;
+    let hashDone = 0;
+    let putDone = 0;
+    const reportItem = () => {
+      onProgress?.(index, fileWork > 0 ? Math.round(((hashDone + putDone) / fileWork) * 100) : 100);
+    };
+    // 哈希每文件只算一次：重试不重算（逐块 signal 检查保证中止语义）
+    const hash = await computeFileSha256(files[index], {
+      signal: currentSession.signal,
+      onProgress: (loaded) => { hashDone = loaded; reportItem(); },
+    });
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (isOffline()) {
         throw new UploadTransportError("network", i18n.t("error.upload.offline"));
@@ -395,11 +425,9 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
           session: currentSession,
           hash,
           source,
-          onPutProgress: (loaded) => { inflightBytes[index] = loaded; report(); },
+          onPutProgress: (_pct, loaded) => { putDone = loaded; reportItem(); },
         });
-        settledBytes[index] = files[index].size;
-        inflightBytes[index] = 0;
-        report();
+        onProgress?.(index, 100);
         results[index] = { status: "fulfilled", value };
         return;
       } catch (err) {
@@ -414,8 +442,8 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
         if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
         lastErr = err;
         if (attempt >= maxRetries) break;
-        inflightBytes[index] = 0;
-        report();
+        putDone = 0;
+        reportItem();
         await waitBackoff(currentSession, attempt, err.retryAfterMs);
       }
     }

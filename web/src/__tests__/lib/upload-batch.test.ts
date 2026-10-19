@@ -77,6 +77,28 @@ describe("uploadBatchWithRetry", () => {
     if (results[0].status === "rejected") expect(results[0].reason.message).toBe("error.upload.offline");
   });
 
+  it("进度按 FormData 区间归因到单文件", async () => {
+    uploadBatch.mockImplementation(
+      (_path: string, _form: FormData, onProgress?: (pct: number, loaded: number) => void) => {
+        onProgress?.(40, 2);
+        return Promise.resolve({
+          items: [
+            { index: 0, ok: true, data: { url: "a", key: "a" } },
+            { index: 1, ok: true, data: { url: "b", key: "b" } },
+          ],
+        });
+      },
+    );
+    const onProgress = vi.fn();
+    const files = [new File(["a"], "a.png", { type: "image/png" }), new File(["bcd"], "b.png", { type: "image/png" })];
+
+    await uploadBatchWithRetry(files, onProgress);
+
+    // 4 字节批次：小文件 [0,1) 已传完，大文件 [1,4) 传了 1/3
+    expect(onProgress).toHaveBeenCalledWith(0, 100);
+    expect(onProgress).toHaveBeenCalledWith(1, 33);
+  });
+
   it("批次成功项缺少 URL 时按业务失败处理", async () => {
     uploadBatch.mockResolvedValue({ items: [{ index: 0, ok: true, data: { key: "a" } }] });
 

@@ -259,8 +259,8 @@ describe("上传管道的失败与落库行为", () => {
     expect(data?.upload?.error?.retryable).toBe(false);
   });
 
-  it("批次字节进度按体积归因到各文件", async () => {
-    let captured: ((pct: number, loaded: number) => void) | undefined;
+  it("批次进度按批内下标转发（归因由模式层完成）", async () => {
+    let captured: ((index: number, pct: number) => void) | undefined;
     vi.mocked(uploadBatchWithRetry).mockImplementation(async (_files, onProgress) => {
       captured = onProgress;
       return [
@@ -279,12 +279,14 @@ describe("上传管道的失败与落库行为", () => {
     });
     await settled;
 
-    // 批次 4 字节：小文件 [0,1)，大文件 [1,4)。loaded=2 时小文件已完成，大文件 1/3
-    captured?.(50, 2);
+    // 模式层已归因到单文件（relay 按 FormData 区间 / direct 按工作量），管线只按下标转发
+    captured?.(0, 100);
+    captured?.(1, 33);
     expect(onProgress).toHaveBeenCalledWith(0, 100);
     expect(onProgress).toHaveBeenCalledWith(1, 33);
-    // 重试前的重置回调：loaded=0，所有文件进度归零
+    // 模式层重试前的重置：逐文件归零
     captured?.(0, 0);
+    captured?.(1, 0);
     expect(onProgress).toHaveBeenLastCalledWith(1, 0);
   });
 

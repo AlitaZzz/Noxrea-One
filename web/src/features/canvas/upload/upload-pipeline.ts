@@ -518,16 +518,9 @@ function splitRawUploadBatches(prepared: Prepared[], maxFiles: number, maxBytes:
   return batches;
 }
 
-/** 把批次整体字节进度归因到单个文件：该文件在 FormData 中的区间占其自身体积的百分比 */
-function filePctOf(loaded: number, size: number, offset: number): number {
-  if (size <= 0) return 100;
-  const uploaded = Math.min(Math.max(loaded - offset, 0), size);
-  return Math.round((uploaded / size) * 100);
-}
-
 /**
- * 上传一个批次：XHR 只报告整批字节进度，浏览器按 FormData append 顺序发送各 part，
- * 据此按体积把进度归因到单个文件（onFileProgress 收到批内下标与该文件自己的百分比）。
+ * 上传一个批次：批次层已把进度归因到单文件（relay 按 FormData 区间、
+ * direct 按哈希+PUT 工作量），这里按批内下标转发即可。
  */
 async function uploadPreparedBatch(
   batch: Prepared[],
@@ -535,19 +528,11 @@ async function uploadPreparedBatch(
   session: UploadSession,
   onFileProgress: (p: Prepared, index: number, pct: number) => void,
 ): Promise<PromiseSettledResult<UploadResult>[]> {
-  const offsets: number[] = [];
-  let batchBytes = 0;
-  for (const p of batch) {
-    offsets.push(batchBytes);
-    batchBytes += p.file.size;
-  }
   return uploadBatchWithRetry(
     batch.map((p) => p.file),
-    (_pct, loaded) => {
+    (index, pct) => {
       if (session.signal.aborted) return;
-      for (let i = 0; i < batch.length; i++) {
-        onFileProgress(batch[i], i, filePctOf(loaded, batch[i].file.size, offsets[i]));
-      }
+      onFileProgress(batch[index], index, pct);
     },
     UPLOAD_MAX_RETRIES,
     source,
