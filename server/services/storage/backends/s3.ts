@@ -179,7 +179,8 @@ export class S3Backend implements StorageBackend {
 
   async delete(key: string): Promise<void> {
     await this.deleteObject(key);
-    // 规则 9：派生联动（枚举半边为接口级共享实现；对象存储无空目录概念，逐对象删除即可）
+    // 规则 9：派生联动覆盖四命名空间（枚举半边为接口级共享实现，specs/derived-deletion-linkage.md；
+    // 对象存储无空目录概念，逐对象删除即可）
     for (const derived of await listDerivedArtifactKeys(this, key)) {
       await this.deleteObject(derived);
     }
@@ -190,28 +191,49 @@ export class S3Backend implements StorageBackend {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.objectKey(key) }));
   }
 
-  async list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>> {
-    const out: Array<{ key: string; size: number; lastModifiedMs: number }> = [];
+  /** ListObjectsV2 分页力学单点（list / listCommonPrefixes 共用）：逐页收集对象与子前缀 */
+  private async collectPages(prefix: string, delimiter?: string): Promise<{
+    objects: Array<{ key: string; size: number; lastModifiedMs: number }>;
+    prefixes: string[];
+  }> {
+    const objects: Array<{ key: string; size: number; lastModifiedMs: number }> = [];
+    const prefixes: string[] = [];
     const fullPrefix = this.objectKey(prefix);
     let token: string | undefined;
     do {
       const res = await this.client.send(new ListObjectsV2Command({
         Bucket: this.bucket,
         Prefix: fullPrefix,
+        ...(delimiter ? { Delimiter: delimiter } : {}),
         MaxKeys: 1000,
         ...(token ? { ContinuationToken: token } : {}),
       }));
       for (const obj of res.Contents ?? []) {
         if (!obj.Key) continue;
-        out.push({
+        objects.push({
           key: this.stripPrefix(obj.Key),
           size: obj.Size ?? 0,
           lastModifiedMs: obj.LastModified ? obj.LastModified.getTime() : 0,
         });
       }
+      for (const cp of res.CommonPrefixes ?? []) {
+        if (cp.Prefix) prefixes.push(this.stripPrefix(cp.Prefix));
+      }
       token = res.IsTruncated ? res.NextContinuationToken : undefined;
     } while (token);
-    return out;
+    return { objects, prefixes };
+  }
+
+  async list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>> {
+    return (await this.collectPages(prefix)).objects;
+  }
+
+  /**
+   * 子前缀列举能力（specs/derived-deletion-linkage.md 规则 2）：Delimiter 一层列举
+   * （CommonPrefixes，含查询前缀与尾随 /），派生删除联动的版本段发现是其唯一消费方。
+   */
+  async listCommonPrefixes(prefix: string): Promise<string[]> {
+    return (await this.collectPages(prefix, "/")).prefixes;
   }
 
   /**

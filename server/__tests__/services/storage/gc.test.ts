@@ -1,7 +1,8 @@
 /**
  * runStorageGc 直测（mock prisma，契约级）：
  * 锁定候选池 SQL 形态（三类排除 + FIFO + LIMIT）、排除量上报、
- * dry-run 只列不删、事务终检三态（回收/引用回归/账本新行）。
+ * dry-run 只列不删、事务终检三态（回收/引用回归/账本新行）；
+ * runGcCycle 三阶段独立成败（引用回收 / staging 清扫 / 派生清扫互不拖累）。
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
@@ -11,7 +12,16 @@ const mocks = vi.hoisted(() => ({
   fileObjectDelete: vi.fn(),
   stat: vi.fn(),
   del: vi.fn(),
+  sweepStaging: vi.fn(),
+  sweepDerived: vi.fn(),
   getConfig: vi.fn().mockReturnValue({ LOG_LEVEL: "silent" }),
+}));
+
+vi.mock("@server/services/storage/upload-direct", () => ({
+  sweepStagingObjects: mocks.sweepStaging,
+}));
+vi.mock("@server/services/storage/derived-cleanup", () => ({
+  sweepStaleDerivedObjects: mocks.sweepDerived,
 }));
 
 vi.mock("@server/core/database/client", () => ({
@@ -32,7 +42,7 @@ vi.mock("@server/services/storage/service", async () => ({
 }));
 
 import type { Prisma } from "@server/core/database/generated/client";
-import { runStorageGc } from "@server/services/storage/gc";
+import { runGcCycle, runStorageGc } from "@server/services/storage/gc";
 import { resetTestSettings } from "../../helpers/settings";
 
 const HASH_A = "a".repeat(64);
@@ -195,5 +205,53 @@ describe("runStorageGc 实删", () => {
     expect(report.skipped).toBe(1);
     // 实删失败的候选不计入 reclaimed（reclaimed 只含真正回收成功的条目）
     expect(report.reclaimed).toHaveLength(1);
+  });
+});
+
+describe("runGcCycle 三阶段独立成败（specs/derived-deletion-linkage.md 规则 4）", () => {
+  beforeEach(() => {
+    mocks.sweepStaging.mockResolvedValue(0);
+    mocks.sweepDerived.mockResolvedValue(0);
+  });
+
+  it("引用回收失败不拖累两路清扫", async () => {
+    mocks.queryRaw.mockReset();
+    mocks.queryRaw.mockRejectedValue(new Error("db down"));
+    mocks.sweepStaging.mockResolvedValue(2);
+    mocks.sweepDerived.mockResolvedValue(5);
+
+    await expect(runGcCycle()).resolves.toEqual({
+      gc: null,
+      gcError: expect.stringContaining("db down"),
+      swept: 2,
+      sweepError: null,
+      derivedSwept: 5,
+      derivedSweepError: null,
+    });
+  });
+
+  it("staging 清扫失败不拖累引用回收与派生清扫", async () => {
+    setRawResponses([]);
+    mocks.sweepStaging.mockRejectedValue(new Error("s3 down"));
+    mocks.sweepDerived.mockResolvedValue(5);
+
+    const result = await runGcCycle();
+    expect(result.gc).not.toBeNull();
+    expect(result.swept).toBeNull();
+    expect(result.sweepError).toContain("s3 down");
+    expect(result.derivedSwept).toBe(5);
+    expect(result.derivedSweepError).toBeNull();
+  });
+
+  it("派生清扫失败独立记录，不拖累前两阶段", async () => {
+    setRawResponses([]);
+    mocks.sweepStaging.mockResolvedValue(1);
+    mocks.sweepDerived.mockRejectedValue(new Error("list failed"));
+
+    const result = await runGcCycle();
+    expect(result.gc).not.toBeNull();
+    expect(result.swept).toBe(1);
+    expect(result.derivedSwept).toBeNull();
+    expect(result.derivedSweepError).toContain("list failed");
   });
 });

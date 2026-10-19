@@ -11,15 +11,14 @@
 import path from "path";
 import { createReadStream, createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
-import { cacheKeyOf, posterMasterKey } from "./derived-keys";
+import { cacheKeyOf, posterMasterKey, RESIZE_WIDTH_TIERS } from "./derived-keys";
 import { acquireMediaFile } from "./media-source";
 import { logEvent } from "@server/core/logger/utils";
 import { ensureArtifact } from "./artifact";
 import { runFfmpegLight } from "./ffmpeg";
 import { acquireMediaSlot, MediaPoolBusyError } from "./media-pool";
 
-/** 缩略图宽度档位：全部来自前端调用点的实际宽度；1280 供视频节点海报（画布缩放 / retina） */
-export const RESIZE_WIDTH_TIERS = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
+/** 缩略图宽度档位单点在 derived-keys（cache key 的 tier 段域，与构造/枚举同址防漂移） */
 
 /** 海报母版参数：代码常量（结构性参数，不做运行期设置）；变更后 POSTER_VERSION +1 整体重生成 */
 const POSTER_MASTER_MAX_WIDTH = 3840;

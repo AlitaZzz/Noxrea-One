@@ -416,4 +416,10 @@ describe("sweepStagingObjects", () => {
     await expect(sweepStagingObjects()).resolves.toBe(1);
     expect(mocks.delete).not.toHaveBeenCalled();
   });
+
+  it("枚举失败上抛（GC 阶段失败可见：sweepError / CLI 退出码）", async () => {
+    mocks.list.mockRejectedValueOnce(new Error("list down"));
+    await expect(sweepStagingObjects()).rejects.toThrow("list down");
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
 });

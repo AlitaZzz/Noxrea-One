@@ -25,6 +25,7 @@ import { probeUploadVideo, type VideoUploadWarning } from "./media-probe";
 import { createXmlContentDetector } from "./xml-content";
 import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
 import { supportsDirectUpload, STAGING_PREFIX, STAGING_KEY_PATTERN } from "./backend";
+import { sweepAgedPrefix } from "./sweep";
 
 /** staging 超龄清扫阈值：完成流程很短，24h 足以覆盖一切中断场景 */
 export const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -231,26 +232,12 @@ export async function completeDirectUpload(
 /**
  * staging 清扫（挂接 GC 每日节奏）：超龄 staging 对象逐个删除。
  * 受 storage.gc_dry_run 护栏约束：开启时只统计不删除，与引用回收同一安全口径。
- * 单个删除失败不中断清扫（次日重试）；枚举失败向上抛由调用方记录。
+ * 判龄、护栏与删除失败留痕的力学单点在 sweep.ts（与派生清扫共享）；
+ * 枚举失败上抛，由 runGcCycle 记录为阶段失败（sweepError / CLI 退出码）。
  */
 export async function sweepStagingObjects(): Promise<number> {
   const backend = getStorageBackend();
   const dryRun = getSetting("storage.gc_dry_run");
   const cutoff = Date.now() - STAGING_MAX_AGE_MS;
-  let swept = 0;
-  for (const entry of await backend.list(STAGING_PREFIX)) {
-    // lastModifiedMs 缺失（0）按未到期处理：宁可多留一轮，不误删在途上传
-    if (entry.lastModifiedMs <= 0 || entry.lastModifiedMs >= cutoff) continue;
-    if (dryRun) {
-      swept += 1;
-      continue;
-    }
-    try {
-      await backend.delete(entry.key);
-      swept += 1;
-    } catch (err) {
-      logger.warn({ err, staging: entry.key }, "staging sweep delete failed; will retry next sweep");
-    }
-  }
-  return swept;
+  return sweepAgedPrefix(backend, STAGING_PREFIX, cutoff, dryRun);
 }

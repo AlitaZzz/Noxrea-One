@@ -7,7 +7,8 @@
 
 import type { Readable } from "stream";
 
-import { isStorageKey, storageKeyStem } from "@noxrea/shared/url";
+import { isStorageKey } from "@noxrea/shared/url";
+import { derivedCandidatesOf } from "./derived-keys";
 
 /** 直传在途暂存命名空间（staging/{userId}/{uuid}，归属编码在 key 里）；直传、staging 清扫、迁移/审计分类共用 */
 export const STAGING_PREFIX = "staging/";
@@ -21,11 +22,9 @@ export const STAGING_KEY_PATTERN = new RegExp(
 );
 
 /**
- * 派生产物命名空间前缀（本地与对象存储同构；迁移两侧枚举分类与审计计数共用）。
+ * 派生产物命名空间前缀（本地与对象存储同构；迁移/审计分类与派生 TTL 清扫的根清单同源于此）。
  * `_tmp` 是工作区临时区，不属对象命名空间，不在此列（审计计数另行并入）。
- * 注：delete 派生联动（listDerivedArtifactKeys）只按 stem 枚举 `_cache`/`_posters`，
- * 不经此前缀常量——_sprite/_proxy 旧形态为单向哈希文件名无法枚举；新形态（specs/file-access-ownership.md
- * 规则 7）内嵌源键后已可枚举，纳入联动为后续可选项，TTL 清扫兜底不变。
+ * 派生删除联动经 listDerivedArtifactKeys 覆盖全部四根（specs/derived-deletion-linkage.md 规则 1）。
  */
 export const DERIVED_ROOT_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/"] as const;
 
@@ -51,10 +50,17 @@ export interface StorageBackend {
    * ETag 消费方（迁移脚本）直接以 SDK 读对象 ETag，不经 stat。
    */
   stat(key: string): Promise<{ size: number; mtimeMs: number } | null>;
-  /** 删除该 key 的一切：主对象 + `_cache` / `_posters` 派生（经 list 按 stem 枚举）；不存在视为成功 */
+  /** 删除该 key 的一切：主对象 + 四命名空间派生（经 listDerivedArtifactKeys 精准 shard 枚举）；不存在视为成功 */
   delete(key: string): Promise<void>;
   /** 按前缀枚举（派生清理、staging 清扫、全 bucket 审计）；lastModifiedMs 供按龄清扫判定 */
   list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>>;
+  /**
+   * 子前缀列举能力：prefix 下一层的「目录型子前缀」（含查询前缀本身与尾随 /，
+   * 如 "_posters/" → ["_posters/v1/", "_posters/v2/"]）。派生删除联动的版本段发现
+   * 是其唯一消费方（specs/derived-deletion-linkage.md 规则 2）；不支持的后端不实现，
+   * 联动对 `_posters` 退化为全前缀 list 兜底（联动语义完整，成本回到全扫描）。
+   */
+  listCommonPrefixes?(prefix: string): Promise<string[]>;
   /** 预签名 GET（重定向分发、媒体工具输入）；不支持的后端不实现 */
   presignGet?(key: string, opts?: {
     ttlSeconds?: number;
@@ -108,23 +114,22 @@ export class StorageTraversalError extends Error {
 
 /**
  * 业务规则 9 的枚举半边（接口级规则，各后端共享不变量：「派生产物只挂内容寻址 key」）：
- * 源 key 的派生产物——`_cache` / `_posters` 下以 `/<stem>.webp` 结尾的对象。删除力学（含空目录回收）由各后端自理；
- * `_sprite` / `_proxy` 新形态（specs/file-access-ownership.md 规则 7）内嵌源键后同样可枚举，
- * 纳入删除联动为后续可选项，当前仍由 TTL 清扫兜底。
+ * 按 specs/derived-deletion-linkage.md 规则 1/2 以精准 shard 前缀枚举四命名空间派生产物
+ * （构造、解析、枚举三面知识同址 derived-keys.ts）。staging / 派生 / 畸形 key 短路返回 []——
+ * staging 清扫等逐 key 删除不为每个 key 付 list 流量；staging 源的派生缓存由 TTL 清扫兜底。
+ * 删除力学（含空目录回收）由各后端自理。
  */
 export async function listDerivedArtifactKeys(
   backend: StorageBackend,
   key: string,
 ): Promise<string[]> {
-  // 派生产物只挂内容寻址 key（规则 9）：staging、派生物自身等非内容 key 没有派生半边，直接短路——
-  // staging 清扫等逐 key 删除不再为每个 key 付两次全前缀 list 的流量。
-  // （会话内对 staging key ?w= 生成的缓存条目属可再派生数据，由 TTL 清扫兜底，不丢内容。）
   if (!isStorageKey(key)) return [];
-  const stem = storageKeyStem(key);
+  const posterVersions = (await backend.listCommonPrefixes?.("_posters/")) ?? null;
+  const candidates = derivedCandidatesOf(key, posterVersions);
   const hits: string[] = [];
-  for (const root of ["_cache", "_posters"]) {
-    for (const entry of await backend.list(`${root}/`)) {
-      if (entry.key.endsWith(`/${stem}.webp`)) hits.push(entry.key);
+  for (const candidate of candidates) {
+    for (const entry of await backend.list(candidate.prefix)) {
+      if (candidate.test(entry.key)) hits.push(entry.key);
     }
   }
   return hits;

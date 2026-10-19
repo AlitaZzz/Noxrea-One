@@ -1,8 +1,9 @@
 /**
  * S3 后端单测：@aws-sdk 命令捕获桩。
  * 覆盖 put（Buffer / 文件路径 / 流暂存）、get（Range / abort）、
- * stat（404 → null）、delete（内容 key 派生联动 + 非 content key 短路）、
- * list（分页 + 前缀剥离）、presign（epoch 窗口对齐）、copy、probe 与 key 防护。
+ * stat（404 → null）、delete（四命名空间派生联动 + 非 content key 短路）、
+ * list（分页 + 前缀剥离）、listCommonPrefixes（Delimiter 版本发现）、
+ * presign（epoch 窗口对齐）、copy、probe 与 key 防护。
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs/promises";
@@ -176,25 +177,64 @@ describe("delete", () => {
   const hash = "a".repeat(64);
   const key = `3/ab/${hash}.png`;
 
-  it("删除主对象并联动 _cache / _posters 派生（规则 9，内容 key）", async () => {
-    mocks.send.mockImplementation((cmd: { kind: string; input: { Prefix?: string } }) => {
-      if (cmd.kind === "list") {
-        const contents =
-          cmd.input.Prefix === "app/_cache/" ? [{ Key: `app/_cache/3/ab/${hash}.webp` }] : [];
-        return Promise.resolve({ Contents: contents });
+  it("删除主对象并联动四命名空间派生：精准 shard list + 版本发现，零全前缀扫描（规则 1/2）", async () => {
+    mocks.send.mockImplementation((cmd: {
+      kind: string;
+      input: { Prefix?: string; Delimiter?: string };
+    }) => {
+      if (cmd.kind !== "list") return Promise.resolve({});
+      if (cmd.input.Delimiter === "/") {
+        // 版本发现（listCommonPrefixes）
+        return Promise.resolve({ CommonPrefixes: [{ Prefix: "app/_posters/v1/" }] });
       }
-      return Promise.resolve({});
+      const contents: Record<string, Array<{ Key: string }>> = {
+        [`app/_cache/64/3/ab/`]: [{ Key: `app/_cache/64/3/ab/${hash}.webp` }],
+        [`app/_posters/v1/3/ab/`]: [{ Key: `app/_posters/v1/3/ab/${hash}.webp` }],
+        [`app/_sprite/3/ab/`]: [{ Key: `app/_sprite/3/ab/${hash}_c20v2.webp` }],
+        [`app/_proxy/3/ab/`]: [{ Key: `app/_proxy/3/ab/${hash}_w480v3.mp4` }],
+      };
+      return Promise.resolve({ Contents: contents[cmd.input.Prefix ?? ""] ?? [] });
     });
+
     await backend.delete(key);
-    const deletedKeys = sentCommands()
-      .filter(([kind]) => kind === "delete")
-      .map(([, input]) => input.Key);
-    expect(deletedKeys).toEqual([`app/${key}`, `app/_cache/3/ab/${hash}.webp`]);
+
+    expect(sentCommands().filter(([kind]) => kind === "delete").map(([, input]) => input.Key)).toEqual([
+      `app/${key}`,
+      `app/_cache/64/3/ab/${hash}.webp`,
+      `app/_posters/v1/3/ab/${hash}.webp`,
+      `app/_sprite/3/ab/${hash}_c20v2.webp`,
+      `app/_proxy/3/ab/${hash}_w480v3.mp4`,
+    ]);
+    const listInputs = sentCommands()
+      .filter(([kind]) => kind === "list")
+      .map(([, input]) => input as { Prefix?: string; Delimiter?: string });
+    // 零全前缀扫描：内容列举（非 Delimiter）无 "app/_cache/"、无 "app/_posters/"；版本发现恰一次
+    expect(
+      listInputs.some(
+        (i) => i.Delimiter !== "/" && (i.Prefix === "app/_cache/" || i.Prefix === "app/_posters/"),
+      ),
+    ).toBe(false);
+    expect(listInputs.filter((i) => i.Delimiter === "/")).toHaveLength(1);
   });
 
-  it("非内容 key（staging）无派生半边：只删对象，不枚举派生（清扫流量护栏）", async () => {
+  it("非内容 key（staging）无派生半边：只删对象，不枚举派生（清扫流量护栏，规则 3）", async () => {
     await backend.delete("staging/3/uuid");
     expect(sentCommands().map(([kind]) => kind)).toEqual(["delete"]);
+  });
+});
+
+describe("listCommonPrefixes", () => {
+  it("Delimiter 列举一层子前缀并剥离统一前缀", async () => {
+    mocks.send.mockResolvedValueOnce({
+      CommonPrefixes: [{ Prefix: "app/_posters/v1/" }, { Prefix: "app/_posters/v2/" }],
+    });
+    await expect(backend.listCommonPrefixes("_posters/")).resolves.toEqual([
+      "_posters/v1/",
+      "_posters/v2/",
+    ]);
+    const [[kind, input]] = sentCommands();
+    expect(kind).toBe("list");
+    expect(input).toMatchObject({ Prefix: "app/_posters/", Delimiter: "/" });
   });
 });
 

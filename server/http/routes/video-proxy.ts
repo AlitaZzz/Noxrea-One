@@ -24,7 +24,6 @@ import { createScrubProxy } from "@server/services/storage/video-frames";
 import { probeVideoMetaCached } from "@server/services/storage/media-probe";
 import { ensureArtifact } from "@server/services/storage/artifact";
 import { proxyKeyOf } from "@server/services/storage/derived-keys";
-import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
 import { mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { buildFileUrl } from "@server/services/storage/service";
 import { ok } from "@server/core/response";
@@ -39,8 +38,6 @@ const videoProxySchema = z.object({
 const PROXY_WIDTH = 480;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
 const PROXY_VERSION = 3;
-/** 代理存活时间：过期后删除，下次打开面板会自动重建 */
-const PROXY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 读取代理文件的真实时长（探一次后进缓存）；拿不到返回 null */
 async function proxyDurationOf(proxyKey: string): Promise<number | null> {
@@ -74,9 +71,6 @@ router.post(
       // 于 derived-keys，归属可解析（specs/file-access-ownership.md 规则 7）
       const proxyKey = proxyKeyOf(sourceKey, width, PROXY_VERSION);
       const fps = meta?.fps ?? null;
-
-      // 顺带做一次低频清理，不阻塞本次请求
-      void cleanupStaleDerived("_proxy/", PROXY_TTL_MS);
 
       await ensureArtifact({
         key: proxyKey,

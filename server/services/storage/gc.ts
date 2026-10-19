@@ -23,6 +23,7 @@ import { prisma } from "@server/core/database/client";
 import { getSetting } from "@server/core/settings";
 import { buildStorageKey, getStorageBackend } from "./service";
 import { sweepStagingObjects } from "./upload-direct";
+import { sweepStaleDerivedObjects } from "./derived-cleanup";
 import { logEvent } from "@server/core/logger/utils";
 
 const GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -172,10 +173,13 @@ export interface GcCycleResult {
   /** staging 清扫回收数；阶段抛错为 null */
   swept: number | null;
   sweepError: string | null;
+  /** 派生清扫回收数（四根统一 TTL，specs/derived-deletion-linkage.md 规则 4）；阶段抛错为 null */
+  derivedSwept: number | null;
+  derivedSweepError: string | null;
 }
 
 /**
- * GC 单周期：引用回收 + staging 按龄清扫，两阶段独立成败。
+ * GC 单周期：引用回收 + staging 按龄清扫 + 派生按龄清扫，三阶段独立成败。
  * 进程内定时 tick 与 storage:gc 手动触发共用同一实现（护栏口径单一来源），
  * 结果返回给调用方各按需消费（tick 落日志，CLI 置退出码）。
  */
@@ -184,6 +188,8 @@ export async function runGcCycle(): Promise<GcCycleResult> {
   let gcError: string | null = null;
   let swept: number | null = null;
   let sweepError: string | null = null;
+  let derivedSwept: number | null = null;
+  let derivedSweepError: string | null = null;
   try {
     gc = await runStorageGc();
     logEvent("gc", {
@@ -208,7 +214,15 @@ export async function runGcCycle(): Promise<GcCycleResult> {
     sweepError = String(err);
     logEvent("gc", { stage: "staging_sweep_failed", error: sweepError });
   }
-  return { gc, gcError, swept, sweepError };
+  // 派生按龄清扫（四根统一 TTL）：同一节奏独立成败，specs/derived-deletion-linkage.md 规则 4
+  try {
+    derivedSwept = await sweepStaleDerivedObjects();
+    logEvent("gc", { stage: "derived_swept", swept: derivedSwept, dryRun: getSetting("storage.gc_dry_run") });
+  } catch (err) {
+    derivedSweepError = String(err);
+    logEvent("gc", { stage: "derived_sweep_failed", error: derivedSweepError });
+  }
+  return { gc, gcError, swept, sweepError, derivedSwept, derivedSweepError };
 }
 
 async function tick(): Promise<void> {

@@ -19,7 +19,6 @@ import { probeVideoIntegrity, probeVideoMetaCached } from "@server/services/stor
 import { ensureArtifact } from "@server/services/storage/artifact";
 import { spriteKeyOf } from "@server/services/storage/derived-keys";
 import { buildFileUrl } from "@server/services/storage/service";
-import { cleanupStaleDerived } from "@server/services/storage/derived-cleanup";
 import { ok, failCode } from "@server/core/response";
 import { createMediaEditRoute } from "./media-edit";
 
@@ -43,8 +42,6 @@ const MAX_FRAMES = 20;
  * 超出部分是坏帧，必须整体重生成。
  */
 const SPRITE_VERSION = 2;
-/** 雪碧图存活时间：单张只有几十 KB，与代理同周期清理即可 */
-const SPRITE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -90,9 +87,6 @@ router.post(
       // 新图，不命中旧规格缓存；构造与解析同址于 derived-keys，归属可解析
       // （specs/file-access-ownership.md 规则 7）
       const spriteKey = spriteKeyOf(sourceKey, count, SPRITE_VERSION);
-
-      // 顺带做一次低频清理，不阻塞本次请求
-      void cleanupStaleDerived("_sprite/", SPRITE_TTL_MS);
 
       const payload = {
         url: buildFileUrl(spriteKey),

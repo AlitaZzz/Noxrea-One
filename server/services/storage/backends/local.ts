@@ -2,12 +2,12 @@
  * 本地磁盘存储后端。
  * 基于文件系统实现 StorageBackend（specs/storage-s3-backend.md 业务规则 3）：
  * put/get/stat/delete/list，发布经工作区 writeAtomic 原子落盘；
- * 派生产物清理经 list 按 stem 枚举（与 S3 后端同一接口语义）。
+ * 派生产物清理经共享枚举器精准 shard 枚举（与 S3 后端同一接口语义）。
  */
 
 import fs from "fs/promises";
 import path from "path";
-import { createReadStream, createWriteStream } from "fs";
+import { createReadStream, createWriteStream, type Dirent } from "fs";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { isPathWithinBase } from "@server/core/paths";
@@ -135,9 +135,9 @@ export class LocalStorageBackend implements StorageBackend {
 
   /**
    * 删除该源文件的派生产物（specs/storage-s3-backend.md 规则 9：delete 负责 key 的一切）。
-   * 经 list 枚举 `_cache` / `_posters` 派生根，按 stem 后缀匹配逐个删除——
-   * 派生路径为 `<派生根>/<分组段>/<源键去扩展名>.webp`（`_cache/<w>/…`、`_posters/v<版本>/…`）。
-   * 雪碧图 / 代理（_sprite / _proxy）的文件名由源键单向哈希派生、无法反查，由各自 TTL 清扫兜底。
+   * 经 listDerivedArtifactKeys 按精准 shard 前缀枚举四命名空间派生
+   * （_cache/_posters/_sprite/_proxy，specs/derived-deletion-linkage.md），
+   * 逐个删除并回收空目录（档位目录、版本目录等）。
    */
   private async deleteDerivedArtifacts(key: string): Promise<void> {
     // 枚举半边是接口级规则，共享实现见 listDerivedArtifactKeys；删除力学（含空目录回收）本地自理
@@ -165,17 +165,13 @@ export class LocalStorageBackend implements StorageBackend {
    * 按前缀枚举对象（相对 posix key + size + 修改时间）；`_tmp` 工作区不在对象命名空间，排除。
    * 遍历根收窄：key 为相对 posix 路径，命中 `xxx/` 前缀的对象必在首段子目录下
    * （如 `_cache/` → `<baseDir>/_cache`），派生清理 / TTL 清扫不再全树遍历；
-   * 无 `/` 的前缀保持全树遍历。
+   * 无 `/` 的前缀保持全树遍历。readdir 错误口径：目录缺失为空集，其余错误上抛
+   * （枚举半边不静默吞错，与 S3 后端 fail-fast 同口径）。
    */
   async list(prefix: string): Promise<Array<{ key: string; size: number; lastModifiedMs: number }>> {
     const out: Array<{ key: string; size: number; lastModifiedMs: number }> = [];
     const walk = async (dir: string): Promise<void> => {
-      let items;
-      try {
-        items = await fs.readdir(dir, { withFileTypes: true });
-      } catch {
-        return; // 目录不存在：没有可枚举对象
-      }
+      const items = await this.readdirOrEmpty(dir);
       for (const item of items) {
         const full = path.join(dir, item.name);
         if (item.isDirectory()) {
@@ -192,6 +188,31 @@ export class LocalStorageBackend implements StorageBackend {
     // 首段收窄遍历根（见方法注释）；无 `/` 的前缀从存储根整树遍历
     await walk(prefix.includes("/") ? path.join(this.baseDir, prefix.split("/", 1)[0]) : this.baseDir);
     return out;
+  }
+
+  /**
+   * 子前缀列举能力（specs/derived-deletion-linkage.md 规则 2）：prefix 下一层的目录型子前缀
+   * （含查询前缀与尾随 /）。工作区临时区 `_tmp` 不在对象命名空间，照 list() 同口径排除。
+   */
+  async listCommonPrefixes(prefix: string): Promise<string[]> {
+    const items = await this.readdirOrEmpty(this.resolveLocalPath(prefix));
+    return items
+      .filter(
+        (item) =>
+          item.isDirectory() &&
+          path.join(this.baseDir, prefix, item.name) !== tmpDir(this.baseDir),
+      )
+      .map((item) => `${prefix}${item.name}/`);
+  }
+
+  /** readdir 枚举口径：目录缺失为合法空集（前缀尚无对象），其余错误上抛（与 S3 后端 fail-fast 同口径） */
+  private async readdirOrEmpty(dir: string): Promise<Dirent[]> {
+    try {
+      return await fs.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
   }
 
   /** 从 dir 向上逐级删除空目录，直到存储根为止 */

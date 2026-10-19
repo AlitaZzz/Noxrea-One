@@ -180,10 +180,57 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await expect(fs.access(abs("_posters/v1"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("派生根不存在时不报错", async () => {
-    await fs.mkdir(path.dirname(abs("u9/ef/plain.bin")), { recursive: true });
-    await fs.writeFile(abs("u9/ef/plain.bin"), "x");
+  it("内容源存在而无任何派生：联动枚举空集不报错（readdir 缺失=合法空集）", async () => {
+    const hash = "f".repeat(64);
+    await fs.mkdir(path.join(root, "9/ef"), { recursive: true });
+    await fs.writeFile(abs(`9/ef/${hash}.bin`), "x");
 
-    await expect(storage.delete("u9/ef/plain.bin")).resolves.toBeUndefined();
+    await expect(storage.delete(`9/ef/${hash}.bin`)).resolves.toBeUndefined();
+    await expect(fs.access(abs(`9/ef/${hash}.bin`))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("删除源文件联动清理新形态 _sprite/_proxy 派生（specs/derived-deletion-linkage.md 规则 1）", async () => {
+    const hash = "c".repeat(64);
+    const otherHash = "d".repeat(64);
+    await fs.mkdir(path.join(root, "7/cc"), { recursive: true });
+    await fs.writeFile(path.join(root, `7/cc/${hash}.mp4`), "video");
+    for (const p of [
+      `_cache/64/7/cc/${hash}.webp`,
+      `_posters/v1/7/cc/${hash}.webp`,
+      `_sprite/7/cc/${hash}_c20v2.webp`,
+      `_proxy/7/cc/${hash}_w480v3.mp4`,
+      // 其他源（同 shard 与他 shard）的派生不受影响
+      `_sprite/7/cc/${otherHash}_c12v1.webp`,
+      `_sprite/${"e".repeat(32)}.webp`, // 旧单向哈希形态：不可枚举，TTL 兜底
+    ]) {
+      await fs.mkdir(path.dirname(abs(p)), { recursive: true });
+      await fs.writeFile(abs(p), "derived");
+    }
+
+    await storage.delete(`7/cc/${hash}.mp4`);
+
+    for (const p of [
+      `_cache/64/7/cc/${hash}.webp`,
+      `_posters/v1/7/cc/${hash}.webp`,
+      `_sprite/7/cc/${hash}_c20v2.webp`,
+      `_proxy/7/cc/${hash}_w480v3.mp4`,
+    ]) {
+      await expect(fs.access(abs(p)), p).rejects.toMatchObject({ code: "ENOENT" });
+    }
+    await expect(fs.access(abs(`_sprite/7/cc/${otherHash}_c12v1.webp`))).resolves.toBeUndefined();
+    await expect(fs.access(abs(`_sprite/${"e".repeat(32)}.webp`))).resolves.toBeUndefined();
+  });
+
+  it("staging 源删除不触发派生枚举（门控短路），staging 源派生缓存由 TTL 兜底（规则 3）", async () => {
+    const uuid = "123e4567-e89b-12d3-a456-426614174000";
+    await fs.mkdir(path.dirname(abs(`staging/9/${uuid}`)), { recursive: true });
+    await fs.writeFile(abs(`staging/9/${uuid}`), "partial");
+    await fs.mkdir(path.dirname(abs(`_cache/64/staging/9/${uuid}.webp`)), { recursive: true });
+    await fs.writeFile(abs(`_cache/64/staging/9/${uuid}.webp`), "cached");
+
+    await storage.delete(`staging/9/${uuid}`);
+
+    await expect(fs.access(abs(`staging/9/${uuid}`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/64/staging/9/${uuid}.webp`))).resolves.toBeUndefined();
   });
 });
