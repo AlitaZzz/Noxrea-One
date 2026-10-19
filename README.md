@@ -259,11 +259,43 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 2. **lifecycle 规则（可选）**：可按前缀自动过期替代 `_sprite` / `_proxy` 的代码内 30 天 TTL 清扫；**禁止**对主对象前缀配置 lifecycle（主对象删除只能由引用计数 GC 驱动）。
 3. **服务端加密**：bucket 不得启用 SSE-KMS / SSE-C（MinIO/R2 默认关闭）；启用会使 ETag≠MD5，迁移校验自动降级为 size 比对 + 重读哈希并告警（直传复验以服务端重算 SHA256 为准，不受影响）。
 
-### 对账与切换
+### 对账与维护
 
-低频维护命令：`npm run storage:audit` 对 bucket 与 `file_objects` 全量对账（孤儿 / 缺失 / 超龄 staging / 未知对象清单，只读不修改，发现异常退出码 1）。
+低频维护命令：`npm run storage:audit` 对 bucket 与 `file_objects` 全量对账（孤儿 / 缺失 / 超龄 staging / 未知对象清单，只读不修改，发现异常退出码 1）；`npm run storage:gc` 手动触发一轮 GC（与进程内定时任务共用同一周期实现，受 `storage.gc_dry_run` 护栏约束）。
 
-切换与回滚遵循「单一后端、切换必须停写」：停应用 → 迁移脚本全量搬迁并校验（迁移脚本属 Stage 4 待交付项，交付前不得执行切换；规格要求支持 dry-run 与断点续跑，不删除本地数据）→ 设置 `storage.backend=s3` → 重启；回滚先反向补迁再改回 `local`。完整规则见 [`specs/storage-s3-backend.md`](specs/storage-s3-backend.md)。
+### 数据迁移（local ↔ s3）
+
+`npm run storage:migrate` 双向全量搬迁 + 校验：内容对象以 ETag==本地 MD5 为主校验（ETag 形态不符时自动降级为重读哈希比对并告警）、派生产物按字节数核对（可再生，失败跳过记清单）、支持 dry-run 盘点与断点续跑、**不删除任何一侧数据**。使用场景：存量 local 数据上 S3，或 S3 异常时反向补迁回滚（流程见 [`specs/storage-s3-backend.md`](specs/storage-s3-backend.md)「切换与回滚流程」）。
+
+### 生产切换核对单（specs/storage-s3-production-cutover.md）
+
+生产部署流程规格见 [`specs/storage-s3-production-cutover.md`](specs/storage-s3-production-cutover.md)（已确认：自建 MinIO 同机部署、反向代理统一终止 TLS、生产空桶冷启动、72 小时观察期）。切换执行前逐项核对，任一缺省即不得切换：
+
+**前置**
+
+- [ ] 反向代理统一终止 https：应用与 bucket 两个地址经同一代理出 https（消除 mixed-content）；代理**原样透传 `Host` 头**（SigV4 预签名校验依赖）；`storage.s3.endpoint` 填代理后公网地址
+- [ ] 生产凭据全新签发：专用最小权限用户（仅本 bucket 读写），与任何演练值（用户名 / 密钥 / 端点 / 桶名）零关联
+- [ ] CORS 按生产域名配置（上一节清单）；lifecycle 仅限派生前缀、主对象前缀禁配；bucket 未启用 SSE-KMS / SSE-C
+- [ ] bucket endpoint 自浏览器与上游 AI 网络均可达；不可达链路分别以 `delivery=proxy` / `upstream_ref_delivery=base64` 兜底并记录决策
+
+**冷启动切换**
+
+- [ ] 确认生产空桶冷启动（开发 / 演练数据不进生产，无存量迁移）
+- [ ] 生产值写入 `system_settings`（`storage.backend=s3` + `storage.s3.*`），重启生效
+- [ ] 启动探测通过（HeadBucket 失败即启动失败属设计行为：修正前置，或临时改回 `local` 恢复服务）
+
+**验收（全部通过并留痕，任一失败即停止切换、保持或回退 local）**
+
+- [ ] 直传全流程（ticket → 预签名 PUT → complete 提升）与秒传命中
+- [ ] redirect 读：302 → https 预签名 URL 字节一致、Range/206、`?download`、`?w=` 档位派生与命中
+- [ ] 视频抓帧 / 封面正常（crossOrigin × 生产 CORS 联合回归点）
+- [ ] 上游 AI 签名 URL 拉取成功、过期后失效
+- [ ] 删除联动四根派生 + GC 三阶段实跑 + `storage:audit` 对账一致
+
+**收尾**
+
+- [ ] 回滚演练：改回 `backend=local` 重启即恢复（冷启动场景本地无历史包袱；`storage:migrate s3-to-local` 保留为运行期回滚路径）
+- [ ] 72 小时观察期（GC 每日周期至少三轮）后判定切换完成；全量 `storage:audit` 基线留档
 
 ## 资源与模型配置
 
