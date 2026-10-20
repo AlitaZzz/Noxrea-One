@@ -15,6 +15,9 @@ import { signFileUrlParams } from "@server/services/storage/file-url-signature";
 import { mimeByExt } from "@server/services/storage/mime";
 import { GenerationFailureError } from "@server/services/tasks/failure";
 
+/** 规则 12 交付失败统一错误码：参考素材无法按选定形态交付上游（落库供失败分类与统计） */
+const REFERENCE_UNAVAILABLE = "generation.reference_unavailable";
+
 /**
  * 将存储 key 引用的素材转为完整的 data: URL（base64）。
  * local 后端直接读存储文件；S3 后端先下载到工作区再读（base64 整体上传属重操作）。
@@ -34,7 +37,7 @@ async function readSelfFile(storageKey: string): Promise<string> {
     }
     throw new GenerationFailureError(
       `参考素材读取失败: ${storageKey}`,
-      "generation.reference_unavailable"
+      REFERENCE_UNAVAILABLE
     );
   }
 
@@ -50,7 +53,7 @@ async function readSelfFile(storageKey: string): Promise<string> {
       });
       throw new GenerationFailureError(
         `参考素材读取失败: ${storageKey}`,
-        "generation.reference_unavailable"
+        REFERENCE_UNAVAILABLE
       );
     }
 
@@ -64,31 +67,62 @@ async function readSelfFile(storageKey: string): Promise<string> {
 }
 
 /**
+ * 签发不能成立的统一出口：记 signed_url_failed 日志、抛 GenerationFailureError
+ * （统一错误码 + 指明配置动作，并统一携带「或改 base64」备选动作）。
+ * 三类签发失败共用，「一律明确失败」契约的单一实现。
+ */
+function signedUrlFailure(key: string, reason: unknown, hint: string): never {
+  logEvent("resolver.reference", {
+    stage: "signed_url_failed",
+    key: key.slice(0, 80),
+    error: reason instanceof Error ? reason.message : String(reason),
+  });
+  throw new GenerationFailureError(
+    `参考素材签名失败: ${key}（${hint}，或将 storage.upstream_ref_delivery 改为 base64）`,
+    REFERENCE_UNAVAILABLE,
+  );
+}
+
+/**
  * 规则 12：引用 key 即时签发为短期签名 URL。
- * - S3 后端：presignGet 直连 bucket（端点需对上游可达）；签名操作失败向上抛
- *   （交付形态由 storage.upstream_ref_delivery 决定，临时故障不静默改变载荷契约）；
- * - local 后端：应用层 HMAC 签名 + public_base_url 拼绝对地址；
- *   未配置 public_base_url 属结构性不可用，返回 null 由调用方按设置回退 base64。
+ * - S3 后端：presignGet 直连 bucket（前提端点对上游可达，见规则 12）；
+ * - local 后端：应用层 HMAC 签名 + public_base_url 拼绝对地址。
+ * 交付形态仅由 storage.upstream_ref_delivery 单一开关决定；signed-url 模式下
+ * 签发不能成立（S3 签名故障 / local 未配 public_base_url / 签名操作故障）
+ * 一律明确失败——与读取失败同一哲学：不静默改变载荷契约，错误信息指明配置动作。
  * TTL 沿用 `storage.s3.signed_url_ttl_seconds`（规则 12：默认 1h，覆盖上游拉取窗口）。
  */
-async function upstreamSignedUrl(key: string): Promise<string | null> {
+async function upstreamSignedUrl(key: string): Promise<string> {
   const backend = getStorageBackend();
-  if (backend.presignGet) return await backend.presignGet(key);
+  if (backend.presignGet) {
+    try {
+      return await backend.presignGet(key);
+    } catch (err) {
+      signedUrlFailure(key, err, "请检查 storage.s3 凭据与签名配置");
+    }
+  }
   const base = stripTrailingSlash(getSetting("network.public_base_url"));
-  if (!base) return null;
+  if (!base) {
+    signedUrlFailure(key, "network.public_base_url 未配置", "请配置 network.public_base_url");
+  }
   const ttl = getSetting("storage.s3.signed_url_ttl_seconds");
-  const { expires, signature } = signFileUrlParams(key, ttl);
-  const query = new URLSearchParams({ expires: String(expires), signature });
-  return `${base}${buildManagedFileUrl(key)}?${query.toString()}`;
+  try {
+    const { expires, signature } = signFileUrlParams(key, ttl);
+    const query = new URLSearchParams({ expires: String(expires), signature });
+    return `${base}${buildManagedFileUrl(key)}?${query.toString()}`;
+  } catch (err) {
+    signedUrlFailure(key, err, "请检查服务端签名密钥配置");
+  }
 }
 
 /**
  * 参考素材通用解析（对齐 Python resolve_refs 三档策略 + storage-s3-backend 规则 12 双凭据）：
  * 1) data: URL → 直接透传
- * 2) 存储 key（任务 ref* 列持久化的托管引用形态）→ 按 `storage.upstream_ref_delivery`：
- *    signed-url（默认）即时签发短期签名 URL（S3 直连 bucket，local 拼 public_base_url）；
- *    base64、或 local 未配 public_base_url（结构性不可用）时回退读本机磁盘转 data URL；
- *    签名操作失败（如 S3 临时故障）按失败处理，不静默改变载荷契约
+ * 2) 存储 key（任务 ref* 列持久化的托管引用形态）→ 按 `storage.upstream_ref_delivery`
+ *    单一开关：signed-url（默认）即时签发短期签名 URL（S3 直连 bucket，local 拼
+ *    public_base_url）；base64 读本机磁盘转 data URL。交付形态仅由设置决定，
+ *    signed-url 模式下签发不能成立（S3 签名故障 / local 未配 public_base_url /
+ *    签名操作故障）一律明确失败，绝不静默回退另一形态。
  * 3) 外链 URL → 透传原串
  * 本地素材读取失败时抛 GenerationFailureError，外链透传不涉及读取、不会失败。
  * 签名 URL 不入库不持久化：解析发生在每次提交/重试时，天然即时重签。
@@ -108,23 +142,11 @@ async function resolveRefList(urls: string[]): Promise<string[]> {
       continue;
     }
 
-    // 存储 key：签名 URL 优先（上游自行拉取，字节不过应用服务器）；
-    // 设置选 base64、或 local 未配 public_base_url（结构性不可用）时回退读盘转 base64；
-    // 签名操作失败按本环节明确失败处理（与 readSelfFile 同一哲学，不静默改走 base64）
+    // 存储 key：交付形态仅由单一开关决定，签发不能成立一律明确失败（详见 upstreamSignedUrl）
     if (isStorageKey(url)) {
       if (getSetting("storage.upstream_ref_delivery") === "signed-url") {
-        const signed = await upstreamSignedUrl(url).catch((err: unknown) => {
-          logEvent("resolver.reference", {
-            stage: "signed_url_failed",
-            key: url.slice(0, 80),
-            error: err instanceof Error ? err.message : String(err),
-          });
-          throw new GenerationFailureError(`参考素材签名失败: ${url}`, "generation.reference_unavailable");
-        });
-        if (signed) {
-          resolved.push(signed);
-          continue;
-        }
+        resolved.push(await upstreamSignedUrl(url));
+        continue;
       }
       resolved.push(await readSelfFile(url));
       continue;

@@ -1,7 +1,8 @@
 /**
  * 单任务执行器回归测试。
  * 锁定：upstreamTaskId 恢复轮询不重提、LLM 纯文本直完、URL 结果走下载编排、
- * 失败/取消的终态写入语义（GenerationFailureError 带 errorCode、取消不写失败）。
+ * 失败/取消的终态写入语义（GenerationFailureError 带 errorCode、取消不写失败）、
+ * 引用每次执行即时重签且解析结果只进上游请求、不回写任务行。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -169,6 +170,30 @@ describe("executeTask", () => {
 
     expect(mocks.safeFailTask).not.toHaveBeenCalled();
     expect(mocks.safeCompleteTask).not.toHaveBeenCalled();
+  });
+
+  it("重试重签：每次执行即时解析引用，解析结果只进上游请求、不回写任务行（规则 12）", async () => {
+    const KEY = `3/ab/${"a".repeat(64)}.png`;
+    const task = makeTask({ refImages: [KEY] });
+    mocks.buildContext.mockReturnValue({ config: { providerId: 7 }, refImages: [KEY], refAudios: [], refVideos: [] });
+    let attempt = 0;
+    mocks.resolveRefImages.mockImplementation(async () => [`https://sig.example/attempt-${++attempt}`]);
+
+    await executeTask(task, makeStopSignal());
+    await executeTask(task, makeStopSignal()); // 重试 = 重新认领后再执行，解析天然重跑
+
+    expect(mocks.resolveRefImages).toHaveBeenCalledTimes(2);
+    expect(mocks.resolveRefImages).toHaveBeenNthCalledWith(1, [KEY]);
+    expect(mocks.resolveRefImages).toHaveBeenNthCalledWith(2, [KEY]);
+    expect(mocks.routeGenerate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ params: expect.objectContaining({ refImages: ["https://sig.example/attempt-1"] }) }),
+    );
+    expect(mocks.routeGenerate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ params: expect.objectContaining({ refImages: ["https://sig.example/attempt-2"] }) }),
+    );
+    expect(task.refImages).toEqual([KEY]);
   });
 
   it("config 缺 providerId → 失败并落专用错误码", async () => {

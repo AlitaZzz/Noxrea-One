@@ -11,8 +11,8 @@
 
 1. **生产对象存储形态**：自建 MinIO 容器与应用同机部署（与演练形态同构、流程复用度最高）；TLS 由应用侧反向代理统一终止。
 2. **数据起点**：生产空桶冷启动——开发/演练数据不进生产，迁移脚本仅保留为回滚路径（规则 5 降为备选流程）。
-3. **TLS 方案**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，消除 mixed-content；SigV4 Host 透传为核对单项；`delivery=proxy` 保留为兜底。
-4. **上游引用下发**：`storage.upstream_ref_delivery=signed-url`（bucket 公网可达前提下上游直连）。
+3. **TLS 方案**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，消除 mixed-content；SigV4 Host 透传为核对单项；`delivery=proxy` 保留为读链路的显式备选模式（须显式设置，无自动兜底）。
+4. **上游引用下发**：`storage.upstream_ref_delivery=signed-url`（默认；签发不能成立明确失败并指明配置动作，届时由运维显式改配 `base64`，无自动兜底）。
 5. **观察期**：72 小时（覆盖 GC 每日周期至少三轮）后判定切换完成。
 
 ## 背景与现状（已验证事实）
@@ -40,11 +40,11 @@
 
 1. **环境隔离铁律**：演练凭据、演练桶、dev 数据库永不进入生产——生产凭据全新签发、生产桶独立、生产 DB 独立实例；任何配置项在「生产」语境下出现演练值（`noxrea-app` / `10.10.10.2` / `noxrea-app-drill-2026`）即演练失败项。
 2. **生产前置硬门槛**（backend=s3 起动前逐项核验，全部源自上游 Bucket 初始化清单 + 生产特有项）：
-   - **TLS（生产新增硬门槛，已确认决策 3）**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，浏览器 mixed-content 从根上消除；`storage.s3.endpoint` 填代理后公网地址，SigV4 签名含 Host 头、代理必须原样透传 Host（核对单项）；`storage.s3.delivery=proxy` 仅作无桶域名/证书条件时的兜底。
+   - **TLS（生产新增硬门槛，已确认决策 3）**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，浏览器 mixed-content 从根上消除；`storage.s3.endpoint` 填代理后公网地址，SigV4 签名含 Host 头、代理必须原样透传 Host（核对单项）；`storage.s3.delivery=proxy` 仅作无桶域名/证书条件时的显式备选模式（须显式设置，无自动兜底）。
    - **CORS**：`AllowedOrigins` 为生产域名（含应用实际 scheme），方法/头/暴露头按上游清单；演练桶 CORS 不得复用照抄。
    - **服务端加密**：bucket 不启用 SSE-KMS / SSE-C（否则迁移校验与 ETag 前提降级，需走降级路径并告警）。
    - **lifecycle**：仅派生命名空间可配过期；主对象前缀禁止任何 lifecycle。
-   - **公网可达性**：bucket endpoint 须自浏览器与上游 AI 网络可达（redirect 读 + 直传写 + 上游签名 URL 拉取三链路）；不可达链路分别以 proxy / `storage.upstream_ref_delivery=base64` 兜底并记录决策。
+   - **公网可达性**：bucket endpoint 须自浏览器与上游 AI 网络可达（redirect 读 + 直传写 + 上游签名 URL 拉取三链路）；无法可达的链路须**显式改配**对应模式（读链路 proxy / 上游引用 `storage.upstream_ref_delivery=base64`）并记录决策——均为显式设置，无自动兜底。
 3. **凭据与配置**：生产 access key 为专用最小权限用户（仅本 bucket 读写）；凭据按 `model_providers.api_key` 同级明文落 `system_settings`（既有基准）；`storage.s3.*` 逐项填写生产值，`storage.backend` 切换重启生效；启动探测（HeadBucket）失败即启动失败，运维语义 =「检查端点/凭据/CORS 前置或临时改回 local 恢复服务」。
 4. **冷启动主流程（已确认决策 2）**：生产空桶直接以 `backend=s3` 起服务——无存量数据则迁移脚本不进主流程；顺序为「建桶清单核验 → 生产凭据与连接配置入库 → 起服务（探测通过）→ 生产验收清单 → 72 小时观察期」。dev/演练数据不进生产。
 5. **带数据迁移主流程（备选）**：若决定携带存量数据上线，沿用上游 Spec「切换与回滚流程」原文——停写 → `storage:migrate local-to-s3`（dry-run 盘点 → 实跑 + ETag==MD5 主校验）→ 改设置 → 起服务；本地 `uploads/` 原样保留作回滚根基。
@@ -90,8 +90,8 @@
 
 1. **生产对象存储形态**：推荐自建 MinIO 容器随应用同机部署（与演练形态同构、流程复用度最高、成本可控；TLS 由应用侧反向代理统一终止）；备选云厂商 S3/R2（endpoint 原生 https、免自运维，凭据/容量成本换管理成本）。影响前置清单细节与 backup 措辞。
 2. **数据起点**：推荐**生产空桶冷启动**（多用户公网产品，开发/演练数据不带上生产；迁移脚本仅保留为回滚路径）——主流程最短、无迁移风险敞口；备选携带存量数据上线（走规则 5 迁移主流程， NAS 2C2G 实证 2738 对象可行）。
-3. **TLS 方案**：推荐反向代理统一终止 TLS（应用与 bucket endpoint 均经代理出 https，浏览器 mixed-content 消除，proxy 分发兜底保留）；备选仅应用 https + bucket 保持 http + `delivery=proxy`（字节回经应用，公网带宽成为必经瓶颈，与部署中立目标相悖，仅在不具备桶域名/证书条件时选用）。
-4. **`storage.upstream_ref_delivery`**：推荐 `signed-url`（bucket 公网可达时上游直连，字节不经应用）；备选 `base64`（仅当上游网络无法达桶）。
+3. **TLS 方案**：推荐反向代理统一终止 TLS（应用与 bucket endpoint 均经代理出 https，浏览器 mixed-content 消除，proxy 分发作为显式备选保留）；备选仅应用 https + bucket 保持 http + `delivery=proxy`（字节回经应用，公网带宽成为必经瓶颈，与部署中立目标相悖，仅在不具备桶域名/证书条件时选用）。
+4. **`storage.upstream_ref_delivery`**：推荐 `signed-url`（bucket 公网可达时上游直连，字节不经应用）；备选 `base64`（仅当上游网络无法达桶时显式改配；signed-url 签发不能成立明确失败，无自动兜底）。
 5. **观察期时长**：推荐 72 小时（覆盖 GC 每日周期至少三轮）后判定切换完成；备选一周（覆盖一个完整上传-引用-GC 生命周期样本）。
 
 ## 当前状态

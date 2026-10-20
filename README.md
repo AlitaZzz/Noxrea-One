@@ -242,10 +242,12 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 | `storage.s3.path_style` | `true` | path-style 寻址（MinIO 等自建为 true） |
 | `storage.s3.prefix` | 空 | 对象 key 统一前缀（bucket 复用） |
 | `storage.s3.signed_url_ttl_seconds` | `3600` | 预签名有效期 |
-| `storage.s3.delivery` | `redirect` | `redirect`（302 预签名）/ `proxy`（服务器流式转发，预签名 URL 不可达时兜底） |
-| `storage.upstream_ref_delivery` | `signed-url` | 上游 AI 拉取引用媒体的方式：`signed-url` / `base64` |
+| `storage.s3.delivery` | `redirect` | `redirect`（302 预签名）/ `proxy`（服务器流式转发；预签名 URL 对浏览器不可达时的显式备选，须显式设置） |
+| `storage.upstream_ref_delivery` | `signed-url` | 上游 AI 拉取引用媒体的唯一开关：`signed-url`（签名 URL；签发不能成立——S3 签名故障 / local 未配 `public_base_url` / 签名操作故障——明确失败）/ `base64`（读盘转 data URL） |
 
 `backend=s3` 时启动即对 bucket 做 HeadBucket 探测，连通性或凭据失败会直接终止启动（不静默降级到本地盘）。
+
+> **开发 / 演练环境**：`signed-url` 交付（默认）要求签发结果对上游可拉取。`backend=local` 未配 `network.public_base_url` 时，参考生成在**签发环节即明确失败**并提示配置动作——补配置或显式设 `storage.upstream_ref_delivery=base64`（无自动兜底）。`backend=s3` 若 endpoint 对上游不可达（如内网 MinIO），签发仍会成功、失败在**上游拉取时**才暴露（生成环节无信号）——部署期按生产切换核对单做可达性核对，或显式设 `storage.upstream_ref_delivery=base64`。
 
 ### Bucket 初始化清单（切换前必配）
 
@@ -276,7 +278,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 - [ ] 反向代理统一终止 https：应用与 bucket 两个地址经同一代理出 https（消除 mixed-content）；代理**原样透传 `Host` 头**（SigV4 预签名校验依赖）；`storage.s3.endpoint` 填代理后公网地址
 - [ ] 生产凭据全新签发：专用最小权限用户（仅本 bucket 读写），与任何演练值（用户名 / 密钥 / 端点 / 桶名）零关联
 - [ ] CORS 按生产域名配置（上一节清单）；lifecycle 仅限派生前缀、主对象前缀禁配；bucket 未启用 SSE-KMS / SSE-C
-- [ ] bucket endpoint 自浏览器与上游 AI 网络均可达；不可达链路分别以 `delivery=proxy` / `upstream_ref_delivery=base64` 兜底并记录决策
+- [ ] bucket endpoint 自浏览器与上游 AI 网络均可达；无法可达的链路须**显式改配**对应模式（读链路 `delivery=proxy` / 上游引用 `upstream_ref_delivery=base64`）并记录决策——两种模式均为显式设置，无自动兜底
 
 **冷启动切换**
 

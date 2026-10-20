@@ -67,11 +67,13 @@ async function resolveMessageImages(
  * 对齐 image/video 的任务级独立列形态：prompt（文本源）与 refImages（参考图）
  * 均由 service 消费进 messages，消费后删除，chat 请求体不含两者的顶层字段。
  *
- * 与 image/video 链路对齐：任务级 refImages 由 executor 统一解析为 base64 后注入 params。
+ * 与 image/video 链路对齐：任务级 refImages 由 executor 按 `storage.upstream_ref_delivery`
+ * 单一开关解析（signed-url / base64）后注入 params。
  * 区别在于消费点——image/video 的参考图终点是上游顶层字段（build() 引擎 mapping 消费），
  * 而 LLM 的图片必须内嵌进 messages[].content 的多模态结构，此处为消费点。
  *
- * 注入的 data: URI 会被 resolveMessageImages 跳过；未解析的本地 URL 由其兜底转换。
+ * 注入的 data: URI 会被 resolveMessageImages 跳过；未解析的存储引用由其按同一开关
+ * 解析（resolveRefImages，签发不能成立同样明确失败）。
  * 消费完毕显式移除 refImages（它不在 llm.allowedFields 中，build() 亦会丢弃，
  * 显式移除使"已消费"在代码层面可见）。
  */
@@ -122,10 +124,10 @@ class LlmCapabilityService implements CapabilityService {
     }
 
     // 归一化：无 messages 时从 prompt 构造；顶层 refImages 注入 messages
-    // （必须先于 base64 解析，保证注入的本地 URL 能被随后解析兜底转换）
+    // （必须先于引用解析，保证注入的存储引用能被随后按单一开关解析）
     normalizeMessages(params);
 
-    // messages 中的 image_url 转为 base64（对齐 Python 逻辑）
+    // messages 中的 image_url 按 `storage.upstream_ref_delivery` 单一开关解析（对齐 Python 逻辑）
     if (params.messages) {
       await resolveMessageImages(params.messages);
     }

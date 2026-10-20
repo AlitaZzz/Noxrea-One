@@ -1,7 +1,7 @@
 /**
  * 参考素材解析单测（specs/storage-s3-backend.md 规则 12 双凭据）：
- * signed-url / base64 分发、S3 预签名直连、local 后端应用层签名 URL、
- * 签名不可用回退 base64、1:1 同序契约与读取失败上抛。
+ * signed-url / base64 单一开关分发、S3 预签名直连、local 后端应用层签名 URL、
+ * 签发不能成立明确失败（不静默回退）、1:1 同序契约与读取失败上抛。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "fs/promises";
@@ -11,7 +11,18 @@ import path from "path";
 const mocks = vi.hoisted(() => ({
   acquire: vi.fn(),
   backend: {} as { presignGet?: (key: string, opts?: unknown) => Promise<string> },
+  signFileUrlParams: vi.fn(),
+  signActual: null as null | ((key: string, ttlSeconds: number) => { expires: number; signature: string }),
 }));
+
+vi.mock("@server/services/storage/file-url-signature", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@server/services/storage/file-url-signature")>();
+  mocks.signActual = actual.signFileUrlParams;
+  return {
+    ...actual,
+    signFileUrlParams: (key: string, ttlSeconds: number) => mocks.signFileUrlParams(key, ttlSeconds),
+  };
+});
 
 vi.mock("@server/core/config", () => ({
   getConfig: () => ({
@@ -50,7 +61,20 @@ beforeEach(async () => {
     await fs.writeFile(fixtureFile, CONTENT);
   }
   mocks.acquire.mockResolvedValue({ path: fixtureFile, release: vi.fn() });
+  mocks.signFileUrlParams.mockImplementation(
+    (key: string, ttlSeconds: number) => mocks.signActual!(key, ttlSeconds),
+  );
 });
+
+/**
+ * 规则 12 失败契约断言：单次调用抛 GenerationFailureError（统一错误码）且消息指明配置动作。
+ */
+async function expectRefUnavailable(promise: Promise<unknown>, messageFragment: string): Promise<void> {
+  const err = await promise.catch((e: unknown) => e);
+  expect(err).toBeInstanceOf(GenerationFailureError);
+  expect(err).toMatchObject({ errorCode: "generation.reference_unavailable" });
+  expect((err as Error).message).toContain(messageFragment);
+}
 
 describe("resolveRefImages（规则 12）", () => {
   it("data: URL 直接透传，不触碰后端", async () => {
@@ -87,23 +111,28 @@ describe("resolveRefImages（规则 12）", () => {
     ).toBe(true);
   });
 
-  it("local 后端未配 public_base_url：签名不可用回退 base64", async () => {
+  it("local 后端未配 public_base_url：signed-url 模式明确失败并指明配置动作，不回退 base64", async () => {
     resetTestSettings({ "network.public_base_url": "" });
     mocks.backend = {};
-    const out = await resolveRefImages([KEY]);
-    expect(out[0]).toMatch(/^data:image\/png;base64,/);
+    await expectRefUnavailable(resolveRefImages([KEY]), "public_base_url");
   });
 
-  it("预签名操作失败：按失败处理，不静默改走 base64（交付形态由设置决定）", async () => {
+  it("预签名操作失败：明确失败并指明配置动作，不静默改走 base64（交付形态由设置决定）", async () => {
     mocks.backend = {
       presignGet: vi.fn(async () => {
         throw new Error("gateway down");
       }),
     };
-    await expect(resolveRefImages([KEY])).rejects.toMatchObject({
-      name: "GenerationFailureError",
-      errorCode: "generation.reference_unavailable",
+    await expectRefUnavailable(resolveRefImages([KEY]), "storage.s3 凭据");
+  });
+
+  it("local 后端签名操作失败：同样明确失败并指明配置动作（「一律」契约完整）", async () => {
+    resetTestSettings({ "network.public_base_url": "https://app.example/" });
+    mocks.backend = {};
+    mocks.signFileUrlParams.mockImplementation(() => {
+      throw new Error("kdf down");
     });
+    await expectRefUnavailable(resolveRefImages([KEY]), "storage.upstream_ref_delivery");
   });
 
   it("外链 URL 原样透传", async () => {

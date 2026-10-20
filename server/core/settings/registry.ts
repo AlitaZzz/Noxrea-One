@@ -98,7 +98,7 @@ export const SETTING_DEFS = {
   "network.ssrf_allowed_internal_hosts": text(),
   "network.outbound_proxy_enabled": bool(false),
   "network.outbound_proxy_url": httpUrlOrEmpty(),
-  /** 对外可访问的服务根地址；配置后参考素材以 URL 发给上游，留空则回退 base64 */
+  /** 对外可访问的服务根地址；local 后端 signed-url 交付（上游引用签名 URL）的拼接基址，未配置时签名明确失败 */
   "network.public_base_url": httpUrlOrEmpty(),
 
   // 上传（批次总大小上限 UPLOAD_BATCH_MAX_MB 与 Next 代理层共用，保留在 env）
@@ -181,7 +181,7 @@ export const SETTING_DEFS = {
   "storage.s3.signed_url_ttl_seconds": timerSeconds(3600),
   /** files 路由分发：redirect（302 预签名，默认）| proxy（服务器流式转发） */
   "storage.s3.delivery": enumText(["redirect", "proxy"] as const, "redirect"),
-  /** 上游 AI 引用下发：signed-url（默认）| base64（无公网可达性兜底） */
+  /** 上游 AI 引用下发形态（唯一开关）：signed-url（默认，签发不能成立时明确失败）| base64 */
   "storage.upstream_ref_delivery": enumText(["signed-url", "base64"] as const, "signed-url"),
   // 存储配额（specs/storage-user-quota.md）：MB 与同族 upload.max_file_mb 同口径，读取时换算字节
   /** 每用户存储配额（MB）；0 = 不限量。上限保证换算字节后仍在 Number 安全域 */
