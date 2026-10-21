@@ -1,6 +1,6 @@
 # PGlite 本地库模式移除（PGlite Removal）
 
-状态：已确认（2026-10-21，用户确认 D1–D6 全按推荐；实施中，工作区已实现并提交，真实库、迁移授权与全量测试验收通过；第四轮审查问题已修复并复验；剩余业务冒烟）
+状态：已实现（2026-10-21，用户确认 D1–D6 全按推荐；真实库、迁移授权、全量测试与业务冒烟验收全部通过；实现已提交 `7656e4e0`）
 
 ## 目标
 
@@ -157,9 +157,9 @@
 
 ## 当前状态
 
-已确认（2026-10-21，用户确认 D1–D6 全按推荐；D3 已于同日复审后修订）；实施中：代码、测试与文档变更已提交，真实库、迁移授权与全量测试验收已通过；四轮代码审查发现的问题均已按根因修复并复验；剩余业务冒烟。
+已实现（2026-10-21，用户确认 D1–D6 全按推荐；D3 已于同日复审后修订）：代码、测试与文档变更已提交（`7656e4e0`），真实库、迁移授权与全量测试通过；四轮代码审查发现的问题均已按根因修复并复验；业务冒烟（登录、视频上传与 ingest、生成任务入队与查询）已执行并经用户确认通过。
 
-### 已完成（2026-10-21 提交）
+### 已完成（2026-10-21，提交 `7656e4e0`）
 
 - **单一运行时**：新增 `server/core/database/connection-string.ts`（`assertDatabaseUrl` / `describeDatabaseTarget` / `parsePostgresDatabaseTarget` / `isSameDatabaseTarget` / `assertDistinctDatabaseTargets`）；`client.ts` 删除 PGlite 分支、目录锁、`ensureLocalMigrations`，保留惰性 Proxy 与连接串键控缓存；删除 `migrate.ts`；bootstrap 只校验连接串并记录 `target`；关停统一为 `closeDatabase`。
 - **迁移链路**：新增 `db:migrate:deploy` 与 `predev`；`db:migrate:new` 改为 `prisma migrate diff --from-migrations --to-schema --script`（只读 shadow 库，不触碰应用库），生成迁移后执行一次 `prisma generate`；`prisma.config.ts` 条件提供 datasource、`SHADOW_DATABASE_URL`；移除三个 PGlite 直接依赖，显式加入 `pg` / `@types/pg`；Prisma CLI 调用收敛到 `scripts/lib/prisma-cli.mts`。
@@ -179,6 +179,7 @@
 - **`db:migrate:new`（复审后机制）**：schema 无变化时输出“无差异”且不创建目录；临时增加字段的成功路径生成了 `ALTER TABLE` 迁移并重新生成客户端，随后删除迁移目录并恢复 schema（未应用临时迁移）。将 `DATABASE_URL` 指向不可达地址后仍能生成正确 SQL，证明授权只使用 shadow 库。`db:migrate:deploy` 对现有 5 条迁移幂等（`No pending migrations to apply.`）。
 - **测试库误配保护**：将 `TEST_DATABASE_URL` 指向开发库 `noxrea` 时，globalSetup 在迁移部署前硬失败（“数据库名必须包含 test”），未执行任何迁移或清理。
 - **CI 门控**：`CI=true` 或 `CI=1` 且未设置 `TEST_DATABASE_URL` 时 globalSetup 直接失败（已验证错误文案）；非 CI 未设置时真实库用例跳过（配置测试库前的全量 server 运行已验证）。
+- **业务冒烟（2026-10-21，用户确认通过）**：`POST /api/auth/login` 返回 200 并下发 HttpOnly 会话 cookie；上传 1 秒 320×240 MP4（7356 字节），响应含 ffmpeg 探测宽高 320×240，下载内容与上传字节逐位一致；生成任务从 `pending` 经 BullMQ Worker 执行至 `completed`，查询返回 `resultText: "smoke-ok"`，mock 上游收到的请求体含 `model` 与用户消息。冒烟产生的测试数据保留在开发库/演练桶（用户 `smoke_20261021` id=7、Provider 24、Model 7336、任务 `ceec653a…`、7 KB S3 对象）。
 - 无 `DATABASE_URL` 时 `prisma generate` 成功；`db:migrate:deploy` 对开发库与测试库均幂等（`No pending migrations to apply.`）。
 - 用户 dev server 热重载后 bootstrap 成功：`database_ready | target=pg noxrea@10.10.10.2:9832/noxrea`（无 `mode`），队列、S3、Worker、reconcile 均正常启动。
 - `npm ls @electric-sql/pglite pglite-prisma-adapter prisma-pglite --depth=0` 为空；`@electric-sql/pglite@0.4.3` 仅作为 `prisma@7.10.0 -> @prisma/dev` 的传递依赖存在，运行时代码无导入或可执行路径。
@@ -197,6 +198,6 @@
 - **第三轮复审（2026-10-21）**：shadow / 测试库同库校验统一为 `connection-string.ts` 的 host/port/database identity 比较（原全串相等可被协议写法或查询参数绕过），新增 3 个同库判定/非法编码回归用例；`test-database.ts` 复用同一解析入口；`client.ts` 缓存键拼接收敛为单函数；Spec 状态行、R4/R5.2/R6 文案与实现对齐，补记迁移名白名单与 helper 更名。
 - **第四轮复审（2026-10-21）**：同库守卫收敛为 `assertDistinctDatabaseTargets`，`prisma.config.ts` / `author-migration.mts` / 测试基座共用判定与文案；`prisma.config.ts` 对已设置的 URL 做格式校验，非 postgres 的 shadow 不再透传给 CLI；`DatabaseIdentity` / `parsePostgresDatabaseIdentity` 与 `...Target` 命名统一为 Target；`client.ts` 删除双模式遗留的 `pg:` 缓存键前缀；仓库根路径移到 `scripts/lib/paths.mts`，恢复 `prisma-cli.mts` 的模块边界；迁移授权改用绝对路径常量并改进迁移名错误文案；测试环境保存/恢复改用 `vi.stubEnv` 与局部 `restoreEnv`；Spec 用例数、CI 取值与空差分判定同步。
 
-### 待完成（验收缺口）
+### 验收结论
 
-- **服务器模式业务冒烟**（验收第 3 条）：已验证启动链路与测试套件，登录 / 上传 / 生成任务全链路未走查。全部验收通过（含本项人工走查）后，方可将状态更新为「已实现」。
+全部验收项通过；业务冒烟于 2026-10-21 执行并经用户确认，状态更新为「已实现」。实现提交 `7656e4e0`。冒烟测试数据（用户 `smoke_20261021` id=7、Provider 24、Model 7336、任务 `ceec653a…`、7 KB S3 对象）仍保留在开发库/演练桶，是否清理由用户决定。
