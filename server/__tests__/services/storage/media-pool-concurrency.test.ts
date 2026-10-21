@@ -5,14 +5,16 @@
  * ffmpeg 目录取 FFMPEG_TEST_DIR，缺省为仓库 bin/；找不到 ffmpeg 时整体跳过。
  */
 import { spawnSync } from "node:child_process";
-import path from "node:path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { ffmpegAvailable, testFfmpegBin } from "../../helpers/ffmpeg";
 
-const ffmpegDir = vi.hoisted(() => process.env.FFMPEG_TEST_DIR ?? `${process.cwd()}/bin`);
 const live = vi.hoisted(() => ({ current: 0, peak: 0, spawned: 0 }));
 const settings = vi.hoisted(() => ({ values: {} as Record<string, unknown> }));
 
-vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir }) }));
+vi.mock("@server/core/config", async () => {
+  const { testFfmpegDir } = await import("../../helpers/ffmpeg");
+  return { getConfig: () => ({ FFMPEG_PATH: testFfmpegDir }) };
+});
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 vi.mock("@server/core/settings", () => ({ getSetting: (key: string) => settings.values[key] }));
 // 透传真实 spawn，只统计「同一时刻存活的 ffmpeg 子进程数」
@@ -31,8 +33,6 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-const bin = path.resolve(ffmpegDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-const available = spawnSync(bin, ["-version"]).status === 0;
 
 const JOB_ARGS = ["-v", "error", "-re", "-f", "lavfi", "-i", "testsrc2=s=64x64:r=10:d=1.2", "-f", "null", "-"];
 
@@ -70,9 +70,9 @@ async function fire(n: number, signals: Array<AbortSignal | undefined> = []) {
 }
 
 beforeAll(() => {
-  if (!available) return;
+  if (!ffmpegAvailable) return;
   const startedAt = Date.now();
-  spawnSync(bin, JOB_ARGS);
+  spawnSync(testFfmpegBin, JOB_ARGS);
   jobMs = Date.now() - startedAt;
 });
 
@@ -83,7 +83,7 @@ beforeEach(() => {
   live.spawned = 0;
 });
 
-describe.skipIf(!available)("媒体池并发实测（真实 ffmpeg）", () => {
+describe.skipIf(!ffmpegAvailable)("媒体池并发实测（真实 ffmpeg）", () => {
   it("上限 10、队列 5，同时进来 15 个：10 个运行、5 个排队等待，全部成功", async () => {
     configure(10, 5, 60);
     const { elapsedMs, succeeded, busyReasons } = await fire(15);

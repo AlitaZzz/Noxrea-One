@@ -55,7 +55,7 @@ async function lastVideoFrame(videoPath: string, remaining: () => number, signal
   const timeBase = numerator / denominator;
   for (let i = keyframes.length - 1; i >= 0; i--) {
     let lastTimestamp: number | undefined;
-    await scanFfprobe([
+    const tailScan = () => scanFfprobe([
       ...probeArgs, "-show_frames", "-read_intervals", `${Math.floor(keyframes[i] * timeBase * 1e6) / 1e6}%`,
       "-show_entries", "frame=best_effort_timestamp", videoPath,
     ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), {
@@ -65,6 +65,15 @@ async function lastVideoFrame(videoPath: string, remaining: () => number, signal
         if (typeof frame.best_effort_timestamp === "number") lastTimestamp = frame.best_effort_timestamp;
       },
     });
+    let scan = await tailScan();
+    // ffprobe 对「seek 后读至 EOF」的调用存在瞬时空结果缺陷：exit 0、目标 section
+    // 为空、无任何 stderr，紧接重试即恢复（实测 ~0.3%/次，与父进程、卷无关）。packets
+    // 索引刚证实关键帧存在，干净空结果必属该缺陷而非内容问题，重试一次；损坏尾巴
+    // 的扫描必带解码错误 stderr，不进此分支，维持「回退前一个 GOP」的既有语义。
+    if (scan.entryCount === 0 && scan.stderr === "") {
+      logEvent("media", { stage: "capture_tail_empty_retry", video: path.basename(videoPath) });
+      scan = await tailScan();
+    }
     if (lastTimestamp !== undefined) return { pts: lastTimestamp, time: lastTimestamp * timeBase - index.format.start_time };
     // An indexed key packet may be truncated. Search the preceding GOP only if no frame decoded.
   }

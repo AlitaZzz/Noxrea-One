@@ -1,15 +1,18 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const ffmpegDir = vi.hoisted(() => process.env.FFMPEG_TEST_DIR ?? process.env.FFMPEG_PATH ?? "ffmpeg");
 const cfg = vi.hoisted(() => ({ uploadDir: "uploads" }));
-vi.mock("@server/core/config", () => ({ getConfig: () => ({ FFMPEG_PATH: ffmpegDir, UPLOAD_DIR: cfg.uploadDir }) }));
+vi.mock("@server/core/config", async () => {
+  const { testFfmpegDir } = await import("../../helpers/ffmpeg");
+  return { getConfig: () => ({ FFMPEG_PATH: testFfmpegDir, UPLOAD_DIR: cfg.uploadDir }) };
+});
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 vi.mock("@server/core/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
+import { ffmpegAvailable, testFfmpegBin, testFfprobeBin } from "../../helpers/ffmpeg";
 import { runFfmpegLight, runFfprobe } from "@server/services/storage/ffmpeg";
 import { probeImageMeta } from "@server/services/storage/media-probe";
 import { captureVideoFrame } from "@server/services/storage/video-frames";
@@ -18,10 +21,8 @@ import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { logEvent } from "@server/core/logger/utils";
 
-const bin = path.resolve(ffmpegDir, process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg");
-const available = spawnSync(bin, ["-version"]).status === 0;
 let temp = "";
-describe.skipIf(!available)("real FFmpeg frame capture", () => {
+describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
   beforeAll(async () => {
     temp = await fs.mkdtemp(path.join(os.tmpdir(), "noxrea-frame-test-"));
     // 海报用例的后端与工作区根锚定隔离目录（uploadRoot 惰性读 config）
@@ -33,13 +34,13 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it.each([1, 2, 10, 30])("captures the last actual frame at %s fps", async (fps) => {
     const source = path.join(temp, `source-${fps}.mkv`);
     const output = path.join(temp, `frame-${fps}.jpg`);
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", `testsrc2=s=128x72:r=${fps}:d=2`, "-c:v", "ffv1", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", `testsrc2=s=128x72:r=${fps}:d=2`, "-c:v", "ffv1", "-y", source]);
     const time = await captureVideoFrame(source, output, { kind: "last" });
     // Matroska timestamps are quantized to milliseconds.
     expect(time).toBeCloseTo(Math.round((2 - 1 / fps) * 1000) / 1000, 4);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
     const reference = path.join(temp, `reference-${fps}.jpg`);
-    execFileSync(bin, ["-v", "error", "-i", source, "-vf", `select=eq(n\\,${2 * fps - 1})`, "-frames:v", "1", "-q:v", "2", "-y", reference]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-i", source, "-vf", `select=eq(n\\,${2 * fps - 1})`, "-frames:v", "1", "-q:v", "2", "-y", reference]);
     expect(await fs.readFile(output)).toEqual(await fs.readFile(reference));
   });
 
@@ -47,8 +48,8 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
     const complete = path.join(temp, "complete.mkv");
     const source = path.join(temp, "truncated.mkv");
     const output = path.join(temp, "truncated.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=4", "-c:v", "ffv1", "-y", complete]);
-    const probe = path.join(path.dirname(bin), process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=4", "-c:v", "ffv1", "-y", complete]);
+    const probe = testFfprobeBin;
     const info = JSON.parse(execFileSync(probe, ["-v", "error", "-select_streams", "v:0", "-show_frames", "-show_entries", "frame=pkt_pos", "-of", "json", complete], { encoding: "utf8" })) as { frames: { pkt_pos: string }[] };
     const contents = await fs.readFile(complete);
     await fs.writeFile(source, contents.subarray(0, Number(info.frames[2].pkt_pos)));
@@ -59,7 +60,7 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("captures a variable-rate tail using its real timestamp", async () => {
     const source = path.join(temp, "variable.mkv");
     const output = path.join(temp, "variable.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=10:d=2", "-vf", "select='eq(n,0)+eq(n,3)+eq(n,12)'", "-fps_mode", "passthrough", "-c:v", "ffv1", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=10:d=2", "-vf", "select='eq(n,0)+eq(n,3)+eq(n,12)'", "-fps_mode", "passthrough", "-c:v", "ffv1", "-y", source]);
     expect(await captureVideoFrame(source, output, { kind: "last" })).toBeCloseTo(1.2, 4);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
   });
@@ -68,14 +69,22 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
     const seed = path.join(temp, "long-seed.mp4");
     const source = path.join(temp, "three-hours.mp4");
     const output = path.join(temp, "three-hours.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "color=c=red:s=32x32:r=30:d=1", "-c:v", "libx264", "-g", "30", "-y", seed]);
-    execFileSync(bin, ["-v", "error", "-stream_loop", "-1", "-i", seed, "-t", "10800", "-c", "copy", "-y", source]);
-    const probe = path.join(path.dirname(bin), process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "color=c=red:s=32x32:r=30:d=1", "-c:v", "libx264", "-g", "30", "-y", seed]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-stream_loop", "-1", "-i", seed, "-t", "10800", "-c", "copy", "-y", source]);
+    const probe = testFfprobeBin;
     const info = JSON.parse(execFileSync(probe, ["-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "json", source], { encoding: "utf8" })) as { streams: { nb_read_packets: string }[] };
     expect(Number(info.streams[0].nb_read_packets)).toBeGreaterThanOrEqual(324_000);
     await expect(runFfprobe(["-v", "error", "-select_streams", "v:0", "-of", "json", "-show_packets", "-show_entries", "packet=pts,flags", source], 30_000)).rejects.toThrow("metadata budget");
     // B-frame reordering can put presentation timestamps past the copy command's -t cutoff.
-    const reference = JSON.parse(execFileSync(probe, ["-v", "error", "-select_streams", "v:0", "-read_intervals", "10799%", "-show_frames", "-show_entries", "frame=best_effort_timestamp_time:format=start_time", "-of", "json", source], { encoding: "utf8" })) as { frames: { best_effort_timestamp_time: string }[]; format: { start_time: string } };
+    // ffprobe 对「seek 后读至 EOF」的调用存在瞬时空结果缺陷（exit 0、空 section、无
+    // stderr，~0.3%/次，紧接重试即恢复；证据见 specs/media-processing-concurrency.md）。
+    // 与生产 lastVideoFrame 的干净空结果重试同为此缺陷的兜底：判空不看 stderr，空结果重试一次。
+    const refArgs = ["-v", "error", "-select_streams", "v:0", "-read_intervals", "10799%", "-show_frames", "-show_entries", "frame=best_effort_timestamp_time:format=start_time", "-of", "json", source];
+    const referenceOut = (() => {
+      const first = execFileSync(probe, refArgs, { encoding: "utf8" });
+      return first.includes("best_effort_timestamp_time") ? first : execFileSync(probe, refArgs, { encoding: "utf8" });
+    })();
+    const reference = JSON.parse(referenceOut) as { frames: { best_effort_timestamp_time: string }[]; format: { start_time: string } };
     const expectedTime = Number(reference.frames.at(-1)!.best_effort_timestamp_time) - Number(reference.format.start_time);
     expect(expectedTime).toBeGreaterThan(10799);
     expect(await captureVideoFrame(source, output, { kind: "last" })).toBeCloseTo(expectedTime, 5);
@@ -85,8 +94,8 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("finds the preceding decoded frame when the last indexed key packet is corrupt", async () => {
     const source = path.join(temp, "corrupt-tail.mp4");
     const output = path.join(temp, "corrupt-tail.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=4", "-c:v", "libx264", "-g", "1", "-y", source]);
-    const probe = path.join(path.dirname(bin), process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=4", "-c:v", "libx264", "-g", "1", "-y", source]);
+    const probe = testFfprobeBin;
     const info = JSON.parse(execFileSync(probe, ["-v", "error", "-select_streams", "v:0", "-show_packets", "-show_entries", "packet=pos,size", "-of", "json", source], { encoding: "utf8" })) as { packets: { pos: string; size: string }[] };
     const packet = info.packets.at(-1)!;
     const contents = await fs.readFile(source);
@@ -99,7 +108,7 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("preserves a delayed video stream's timestamp relative to the audio timeline", async () => {
     const source = path.join(temp, "delayed-video.mkv");
     const output = path.join(temp, "delayed-video.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-vf", "setpts=PTS+2/TB", "-fps_mode", "passthrough", "-t", "4", "-c:v", "ffv1", "-c:a", "pcm_s16le", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-vf", "setpts=PTS+2/TB", "-fps_mode", "passthrough", "-t", "4", "-c:v", "ffv1", "-c:a", "pcm_s16le", "-y", source]);
     expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(3);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
   });
@@ -107,7 +116,7 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("returns playback time for a container with a nonzero starting timestamp", async () => {
     const source = path.join(temp, "offset-start.mkv");
     const output = path.join(temp, "offset-start.jpg");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-c:v", "ffv1", "-output_ts_offset", "10", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-c:v", "ffv1", "-output_ts_offset", "10", "-y", source]);
     expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(1);
   });
 
@@ -136,7 +145,7 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("海报母版每视频只解码一次，档位由 sharp 从母版派生", async () => {
     await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
     const source = path.join(temp, "u1/ab/poster.mkv");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
 
     await getVideoPosterWebP("u1/ab/poster.mkv", 64);
     await getVideoPosterWebP("u1/ab/poster.mkv", 480);
@@ -152,7 +161,7 @@ describe.skipIf(!available)("real FFmpeg frame capture", () => {
   it("并发请求全部档位只解码一次，再次请求全部命中缓存", async () => {
     await fs.mkdir(path.join(temp, "u1/ab"), { recursive: true });
     const source = path.join(temp, "u1/ab/tiers.mkv");
-    execFileSync(bin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
+    execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:d=0.5", "-c:v", "ffv1", "-y", source]);
 
     const widths = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
     const keys = await Promise.all(widths.map((w) => getVideoPosterWebP("u1/ab/tiers.mkv", w)));

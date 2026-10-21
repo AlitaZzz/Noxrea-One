@@ -47,16 +47,10 @@ let _config: Config | null = null;
 export function loadConfig(): Config {
   if (_config) return _config;
 
-  // 兜底加载 .env（兼容直接 node 运行、非 --env-file 场景）
-  // Node.js 21.7+ 内置，无需安装 dotenv
-  try {
-    if (typeof process.loadEnvFile === "function") {
-      process.loadEnvFile(".env");
-    }
-  } catch {
-    // .env 不存在或无法读取时忽略
-  }
-
+  // 环境变量由进程入口注入（--env-file=.env / entrypoint source / compose -e）。
+  // 本模块不做 .env 兜底加载：模块级 loadEnvFile 是隐式全局副作用，谁先加载 config
+  // 谁就改写共享 process.env，环境内容随模块加载顺序漂移（曾致测试门控在
+  // 全量/单文件两种执行模式下行为不同）；缺 env 时下方 schema 校验立即大声失败
   const raw = process.env;
   const parsed = configSchema.safeParse(raw);
 

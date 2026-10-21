@@ -266,10 +266,20 @@ interface FfprobeScanOptions extends FfmpegRunOptions {
   onEntry: (value: unknown) => void;
 }
 
+/** 一次流式扫描的结果：交付条目数与进程 stderr（-v error 下非空即有容器/解码错误） */
+export interface FfprobeScanResult {
+  entryCount: number;
+  stderr: string;
+}
+
 /** Emit one structured entry at a time, releasing each parsed sibling immediately. */
-export async function scanFfprobe(args: string[], timeoutMs: number, opts: FfprobeScanOptions): Promise<void> {
+export async function scanFfprobe(args: string[], timeoutMs: number, opts: FfprobeScanOptions): Promise<FfprobeScanResult> {
   const parser = new JSONParser({ paths: [`$.${opts.section}.*`], keepStack: false });
-  parser.onValue = ({ value }) => opts.onEntry(value);
+  let entryCount = 0;
+  parser.onValue = ({ value }) => {
+    entryCount += 1;
+    opts.onEntry(value);
+  };
   const outcome = await executeMediaTool(
     args,
     timeoutMs,
@@ -278,4 +288,5 @@ export async function scanFfprobe(args: string[], timeoutMs: number, opts: Ffpro
   );
   assertProbeSuccess(outcome, timeoutMs);
   if (!parser.isEnded) parser.end();
+  return { entryCount, stderr: outcome.stderr };
 }
