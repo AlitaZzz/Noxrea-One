@@ -47,7 +47,7 @@
    - **公网可达性**：bucket endpoint 须自浏览器与上游 AI 网络可达（redirect 读 + 直传写 + 上游签名 URL 拉取三链路）；无法可达的链路须**显式改配**对应模式（读链路 proxy / 上游引用 `storage.upstream_ref_delivery=base64`）并记录决策——均为显式设置，无自动兜底。
 3. **凭据与配置**：生产 access key 为专用最小权限用户（仅本 bucket 读写）；凭据按 `model_providers.api_key` 同级明文落 `system_settings`（既有基准）；`storage.s3.*` 逐项填写生产值，`storage.backend` 切换重启生效；启动探测（HeadBucket）失败即启动失败，运维语义 =「检查端点/凭据/CORS 前置或临时改回 local 恢复服务」。
 4. **冷启动主流程（已确认决策 2）**：生产空桶直接以 `backend=s3` 起服务——无存量数据则迁移脚本不进主流程；顺序为「建桶清单核验 → 生产凭据与连接配置入库 → 起服务（探测通过）→ 生产验收清单 → 72 小时观察期」。dev/演练数据不进生产。
-5. **带数据迁移主流程（备选）**：若决定携带存量数据上线，沿用上游 Spec「切换与回滚流程」原文——停写 → `storage:migrate local-to-s3`（dry-run 盘点 → 实跑 + ETag==MD5 主校验）→ 改设置 → 起服务；本地 `uploads/` 原样保留作回滚根基。
+5. **带数据迁移主流程（备选）**：若决定携带存量数据上线，沿用上游 Spec「切换与回滚流程」原文——停写 → `storage:migrate local-to-s3`（dry-run 盘点 → 实跑 + ETag==MD5 主校验）→ 改设置 → 起服务；本地存储目录（缺省 `data/uploads/`）原样保留作回滚根基。
 6. **生产验收清单（演练执行体）**：在生产环境逐项核验并留痕——
    - 启动探测通过（backend=s3，真实生产凭据）；
    - 直传全流程 ticket → 预签名 PUT → complete 提升（https 端点下真实浏览器行为）；
@@ -63,7 +63,7 @@
 ## 技术影响
 
 - 业务代码：**预期零改动**——本 Spec 为部署运维流程；若验收暴露缺陷，按缺陷单独走修复流程（不并入演练 Spec 范围）。
-- 文档：README 部署章节增补「生产切换核对单」（引用本 Spec）；演练留痕归档 `storage-migration/`（已 gitignore）。
+- 文档：README 部署章节增补「生产切换核对单」（引用本 Spec）；演练留痕归档 `data/storage-migration/`（已 gitignore）。
 - 配置：生产 `system_settings` 的 `storage.backend` / `storage.s3.*` / `storage.upstream_ref_delivery` / `storage.s3.delivery` 按决策填列。
 - 关联 Spec：上游 [storage-s3-backend.md](storage-s3-backend.md)（机制与 Bucket 清单来源）；[derived-deletion-linkage.md](derived-deletion-linkage.md)、[file-access-ownership.md](file-access-ownership.md)（验收清单覆盖其生产行为，Spec 本体不变）。
 

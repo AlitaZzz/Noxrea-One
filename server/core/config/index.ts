@@ -28,7 +28,7 @@ const configSchema = z.object({
   // Upload：批次总大小上限与 Next 代理层（proxyClientMaxBodySize）共用同一 env 来源，故不入库
   UPLOAD_BATCH_MAX_MB: z.coerce.number().int().positive().default(128),
   // 上传文件根目录（相对项目根，或绝对路径）
-  UPLOAD_DIR: z.string().default("uploads"),
+  UPLOAD_DIR: z.string().default("data/uploads"),
   /** 资源目录（模型配置等 JSON 资源根目录），相对项目根或绝对路径；Docker 指向 /data/resources */
   RESOURCES_DIR: z.string().default("server/resources"),
 

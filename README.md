@@ -56,7 +56,8 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 │   ├── services/         # 模型网关、任务 Worker、存储与 Agent 服务
 │   └── resources/        # 模型 UI、供应商预设、Prompt 与技能配置
 ├── prisma/               # Prisma schema 与迁移
-├── uploads/              # 本地上传文件
+├── data/                 # 本地运行时数据（已 gitignore）
+│   └── uploads/          # 本地上传文件
 ├── Dockerfile            # 构建单容器镜像
 ├── docker-entrypoint.sh  # 容器初始化入口
 └── docker-compose.nas.yml # NAS 部署示例
@@ -152,7 +153,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
 | `WEB_AUTH_GATE_MODE` | 前端路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
 | `WEB_APP_NAME` | 浏览器端显示的应用名（构建期固化） |
-| `UPLOAD_DIR` | 上传文件目录，默认 `uploads` |
+| `UPLOAD_DIR` | 上传文件目录，默认 `data/uploads` |
 | `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名；Next 代理层共用，故保留在 env） |
 | `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
