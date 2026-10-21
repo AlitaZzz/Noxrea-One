@@ -35,7 +35,7 @@
 ## 非目标
 
 - 不做优先级队列 / 加权公平调度；按用户限额只用于重型池（见「已知限制」）。
-- 不做多进程 / 多实例共享的分布式限流（当前单进程；多实例时上限按实例各自生效）。
+- 不做跨 Redis 实例的全局限流（配额以单个 Redis 实例为边界；Redis HA/多活另议）。
 - 不做运行期热更新（沿用设置快照，改库后重启生效）。
 - 不拆分独立媒体 worker 进程、不更换语言或数据库。
 - 本 Spec 不把同步媒体接口改造成异步任务（第三阶段另立 Spec，见「演进方向」）。
@@ -84,8 +84,10 @@
 
 起因：用户 10 秒内连续打开截取面板，第 5 次拿不到雪碧图且前端没有任何提示；同时点「抽帧 → 首帧」提示「操作过于频繁，请稍后重试」。
 
-- **请求次数限流**：`createMediaEditRoute` 在入口对 8 个媒体路由（截帧、片段截取、音频片段、音频变速、画面裁剪、分离音轨、雪碧图、预览代理）共用一个按用户限流：20 次 / 60 秒（[media-edit.ts](../server/http/routes/media-edit.ts)）。限流器是滑动窗口（[ratelimit/index.ts](../server/core/ratelimit/index.ts)，每条请求记录 60 秒后过期），计数发生在缓存检查之前：雪碧图 / 代理命中缓存时不跑 ffmpeg，同样扣额度。
-- **429 缺 `Retry-After`**：登录、注册、AI 生成、媒体编辑的按次数限流响应都不带 `Retry-After`（`RateLimiter.check` 只返回布尔值）。
+以下为改造前的调查结论，现行行为以规则 5 为准。
+
+- **请求次数限流（改造前）**：`createMediaEditRoute` 在入口对 8 个媒体路由（截帧、片段截取、音频片段、音频变速、画面裁剪、分离音轨、雪碧图、预览代理）共用一个按用户限流：硬编码 20 次 / 60 秒（[media-edit.ts](../server/http/routes/media-edit.ts)）。限流器是进程内滑动窗口（[ratelimit/index.ts](../server/core/ratelimit/index.ts)，每条请求记录 60 秒后过期），计数发生在缓存检查之前：雪碧图 / 代理命中缓存时不跑 ffmpeg，同样扣额度。
+- **429 缺 `Retry-After`（改造前）**：登录、注册、AI 生成、媒体编辑的按次数限流响应都不带 `Retry-After`（旧内存限流器只返回布尔值）。
 - **面板请求**：截取 / 抽帧面板每次打开发 2 个 POST——雪碧图（[use-frame-sprite.ts](../web/src/features/canvas/hooks/use-frame-sprite.ts)）与预览代理（[ClipStripPanel.tsx](../web/src/features/canvas/editing/ClipStripPanel.tsx)、`FrameStripPanel.tsx`），都不带中止信号。开发模式 `reactStrictMode: true`（`web/next.config.ts`）使 effect 双挂载，每次打开实际发 4 个请求，约 5 次打开即用完 20 次额度。
 - **恢复时间**：额度按请求逐条过期；10 秒内连续触发后，自第一次请求起 60 秒开始逐个恢复，约 70 秒后全部恢复。面板不会自动重试，恢复后需关闭重开。
 - **前端失败表现**：`apiRaw` 不重试、不解析 `Retry-After`。雪碧图失败静默退为「无缩略图但可定位」的轨道，不提示；代理失败只显示「预览代理生成失败，请关闭后重开面板重试」，不区分限流 / 繁忙 / 真失败，也没有重试按钮。截帧由节点工具栏「首帧 / 尾帧」菜单与抽帧面板派发、`VideoNode` 调用接口，失败经 `notifyActionFailed` 按 `error.<code>` 提示（因此抽帧会显示「操作过于频繁」；第一阶段的「`capture-frame` 前端调用方待核实」至此核实）。
@@ -218,7 +220,7 @@
 
 ### 5. 请求次数限流（第二阶段）
 
-1. 只对**产出新文件**的编辑接口计数：截帧、片段截取、音频片段、音频变速、画面裁剪、分离音轨。额度不变：每人 20 次 / 60 秒，滑动窗口（代码常量）。它的用途是限制单个用户每分钟能产生的派生文件数量（存储增长），不承担 CPU 保护——CPU 由并发门负责。
+1. 只对**产出新文件**的编辑接口计数：截帧、片段截取、音频片段、音频变速、画面裁剪、分离音轨。默认额度：每人 20 次 / 60 秒，由 `rate_limit.media_edit_user_max_requests` / `rate_limit.media_edit_window_seconds` 配置；计数为 Redis 滑动窗口，多副本共享同一配额。它的用途是限制单个用户每分钟能产生的派生文件数量（存储增长），不承担 CPU 保护——CPU 由并发门负责。
 2. 雪碧图与预览代理**不计数**：两者幂等、可缓存，命中缓存不跑 ffmpeg；需要生成时，CPU 由重型池的个人与全局限额约束，个人排队已满即 429 `media.user_busy`。
 3. 被限流时返回 429 `common.rate_limited`，`Retry-After` = 窗口内最早一次计数到期的剩余秒数（向上取整，至少 1）。
 4. 同类问题一并修正：登录、注册、AI 生成的按次数限流共用同一限流器，429 同样带 `Retry-After`。
@@ -318,7 +320,7 @@
 - **缩略图档位与母版**：`resize-cache.ts` 新增档位归一化（替换 `safeCacheWidth` 的 1..2048 钳位）与视频海报母版模块（`_posters/`：ffmpeg 首帧、min(源宽, 3840)、q90、带版本号）；视频档位派生改为「确保母版 → sharp 缩放（withoutEnlargement）」；`files.ts` 的宽度处理同步替换；`MAX_RESIZE_WIDTH`（2048）由档位上限取代。档位表、母版参数为代码常量。
 - **落盘生成母版**：`persist.ts` 删除 `prewarmVideoPoster`（fire-and-forget），`persistFileObject` 对 `video/*` 同步等待母版生成（轻型池，失败 / 超时不阻塞落盘）；上传、AI 下载（`download.ts`）、派生剪辑（`media-edit.ts` 的 `persistDerived`）三条落盘路径一致受益。上传响应时间增加约 1～2 秒 / 视频（估算），受轻型池排队上限与等待时限约束。
 - **派生产物清理**：`LocalStorageBackend.delete` 在删除源文件后按前缀清理 `_posters` / `_cache` 下的派生文件；`_sprite` / `_proxy` 维持 TTL 清扫。
-- **请求次数限流**：`RateLimiter.check` 返回是否放行与 `retryAfterSeconds`，`checkUserRateLimit` 随之调整；登录、注册、AI 生成、媒体编辑的 429 全部带 `Retry-After`。`createMediaEditRoute` 按路由声明区分「产出类编辑」与「派生预览产物」，只对前者计数。
+- **请求次数限流**：`RateLimitStore.check` 返回是否放行与 `retryAfterSeconds`，业务服务（`checkLoginRateLimit` / `checkRegisterRateLimit` / `checkGenerateRateLimit` / `checkMediaEditRateLimit`）从 `system_settings` 读取配额；登录、注册、AI 生成、媒体编辑的 429 全部带 `Retry-After`。`createMediaEditRoute` 按路由声明区分「产出类编辑」与「派生预览产物」，只对前者计数。
 - **错误码**：新增 `media.user_busy`；中英文案由 Claude 补齐，`web-contract.test.ts` 保证一一对应。
 - **前端**：`VideoNode` 海报 `?w=480` → `?w=1280`（一处调用点）；面板中止、失败提示与重试见「前端影响」。
 - **测试**：池隔离（重型满时轻型可立即执行）、两级准入（个人满、全局满、两段合计等待时限、个人排队边界、中止；释放顺序为规则 2.6.1 的结构保证，由两级准入行为测试覆盖）、合并不占个人名额、请求次数限流的计数范围与 `Retry-After`、档位归一化、母版一次生成与档位派生、落盘同步生成（含失败不阻塞）、派生产物清理、错误映射；既有用例按新入口与新键名迁移。

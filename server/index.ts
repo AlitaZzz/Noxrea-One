@@ -10,6 +10,8 @@ import { startTaskWorker, stopTaskWorker } from "@server/services/worker/worker"
 import { startReconcileSweep, stopReconcileSweep } from "@server/services/worker/reconcile";
 import { closeTaskQueue } from "@server/services/worker/queue";
 import { closeDatabase } from "@server/core/database/client";
+import { secondsToMs } from "@server/core/duration";
+import { closeRateLimit } from "@server/core/ratelimit";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
@@ -36,15 +38,16 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logEvent("server", { stage: "shutdown_requested" });
 
-    // 4a. 停止接受新 HTTP 连接
+    // 4a. 停止接受新 HTTP 连接，随后关闭限流连接（此后不应再有 HTTP 请求）
     await stopServer();
+    await closeRateLimit();
 
     // 4b. 停止清扫定时器（停机期间不再发起重激活）
     stopReconcileSweep();
 
     // 4c. Worker 排空：停止接新 job → drain 窗口 → 超时 abort 在途 → 有界等待 → 强制关闭。
     //     内部时序见 stopTaskWorker；这里只设更大的进程退出兜底时限
-    const exitBound = getSetting("worker.drain_timeout_seconds") * 1000 * 3;
+    const exitBound = secondsToMs(getSetting("worker.drain_timeout_seconds")) * 3;
     await Promise.race([
       stopTaskWorker(),
       new Promise<void>((r) => setTimeout(r, exitBound)),

@@ -13,6 +13,7 @@
 import { Worker } from "bullmq";
 import { logEvent, errText } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
+import { secondsToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { processTaskJob } from "./handler";
 import {
@@ -98,7 +99,7 @@ export async function stopTaskWorker(): Promise<void> {
   worker = null;
   stopping = true;
 
-  const drainMs = getSetting("worker.drain_timeout_seconds") * 1000;
+  const drainMs = secondsToMs(getSetting("worker.drain_timeout_seconds"));
   let closed = false;
   const closing = w
     .close()

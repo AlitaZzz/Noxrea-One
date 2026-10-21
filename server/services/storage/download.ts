@@ -5,6 +5,7 @@
 
 import { resolveAndValidate } from "@server/core/ssrf";
 import { fetchWithTimeout } from "@server/core/http-client";
+import { secondsToMs } from "@server/core/duration";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";
 import { getSetting } from "@server/core/settings";
@@ -80,7 +81,7 @@ export async function downloadAndSave(
             connectTimeoutMs: CONNECT_TIMEOUT_MS,
             // body idle：传输停摆及时终止；overall：防慢滴漏长期占用（上限仍受 upload.max_file_mb 约束）
             bodyIdleTimeoutMs: DOWNLOAD_BODY_IDLE_MS,
-            overallTimeoutMs: getSetting("http.download_total_timeout_seconds") * 1000,
+            overallTimeoutMs: secondsToMs(getSetting("http.download_total_timeout_seconds")),
           });
 
           // 4xx（非 429）属于确定性失败，不重试

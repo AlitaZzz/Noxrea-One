@@ -8,6 +8,7 @@
  * 轻型池（单帧、流拷贝）与 sharp 池不按用户限额：单个任务短、等待时限小。
  */
 
+import { secondsToMs } from "@server/core/duration";
 import { getSetting, type SettingKey } from "@server/core/settings";
 import {
   BoundedGate,
@@ -129,7 +130,11 @@ async function acquireGlobalSlot(
  * 排队期间 AbortSignal 触发抛 AbortError。
  */
 export async function acquireMediaSlot(pool: "ffmpeg_light" | "sharp", signal?: AbortSignal): Promise<() => void> {
-  return acquireGlobalSlot(pool, signal, getSetting(POOL_SETTING_KEYS[pool].maxWaitSeconds) * 1000);
+  return acquireGlobalSlot(
+    pool,
+    signal,
+    secondsToMs(getSetting(POOL_SETTING_KEYS[pool].maxWaitSeconds)),
+  );
 }
 
 /**
@@ -141,7 +146,7 @@ export async function acquireMediaSlot(pool: "ffmpeg_light" | "sharp", signal?: 
  * 排队期间 AbortSignal 触发抛 AbortError，不占名额、不占槽位。
  */
 export async function acquireHeavySlot(owner: number, signal?: AbortSignal): Promise<() => void> {
-  const budgetMs = getSetting("media.ffmpeg_heavy_max_wait_seconds") * 1000;
+  const budgetMs = secondsToMs(getSetting("media.ffmpeg_heavy_max_wait_seconds"));
   const userMaxConcurrent = getSetting("media.ffmpeg_heavy_user_max_concurrency");
   const userMaxPending = getSetting("media.ffmpeg_heavy_user_max_pending");
 

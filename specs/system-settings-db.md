@@ -1,6 +1,6 @@
 # System Settings DB
 
-状态：待确认（2026-10-13 新增「定时器类时长上限」规则，见待确认事项；此前版本已由用户于 2026-10-12 确认）
+状态：已确认（用户 2026-10-21 确认规则 5「定时器类时长上限」；此前版本 2026-10-12 确认，2026-10-21「硬编码业务策略落库与 Redis 限流」扩展确认）
 
 ## 目标
 
@@ -44,14 +44,12 @@
 | `UPLOAD_BATCH_MAX_FILES` | `upload.batch_max_files` | int | `20` | |
 | `UPLOAD_BATCH_MAX_CONCURRENT` | `upload.batch_max_concurrent` | int | `1` | |
 | `UPLOAD_BATCH_MAX_PENDING` | `upload.batch_max_pending` | int | `10` | |
-| `WORKER_POLL_INTERVAL` | `worker.poll_interval_seconds` | int 秒（定时器） | `1` | 重命名：键名带单位 |
 | `WORKER_MAX_CONCURRENCY` | `worker.max_concurrency` | int | `10` | |
 | `WORKER_API_TIMEOUT` | `worker.api_timeout_seconds` | int 秒（定时器） | `240` | 同步生成 / Agent 补全的总超时 |
 | `WORKER_STUCK_TIMEOUT` | `worker.stuck_timeout_minutes` | int 分钟 | `15` | 单位与其他 Worker 项不同（分钟），键名显式带单位 |
 | `WORKER_ZOMBIE_INTERVAL` | `worker.zombie_scan_interval_seconds` | int 秒 | `60` | |
 | `WORKER_MAX_RETRIES` | `worker.max_retries` | int ≥0 | `2` | |
 | `WORKER_DRAIN_TIMEOUT` | `worker.drain_timeout_seconds` | int 秒（定时器） | `15` | |
-| `WORKER_POLL_CHECK_INTERVAL` | `worker.poll_check_interval_ms` | int 毫秒（定时器） | `200` | 现单位为毫秒（`loop.ts` 直接传入） |
 | `WORKER_ASYNC_POLL_INTERVAL` | `worker.async_poll_interval_seconds` | number 秒（定时器） | `3.0` | |
 | `WORKER_ASYNC_POLL_MAX_ATTEMPTS` | `worker.async_poll_max_attempts` | int | `120` | |
 | `WORKER_ASYNC_POLL_INITIAL_DELAY` | `worker.async_poll_initial_delay_seconds` | number 秒（定时器） | `0.5` | |
@@ -63,6 +61,8 @@
 | `DOWNLOAD_TOTAL_TIMEOUT` | `http.download_total_timeout_seconds` | number 秒（定时器） | `600` | |
 | `GC_GRACE_HOURS` | `storage.gc_grace_hours` | int 小时 | `48` | |
 | `GC_DRY_RUN` | `storage.gc_dry_run` | boolean | `true` | |
+
+原进程内轮询的两个键（`WORKER_POLL_INTERVAL` / `WORKER_POLL_CHECK_INTERVAL`）已随 BullMQ 重构整体删除，派发不再依赖进程内轮询间隔，故不落库，见 [task-queue-bullmq.md](task-queue-bullmq.md)。
 
 ### B. 保留在 env（引导期 / 部署拓扑 / 密钥 / 前端构建运行时）
 
@@ -85,7 +85,7 @@
 3. **env 不参与**：已迁移的变量从 env 体系中彻底移除，播种只用注册表默认值，不读取旧 env，也不做 env 与库不一致的提示（已确认：不需要向后兼容）。现有部署升级后，原先在 `.env` 里的自定义值需手工写入库中。
 4. **读取**：启动播种完成后，把全部设置读入进程内**不可变快照**，通过同步入口读取（保持现有调用方同步形态，不引入 async 传染）。运行期不再回库，也不回退读 env。
 5. **校验**：库中存储值按注册表规则解析；值非法一律启动失败并指明键名，不静默回退默认值。数值只接受规范化十进制文本（整数 `^\d+$`、小数 `^\d+(\.\d+)?$`），空串 / 空白 / `Infinity` / 科学计数法 / 负数均视为非法；布尔值只接受 `true` / `false`；两个 URL 设置（出网代理、对外访问地址）留空或必须是 http(s) URL，以便在启动期而非首次出站请求时暴露错误。
-   **定时器类时长**（表中标注「定时器」的项，以及 [media-processing-concurrency.md](media-processing-concurrency.md) 中各媒体池的 `media.*_max_wait_seconds`，第一阶段 2 个、第二阶段 3 个）会换算成 `setTimeout` 延迟，上限为 1 天（秒数 ≤ 86400、毫秒数 ≤ 86400000），超出即非法：Node 定时器的延迟上限为 2^31−1 ms（约 24.8 天），超出时不报错，而是把延迟改成 1ms；1 天上限同时为代码中的倍数换算（排空时限 ×3、轮询退避 ×2）留足余量。不换算成定时器的时长（`auth.token_ttl_minutes`、`worker.stuck_timeout_minutes`、`worker.zombie_scan_interval_seconds`、`storage.gc_grace_hours`）不受此限。
+   **定时器类时长**（表中标注「定时器」的项，以及 [media-processing-concurrency.md](media-processing-concurrency.md) 中各媒体池的 `media.*_max_wait_seconds`，第一阶段 2 个、第二阶段 3 个）会换算成 `setTimeout` 延迟，上限为 1 天（秒数 ≤ 86400、毫秒数 ≤ 86400000），超出即非法：Node 定时器的延迟上限为 2^31−1 ms（约 24.8 天），超出时不报错，而是把延迟改成 1ms；1 天上限同时为代码中的倍数换算（排空时限 ×3、轮询退避 ×2）留足余量。不换算成定时器的时长（`auth.token_ttl_minutes`、`worker.stuck_timeout_minutes`、`storage.gc_grace_hours`）不受此限，但仍受「换算后落在 Number 安全域」的技术上限约束（分钟 ≤ `floor(MAX_SAFE_INTEGER / 60000)`、小时 ≤ `floor(MAX_SAFE_INTEGER / 3600000)`）。`worker.zombie_scan_interval_seconds` 直接作为 `setInterval` 周期，属于定时器类时长，受 1 天上限约束。
 6. **存储形式**：`value` 统一存规范化文本，由注册表按类型解析；不在表内存类型元信息。
 7. **生效时机**：本期修改库值需重启进程生效；管理端阶段再引入写入 + 快照刷新。
 
@@ -128,11 +128,39 @@
 - `JWT_ALGORITHM` 保留 env，视为非可调参数。
 - 新部署的初始化由服务端启动流程完成：env 只保留 B 类变量，A 类设置在启动时自动按注册表默认值写入数据库，无需部署侧提供任何设置值。非默认值待后续管理端维护；管理端上线前如需修改，直接改库后重启（例如首个管理员注册后关闭 `auth.registration_enabled`）。
 
+## 2026-10-21 扩展：硬编码业务策略落库与 Redis 限流
+
+用户确认把原先硬编码、但属于运行期业务策略的值迁入注册表，并把限流计数迁到 Redis（多副本共享配额）。协议/算法不变量（SSE 心跳、BullMQ 锁与 stalled、任务心跳、watcher 轮询等）仍保留代码常量。
+
+| 设置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `rate_limit.login_ip_max_requests` | 5 | 登录按 IP 窗口内最大请求数 |
+| `rate_limit.login_window_seconds` | 60 | 登录限流窗口（整数秒） |
+| `rate_limit.register_ip_max_requests` | 3 | 注册按 IP 窗口内最大请求数 |
+| `rate_limit.register_window_seconds` | 3600 | 注册限流窗口（整数秒） |
+| `rate_limit.generate_user_max_requests` | 20 | 生成任务按用户窗口内最大请求数 |
+| `rate_limit.generate_window_seconds` | 60 | 生成限流窗口（整数秒） |
+| `rate_limit.media_edit_user_max_requests` | 20 | 媒体编辑按用户窗口内最大请求数 |
+| `rate_limit.media_edit_window_seconds` | 60 | 媒体编辑限流窗口（整数秒） |
+| `storage.gc_interval_seconds` | 86400 | GC 周期（整数秒定时器，沿用 1 天上限） |
+| `storage.gc_startup_delay_seconds` | 60 | 启动后首次 GC 延迟（整数秒定时器，沿用 1 天上限） |
+| `storage.gc_batch_size` | 500（上限 10000） | 单轮引用回收扫描上限；上限防止误配置退化为单个长事务 |
+| `storage.derived_ttl_hours` | 720 | 派生产物统一 TTL（非定时器，无 1 天上限） |
+| `storage.staging_max_age_hours` | 24 | 直传 staging 超龄清扫阈值 |
+
+非定时器的时长键（限流窗口、GC 宽限期、派生产物 TTL、staging 阈值）只按「换算毫秒后仍在 Number 安全域」设技术上限，不设业务窗口上限。限流窗口按整数秒配置：滑动窗口以毫秒写入 Redis，Redis `PEXPIRE` 只接受整数毫秒，小数秒会因浮点换算产生非整数毫秒而报错。
+
+限流实现：Redis ZSET 滑动窗口，判定与写入由单段 Lua 原子执行，时间取 Redis `TIME`（避免副本间时钟偏差）；键前缀 `noxrea:ratelimit:`。启动期 Redis 不可达直接启动失败；运行期命令失败 fail-open 放行，命令失败与连接错误日志均按 10 秒间隔去重。计数的存储不再是进程内存，多副本共享同一配额。停机顺序：先 `stopServer`（停止接受新连接、主动断开 SSE、等待在途请求结束后关闭 HTTP server），再 `closeRateLimit` 断开限流专用连接（连接已断开则直接丢弃，不阻塞停机）；因此关闭限流时不存在仍在处理中的 HTTP 请求。
+
 ## 待确认事项
 
-1. 定时器类时长上限（业务规则 5）：2026-10-13 由 media-processing-concurrency 第三轮代码审查发现——`media.*_max_wait_seconds` 设置过大时 `setTimeout` 溢出成 1ms，排查后同类问题覆盖表中全部换算成定时器的时长。用户已回复按建议修复，请确认本规则文本与 1 天上限。
+无。规则 5 的定时器类时长上限（1 天及倍数换算余量）已于 2026-10-21 由用户确认。
 
 ## 当前状态
+
+2026-10-21：规则 5 经用户确认，原待确认事项关闭，Spec 状态更新为「已确认」。实现已完成并通过 typecheck、lint、全量服务端测试；代码尚未提交，提交后状态更新为「已实现」。
+
+2026-10-21：按用户指示完成「硬编码业务策略落库 + Redis 限流」扩展（见上一节）：注册表新增 13 个键，GC / 派生产物 TTL / staging 清扫阈值改为设置读取；限流计数从进程内存迁到 Redis 滑动窗口，多副本共享。设置时长换算（分→秒、秒 / 分 / 小时→毫秒）统一走 `server/core/duration.ts`；`worker.zombie_scan_interval_seconds` 纳入 1 天定时器上限，分钟类时长按 Number 安全域设技术上限。已通过 typecheck、lint、路由与存储单测及真 Redis 集成测试（设置 `TEST_REDIS_URL` 后运行）；待提交。
 
 2026-10-13：注册表新增定时器类时长类型（`timerSeconds` / `timerMillis`，上限 1 天），表中标注「定时器」的项与媒体等待时限已改用它；已实现并通过测试，规则待确认。媒体池第二阶段（重型 / 轻型 / sharp 三池）已实现，等待时限共 3 个，同样使用该类型（见 media-processing-concurrency.md）。
 

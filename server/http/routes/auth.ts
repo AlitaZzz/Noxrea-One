@@ -9,30 +9,19 @@ import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTaken
 import type { User } from "@server/core/database/generated/client";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getStorageSummary } from "@server/services/storage/quota";
-import { getLoginRateLimiter, getRegisterRateLimiter } from "@server/core/ratelimit";
+import { checkLoginRateLimit, checkRegisterRateLimit } from "@server/core/ratelimit";
 import { getSetting } from "@server/core/settings";
 import { logger } from "@server/core/logger";
-import { getConnInfo } from "@hono/node-server/conninfo";
-import { resolveRateLimitIp } from "@server/core/ratelimit/client-ip";
 import { ok, failCode } from "@server/core/response";
+import { failRateLimited } from "@server/http/rate-limited";
+import { requestRateLimitIp } from "@server/http/request-ip";
 
 const router = new Hono();
 
 router.post("/api/auth/login", async (c) => {
-  const request = c.req.raw;
-
-  // 限流：X-Forwarded-For 可伪造，默认使用 socket peer；只有可信代理链才解析该头。
-  const ip = resolveRateLimitIp({
-    remoteAddress: getConnInfo(c).remote.address,
-    forwardedFor: request.headers.get("x-forwarded-for"),
-    trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
-  });
-  const loginCheck = getLoginRateLimiter().check(`login:${ip}`);
+  const loginCheck = await checkLoginRateLimit(requestRateLimitIp(c));
   if (!loginCheck.allowed) {
-    return failCode(429, "auth.login_rate_limited", undefined, {
-      "Retry-After": String(loginCheck.retryAfterSeconds),
-      "Cache-Control": "no-store",
-    });
+    return failRateLimited("auth.login_rate_limited", loginCheck.retryAfterSeconds);
   }
 
   // 解析
@@ -78,25 +67,14 @@ router.post("/api/auth/login", async (c) => {
 
 // POST /api/auth/register
 router.post("/api/auth/register", async (c) => {
-  const request = c.req.raw;
-
   // 注册开关
   if (!getSetting("auth.registration_enabled")) {
     return failCode(403, "auth.registration_disabled");
   }
 
-  // 限流：与登录一致，不信任未配置为可信代理的 X-Forwarded-For。
-  const ip = resolveRateLimitIp({
-    remoteAddress: getConnInfo(c).remote.address,
-    forwardedFor: request.headers.get("x-forwarded-for"),
-    trustedProxyCidrs: getSetting("network.trusted_proxy_cidrs"),
-  });
-  const registerCheck = getRegisterRateLimiter().check(`register:${ip}`);
+  const registerCheck = await checkRegisterRateLimit(requestRateLimitIp(c));
   if (!registerCheck.allowed) {
-    return failCode(429, "auth.register_rate_limited", undefined, {
-      "Retry-After": String(registerCheck.retryAfterSeconds),
-      "Cache-Control": "no-store",
-    });
+    return failRateLimited("auth.register_rate_limited", registerCheck.retryAfterSeconds);
   }
 
   // 解析

@@ -14,10 +14,9 @@ const mocks = vi.hoisted(() => ({
   createAccessToken: vi.fn(),
   hashPassword: vi.fn(),
   verifyPassword: vi.fn(),
-  getLoginRateLimiter: vi.fn(),
-  getRegisterRateLimiter: vi.fn(),
+  checkLoginRateLimit: vi.fn(),
+  checkRegisterRateLimit: vi.fn(),
   getConnInfo: vi.fn(),
-  loginCheck: vi.fn(),
   loggerWarn: vi.fn(),
   aggregate: vi.fn(),
 }));
@@ -42,8 +41,8 @@ vi.mock("@server/core/auth", () => ({
   verifyPassword: mocks.verifyPassword,
 }));
 vi.mock("@server/core/ratelimit", () => ({
-  getLoginRateLimiter: mocks.getLoginRateLimiter,
-  getRegisterRateLimiter: mocks.getRegisterRateLimiter,
+  checkLoginRateLimit: mocks.checkLoginRateLimit,
+  checkRegisterRateLimit: mocks.checkRegisterRateLimit,
 }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 vi.mock("@server/core/database/client", () => ({
@@ -62,8 +61,8 @@ import { resetTestSettings } from "../../helpers/settings";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getLoginRateLimiter.mockReturnValue({ check: mocks.loginCheck });
-  mocks.loginCheck.mockReturnValue({ allowed: true });
+  mocks.checkLoginRateLimit.mockResolvedValue({ allowed: true });
+  mocks.checkRegisterRateLimit.mockResolvedValue({ allowed: true });
   mocks.getConnInfo.mockReturnValue({ remote: { address: "203.0.113.10" } });
   resetTestSettings();
   mocks.getUserByUsername.mockResolvedValue(null);
@@ -81,7 +80,7 @@ describe("认证限流 IP 解析", () => {
     });
 
     expect(response.status).toBe(401);
-    expect(mocks.loginCheck).toHaveBeenCalledWith("login:203.0.113.10");
+    expect(mocks.checkLoginRateLimit).toHaveBeenCalledWith("203.0.113.10");
   });
 
   it("可信代理存在时解析 XFF 中最右侧的非可信客户端", async () => {
@@ -97,11 +96,11 @@ describe("认证限流 IP 解析", () => {
       },
     });
 
-    expect(mocks.loginCheck).toHaveBeenCalledWith("login:198.51.100.10");
+    expect(mocks.checkLoginRateLimit).toHaveBeenCalledWith("198.51.100.10");
   });
 
   it("登录被限流时返回 429，带 Retry-After 并禁止缓存", async () => {
-    mocks.loginCheck.mockReturnValue({ allowed: false, retryAfterSeconds: 30 });
+    mocks.checkLoginRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 30 });
 
     const response = await router.request("/api/auth/login", {
       method: "POST",
@@ -116,9 +115,7 @@ describe("认证限流 IP 解析", () => {
   });
 
   it("注册被限流时返回 429，带 Retry-After 并禁止缓存", async () => {
-    mocks.getRegisterRateLimiter.mockReturnValue({
-      check: () => ({ allowed: false, retryAfterSeconds: 45 }),
-    });
+    mocks.checkRegisterRateLimit.mockResolvedValue({ allowed: false, retryAfterSeconds: 45 });
 
     const response = await router.request("/api/auth/register", {
       method: "POST",
@@ -139,7 +136,7 @@ describe("注册并发重名", () => {
   });
 
   beforeEach(() => {
-    mocks.getRegisterRateLimiter.mockReturnValue({ check: () => ({ allowed: true }) });
+    mocks.checkRegisterRateLimit.mockResolvedValue({ allowed: true });
     mocks.hashPassword.mockResolvedValue("hashed");
   });
 

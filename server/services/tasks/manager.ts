@@ -11,6 +11,7 @@ import {
   noUpstreamResult,
 } from "@server/services/tasks/sync-fetch";
 import { acceptUpstreamTask, isTaskCancelled, takeSubmissionGate } from "@server/crud/task";
+import { secondsToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { GenerationGateRejectedError } from "@server/services/tasks/failure";
 import type { ProtocolService } from "@server/services/protocols/base";
@@ -200,7 +201,9 @@ async function _acceptAsync(
     return { status: "cancelled", urls: [] };
   }
 
-  const firstPollAt = new Date(Date.now() + getSetting("worker.async_poll_initial_delay_seconds") * 1000);
+  const firstPollAt = new Date(
+    Date.now() + secondsToMs(getSetting("worker.async_poll_initial_delay_seconds")),
+  );
 
   const logWriteFailed = (attempt: number | string, err: unknown) => {
     logEvent("taskmgr", {

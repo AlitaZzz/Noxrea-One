@@ -16,26 +16,21 @@
  *   不影响任何引用的完整性。
  * - storage.gc_dry_run：引用回收与 staging 清扫都只报告不删除，观察扫描结果后再切换实删。
  *
- * 启动后延迟首跑 + 每日一次（进程内 interval），由 bootstrap 挂载，幂等。
+ * 启动后延迟首跑 + 按 storage.gc_interval_seconds 周期执行（进程内 interval），由 bootstrap 挂载，幂等。
  */
 import { Prisma } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
+import { hoursToMs, secondsToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { buildStorageKey, getStorageBackend } from "./service";
 import { sweepStagingObjects } from "./upload-direct";
 import { sweepStaleDerivedObjects } from "./derived-cleanup";
 import { logEvent } from "@server/core/logger/utils";
 
-const GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
-/** 启动后延迟首跑：避开启动高峰，也不阻塞首个请求 */
-const GC_STARTUP_DELAY_MS = 60 * 1000;
-/** 单轮扫描上限：孤儿数量异常膨胀时分多天消化，避免长事务 */
-const GC_BATCH_SIZE = 500;
-
 export interface StorageGcReport {
   dryRun: boolean;
   scannedAt: string;
-  /** refCount 归零、超宽限期且不在任何保护类的候选数（本批，FIFO 升序前 GC_BATCH_SIZE 个） */
+  /** refCount 归零、超宽限期且不在任何保护类的候选数（本批，FIFO 升序前 storage.gc_batch_size 个） */
   candidates: number;
   /** 账本仍有行（聚合计数漂移）：候选池 SQL 层排除，对全部候选统计 */
   ledgerProtected: number;
@@ -70,7 +65,7 @@ interface GcExcludedCounts {
 
 export async function runStorageGc(): Promise<StorageGcReport> {
   const dryRun = getSetting("storage.gc_dry_run");
-  const cutoff = new Date(Date.now() - getSetting("storage.gc_grace_hours") * 3_600_000);
+  const cutoff = new Date(Date.now() - hoursToMs(getSetting("storage.gc_grace_hours")));
 
   // 候选池在 SQL 层即排除三类不可回收行（账本保护 / Agent 引用 / 扩展名缺失），
   // 永久保护行不占批名额；FIFO（updatedAt 升序）批上限下的消化进度真正有保证。
@@ -84,7 +79,7 @@ export async function runStorageGc(): Promise<StorageGcReport> {
       AND NOT ${ledgerRefExists}
       AND NOT ${agentRefExists}
     ORDER BY fo.updated_at ASC
-    LIMIT ${GC_BATCH_SIZE}
+    LIMIT ${getSetting("storage.gc_batch_size")}
   `);
 
   // 排除量上报：同 WHERE 前置条件对全部候选统计（非仅本批），保持可观测性
@@ -236,12 +231,14 @@ async function tick(): Promise<void> {
   }
 }
 
-/** 启动 GC 循环（幂等）：延迟首跑 + 每日一次 */
+/** 启动 GC 循环（幂等）：延迟首跑 + 按 storage.gc_interval_seconds 周期执行 */
 export function startStorageGc(): void {
   if (timer) return;
-  timer = setInterval(() => void tick(), GC_INTERVAL_MS);
+  const intervalMs = secondsToMs(getSetting("storage.gc_interval_seconds"));
+  const startupDelayMs = secondsToMs(getSetting("storage.gc_startup_delay_seconds"));
+  timer = setInterval(() => void tick(), intervalMs);
   timer.unref?.();
-  const first = setTimeout(() => void tick(), GC_STARTUP_DELAY_MS);
+  const first = setTimeout(() => void tick(), startupDelayMs);
   first.unref?.();
-  logEvent("gc", { stage: "scheduled", intervalMs: GC_INTERVAL_MS });
+  logEvent("gc", { stage: "scheduled", intervalMs, startupDelayMs });
 }

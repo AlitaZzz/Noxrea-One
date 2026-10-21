@@ -1,5 +1,5 @@
 # NAS 部署用：直接从 GitHub 容器仓库拉取现成镜像（无需在 NAS 上构建）
-# 架构：三容器 —— PostgreSQL 17 + Redis 7（任务队列）+ 应用（web 3000 / api 4000）
+# 架构：三容器 —— PostgreSQL 17 + Redis 7（任务队列与分布式限流）+ 应用（web 3000 / api 4000）
 # 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（PG 数据 + Redis AOF + 上传文件）
 # 配置文件：首次启动前只需在 /share/Container/noxreaone/.env 写 POSTGRES_PASSWORD=... 与 REDIS_PASSWORD=...，
 #           其余配置（JWT 密钥等）由容器首次启动自动生成；之后编辑该文件并重启容器即可修改
@@ -32,7 +32,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: noxrea-redis
-    # 任务队列专用实例（specs/task-queue-bullmq.md 规则 7）：
+    # 本应用专用实例（任务队列 + 分布式限流；specs/task-queue-bullmq.md 规则 7）：
     # - requirepass 必填（REDIS_PASSWORD 由 compose 同目录 .env 提供）
     # - appendonly yes + everysec：队列派发状态崩溃后可恢复
     # - maxmemory 256MB + noeviction：队列键被驱逐 = 派发丢失，宁可写失败（由
@@ -69,7 +69,9 @@ services:
       # 服务器模式：连接串指向 compose 内的 postgres 服务；
       # 迁移由 entrypoint 的 prisma migrate deploy 自动执行
       DATABASE_URL: postgres://noxrea:${POSTGRES_PASSWORD}@postgres:5432/noxrea
-      # 任务队列（BullMQ）：指向 compose 内的 redis 服务；Redis 不可达时应用启动失败
+      # 单副本由 entrypoint 自动执行迁移；多副本部署设 RUN_MIGRATIONS=0 并用独立迁移 Job。
+      # DATABASE_POOL_MAX 可选（默认 10），多副本按「副本数 × 该值 + 余量 ≤ max_connections」规划。
+      # 任务队列（BullMQ）与分布式限流共用：指向 compose 内的 redis 服务；Redis 不可达时应用启动失败
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - "3000:3000"

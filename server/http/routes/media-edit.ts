@@ -33,7 +33,8 @@ import { isKeyOwner } from "@server/services/storage/ownership";
 import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
 import { failClientDisconnected, failCode } from "@server/core/response";
-import { checkUserRateLimit } from "@server/core/ratelimit";
+import { failRateLimited } from "@server/http/rate-limited";
+import { checkMediaEditRateLimit } from "@server/core/ratelimit";
 import { logger } from "@server/core/logger";
 import type { ErrorCode } from "@server/core/errors/codes";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
@@ -151,15 +152,12 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
     const auth = await authenticateRequest(request);
     if ("error" in auth) return auth.error;
 
-    // 按用户限流（仅产出类编辑）：每条都落库新文件，单用户 20 次/分钟（交互式点击远低于此）；
+    // 按用户限流（仅产出类编辑）：每条都落库新文件，默认单用户 20 次/分钟（rate_limit.*）；
     // CPU 保护由媒体池负责，预览产物类路由不计数
     if (opts.persistsFileObject !== false) {
-      const limitCheck = checkUserRateLimit("media-edit", auth.user.id, 20, 60);
+      const limitCheck = await checkMediaEditRateLimit(auth.user.id);
       if (!limitCheck.allowed) {
-        return failCode(429, "common.rate_limited", undefined, {
-          "Retry-After": String(limitCheck.retryAfterSeconds),
-          "Cache-Control": "no-store",
-        });
+        return failRateLimited("common.rate_limited", limitCheck.retryAfterSeconds);
       }
 
       // 存储配额二元门槛（specs/storage-user-quota.md 规则 3）：产出类编辑将落库新对象，

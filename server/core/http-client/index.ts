@@ -11,6 +11,7 @@
  * （仅在 undici 默认 bodyTimeout 的隐式兜底下不出大事），慢滴漏响应可无限占用调用方。
  */
 import { ProxyAgent } from "undici";
+import { secondsToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { isProxyRoutingEnabled } from "@server/core/settings/proxy";
 import { getSsrfAgent } from "@server/core/ssrf";
@@ -20,9 +21,9 @@ export type HttpTimeoutScene = "dl" | "poll" | "api";
 /** 按场景获取超时（毫秒） */
 export function getSceneTimeout(scene: HttpTimeoutScene): number {
   switch (scene) {
-    case "dl":   return getSetting("http.download_timeout_seconds") * 1000;
-    case "poll": return getSetting("http.poll_timeout_seconds") * 1000;
-    case "api":  return getSetting("http.api_timeout_seconds") * 1000;
+    case "dl":   return secondsToMs(getSetting("http.download_timeout_seconds"));
+    case "poll": return secondsToMs(getSetting("http.poll_timeout_seconds"));
+    case "api":  return secondsToMs(getSetting("http.api_timeout_seconds"));
   }
 }
 
@@ -127,7 +128,7 @@ export async function fetchWithTimeout(
   } = options;
 
   const headersTimeoutMs = timeoutMs ?? (scene ? getSceneTimeout(scene) : 0);
-  const bodyIdleMs = bodyIdleTimeoutMs ?? getSetting("http.body_idle_timeout_seconds") * 1000;
+  const bodyIdleMs = bodyIdleTimeoutMs ?? secondsToMs(getSetting("http.body_idle_timeout_seconds"));
 
   // 代理模式：DNS 由代理解析，SSRF 预检降级为告警（见 core/ssrf）；
   // 直连模式：默认走 SSRF 校验型 Agent，建连 lookup 阶段校验并 pinning 校验通过的 IP，
@@ -208,5 +209,5 @@ export async function fetchWithTimeout(
 
 /** Worker API 超时（worker.api_timeout_seconds） */
 export function getWorkerApiTimeout(): number {
-  return getSetting("worker.api_timeout_seconds") * 1000;
+  return secondsToMs(getSetting("worker.api_timeout_seconds"));
 }

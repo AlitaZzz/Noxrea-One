@@ -36,7 +36,7 @@
 | 前端 | `APP_NAME` | `WEB_APP_NAME` | 浏览器端应用名（构建期固化，映射为 `NEXT_PUBLIC_APP_NAME`）；从后端 config 中删除 |
 | 共用 | `UPLOAD_BATCH_MAX_MB` | 不变 | 后端批次校验与前端代理请求体上限共用同一来源 |
 | 后端 | 其余（`DATABASE_URL`、`DB_TIMEOUT`、`JWT_SECRET_KEY`、`JWT_ALGORITHM`、`ALLOW_INSECURE_SECRETS`、`LOG_LEVEL`、`UPLOAD_DIR`、`FFMPEG_PATH`、`RESOURCES_DIR`） | 不变 | 仅重新归入「后端」分区 |
-| 后端 | `REDIS_URL`（task-queue-bullmq.md 新增） | — | BullMQ 专用 Redis 连接串（必填，启动探测失败即启动失败）；归属「后端」分区，通用外部约定名不另起前缀 |
+| 后端 | `REDIS_URL`（task-queue-bullmq.md 新增） | — | 任务队列与分布式限流共用的 Redis 连接串（必填，启动探测失败即启动失败；两类键按前缀隔离）；归属「后端」分区，通用外部约定名不另起前缀 |
 
 命名规则：后端监听用 `API_*`（它就是 API 服务）；前端 Next 进程读取的变量统一 `WEB_*` 前缀，变量名即表明由哪个进程读取；`DATABASE_URL` 等通用/外部约定名保持不变。
 
@@ -84,6 +84,15 @@
 - 测试树注入点：`vitest.config.ts` 主进程求值期 `process.loadEnvFile` 一次，worker 继承；仅容忍 .env 不存在（ENOENT），其余错误原样抛出——与生产 script 的 `tsx --env-file=.env` 对坏 .env 的大声失败对称；需要 env 的用例由 schema 报缺。测试 script 此前从未携带 `--env-file`，全仓测试的 env 实际一直依赖 config 模块的兜底加载，该收敛使这一点显式化。
 - 测试侧收口：新增 `server/__tests__/helpers/ffmpeg.ts` 统一 ffmpeg 目录供给（`FFMPEG_TEST_DIR` 缺省仓库 `bin/`，`ffmpegAvailable` 整体跳过），video-frames / media-pool-concurrency 的门控不再读生产进程 env（仅测试变量 FFMPEG_TEST_DIR）。
 - 验证：全量服务端 932/932（`npm run test:server` 干净 shell 直跑）、web 934/934、typecheck、lint。
+
+增量（2026-10-21，多副本运行与 Redis 共用）：
+
+- `DATABASE_POOL_MAX`（后端，可选，默认 `10`）：每进程 PostgreSQL 连接池上限，由 `server/core/database/pool.ts` 校验（纯十进制正整数、安全整数、≥1；未设置或空值取默认），`client.ts` 建 PrismaPg 适配器时读取。与 `DATABASE_URL` 同属数据库层引导配置，直接读 env，不依赖完整业务配置。多副本规划：副本数 × 该值 + 迁移/运维余量 ≤ PostgreSQL `max_connections`。
+- `RUN_MIGRATIONS`（Docker entrypoint）：容器启动时是否执行 `prisma migrate deploy`，默认 `1`，只接受 `0` / `1`（其他值启动失败，避免拼写错误静默执行迁移）；设为 `0` 时跳过迁移，由部署侧一次性迁移 Job 在发布前执行。多副本部署必须设为 `0`。仅容器入口读取，应用进程不感知。
+- `TEST_REDIS_URL`（测试，可选）：真 Redis 集成测试连接串，应指向专用 DB index（如 `/15`）；用例只清理自身前缀键，未设置时整体跳过。`.env.example` 模板密码与 README「本地开发」的 Redis 启动命令一致（`devredis`），取消注释即可运行。
+- `REDIS_URL` 语义扩展：由 BullMQ 专用改为任务队列与分布式限流共用实例（见 [system-settings-db.md](system-settings-db.md) 2026-10-21 扩展），两类键分别使用 `noxrea:queue:` / `noxrea:ratelimit:` 前缀；仍为必填，启动探测失败即启动失败。`.env.example` 预置与 README「本地开发」一致、可直接使用的开发连接串（`redis://:devredis@localhost:6379`），生产部署必须替换密码（模板注释已说明）。
+- `UPLOAD_BATCH_MAX_MB`：补充「修改后需重新构建 Next 镜像」——代理层上限在 `next build` 时固化。
+- 同步：`.env.example`、`docker-entrypoint.sh`、README、`docker-compose.nas.yml` 注释。
 
 增量（2026-10-21，随 [pglite-removal.md](pglite-removal.md) 实施）：
 

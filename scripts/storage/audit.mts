@@ -7,7 +7,7 @@
  * 分类口径：
  * - 主对象（内容寻址 {userId}/{ss}/{hash}{ext}）：bucket 有 DB 无 → 孤儿；
  *   DB 有 bucket 无 → 缺失（引用悬空，最高优先级）；
- * - staging/：直传暂存，超龄（>24h）说明按龄清扫未覆盖，逐条列出；
+ * - staging/：直传暂存，超过 storage.staging_max_age_hours 说明按龄清扫未覆盖，逐条列出；
  * - _cache/_posters/_sprite/_proxy：派生产物，无 DB 行属正常，只计数；
  *   _tmp/：本地工作区临时区，同上；
  * - 其余 key：无法归类的未知对象，逐条列出。
@@ -18,11 +18,11 @@
  * 用法：npm run storage:audit；发现异常时退出码 1（可脚本化感知）。
  */
 import { prisma } from "@server/core/database/client";
+import { hoursToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { bootstrapCliStorage } from "./cli-bootstrap.mts";
 import { isStorageKey } from "@noxrea/shared/url";
 import { buildStorageKey, getStorageBackend } from "@server/services/storage/service";
-import { STAGING_MAX_AGE_MS } from "@server/services/storage/upload-direct";
 import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "@server/services/storage/backend";
 
 /** 审计计数的前缀全集：派生产物四根 + `_tmp` 工作区（审计须覆盖临时区残留计数） */
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
   const bucketMain = new Set<string>();
   let mainOk = 0;
 
-  const stagingCutoff = Date.now() - STAGING_MAX_AGE_MS;
+  const stagingCutoff = Date.now() - hoursToMs(getSetting("storage.staging_max_age_hours"));
   for (const obj of objects) {
     if (obj.key.startsWith(STAGING_PREFIX)) {
       // lastModifiedMs 缺失（0）按在途处理：宁可漏报不误报

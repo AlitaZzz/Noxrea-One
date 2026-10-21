@@ -8,7 +8,7 @@ set -e
 #   - 未传入的使用 Docker 默认值
 #   - JWT_SECRET_KEY 缺失时自动生成随机密钥并持久化（重启不变）
 # 数据库固定为服务器模式（真 PostgreSQL，连接串由 compose 注入 DATABASE_URL）；
-# 任务队列 Redis 连接串由 compose 注入 REDIS_URL（不可达时启动失败）。
+# 任务队列与分布式限流共用的 Redis 连接串由 compose 注入 REDIS_URL（不可达时启动失败）。
 # ------------------------------------------------------------
 if [ ! -f /data/.env ]; then
   cat > /data/.env <<EOF
@@ -27,8 +27,10 @@ JWT_SECRET_KEY="${JWT_SECRET_KEY:-$(node -e "console.log(require('crypto').rando
 
 # ---------- 后端：数据库（服务器模式：真 PostgreSQL，由 compose 注入） ----------
 DATABASE_URL="${DATABASE_URL}"
+# 每个进程的 PostgreSQL 连接池上限；未设置时应用默认 10，多副本时按 max_connections 规划
+# DATABASE_POOL_MAX=10
 
-# ---------- 后端：任务队列（BullMQ，由 compose 注入；Redis 不可达时启动失败） ----------
+# ---------- 后端：任务队列（BullMQ）与分布式限流，由 compose 注入；Redis 不可达时启动失败 ----------
 REDIS_URL="${REDIS_URL}"
 
 # ---------- 后端：服务 ----------
@@ -102,7 +104,7 @@ case "$DATABASE_URL" in
     ;;
 esac
 if [ -z "$REDIS_URL" ]; then
-  echo "ERROR: 必须设置 REDIS_URL（任务队列，形如 redis://:pass@redis:6379）。" >&2
+  echo "ERROR: 必须设置 REDIS_URL（任务队列与分布式限流共用，形如 redis://:pass@redis:6379）。" >&2
   echo "       NAS compose 已自动注入；手工 docker run 时请用 -e REDIS_URL=... 传入。" >&2
   exit 1
 fi
@@ -141,7 +143,7 @@ c.connect().then(() => c.end()).then(() => process.exit(0)).catch(() => process.
 done
 
 # ------------------------------------------------------------
-# 等待 Redis 就绪（任务队列，specs/task-queue-bullmq.md 规则 7）
+# 等待 Redis 就绪（任务队列与分布式限流共用，specs/task-queue-bullmq.md 规则 7）
 # ------------------------------------------------------------
 echo "== 等待 Redis 就绪 =="
 i=0
@@ -161,8 +163,13 @@ done
 
 # ------------------------------------------------------------
 # 数据库迁移（首次运行建表，之后幂等；Prisma v7 连接取自 DATABASE_URL）
+# 多副本部署：应用副本设 RUN_MIGRATIONS=0，由独立迁移 Job 在发布前执行一次。
 # ------------------------------------------------------------
-npx prisma migrate deploy
+case "${RUN_MIGRATIONS:-1}" in
+  1) npx prisma migrate deploy ;;
+  0) echo "== RUN_MIGRATIONS=0：跳过数据库迁移（由部署侧一次性 Job 执行） ==" ;;
+  *) echo "RUN_MIGRATIONS 只接受 0（跳过）或 1（执行），当前为：${RUN_MIGRATIONS}" >&2; exit 1 ;;
+esac
 
 echo "== Noxrea: web -> 0.0.0.0:3000, api -> ${API_HOST}:${API_PORT} =="
 

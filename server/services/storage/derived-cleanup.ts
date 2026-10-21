@@ -6,20 +6,18 @@
  * 阶段失败对调用方可见（GcCycleResult.derivedSweepError / CLI 退出码），下一周期自然重试。
  */
 
+import { hoursToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { logger } from "@server/core/logger";
 import { DERIVED_ROOT_PREFIXES } from "./backend";
 import { getStorageBackend } from "./service";
 import { sweepAgedPrefix } from "./sweep";
 
-/** 派生产物统一存活时间：30 天（specs/derived-deletion-linkage.md 已确认决策 3） */
-export const DERIVED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
 /** 派生按龄清扫：四根逐一回收，返回实删/应删（dry-run）总数；任一根枚举失败则整阶段上抛 */
 export async function sweepStaleDerivedObjects(): Promise<number> {
   const backend = getStorageBackend();
   const dryRun = getSetting("storage.gc_dry_run");
-  const cutoff = Date.now() - DERIVED_TTL_MS;
+  const cutoff = Date.now() - hoursToMs(getSetting("storage.derived_ttl_hours"));
   let swept = 0;
   let firstError: { err: unknown } | null = null;
   for (const prefix of DERIVED_ROOT_PREFIXES) {

@@ -121,7 +121,7 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 ### 8. Redis 运维口径
 
 - Redis 7.x；AOF everysec；`maxmemory` 初值 256mb + `noeviction`（队列数据不可淘汰，容量随队列深度复核）；AOF rewrite 与磁盘占用纳入运维监控项。
-- 安全：`requirepass`（凭据与 PG 同级落 env）；仅内网监听；生产 TLS 经反向代理（与存储决策同构）；**专用实例**（NAS 新容器，不与其他服务共享；BullMQ `prefix: "noxrea:queue:"`）。
+- 安全：`requirepass`（凭据与 PG 同级落 env）；仅内网监听；生产 TLS 经反向代理（与存储决策同构）；**本应用专用实例**（不与其他系统共享；BullMQ `prefix: "noxrea:queue:"`；2026-10-21 起分布式限流共用该实例，使用独立 `noxrea:ratelimit:` 前缀）。
 - 健康与告警：`/api/health` 扩展（启动探测管生死，health 管运行期 readiness 供 LB/人工核查）；queue depth / failed 计数 / redis 内存告警阈值列为部署文档项。
 
 ### 9. 停机

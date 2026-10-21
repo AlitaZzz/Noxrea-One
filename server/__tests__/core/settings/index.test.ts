@@ -5,6 +5,7 @@
  * 库结构由 global-setup 的 prisma migrate deploy（与生产同一份 prisma/migrations）建立。
  */
 import type { PrismaClient } from "@server/core/database/generated/client";
+import { MS_PER_MINUTE } from "@server/core/duration";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { databaseTestsEnabled, setupTestDatabase } from "../../helpers/test-database";
@@ -122,11 +123,21 @@ describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 Pos
     ["科学计数法", "1e3"],
     ["负数", "-1"],
     ["小数", "1.5"],
+    ["超安全整数域", "9007199254740992"],
   ])("整数设置的非法文本（%s）启动失败", async (_label, value) => {
     await prisma.systemSetting.create({ data: { key: "worker.max_retries", value } });
     const settings = await restart();
 
     await expect(settings.initSettings()).rejects.toThrow(/worker\.max_retries/);
+  });
+
+  it("超出安全整数域的纯数字文本给出范围错误而非文本形态错误", async () => {
+    await prisma.systemSetting.create({
+      data: { key: "worker.max_retries", value: "9007199254740992" },
+    });
+    const settings = await restart();
+
+    await expect(settings.initSettings()).rejects.toThrow(/safe integer range/);
   });
 
   it.each([["空串", ""], ["Infinity", "Infinity"], ["零", "0"]])(
@@ -227,6 +238,9 @@ describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 Pos
     ["http.api_timeout_seconds", "2147484"],
     ["worker.drain_timeout_seconds", "86401"],
     ["worker.async_poll_interval_seconds", "86401"],
+    ["worker.zombie_scan_interval_seconds", "86401"],
+    ["storage.gc_interval_seconds", "86401"],
+    ["storage.gc_startup_delay_seconds", "86401"],
   ])("定时器类时长 %s 超过 1 天（%s）启动失败", async (key, value) => {
     await prisma.systemSetting.create({ data: { key, value } });
     const settings = await restart();
@@ -239,6 +253,9 @@ describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 Pos
       data: [
         { key: "media.ffmpeg_light_max_wait_seconds", value: "86400" },
         { key: "worker.async_poll_interval_seconds", value: "86400" },
+        { key: "worker.zombie_scan_interval_seconds", value: "86400" },
+        { key: "storage.gc_interval_seconds", value: "86400" },
+        { key: "storage.gc_startup_delay_seconds", value: "86400" },
       ],
     });
     const settings = await restart();
@@ -247,6 +264,18 @@ describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 Pos
 
     expect(settings.getSetting("media.ffmpeg_light_max_wait_seconds")).toBe(86400);
     expect(settings.getSetting("worker.async_poll_interval_seconds")).toBe(86400);
+    expect(settings.getSetting("worker.zombie_scan_interval_seconds")).toBe(86400);
+    expect(settings.getSetting("storage.gc_interval_seconds")).toBe(86400);
+    expect(settings.getSetting("storage.gc_startup_delay_seconds")).toBe(86400);
+  });
+
+  it("GC 定时器类时长只接受整数秒", async () => {
+    await prisma.systemSetting.create({
+      data: { key: "storage.gc_interval_seconds", value: "0.5" },
+    });
+    const settings = await restart();
+
+    await expect(settings.initSettings()).rejects.toThrow("storage.gc_interval_seconds");
   });
 
   it("不换算成定时器的时长不受 1 天上限约束", async () => {
@@ -262,6 +291,37 @@ describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 Pos
 
     expect(settings.getSetting("auth.token_ttl_minutes")).toBe(43200);
     expect(settings.getSetting("storage.gc_grace_hours")).toBe(720);
+  });
+
+  it.each(["auth.token_ttl_minutes", "worker.stuck_timeout_minutes"])(
+    "分钟类时长 %s 超过 Number 安全域上限时启动失败",
+    async (key) => {
+      const maxMinutes = Math.floor(Number.MAX_SAFE_INTEGER / MS_PER_MINUTE);
+      await prisma.systemSetting.create({
+        data: { key, value: String(maxMinutes + 1) },
+      });
+      const settings = await restart();
+
+      await expect(settings.initSettings()).rejects.toThrow(key);
+    },
+  );
+
+  it("限流窗口是 Redis TTL，不受定时器 1 天上限约束", async () => {
+    await prisma.systemSetting.create({
+      data: { key: "rate_limit.register_window_seconds", value: "604800" },
+    });
+    const settings = await restart();
+
+    await settings.initSettings();
+
+    expect(settings.getSetting("rate_limit.register_window_seconds")).toBe(604800);
+  });
+
+  it("GC 单轮批量超过上限（10000）启动失败，防止退化为长事务", async () => {
+    await prisma.systemSetting.create({ data: { key: "storage.gc_batch_size", value: "10001" } });
+    const settings = await restart();
+
+    await expect(settings.initSettings()).rejects.toThrow("storage.gc_batch_size");
   });
 
   it("代理路由仅在开关打开且地址非空时启用", async () => {

@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   createProxy: vi.fn(),
   probeMeta: vi.fn(),
   probeIntegrity: vi.fn(),
-  checkRateLimit: vi.fn(() => ({ allowed: true })),
+  checkRateLimit: vi.fn(async () => ({ allowed: true })),
 }));
 
 const cfg = vi.hoisted(() => ({ uploadDir: "" }));
@@ -34,7 +34,7 @@ vi.mock("@server/services/storage/media-probe", () => ({
 vi.mock("@server/core/settings", () => ({ getSetting: vi.fn() }));
 // 形状与真实现一致；雪碧图 / 代理路由 persistsFileObject: false，全程不应接入限流
 // （用例内断言 spy 未被调用，即路由级验证「含缓存命中也不计数」）
-vi.mock("@server/core/ratelimit", () => ({ checkUserRateLimit: mocks.checkRateLimit }));
+vi.mock("@server/core/ratelimit", () => ({ checkMediaEditRateLimit: mocks.checkRateLimit }));
 
 import { router as spriteRouter } from "@server/http/routes/frame-sprite";
 import { router as proxyRouter } from "@server/http/routes/video-proxy";

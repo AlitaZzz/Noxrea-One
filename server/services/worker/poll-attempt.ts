@@ -5,6 +5,7 @@
  * 轮询段不持有租约（对上游只读 GET），tick job 即存活信号。
  */
 
+import { secondsToMs } from "@server/core/duration";
 import { logEvent } from "@server/core/logger/utils";
 import { getSetting } from "@server/core/settings";
 import { getProvider } from "@server/crud/model-config";
@@ -148,7 +149,7 @@ export async function runPollAttempt(
   // 已失权（任务被取消/重置），不调度
   const interval = getSetting("worker.async_poll_interval_seconds");
   const delaySeconds = attempt >= POLL_BACKOFF_TRIGGER_ATTEMPT ? interval * 2 : interval;
-  const nextPollAt = new Date(Date.now() + delaySeconds * 1000);
+  const nextPollAt = new Date(Date.now() + secondsToMs(delaySeconds));
   const deferred = await deferPollTick(taskId, task.startedAt, nextPollAt, attempt);
   if (!deferred) {
     logEvent("poll_tick", { stage: "defer_ownership_lost", taskId });

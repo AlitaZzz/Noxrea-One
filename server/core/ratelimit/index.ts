@@ -1,126 +1,115 @@
 /**
- * 内存限流器。
- * 基于滑动窗口实现按标识的速率限制，防止接口被过度调用。
- * 按用户的并发租约（FIFO 排队等待槽位）是独立机制，见同目录 concurrency.ts。
+ * 分布式限流（Redis 滑动窗口）。
+ *
+ * 计数存放在 Redis，多副本共享同一配额；限流额度等业务策略来自 system_settings。
+ * Redis 是请求路径上的旁路依赖：启动期建连失败直接让启动失败（与任务队列同口径），
+ * 运行期命令失败则 fail-open 放行并记录错误——可用性优先，避免 Redis 抖动放大为
+ * 全站登录 / 生成 / 媒体编辑不可用。命令失败与连接错误日志均按固定间隔去重。
  */
+import { getConfig } from "@server/core/config";
+import { logger } from "@server/core/logger";
+import { getSetting } from "@server/core/settings";
 
-interface WindowEntry {
-  timestamps: number[];
-}
+import { createFailureLogThrottle } from "./log-throttle";
+import { RedisRateLimitStore } from "./redis-store";
+import type { RateLimitQuota, RateLimitResult, RateLimitStore } from "./types";
 
-const globalForRateLimit = globalThis as unknown as {
-  __noxreaRateLimiters?: Map<string, RateLimiter>;
-};
+export type { RateLimitQuota, RateLimitResult, RateLimitStore } from "./types";
 
-export class RateLimiter {
-  private windows = new Map<string, WindowEntry>();
-  private maxRequests: number;
-  private windowSeconds: number;
-  private lastCleanup = Date.now();
+/**
+ * 策略表是「业务入口 → 设置键」的唯一来源；策略名同时作为 Redis 键前缀
+ * （login / register / generate / media-edit），避免名字与前缀两处维护、漂移。
+ * 四个业务入口只负责限定身份类型（IP / userId）。
+ */
+const RATE_LIMIT_POLICIES = {
+  login: {
+    maxRequestsKey: "rate_limit.login_ip_max_requests",
+    windowSecondsKey: "rate_limit.login_window_seconds",
+  },
+  register: {
+    maxRequestsKey: "rate_limit.register_ip_max_requests",
+    windowSecondsKey: "rate_limit.register_window_seconds",
+  },
+  generate: {
+    maxRequestsKey: "rate_limit.generate_user_max_requests",
+    windowSecondsKey: "rate_limit.generate_window_seconds",
+  },
+  "media-edit": {
+    maxRequestsKey: "rate_limit.media_edit_user_max_requests",
+    windowSecondsKey: "rate_limit.media_edit_window_seconds",
+  },
+} as const;
 
-  constructor(maxRequests: number, windowSeconds: number) {
-    this.maxRequests = maxRequests;
-    this.windowSeconds = windowSeconds;
-  }
+type RateLimitPolicyName = keyof typeof RATE_LIMIT_POLICIES;
 
-  /**
-   * 检查是否允许通过。
-   * 放行时返回 { allowed: true }；被限流时附带 retryAfterSeconds——窗口内最早一次
-   * 计数到期的剩余秒数（向上取整，至少 1），调用方据此回 429 + Retry-After。
-   */
-  check(key: string): { allowed: boolean; retryAfterSeconds?: number } {
-    const now = Date.now();
-    const cutoff = now - this.windowSeconds * 1000;
+let store: RateLimitStore | null = null;
+/** 建连中的单飞 Promise：并发初始化共享同一次连接，避免重复建连后泄漏其一。 */
+let pendingInit: Promise<RateLimitStore> | null = null;
+const shouldLogFailure = createFailureLogThrottle();
 
-    // 定期清理空条目，防止内存泄漏
-    if (now - this.lastCleanup > this.windowSeconds * 1000 * 2) {
-      for (const [k, entry] of this.windows) {
-        entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-        if (entry.timestamps.length === 0) {
-          this.windows.delete(k);
-        }
-      }
-      this.lastCleanup = now;
+async function checkPolicy(
+  policyName: RateLimitPolicyName,
+  identity: string | number,
+): Promise<RateLimitResult> {
+  // 未初始化属于启动流程不变量，必须抛出错误（async 入口会转成 rejection），
+  // 不能落入 fail-open——否则忘记 bootstrap 时限流会静默失效。
+  const activeStore = requireStore();
+  const policy = RATE_LIMIT_POLICIES[policyName];
+  const quota: RateLimitQuota = {
+    maxRequests: getSetting(policy.maxRequestsKey),
+    windowSeconds: getSetting(policy.windowSecondsKey),
+  };
+  try {
+    return await activeStore.check(`${policyName}:${identity}`, quota);
+  } catch (err) {
+    if (shouldLogFailure()) {
+      logger.error({ err }, "rate limit store unavailable; failing open");
     }
-
-    let entry = this.windows.get(key);
-    if (!entry) {
-      entry = { timestamps: [] };
-      this.windows.set(key, entry);
-    }
-
-    // 清理过期时间戳
-    entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-
-    // 检查是否超限
-    if (entry.timestamps.length >= this.maxRequests) {
-      const oldest = entry.timestamps[0];
-      return {
-        allowed: false,
-        retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.windowSeconds * 1000 - now) / 1000)),
-      };
-    }
-
-    // 记录本次请求
-    entry.timestamps.push(now);
     return { allowed: true };
   }
 }
 
-// 预置限流器
-
-const globalLimiters =
-  globalForRateLimit.__noxreaRateLimiters ?? new Map();
-
-if (!globalForRateLimit.__noxreaRateLimiters) {
-  globalForRateLimit.__noxreaRateLimiters = globalLimiters;
-}
-
-/** 登录限流：每分钟 5 次 */
-export function getLoginRateLimiter(): RateLimiter {
-  const key = "login";
-  let limiter = globalLimiters.get(key);
-  if (!limiter) {
-    limiter = new RateLimiter(5, 60);
-    globalLimiters.set(key, limiter);
+function requireStore(): RateLimitStore {
+  if (!store) {
+    throw new Error("Rate limit is not initialized; call bootstrap() first");
   }
-  return limiter;
+  return store;
 }
 
-/** 注册限流：每小时 3 次 */
-export function getRegisterRateLimiter(): RateLimiter {
-  const key = "register";
-  let limiter = globalLimiters.get(key);
-  if (!limiter) {
-    limiter = new RateLimiter(3, 3600);
-    globalLimiters.set(key, limiter);
+/** 幂等初始化；并发调用共享同一次建连。 */
+export async function initRateLimit(): Promise<void> {
+  if (store) return;
+  pendingInit ??= RedisRateLimitStore.connect(getConfig().REDIS_URL);
+  try {
+    store = await pendingInit;
+  } finally {
+    pendingInit = null;
   }
-  return limiter;
 }
 
-/**
- * 通用具名限流器：同名（maxRequests, windowSeconds）全局唯一，惰性创建。
- * 各业务路由经 checkUserRateLimit 声明配额，无需为每个场景复制一个 getter。
- */
-function getNamedRateLimiter(name: string, maxRequests: number, windowSeconds: number): RateLimiter {
-  let limiter = globalLimiters.get(name);
-  if (!limiter) {
-    limiter = new RateLimiter(maxRequests, windowSeconds);
-    globalLimiters.set(name, limiter);
-  }
-  return limiter;
+/** 停机收尾：断开限流连接；后续请求不应再发生（HTTP 已停止接收）。 */
+export async function closeRateLimit(): Promise<void> {
+  const current = store;
+  store = null;
+  if (current) await current.close();
 }
 
-/**
- * 已登录接口的按用户限流：以「业务名 + userId」为键。
- * 已登录请求的调用方身份明确，无需走 IP 解析（IP 维度留给未鉴权的登录/注册）。
- * 被限流时返回 retryAfterSeconds，调用方回 429 + Retry-After。
- */
-export function checkUserRateLimit(
-  name: string,
-  userId: number,
-  maxRequests: number,
-  windowSeconds: number,
-): { allowed: boolean; retryAfterSeconds?: number } {
-  return getNamedRateLimiter(name, maxRequests, windowSeconds).check(`${name}:${userId}`);
+// 具名入口把身份类型固定在调用边界（登录 / 注册为 IP，生成 / 媒体编辑为 userId），
+// 避免路由直接传策略名时把用户 id 当 IP 使用；策略名与设置键只在策略表维护。
+// 显式声明 async：Promise 契约必须覆盖「未初始化」这条失败路径，
+// 让调用方用 try/catch 或 .catch 都能捕获，而不是同步抛出穿透 Promise 链。
+export async function checkLoginRateLimit(ip: string): Promise<RateLimitResult> {
+  return checkPolicy("login", ip);
+}
+
+export async function checkRegisterRateLimit(ip: string): Promise<RateLimitResult> {
+  return checkPolicy("register", ip);
+}
+
+export async function checkGenerateRateLimit(userId: number): Promise<RateLimitResult> {
+  return checkPolicy("generate", userId);
+}
+
+export async function checkMediaEditRateLimit(userId: number): Promise<RateLimitResult> {
+  return checkPolicy("media-edit", userId);
 }

@@ -15,9 +15,10 @@ import { reactivateBestEffort, cancelQueuedTask } from "@server/services/worker/
 import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
+import { failRateLimited } from "@server/http/rate-limited";
 import { buildFileUrl, getStorageBackend } from "@server/services/storage/service";
 import { findQuotaGateViolation } from "@server/services/storage/quota";
-import { checkUserRateLimit } from "@server/core/ratelimit";
+import { checkGenerateRateLimit } from "@server/core/ratelimit";
 
 const router = new Hono();
 
@@ -52,13 +53,10 @@ router.post("/api/generate/task", async (c) => {
   const auth = await authenticateRequest(request);
   if ("error" in auth) return auth.error;
 
-  // 按用户限流：每个任务都占用 worker 与上游配额，单用户 20 次/分钟
-  const generateCheck = checkUserRateLimit("generate", auth.user.id, 20, 60);
+  // 按用户限流：每个任务都占用 worker 与上游配额，默认单用户 20 次/分钟（rate_limit.*）
+  const generateCheck = await checkGenerateRateLimit(auth.user.id);
   if (!generateCheck.allowed) {
-    return failCode(429, "common.rate_limited", undefined, {
-      "Retry-After": String(generateCheck.retryAfterSeconds),
-      "Cache-Control": "no-store",
-    });
+    return failRateLimited("common.rate_limited", generateCheck.retryAfterSeconds);
   }
 
   let body: unknown;

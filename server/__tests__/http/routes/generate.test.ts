@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getAllowedFields: vi.fn(),
   taskWatcher: {},
   quotaGate: vi.fn(),
+  checkGenerateRateLimit: vi.fn(),
   reactivateBestEffort: vi.fn(),
   cancelQueuedTask: vi.fn(),
 }));
@@ -51,6 +52,9 @@ vi.mock("@server/services/storage/service", () => ({
 vi.mock("@server/services/storage/quota", () => ({
   findQuotaGateViolation: mocks.quotaGate,
 }));
+vi.mock("@server/core/ratelimit", () => ({
+  checkGenerateRateLimit: mocks.checkGenerateRateLimit,
+}));
 vi.mock("@server/services/worker/queue", () => ({
   reactivateBestEffort: mocks.reactivateBestEffort,
   cancelQueuedTask: mocks.cancelQueuedTask,
@@ -67,6 +71,7 @@ app.route("/", router);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.checkGenerateRateLimit.mockResolvedValue({ allowed: true });
   mocks.reactivateBestEffort.mockResolvedValue("added");
   mocks.cancelQueuedTask.mockResolvedValue(undefined);
 });

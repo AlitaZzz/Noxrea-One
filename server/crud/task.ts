@@ -3,6 +3,7 @@ import { TASK_TERMINAL_STATUSES } from "@noxrea/shared";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./json-column";
 import { publishTaskTerminal } from "@server/services/tasks/event-bus";
 import { logEvent, errText } from "@server/core/logger/utils";
+import { minutesToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import type { TerminalTaskState } from "@server/services/tasks/watcher";
 import crypto from "crypto";
@@ -196,7 +197,7 @@ export async function takeSubmissionGate(
  * 执行者失联。handler 的接管/判失败与对账清扫的候选窗口共用同一实现，禁止各自换算。
  */
 export function stuckLeaseCutoff(now: Date = new Date()): Date {
-  return new Date(now.getTime() - getSetting("worker.stuck_timeout_minutes") * 60 * 1000);
+  return new Date(now.getTime() - minutesToMs(getSetting("worker.stuck_timeout_minutes")));
 }
 
 /**

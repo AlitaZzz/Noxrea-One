@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
   root: "",
   quotaGate: vi.fn(),
+  rateLimitCounts: new Map<number, number>(),
 }));
 
 vi.mock("@server/core/config", () => ({
@@ -31,10 +32,31 @@ vi.mock("@server/services/storage/quota", () => ({
   findQuotaGateViolation: mocks.quotaGate,
 }));
 
+// 路由级限流契约用进程内计数替身锁定（真 Redis 窗口语义由 redis-store 集成测试覆盖）。
+// 额度取自注册表默认值，避免测试替身与生产默认值两处维护、静默漂移。
+vi.mock("@server/core/ratelimit", async () => {
+  const { SETTING_DEFS } = await import("@server/core/settings/registry");
+  const limit = SETTING_DEFS["rate_limit.media_edit_user_max_requests"].default;
+  const windowSeconds = SETTING_DEFS["rate_limit.media_edit_window_seconds"].default;
+  return {
+    checkMediaEditRateLimit: async (userId: number) => {
+      const count = (mocks.rateLimitCounts.get(userId) ?? 0) + 1;
+      mocks.rateLimitCounts.set(userId, count);
+      return count <= limit
+        ? { allowed: true }
+        : { allowed: false, retryAfterSeconds: windowSeconds };
+    },
+  };
+});
+
 import { createMediaEditRoute, type MediaEditContext } from "@server/http/routes/media-edit";
+import { SETTING_DEFS } from "@server/core/settings/registry";
 import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
+
+const MEDIA_EDIT_LIMIT = SETTING_DEFS["rate_limit.media_edit_user_max_requests"].default;
+const MEDIA_EDIT_WINDOW_SECONDS = SETTING_DEFS["rate_limit.media_edit_window_seconds"].default;
 
 const USER_ID = 3;
 // 归属校验（specs/file-access-ownership.md）要求源键为严格形态：规范内容 key
@@ -76,6 +98,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.rateLimitCounts.clear();
   mocks.authenticate.mockResolvedValue({ user: { id: USER_ID } });
   mocks.quotaGate.mockResolvedValue(null);
 });
@@ -190,10 +213,10 @@ describe("createMediaEditRoute 请求次数限流（specs/media-processing-concu
     await writeSource(RATE_LIMIT_USER);
   });
 
-  it("产出类编辑超过 20 次/60 秒返回 429，带 Retry-After 并禁止缓存", async () => {
+  it(`产出类编辑超过 ${MEDIA_EDIT_LIMIT} 次/${MEDIA_EDIT_WINDOW_SECONDS} 秒返回 429，带 Retry-After 并禁止缓存`, async () => {
     const app = buildApp(async ({ c }) => c.json({ ok: true }));
 
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < MEDIA_EDIT_LIMIT; i++) {
       const res = await post(app, { video_key: RATE_LIMIT_KEY });
       expect(res.status).toBe(200);
     }
@@ -203,14 +226,14 @@ describe("createMediaEditRoute 请求次数限流（specs/media-processing-concu
     expect(await errorOf(limited)).toBe("common.rate_limited");
     const retryAfter = Number(limited.headers.get("Retry-After"));
     expect(retryAfter).toBeGreaterThanOrEqual(1);
-    expect(retryAfter).toBeLessThanOrEqual(60);
+    expect(retryAfter).toBeLessThanOrEqual(MEDIA_EDIT_WINDOW_SECONDS);
     expect(limited.headers.get("Cache-Control")).toBe("no-store");
   });
 
-  it("预览产物路由（persistsFileObject: false）不计数，21 次请求全部通过", async () => {
+  it(`预览产物路由（persistsFileObject: false）不计数，${MEDIA_EDIT_LIMIT + 1} 次请求全部通过`, async () => {
     const app = buildApp(async ({ c }) => c.json({ ok: true }), undefined, { persistsFileObject: false });
 
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < MEDIA_EDIT_LIMIT + 1; i++) {
       const res = await post(app, { video_key: RATE_LIMIT_KEY });
       expect(res.status).toBe(200);
     }
@@ -254,7 +277,7 @@ describe("createMediaEditRoute 存储配额二元门槛（specs/storage-user-quo
 
 describe("createMediaEditRoute 错误映射", () => {
   // 独立用户与源文件：限流键按「业务名 + userId」隔离，避免与其他 describe
-  // 共享 user 3 的 20 次/60 秒窗口（其计数已贴近上限）
+  // 共享 user 3 的限流窗口（其计数已贴近上限）
   const ERROR_USER = 5;
   const ERROR_KEY = contentKey(ERROR_USER);
 

@@ -6,8 +6,8 @@
 ## 已确认决策（2026-10-18，用户按推荐项逐条确认）
 
 1. 枚举策略：**精准 shard list**（uniform 全前缀备选否决）。
-2. TTL 触发点：**收敛到 GC 每日周期**（路由顺带清扫迁走）。
-3. TTL 值：**四根统一 30 天**。
+2. TTL 触发点：**收敛到 GC 周期**（默认每日一次，周期由 `storage.gc_interval_seconds` 配置；路由顺带清扫迁走）。
+3. TTL 值：**四根统一**（默认 30 天，由 `storage.derived_ttl_hours` 配置）。
 4. 范围：**两类永久孤儿治理并入本 Spec**。
 5. `_posters` 版本发现：**接口新增 `listCommonPrefixes` 能力**（全前缀备选否决）。
 
@@ -23,7 +23,7 @@
 - **TTL 清扫现状**：仅 `_sprite/`（30 天，frame-sprite 路由顺带触发）与 `_proxy/`（30 天，video-proxy 路由顺带触发）有 TTL 清扫；**`_cache` 与 `_posters` 无任何 TTL**。由此存在两类永久孤儿：
   1. **staging 源的派生缓存**：会话路径 `?w=` 对 staging key 的缩放会产出 `_cache/{tier}/staging/{userId}/{uuid}.webp`（specs/file-access-ownership.md 规则 3 认可的形态），海报档位派生同理可产出 `_posters/v{N}/staging/{userId}/{uuid}.webp`。staging key 被 `isStorageKey` 门控短路（无删除联动），staging 本体 24h 后被清扫，而这些派生条目既无联动也无 TTL——**永久孤儿**。backend.ts 现有注释称其「由 TTL 清扫兜底」与代码不符（失实注释，本 Spec 修正）。
   2. **版本升级孤儿**：`POSTER_VERSION` 升版后，旧版本 `_posters/v{旧N}/` 母版不再被任何路径命中且无 TTL——永久孤儿（低频事件：版本仅在代码变更时递增）。sprite/proxy 的版本孤儿已有 30 天 TTL 覆盖。
-- **枚举成本现状**：每次内容键 delete = 2 次全前缀 list（`_cache/`、`_posters/`）；S3 ListObjectsV2 每页 1000 键。GC 单批上限 500 对象/日。local 后端 list 按首段收窄遍历根，深层前缀进一步收窄。
+- **枚举成本现状**：每次内容键 delete = 2 次全前缀 list（`_cache/`、`_posters/`）；S3 ListObjectsV2 每页 1000 键。GC 单批上限默认 500 对象/轮（`storage.gc_batch_size`）。local 后端 list 按首段收窄遍历根，深层前缀进一步收窄。
 - 缩放档位集合 `RESIZE_WIDTH_TIERS`（8 档）定义于 resize-cache.ts 并导出；derived-keys.ts 是四命名空间 key 格式知识单点（仅依赖 shared/url，无服务端内部依赖，可被 backend.ts 安全引用）。
 
 ## 范围
@@ -49,7 +49,7 @@
    - `_posters/v{N}/{userId}/{hash2}/`：版本段动态累积，先经一次 `listCommonPrefixes("_posters/")` 发现版本集，再逐版本精准 list。
    收益：单次 delete 的全部 list 均为 O(shard) 精准列举（约 0–20 键/次、页数 O(1)），与 S3 生态「prefix list + delete」标准做法同型；联动扩到 4 根的同时成本仍严格优于现状的 2 次全前缀 list，多用户公网规模不引入公网瓶颈（部署中立）。
 3. **staging 源短路维持**：`isStorageKey` 门控不变——staging key 的 delete 不触发派生枚举（staging 清扫高频，不为每个 key 付 list）；staging 源的派生缓存由规则 4 的 TTL 兜底。旧单向哈希形态派生 key 传给 delete 时同样短路（只删本体，无递归枚举）。
-4. **`_cache`/`_posters` TTL 兜底**（待确认事项 2/3）：四命名空间统一 30 天 TTL，清扫挂接 GC 每日周期（runGcCycle 增加派生清扫阶段，与引用回收、staging 清扫并列独立成败；frame-sprite/video-proxy 路由内的顺带清扫迁入 GC，触发时机单一化）。受 `storage.gc_dry_run` 护栏约束（开启时只报告不删除，与 staging 清扫同一口径）。被老化的当前版本母版/档位缓存按需幂等重生成（ensureArtifact 语义不变）。
+4. **`_cache`/`_posters` TTL 兜底**（待确认事项 2/3）：四命名空间统一 TTL（`storage.derived_ttl_hours`，默认 720 小时 / 30 天），清扫挂接 GC 周期（`storage.gc_interval_seconds`，默认每日一次；runGcCycle 增加派生清扫阶段，与引用回收、staging 清扫并列独立成败；frame-sprite/video-proxy 路由内的顺带清扫迁入 GC，触发时机单一化）。受 `storage.gc_dry_run` 护栏约束（开启时只报告不删除，与 staging 清扫同一口径）。被老化的当前版本母版/档位缓存按需幂等重生成（ensureArtifact 语义不变）。
 5. **GC 调用方不变**：gc.ts 不感知派生枚举细节；backend.delete 契约「删除该 key 的一切」语义扩展为四根覆盖。
 
 ## 技术影响
@@ -57,12 +57,12 @@
 - [derived-keys.ts](../server/services/storage/derived-keys.ts)：新增枚举面——`候选 shard 前缀构造（给定内容源 key）+ 四根后缀匹配器`，与既有构造/解析同址；`RESIZE_WIDTH_TIERS` 自 resize-cache.ts 迁入（cache key 段域知识，resize-cache 及其他引用方改改 import）。
 - [backend.ts](../server/services/storage/backend.ts)：`listDerivedArtifactKeys` 改为按 derived-keys 候选前缀执行精准 list + 后缀匹配；接口新增可选 `listCommonPrefixes(prefix): Promise<string[]>`（S3 以 ListObjectsV2 Delimiter 实现，local 以 readdir 一层目录实现；唯一消费方为 `_posters` 版本段发现）；失实注释修正（staging 源派生缓存兜底方式改为指向本 Spec TTL 规则）。local 后端 readdir 枚举错误口径统一（list / listCommonPrefixes 共用 readdirOrEmpty）：目录缺失为合法空集，其余错误上抛，与 S3 fail-fast 同口径。
 - [sweep.ts](../server/services/storage/sweep.ts)（新增）：按龄清扫共享力学单点——判龄（lastModifiedMs 缺失视为未到期）、gc_dry_run 只计不删、单条删除失败留痕续行；枚举失败上抛（阶段失败可见性归调用方），根间隔离粒度归策略侧。
-- [derived-cleanup.ts](../server/services/storage/derived-cleanup.ts)：派生侧策略——四根清单 + 统一 TTL（`DERIVED_TTL_MS` 30 天）+ gc_dry_run 护栏；单根枚举失败留痕不中断其余根，全部根尝试后聚合上抛（阶段失败经 GcCycleResult.derivedSweepError / CLI 退出码可见）；被 GC 周期调用（新增阶段挂接 [gc.ts](../server/services/storage/gc.ts) runGcCycle，独立成败）。
-- [upload-direct.ts](../server/services/storage/upload-direct.ts)：staging 清扫（24h 策略留本文件）改调共享力学核 sweepAgedPrefix；枚举失败由留痕改上抛，恢复「GC 记录 sweepError / CLI 退出码 1」语义。
+- [derived-cleanup.ts](../server/services/storage/derived-cleanup.ts)：派生侧策略——四根清单 + 统一 TTL（`storage.derived_ttl_hours`，默认 720 小时）+ gc_dry_run 护栏；单根枚举失败留痕不中断其余根，全部根尝试后聚合上抛（阶段失败经 GcCycleResult.derivedSweepError / CLI 退出码可见）；被 GC 周期调用（新增阶段挂接 [gc.ts](../server/services/storage/gc.ts) runGcCycle，独立成败）。
+- [upload-direct.ts](../server/services/storage/upload-direct.ts)：staging 清扫（阈值 `storage.staging_max_age_hours`，默认 24h）改调共享力学核 sweepAgedPrefix；枚举失败由留痕改上抛，恢复「GC 记录 sweepError / CLI 退出码 1」语义。
 - [frame-sprite.ts](../server/http/routes/frame-sprite.ts) / [video-proxy.ts](../server/http/routes/video-proxy.ts)：顺带清扫调用迁出（TTL 常量统一收口）。
 - [resize-cache.ts](../server/services/storage/resize-cache.ts)：档位常量迁出后改从 derived-keys 引用。
 - [scripts/storage/gc.mts](../scripts/storage/gc.mts)：CLI 输出与退出码纳入派生清扫阶段成败（derivedSwept / derivedSweepError）。
-- [specs/storage-s3-backend.md](../specs/storage-s3-backend.md)：规则 9 改写——delete 联动四命名空间（精准 shard 枚举）+ 四根统一 30 天 TTL 挂 GC 每日周期，交叉引用本 Spec。
+- [specs/storage-s3-backend.md](../specs/storage-s3-backend.md)：规则 9 改写——delete 联动四命名空间（精准 shard 枚举）+ 四根统一 TTL（`storage.derived_ttl_hours`）挂 GC 周期（`storage.gc_interval_seconds`），交叉引用本 Spec。
 - 测试：derived-keys 枚举面往返锁定（构造函数产物必被「候选前缀 + 后缀」命中，覆盖四命名空间 × 内容源/staging 源矩阵；staging/派生 key 短路维持）；local 后端删除联动扩展（四根回收、旧形态不联动）；TTL 清扫 dry-run 报告语义；GC 周期新阶段成败隔离；TTL 清扫失败语义（单条失败续行、根枚举失败聚合上抛、_posters 旧版本母版回收直测）与 staging 清扫枚举失败上抛断言。
 
 ## 异常与边界

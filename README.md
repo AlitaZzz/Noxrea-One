@@ -96,7 +96,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
    `DATABASE_URL` 必填，仅支持外置 PostgreSQL（`postgres://` / `postgresql://`）；缺失或非法时启动失败。首次使用先执行 `npm run db:migrate:deploy` 建表（`npm run dev` 的 `predev` 钩子也会自动执行）。
 
-   生成异步任务队列所需的 Redis（BullMQ 派发，连接串 `REDIS_URL` 必填；Redis 不可达时应用启动失败）。本地可临时用 Docker 起一个带密码的 Redis 7：
+   任务队列（BullMQ 派发）与分布式限流共用的 Redis（连接串 `REDIS_URL` 必填；Redis 不可达时应用启动失败）。本地可临时用 Docker 起一个带密码的 Redis 7：
 
    ```bash
    docker run -d --name noxrea-dev-redis -p 6379:6379 redis:7-alpine redis-server --requirepass devredis --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
@@ -147,14 +147,16 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | 变量 | 说明 |
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
-| `REDIS_URL` | 任务队列（BullMQ）Redis 连接串，必填；Redis 不可达时启动失败，运行期瞬断由 stalled 重跑与对账清扫自愈（specs/task-queue-bullmq.md） |
+| `REDIS_URL` | 任务队列（BullMQ）与分布式限流共用的 Redis 连接串，必填；Redis 不可达时启动失败，队列瞬断由 stalled 重跑与对账清扫自愈（specs/task-queue-bullmq.md），限流命令失败 fail-open |
 | `DATABASE_URL` | 外置 PostgreSQL 连接串（必填，`postgres://` / `postgresql://`）；应用启动不自动迁移，需先执行 `npm run db:migrate:deploy` |
+| `DATABASE_POOL_MAX` | 每个进程的 PostgreSQL 连接池上限，默认 `10`；多副本按 `副本数 × 该值 + 余量 ≤ PostgreSQL max_connections` 规划 |
+| `RUN_MIGRATIONS` | Docker 容器启动时是否执行 `prisma migrate deploy`，默认 `1`，只接受 `0` / `1`；多副本部署设为 `0`，由独立迁移 Job 执行一次 |
 | `API_HOST` / `API_PORT` | 后端（Hono）监听地址与端口，默认 `0.0.0.0:4000` |
 | `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
 | `WEB_AUTH_GATE_MODE` | 前端路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
 | `WEB_APP_NAME` | 浏览器端显示的应用名（构建期固化） |
 | `UPLOAD_DIR` | 上传文件目录，默认 `data/uploads` |
-| `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名；Next 代理层共用，故保留在 env） |
+| `UPLOAD_BATCH_MAX_MB` | 单次批量上传总大小上限，默认 `128` MiB（配置键沿用 MB 命名；Next 代理层共用，故保留在 env；修改后需重新构建 Next 镜像并重启后端） |
 | `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
 | `LOG_LEVEL` | 日志级别，可选 `DEBUG`、`INFO`、`WARN`、`ERROR` |
@@ -162,20 +164,23 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 生产环境务必使用随机 `JWT_SECRET_KEY`，不要开启 `ALLOW_INSECURE_SECRETS`。
 
-真实数据库测试使用 `TEST_DATABASE_URL`（专用测试库，库名必须包含 `test`，且不得与 `DATABASE_URL` 同库）；未设置时本地跳过这些用例，CI 环境（`CI=true` 或 `CI=1`）未设置则测试失败。`db:migrate:new` 必需 `SHADOW_DATABASE_URL`（可丢弃的 shadow 库，不得与 `DATABASE_URL` 相同）；迁移授权只在该库回放迁移并生成 SQL。
+真实数据库测试使用 `TEST_DATABASE_URL`（专用测试库，库名必须包含 `test`，且不得与 `DATABASE_URL` 同库）；未设置时本地跳过这些用例，CI 环境（`CI=true` 或 `CI=1`）未设置则测试失败。`db:migrate:new` 必需 `SHADOW_DATABASE_URL`（可丢弃的 shadow 库，不得与 `DATABASE_URL` 相同）；迁移授权只在该库回放迁移并生成 SQL。真 Redis 集成测试使用 `TEST_REDIS_URL`（应指向专用 DB index，如 `/15`；测试只清理自己的前缀键）；未设置时这些用例整体跳过。
 
 ### 系统设置
 
-运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面：可用 `psql` 执行 SQL）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
+运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（多副本部署需全部副本重启；暂无后台管理界面：可用 `psql` 执行 SQL）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
 
 | 前缀 | 内容 |
 | --- | --- |
 | `auth.*` | 注册开关 `registration_enabled`、登录态有效期 `token_ttl_minutes` |
+| `rate_limit.*` | 登录/注册按 IP、生成/媒体编辑按用户的请求额度与窗口；计数存 Redis，多副本共享 |
 | `network.*` | 可信代理网段、SSRF 内网白名单、出网代理、对外访问地址 `public_base_url` |
 | `upload.*` | 单文件大小、单批文件数、单用户并发批次数与排队深度 |
 | `worker.*` | 生成任务 Worker 的并发、超时、重试与异步轮询节奏等 |
 | `http.*` | 下载、轮询、API 请求超时，响应体空闲与下载总时长 |
-| `storage.*` | 存储后端选择与 S3 连接配置（`storage.backend` / `storage.s3.*`）、读取分发与上游引用策略、存储引用 GC 宽限期与试运行开关 |
+| `storage.*` | 存储后端选择与 S3 连接配置（`storage.backend` / `storage.s3.*`）、读取分发与上游引用策略、GC 周期/批量/宽限期/试运行、派生产物与 staging 保留时长 |
+
+限流计数使用 `REDIS_URL` 指向的 Redis（与 BullMQ 同实例，键前缀 `noxrea:ratelimit:`）。启动时 Redis 不可达会直接启动失败；运行期 Redis 命令失败按 fail-open 放行并记录错误，避免 Redis 抖动放大为全站登录/生成不可用。
 
 例如关闭注册：
 
@@ -185,7 +190,7 @@ UPDATE system_settings SET value = 'false' WHERE key = 'auth.registration_enable
 
 ## Docker 部署
 
-镜像将前端与后端封装在同一容器中，配置与上传文件统一持久化到 `/data`；数据库为外置 PostgreSQL（compose 示例内置 postgres 服务，也可指向自备实例），entrypoint 会等待数据库就绪并自动执行 `prisma migrate deploy`。任务队列使用 compose 示例内置的 Redis 7 服务（AOF 持久化 + noeviction，队列专用实例），entrypoint 同样等待其就绪。
+镜像将前端与后端封装在同一容器中，配置与上传文件统一持久化到 `/data`；数据库为外置 PostgreSQL（compose 示例内置 postgres 服务，也可指向自备实例），entrypoint 会等待数据库就绪并自动执行 `prisma migrate deploy`。任务队列与分布式限流使用 compose 示例内置的 Redis 7 服务（AOF 持久化 + noeviction，本应用专用实例），entrypoint 同样等待其就绪。
 
 1. 准备 `docker-compose.nas.yml`
 
@@ -235,7 +240,7 @@ docker build -t noxrea-one .
 
 - **`/api/health` 返回 `redis: false`** ⇒ 运行期 Redis 不可达，立即告警。此时任务仍落库 pending、恢复后由对账清扫自动排水，但创建侧体验降级，不应长时间持续。
 - **`queueDepth` 持续增长不回落** ⇒ 消费能力不足或 Redis 写入后 worker 停摆；正常水位应随提交量波动并在分钟级回落。
-- **Redis `used_memory` 逼近 `maxmemory`（256mb）** ⇒ 告警并复核容量；策略为 noeviction，写满后队列写入将报错（自愈路径依赖清扫，但应扩容根除）。
+- **Redis `used_memory` 逼近 `maxmemory`（256mb）** ⇒ 告警并复核容量；策略为 noeviction，写满后队列写入将报错（自愈路径依赖清扫，但应扩容根除）。限流键按窗口 TTL 自动过期，但大量不同来源 IP 会在窗口内推高键数量（每个键一个 ZSET）；此类增长应结合 `noxrea:ratelimit:*` 键数量一并观察。
 - **failed 计数**（基础设施级瞬断重试耗尽）用 `redis-cli` 查看：
 
   ```bash

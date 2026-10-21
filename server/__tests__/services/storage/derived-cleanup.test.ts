@@ -18,10 +18,13 @@ vi.mock("@server/services/storage/service", () => ({
   getStorageBackend: () => ({ list: mocks.list, delete: mocks.del }),
 }));
 
-import { DERIVED_TTL_MS, sweepStaleDerivedObjects } from "@server/services/storage/derived-cleanup";
+import { hoursToMs } from "@server/core/duration";
+import { getSetting } from "@server/core/settings";
+import { sweepStaleDerivedObjects } from "@server/services/storage/derived-cleanup";
 import { resetTestSettings } from "../../helpers/settings";
 
-const OLD_MS = Date.now() - DERIVED_TTL_MS - 60_000;
+/** 以注册表默认 TTL 之外的 1 分钟作为“确定超龄”样本，避免贴近边界 */
+const oldMs = () => Date.now() - hoursToMs(getSetting("storage.derived_ttl_hours")) - 60_000;
 const FRESH_MS = Date.now() - 60_000;
 
 beforeEach(() => {
@@ -33,8 +36,8 @@ beforeEach(() => {
 describe("sweepStaleDerivedObjects", () => {
   it("四根逐一枚举（根清单同源 DERIVED_ROOT_PREFIXES），超龄条目回收", async () => {
     mocks.list.mockImplementation(async (prefix: string) => {
-      if (prefix === "_cache/") return [{ key: "_cache/64/3/ab/h.webp", size: 1, lastModifiedMs: OLD_MS }];
-      if (prefix === "_sprite/") return [{ key: "_sprite/3/ab/h_c20v2.webp", size: 1, lastModifiedMs: OLD_MS }];
+      if (prefix === "_cache/") return [{ key: "_cache/64/3/ab/h.webp", size: 1, lastModifiedMs: oldMs() }];
+      if (prefix === "_sprite/") return [{ key: "_sprite/3/ab/h_c20v2.webp", size: 1, lastModifiedMs: oldMs() }];
       return [];
     });
 
@@ -51,7 +54,7 @@ describe("sweepStaleDerivedObjects", () => {
     mocks.list.mockImplementation(async (prefix: string) =>
       prefix === "_posters/"
         ? [
-            { key: "_posters/v1/3/ab/old-master.webp", size: 1, lastModifiedMs: OLD_MS },
+            { key: "_posters/v1/3/ab/old-master.webp", size: 1, lastModifiedMs: oldMs() },
             { key: "_posters/v2/3/ab/current.webp", size: 1, lastModifiedMs: FRESH_MS },
           ]
         : [],
@@ -79,7 +82,7 @@ describe("sweepStaleDerivedObjects", () => {
   it("gc_dry_run 开启：只统计不删除（与 staging 清扫同一护栏口径）", async () => {
     resetTestSettings({ "storage.gc_dry_run": true });
     mocks.list.mockImplementation(async (prefix: string) =>
-      prefix === "_cache/" ? [{ key: "old", size: 1, lastModifiedMs: OLD_MS }] : [],
+      prefix === "_cache/" ? [{ key: "old", size: 1, lastModifiedMs: oldMs() }] : [],
     );
 
     await expect(sweepStaleDerivedObjects()).resolves.toBe(1);
@@ -90,8 +93,8 @@ describe("sweepStaleDerivedObjects", () => {
     mocks.list.mockImplementation(async (prefix: string) => {
       if (prefix === "_cache/") {
         return [
-          { key: "boom", size: 1, lastModifiedMs: OLD_MS },
-          { key: "ok", size: 1, lastModifiedMs: OLD_MS },
+          { key: "boom", size: 1, lastModifiedMs: oldMs() },
+          { key: "ok", size: 1, lastModifiedMs: oldMs() },
         ];
       }
       if (prefix === "_posters/") throw new Error("list failed");

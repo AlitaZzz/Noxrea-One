@@ -9,6 +9,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "./generated/client";
 import { assertDatabaseUrl } from "./connection-string";
+import { databasePoolMax } from "./pool";
 
 interface DatabaseEntry {
   prisma: PrismaClient;
@@ -30,7 +31,10 @@ function getEntry(): DatabaseEntry {
       : ["warn", "error"];
 
   const entry: DatabaseEntry = {
-    prisma: new PrismaClient({ adapter: new PrismaPg({ connectionString: dbUrl }), log }),
+    prisma: new PrismaClient({
+      adapter: new PrismaPg({ connectionString: dbUrl, max: databasePoolMax() }),
+      log,
+    }),
   };
   globalForPrisma.databases.set(dbUrl, entry);
   return entry;

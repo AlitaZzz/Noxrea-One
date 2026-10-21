@@ -3,6 +3,14 @@
  * 启动时按此表把缺失的键以默认值写入 system_settings；值统一以规范化文本存储。
  */
 import { z } from "zod";
+import {
+  MS_PER_HOUR,
+  MS_PER_MINUTE,
+  MS_PER_SECOND,
+  SECONDS_PER_DAY,
+  maxSafeUnits,
+} from "@server/core/duration";
+import { parseDecimalText, parseIntegerText } from "@server/core/numeric-text";
 import { isValidTrustedProxyCidrs } from "@server/core/ratelimit/client-ip";
 
 interface SettingDef<T> {
@@ -16,25 +24,44 @@ const bool = (value: boolean): SettingDef<boolean> => ({
 });
 
 // 数值只接受规范化的十进制文本：z.coerce.number() 会把空串 / 空白当成 0、把 "Infinity" 当成有效值，
-// 与「非法值启动失败」相悖，因此先校验文本形态，再转数字并校验取值范围
-const INT_TEXT = /^\d+$/;
-const DECIMAL_TEXT = /^\d+(\.\d+)?$/;
-
+// 与「非法值启动失败」相悖。整数 / 小数的文本形态与整数安全域统一由 numeric-text 判定，
+// 与 env 引导配置共用同一规则；判定与取值在同一次转换内完成，避免先校验再 Number 的两次解析
 const int = (value: number, min = 1, max = Number.MAX_SAFE_INTEGER): SettingDef<number> => ({
   schema: z
     .string()
-    .regex(INT_TEXT, "must be an integer written as plain digits")
-    .transform(Number)
-    .pipe(z.number().int().safe().min(min).max(max)),
+    .transform((v, ctx) => {
+      const parsed = parseIntegerText(v);
+      if (!parsed.ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            parsed.reason === "unsafe-integer"
+              ? "must be an integer within the safe integer range"
+              : "must be an integer written as plain digits",
+        });
+        return z.NEVER;
+      }
+      return parsed.value;
+    })
+    .pipe(z.number().min(min).max(max)),
   default: value,
 });
 
 const positive = (value: number, max: number): SettingDef<number> => ({
   schema: z
     .string()
-    .regex(DECIMAL_TEXT, "must be a number written as plain digits with an optional fraction")
-    .transform(Number)
-    .pipe(z.number().finite().positive().max(max)),
+    .transform((v, ctx) => {
+      const parsed = parseDecimalText(v);
+      if (parsed === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "must be a finite number written as plain digits with an optional fraction",
+        });
+        return z.NEVER;
+      }
+      return parsed;
+    })
+    .pipe(z.number().positive().max(max)),
   default: value,
 });
 
@@ -43,10 +70,22 @@ const positive = (value: number, max: number): SettingDef<number> => ({
  * 同时保证代码里的倍数换算（如排空时限 ×3、轮询退避 ×2）仍远小于 Node 定时器上限
  * 2^31-1 ms（约 24.8 天）——超出该上限时 setTimeout 不报错，而是把延迟改成 1ms。
  */
-const MAX_TIMER_SECONDS = 24 * 60 * 60;
+const MAX_TIMER_SECONDS = SECONDS_PER_DAY;
 
 /** 配额 MB 上限：换算字节后仍在 Number 安全域（MB × 1024² ≤ MAX_SAFE_INTEGER） */
 const MAX_QUOTA_MB = Math.floor(Number.MAX_SAFE_INTEGER / 1024 ** 2);
+
+/** 秒值上限：换算毫秒后仍在 Number 安全域；只约束数值正确性，不设业务窗口上限 */
+const MAX_SECONDS_WITHIN_SAFE_MS = maxSafeUnits(MS_PER_SECOND);
+
+/** 分钟值上限：换算毫秒后仍在 Number 安全域（租约 / 凭据有效期共用） */
+const MAX_MINUTES_WITHIN_SAFE_MS = maxSafeUnits(MS_PER_MINUTE);
+
+/** 小时值上限：换算毫秒后仍在 Number 安全域（TTL / 宽限期等按龄阈值共用） */
+const MAX_HOURS_WITHIN_SAFE_MS = maxSafeUnits(MS_PER_HOUR);
+
+/** GC 单轮扫描上限：防止误配置成超大 LIMIT 后退化为单个长事务 */
+const MAX_GC_BATCH_SIZE = 10_000;
 
 /** 用作定时器延迟的秒数；integer 为 true 时只接受整数秒 */
 const timerSeconds = (value: number, { integer = false } = {}): SettingDef<number> =>
@@ -86,7 +125,18 @@ const enumText = <T extends string>(values: readonly T[], value: T): SettingDef<
 export const SETTING_DEFS = {
   // 认证
   "auth.registration_enabled": bool(true),
-  "auth.token_ttl_minutes": int(1440),
+  "auth.token_ttl_minutes": int(1440, 1, MAX_MINUTES_WITHIN_SAFE_MS),
+
+  // 限流（Redis 滑动窗口，多副本共享同一配额；登录/注册按 IP，生成/媒体编辑按用户）。
+  // 窗口用整数秒：写入 Redis 前换算成毫秒，PEXPIRE 只接受整数毫秒，小数秒会因浮点尾差报错
+  "rate_limit.login_ip_max_requests": int(5),
+  "rate_limit.login_window_seconds": int(60, 1, MAX_SECONDS_WITHIN_SAFE_MS),
+  "rate_limit.register_ip_max_requests": int(3),
+  "rate_limit.register_window_seconds": int(3600, 1, MAX_SECONDS_WITHIN_SAFE_MS),
+  "rate_limit.generate_user_max_requests": int(20),
+  "rate_limit.generate_window_seconds": int(60, 1, MAX_SECONDS_WITHIN_SAFE_MS),
+  "rate_limit.media_edit_user_max_requests": int(20),
+  "rate_limit.media_edit_window_seconds": int(60, 1, MAX_SECONDS_WITHIN_SAFE_MS),
 
   // 网络
   /** 可信反向代理网段（逗号分隔 IP/CIDR）；只有直连 peer 命中时才解析 X-Forwarded-For */
@@ -135,8 +185,8 @@ export const SETTING_DEFS = {
   "worker.api_timeout_seconds": timerSeconds(240, { integer: true }),
   /** 租约判定阈值（分钟）：执行段经心跳/闸门/下载持续推进 updatedAt，
    *  轮询段由 tick 持续推进 nextPollAt；这里只兜「执行者真的挂了」 */
-  "worker.stuck_timeout_minutes": int(15),
-  "worker.zombie_scan_interval_seconds": int(60),
+  "worker.stuck_timeout_minutes": int(15, 1, MAX_MINUTES_WITHIN_SAFE_MS),
+  "worker.zombie_scan_interval_seconds": timerSeconds(60, { integer: true }),
   "worker.max_retries": int(2, 0),
   "worker.drain_timeout_seconds": timerSeconds(15, { integer: true }),
   "worker.async_poll_interval_seconds": timerSeconds(3),
@@ -152,11 +202,21 @@ export const SETTING_DEFS = {
   /** 单次结果下载总时长上限：防慢滴漏响应长期占用下载与 Worker 槽位 */
   "http.download_total_timeout_seconds": timerSeconds(600),
 
-  // 存储引用 GC
+  // 存储引用 GC 与保留策略
   /** 引用归零后的保留宽限期，覆盖撤销 / 恢复等短暂重引用场景 */
-  "storage.gc_grace_hours": int(48),
+  "storage.gc_grace_hours": int(48, 1, MAX_HOURS_WITHIN_SAFE_MS),
   /** 试运行模式：只扫描报告不删除；确认扫描结果无误后再关闭 */
   "storage.gc_dry_run": bool(true),
+  /** GC 周期（整数秒定时器，受 1 天上限约束）；默认每日一次 */
+  "storage.gc_interval_seconds": timerSeconds(SECONDS_PER_DAY, { integer: true }),
+  /** 启动后首次 GC 延迟（整数秒），避开启动高峰 */
+  "storage.gc_startup_delay_seconds": timerSeconds(60, { integer: true }),
+  /** 单轮引用回收扫描上限：孤儿数量异常膨胀时分多轮消化，避免长事务 */
+  "storage.gc_batch_size": int(500, 1, MAX_GC_BATCH_SIZE),
+  /** 派生产物（四根）统一存活时间；按龄清扫，不是定时器延迟 */
+  "storage.derived_ttl_hours": int(30 * 24, 1, MAX_HOURS_WITHIN_SAFE_MS),
+  /** 直传 staging 超龄清扫阈值；完成流程很短，默认 24h 覆盖中断场景 */
+  "storage.staging_max_age_hours": int(24, 1, MAX_HOURS_WITHIN_SAFE_MS),
 
   // 存储后端选择与 S3 连接（specs/storage-s3-backend.md 规则 1/2）。
   // 重启生效，永不参与快照热刷新；backend=s3 时必填键的跨项联合校验

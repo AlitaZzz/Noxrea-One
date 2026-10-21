@@ -17,6 +17,7 @@ import { createHash, randomUUID } from "crypto";
 import { prisma } from "@server/core/database/client";
 import type { ErrorCode } from "@server/core/errors/codes";
 import { logger } from "@server/core/logger";
+import { hoursToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { evaluateUploadIdentity, resolveUploadMime } from "./formats";
 import { mimeByExt, sniffMime, normalizeExt, SNIFF_WINDOW_BYTES } from "./mime";
@@ -27,9 +28,6 @@ import { createXmlContentDetector } from "./xml-content";
 import { buildStorageKey, getStorageBackend, storedFileView, type StoredFileView } from "./service";
 import { supportsDirectUpload, STAGING_PREFIX, STAGING_KEY_PATTERN } from "./backend";
 import { sweepAgedPrefix } from "./sweep";
-
-/** staging 超龄清扫阈值：完成流程很短，24h 足以覆盖一切中断场景 */
-export const STAGING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** 直传业务错误：路由层按携带的 status/code 直接映射响应 */
 export class UploadDirectError extends Error {
@@ -255,6 +253,6 @@ export async function completeDirectUpload(
 export async function sweepStagingObjects(): Promise<number> {
   const backend = getStorageBackend();
   const dryRun = getSetting("storage.gc_dry_run");
-  const cutoff = Date.now() - STAGING_MAX_AGE_MS;
+  const cutoff = Date.now() - hoursToMs(getSetting("storage.staging_max_age_hours"));
   return sweepAgedPrefix(backend, STAGING_PREFIX, cutoff, dryRun);
 }

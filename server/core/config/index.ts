@@ -9,13 +9,13 @@ const PLACEHOLDER_SECRETS: Record<string, string> = {
   JWT_SECRET_KEY: "change-me-to-a-random-secret",
 };
 
-// DATABASE_URL 由 core/database/client 直接读取 process.env，不经此处
+// DATABASE_URL / DATABASE_POOL_MAX 由 core/database 直接读取 process.env，不经此处
 const configSchema = z.object({
   // JWT（密钥与算法属引导配置；有效期在 system_settings）
   JWT_SECRET_KEY: z.string().min(1, "JWT_SECRET_KEY is required"),
   JWT_ALGORITHM: z.string().default("HS256"),
 
-  // 任务队列（specs/task-queue-bullmq.md）：Redis 连接串，专用实例。
+  // 任务队列（specs/task-queue-bullmq.md）与分布式限流共用 Redis 连接串，本应用专用实例。
   // 启动探测 PING 失败即启动失败（无队列无法服务，规则 7）
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
 

@@ -9,6 +9,7 @@
  */
 
 import { logEvent, errText } from "@server/core/logger/utils";
+import { secondsToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { findReconcileCandidates, stuckLeaseCutoff } from "@server/crud/task";
 import { reactivateTask } from "./queue";
@@ -19,7 +20,7 @@ let sweeping = false;
 
 export function startReconcileSweep(): void {
   if (timer) return;
-  const intervalMs = getSetting("worker.zombie_scan_interval_seconds") * 1000;
+  const intervalMs = secondsToMs(getSetting("worker.zombie_scan_interval_seconds"));
   timer = setInterval(() => {
     void reconcileSweep().catch((err: unknown) => {
       // 周期任务自身不抛：DB/Redis 抖动仅记日志，下一周期重试
@@ -41,7 +42,9 @@ export async function reconcileSweep(): Promise<void> {
   try {
     const now = new Date();
     // pending 心跳窗口 = 清扫间隔（创建入队失败/派发丢失的行，一个周期后即可被兜住）
-    const pendingCutoff = new Date(now.getTime() - getSetting("worker.zombie_scan_interval_seconds") * 1000);
+    const pendingCutoff = new Date(
+      now.getTime() - secondsToMs(getSetting("worker.zombie_scan_interval_seconds")),
+    );
     const leaseCutoff = stuckLeaseCutoff(now);
     const candidates = await findReconcileCandidates(pendingCutoff, leaseCutoff, now);
     const all = [

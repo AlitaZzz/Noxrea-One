@@ -9,6 +9,7 @@ import { type Context } from "hono";
 import { setCookie } from "hono/cookie";
 
 import { prisma } from "@server/core/database/client";
+import { minutesToSeconds } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { decodeAccessToken } from "@server/core/auth/jwt";
 import { failCode } from "@server/core/response";
@@ -23,7 +24,7 @@ export const AUTH_COOKIE = "noxrea-auth-token";
  * 每次签发时读取，而非模块导入时冻结：导入时系统设置尚未初始化。
  */
 function authCookieMaxAgeS() {
-  return getSetting("auth.token_ttl_minutes") * 60;
+  return minutesToSeconds(getSetting("auth.token_ttl_minutes"));
 }
 
 const AUTH_COOKIE_OPTS = { path: "/", httpOnly: true, sameSite: "Lax" } as const;
