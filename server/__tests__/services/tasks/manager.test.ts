@@ -1,8 +1,9 @@
 /**
- * 任务管理器回归测试。
- * 锁定 submitAndWait 全分支：同步完成 / 提交失败 / HTTP 错误提取 task_id 升级轮询 /
- * 提交后已取消 / 无结果无 task_id / 守卫拒绝 / 落盘推迟续轮询 / 不支持轮询 /
- * 预算耗尽重入队（exhausted → requeued / 烧完落终态）/ signal 贯穿。
+ * 任务管理器回归测试（specs/task-queue-bullmq.md 规则 1/3）。
+ * 锁定 submitAndWait 提交边界分支：提交闸门紧贴 fetch（拒绝即抛闸门错误不发上游）/
+ * 同步完成 / 模糊失败归 submission_uncertain（绝不自动重发）/
+ * safe-rejection（4xx 除 408/425）沿用现行分类 / 错误体提取 task_id 升级异步受理 /
+ * 受理落库（含首 tick 时间）/ 守卫拒绝 / 落库重试耗尽的诚实失败 / signal 贯穿。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,13 +11,11 @@ const mocks = vi.hoisted(() => ({
   fetchUpstream: vi.fn(),
   httpUpstreamFailure: vi.fn(),
   noUpstreamResult: vi.fn(),
+  acceptUpstreamTask: vi.fn(),
+  isTaskCancelled: vi.fn(),
+  takeSubmissionGate: vi.fn(),
   logEvent: vi.fn(),
   errText: vi.fn((e: unknown) => String(e)),
-  markTaskProcessing: vi.fn(),
-  isTaskCancelled: vi.fn(),
-  touchTaskHeartbeat: vi.fn(),
-  requeueProcessingAsyncTask: vi.fn(),
-  pollUpstreamTask: vi.fn(),
 }));
 
 vi.mock("@server/services/tasks/sync-fetch", () => ({
@@ -30,16 +29,13 @@ vi.mock("@server/core/logger/utils", () => ({
   errText: mocks.errText,
 }));
 vi.mock("@server/crud/task", () => ({
-  markTaskProcessing: mocks.markTaskProcessing,
+  acceptUpstreamTask: mocks.acceptUpstreamTask,
   isTaskCancelled: mocks.isTaskCancelled,
-  touchTaskHeartbeat: mocks.touchTaskHeartbeat,
-  requeueProcessingAsyncTask: mocks.requeueProcessingAsyncTask,
-}));
-vi.mock("@server/services/tasks/poll-loop", () => ({
-  pollUpstreamTask: mocks.pollUpstreamTask,
+  takeSubmissionGate: mocks.takeSubmissionGate,
 }));
 
 import { submitAndWait } from "@server/services/tasks/manager";
+import { GenerationGateRejectedError } from "@server/services/tasks/failure";
 import { resetTestSettings } from "../../helpers/settings";
 
 const protocol = {
@@ -74,19 +70,23 @@ function makeInput(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetTestSettings({
-    "worker.async_poll_interval_seconds": 1,
-    "worker.async_poll_max_attempts": 3,
     "worker.async_poll_initial_delay_seconds": 0,
-    "worker.max_retries": 2,
   });
   mocks.isTaskCancelled.mockResolvedValue(false);
-  mocks.markTaskProcessing.mockResolvedValue(true);
-  mocks.pollUpstreamTask.mockResolvedValue({ kind: "completed", urls: ["u"], text: "t" });
+  mocks.acceptUpstreamTask.mockResolvedValue(true);
+  mocks.takeSubmissionGate.mockResolvedValue(true);
   protocol.extractTaskId.mockReturnValue(undefined);
 });
 
 describe("submitAndWait", () => {
-  it("同步响应含结果 → completed，不进入轮询", async () => {
+  it("提交闸门紧贴 fetch：拒绝 → 抛闸门错误，上游请求不发（规则 3）", async () => {
+    mocks.takeSubmissionGate.mockResolvedValue(false);
+
+    await expect(submitAndWait(makeInput())).rejects.toBeInstanceOf(GenerationGateRejectedError);
+    expect(mocks.fetchUpstream).not.toHaveBeenCalled();
+  });
+
+  it("同步响应含结果 → completed，不进入异步受理", async () => {
     mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { url: "u" } });
 
     const result = await submitAndWait(makeInput({
@@ -94,10 +94,10 @@ describe("submitAndWait", () => {
     }));
 
     expect(result).toMatchObject({ status: "completed", urls: ["u1"] });
-    expect(mocks.pollUpstreamTask).not.toHaveBeenCalled();
+    expect(mocks.acceptUpstreamTask).not.toHaveBeenCalled();
   });
 
-  it("提交失败（超时/网络）→ 原样透传错误与分类，不再提交", async () => {
+  it("提交失败（超时/网络）→ submission_uncertain 留痕：请求可能已在途，绝不区分细节重发", async () => {
     mocks.fetchUpstream.mockResolvedValue({
       kind: "failure",
       error: "API call timed out",
@@ -110,12 +110,11 @@ describe("submitAndWait", () => {
       status: "failed",
       urls: [],
       error: "API call timed out",
-      errorCode: "generation.timeout",
+      errorCode: "generation.submission_uncertain",
     });
-    expect(mocks.pollUpstreamTask).not.toHaveBeenCalled();
   });
 
-  it("HTTP 错误体中携带 task_id → 视为上游已受理，升级为轮询", async () => {
+  it("HTTP 错误体中携带 task_id → 视为上游已受理，升级为异步受理（含首 tick 时间落库）", async () => {
     mocks.fetchUpstream.mockResolvedValue({
       kind: "http-error",
       status: 500,
@@ -126,43 +125,118 @@ describe("submitAndWait", () => {
 
     const result = await submitAndWait(makeInput());
 
-    expect(result).toMatchObject({ status: "completed", urls: ["u"] });
-    const pollInput = mocks.pollUpstreamTask.mock.calls[0][0];
-    expect(pollInput).toMatchObject({ taskId: "task-1", upstreamTaskId: "up-1" });
-    expect(mocks.markTaskProcessing).toHaveBeenCalledWith("task-1", "up-1", STARTED_AT);
+    expect(result).toEqual({ status: "async", urls: [], asyncNextPollAt: expect.any(Date) });
+    expect(mocks.acceptUpstreamTask).toHaveBeenCalledWith(
+      "task-1",
+      "up-1",
+      STARTED_AT,
+      expect.any(Date)
+    );
   });
 
-  it("提取到 task_id 时任务已被取消 → cancelled，不轮询", async () => {
-    mocks.fetchUpstream.mockResolvedValue({
-      kind: "data",
-      data: { task_id: "up-1" },
-    });
+  it("提取到 task_id 时任务已被取消 → cancelled，不落库受理", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
     protocol.extractTaskId.mockReturnValue("up-1");
     mocks.isTaskCancelled.mockResolvedValue(true);
 
     const result = await submitAndWait(makeInput());
 
     expect(result).toEqual({ status: "cancelled", urls: [] });
-    expect(mocks.pollUpstreamTask).not.toHaveBeenCalled();
+    expect(mocks.acceptUpstreamTask).not.toHaveBeenCalled();
   });
 
-  it("HTTP 错误体无 task_id → 经 httpUpstreamFailure 翻译后失败", async () => {
+  it("5xx 无 task_id → 提交结果不确定（经网关转发无法判断源站是否已建任务）", async () => {
     mocks.fetchUpstream.mockResolvedValue({
       kind: "http-error",
       status: 500,
       errText: "boom",
       errData: { error: { message: "boom" } },
     });
-    mocks.httpUpstreamFailure.mockReturnValue({ error: "boom" });
 
     const result = await submitAndWait(makeInput());
 
-    expect(result).toEqual({ status: "failed", urls: [], error: "boom" });
-    // 原始错误体只进日志，不进对外 error
-    expect(mocks.logEvent).toHaveBeenCalledWith(
-      "taskmgr",
-      expect.objectContaining({ stage: "upstream_http_error", body: "boom" })
-    );
+    expect(result).toEqual({
+      status: "failed",
+      urls: [],
+      error: "上游提交结果不确定（HTTP 500），为避免重复提交已放弃重试",
+      errorCode: "generation.submission_uncertain",
+    });
+    expect(mocks.httpUpstreamFailure).not.toHaveBeenCalled();
+  });
+
+  it("408/425 同样归入提交不确定（无法排除上游已受理）", async () => {
+    for (const status of [408, 425]) {
+      mocks.fetchUpstream.mockResolvedValue({
+        kind: "http-error",
+        status,
+        errText: "{}",
+        errData: {},
+      });
+
+      const result = await submitAndWait(makeInput());
+
+      expect(result).toMatchObject({ status: "failed", errorCode: "generation.submission_uncertain" });
+    }
+  });
+
+  it("4xx 明确拒绝（含 429 限流）→ 沿用 httpUpstreamFailure 现行分类", async () => {
+    for (const status of [400, 401, 403, 404, 429]) {
+      mocks.fetchUpstream.mockResolvedValue({
+        kind: "http-error",
+        status,
+        errText: "rejected",
+        errData: {},
+      });
+      mocks.httpUpstreamFailure.mockReturnValue({ error: "rejected", errorCode: "generation.upstream_rejected" });
+
+      const result = await submitAndWait(makeInput());
+
+      expect(result).toEqual({
+        status: "failed",
+        urls: [],
+        error: "rejected",
+        errorCode: "generation.upstream_rejected",
+      });
+      expect(mocks.httpUpstreamFailure).toHaveBeenLastCalledWith(status, "rejected");
+    }
+  });
+
+  it("响应体含 task_id → 异步受理落库成功，返回 async（携带首 tick 时间）", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
+    protocol.extractTaskId.mockReturnValue("up-1");
+
+    const result = await submitAndWait(makeInput());
+
+    expect(result.status).toBe("async");
+    // 首 tick 延迟单源：结果携带与落库相同的首个 nextPollAt
+    const firstPollAt = mocks.acceptUpstreamTask.mock.calls[0][3] as Date;
+    expect(result.asyncNextPollAt).toBe(firstPollAt);
+  });
+
+  it("受理落库被守卫拒绝 → ownership lost（任务已离开本次认领，不写终态不重试）", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
+    protocol.extractTaskId.mockReturnValue("up-1");
+    mocks.acceptUpstreamTask.mockResolvedValue(false);
+
+    const result = await submitAndWait(makeInput());
+
+    expect(result).toEqual({ status: "failed", urls: [], error: "Task ownership lost" });
+    expect(mocks.acceptUpstreamTask).toHaveBeenCalledTimes(1);
+  });
+
+  it("受理落库持续抛错（DB 不可用）→ 3 次重试后诚实失败 submission_uncertain", async () => {
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
+    protocol.extractTaskId.mockReturnValue("up-1");
+    mocks.acceptUpstreamTask.mockRejectedValue(new Error("db down"));
+
+    const result = await submitAndWait(makeInput());
+
+    expect(mocks.acceptUpstreamTask).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({
+      status: "failed",
+      errorCode: "generation.submission_uncertain",
+    });
+    expect(result.error).toContain("落库失败");
   });
 
   it("无结果无 task_id → 失败兜底文案；raw_sample 只进日志与 metadata", async () => {
@@ -187,106 +261,9 @@ describe("submitAndWait", () => {
     );
   });
 
-  it("处理态落盘被守卫拒绝 → ownership lost，不继续轮询", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
-    mocks.markTaskProcessing.mockResolvedValue(false);
-
-    const result = await submitAndWait(makeInput());
-
-    expect(result).toEqual({ status: "failed", urls: [], error: "Task ownership lost" });
-    expect(mocks.pollUpstreamTask).not.toHaveBeenCalled();
-  });
-
-  it("处理态落盘持续失败 → 推迟落盘但继续轮询（上游已受理不判死）", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
-    mocks.markTaskProcessing.mockRejectedValue(new Error("db down"));
-
-    const result = await submitAndWait(makeInput());
-
-    expect(mocks.markTaskProcessing).toHaveBeenCalledTimes(3);
-    expect(mocks.logEvent).toHaveBeenCalledWith(
-      "taskmgr",
-      expect.objectContaining({ stage: "processing_persist_deferred" })
-    );
-    expect(result).toMatchObject({ status: "completed", urls: ["u"] });
-  });
-
-  it("协议不支持轮询 → 直接失败，避免无限 pending", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    const noPollProtocol = { name: "bare", extractTaskId: vi.fn(() => "up-1") };
-
-    const result = await submitAndWait(makeInput({ protocol: noPollProtocol }));
-
-    expect(result).toEqual({
-      status: "failed",
-      urls: [],
-      error: expect.stringContaining("does not support polling"),
-    });
-  });
-
-  it("轮询超时 outcome 原样透传，错误文案不含完整响应体（R3）", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
-    mocks.pollUpstreamTask.mockResolvedValue({
-      kind: "failed",
-      error: "异步轮询超时（upstream_task_id=up-1）",
-      errorCode: "generation.poll_timeout",
-    });
-
-    const result = await submitAndWait(makeInput());
-
-    expect(result).toEqual({
-      status: "failed",
-      urls: [],
-      error: "异步轮询超时（upstream_task_id=up-1）",
-      errorCode: "generation.poll_timeout",
-    });
-    expect(result.error).not.toContain("{");
-  });
-
-  it("轮询预算耗尽 → requeueProcessingAsyncTask 重入队，返回 requeued", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
-    mocks.pollUpstreamTask.mockResolvedValue({
-      kind: "exhausted",
-      error: "异步轮询超时（upstream_task_id=up-1）",
-      errorCode: "generation.poll_timeout",
-    });
-    mocks.requeueProcessingAsyncTask.mockResolvedValue(true);
-
-    const result = await submitAndWait(makeInput());
-
-    expect(result).toEqual({ status: "requeued", urls: [] });
-    // 守卫参数：所有权令牌 startedAt + retryCount 预算（worker.max_retries）
-    expect(mocks.requeueProcessingAsyncTask).toHaveBeenCalledWith("task-1", STARTED_AT, 2);
-  });
-
-  it("预算耗尽且重入队被拒（retryCount 烧完）→ 落 poll_timeout 终态失败", async () => {
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
-    mocks.pollUpstreamTask.mockResolvedValue({
-      kind: "exhausted",
-      error: "异步轮询超时（upstream_task_id=up-1）",
-      errorCode: "generation.poll_timeout",
-    });
-    mocks.requeueProcessingAsyncTask.mockResolvedValue(false);
-
-    const result = await submitAndWait(makeInput());
-
-    expect(result).toEqual({
-      status: "failed",
-      urls: [],
-      error: "异步轮询超时（upstream_task_id=up-1）",
-      errorCode: "generation.poll_timeout",
-    });
-  });
-
-  it("signal 贯穿提交请求与轮询", async () => {
+  it("signal 贯穿提交请求（停机 drain 超时可中止在途提交）", async () => {
     const controller = new AbortController();
-    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: { task_id: "up-1" } });
-    protocol.extractTaskId.mockReturnValue("up-1");
+    mocks.fetchUpstream.mockResolvedValue({ kind: "data", data: {} });
 
     await submitAndWait(makeInput({ signal: controller.signal }));
 
@@ -296,12 +273,5 @@ describe("submitAndWait", () => {
       "taskmgr",
       controller.signal
     );
-
-    // 轮询侧经 shouldStop 闭包消费 signal：abort 后 shouldStop 立即为真
-    const pollInput = mocks.pollUpstreamTask.mock.calls[0][0] as {
-      shouldStop: () => Promise<boolean>;
-    };
-    controller.abort();
-    await expect(pollInput.shouldStop()).resolves.toBe(true);
   });
 });

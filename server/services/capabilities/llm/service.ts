@@ -18,7 +18,8 @@ import {
   httpUpstreamFailure,
   noUpstreamResult,
 } from "@server/services/tasks/sync-fetch";
-import { GenerationFailureError } from "@server/services/tasks/failure";
+import { GenerationFailureError, GenerationGateRejectedError } from "@server/services/tasks/failure";
+import { takeSubmissionGate } from "@server/crud/task";
 import type { GenerationResult } from "@server/schemas/result";
 
 /**
@@ -154,6 +155,13 @@ class LlmCapabilityService implements CapabilityService {
       method: req.method,
       body: req.body,
     });
+
+    // 提交闸门（规则 3，唯一位置 = 上游提交点内、请求发出前；与 manager 同构）：
+    // 紧贴 fetch 前执行条件更新——双提交结构性排除；此前的引用解析等 await 全部
+    // 退到闸门前。拒绝 = 已失权或闸门已被占，抛闸门错误终止（不写任何终态）
+    if (!(await takeSubmissionGate(ctx.taskId, ctx.startedAt))) {
+      throw new GenerationGateRejectedError();
+    }
 
     // 同步执行段单源（fetch + 超时/网络分类 + HTTP 错误翻译），
     // 此前在能力内自写：超时与网络失败裸抛无分类；signal 贯穿停机中止

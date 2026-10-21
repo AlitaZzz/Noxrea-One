@@ -173,15 +173,31 @@ export function extractFailureCode(err: unknown): { code?: string } {
 }
 
 /**
- * 轮询预算耗尽但上游未到终态，任务已重置 pending 等待重新认领恢复轮询。
- * 能力服务收到该信号时抛出；executor 捕获后结束本次执行、不写任何终态
- * （任务在队列里会再次被认领，继续轮询同一个上游任务）。
+ * 上游已受理异步生成（upstreamTaskId 已落库、首个轮询到期时间已写入），
+ * 本执行段的职责到此结束——后续轮询由 BullMQ 延迟 tick 逐次驱动
+ * （specs/task-queue-bullmq.md 规则 1：不在 handler 内长驻轮询）。
+ * 能力服务收到该信号时抛出；executor 捕获后经 moveToDelayed 原位调度首 tick
+ * 并结束本次执行，不写任何终态（任务处于 processing，轮询段语义）。
+ * nextPollAt 为首 tick 延迟的单源：队列 delay 由它推算，禁止再读设置重复换算。
  */
-export class GenerationRequeuedError extends Error {
+export class GenerationAsyncDispatchedError extends Error {
+  constructor(public readonly nextPollAt: Date) {
+    super("Upstream accepted the task, polling handed to delayed ticks");
+    this.name = "GenerationAsyncDispatchedError";
+    Object.setPrototypeOf(this, GenerationAsyncDispatchedError.prototype);
+  }
+}
+
+/**
+ * 提交闸门拒绝（specs/task-queue-bullmq.md 规则 3）：已失权或闸门已被占——
+ * 终止且不提交上游，不写任何终态。由提交点（manager / LLM 能力）抛出，
+ * executor 捕获后静默结束本次执行。
+ */
+export class GenerationGateRejectedError extends Error {
   constructor() {
-    super("Poll budget exhausted, task requeued for resume polling");
-    this.name = "GenerationRequeuedError";
-    Object.setPrototypeOf(this, GenerationRequeuedError.prototype);
+    super("Submission gate rejected: ownership lost or gate already taken");
+    this.name = "GenerationGateRejectedError";
+    Object.setPrototypeOf(this, GenerationGateRejectedError.prototype);
   }
 }
 

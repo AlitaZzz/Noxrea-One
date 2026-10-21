@@ -17,9 +17,9 @@ import { build } from "@server/services/request-builder/engine";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { submitAndWait } from "@server/services/tasks/manager";
 import {
+  GenerationAsyncDispatchedError,
   GenerationCancelledError,
   GenerationFailureError,
-  GenerationRequeuedError,
 } from "@server/services/tasks/failure";
 import { logEvent } from "@server/core/logger/utils";
 
@@ -110,8 +110,11 @@ export abstract class PollingCapabilityService implements CapabilityService {
       throw new GenerationCancelledError();
     }
 
-    if (result.status === "requeued") {
-      throw new GenerationRequeuedError();
+    if (result.status === "async") {
+      // 上游已受理、状态已落库（含首个 nextPollAt）：本执行段结束，轮询交给延迟
+      // tick（worker/handler）。nextPollAt 随信号携带——executor 的首 tick 原位
+      // moveToDelayed 以它为延迟单源，禁止再读设置重复换算
+      throw new GenerationAsyncDispatchedError(result.asyncNextPollAt!);
     }
 
     if (result.status === "failed") {

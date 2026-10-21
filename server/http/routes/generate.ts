@@ -11,6 +11,7 @@ import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { cancelUpstreamTask } from "@server/services/tasks/upstream-cancel";
+import { reactivateBestEffort, cancelQueuedTask } from "@server/services/worker/queue";
 import { createSseResponse } from "@server/http/sse";
 import { logEvent } from "@server/core/logger/utils";
 import { ok, failCode } from "@server/core/response";
@@ -168,6 +169,10 @@ router.post("/api/generate/task", async (c) => {
     nodeId: data.nodeId ?? "",
   });
 
+  // 派发最终一致（规则 7）：入队失败不回滚不 503——行留 DB（pending），
+  // 由对账清扫按心跳逾期重激活自愈。用户侧任务始终创建成功
+  await reactivateBestEffort(task.id, { channel: "http.generate", stage: "enqueue_failed" });
+
   return c.json(ok(task));
 });
 
@@ -215,6 +220,11 @@ router.on(["POST", "DELETE"], "/api/generate/task/:id/cancel", async (c) => {
     model: task.model,
     providerId: (task.config as Record<string, unknown> | null)?.providerId,
   });
+
+  // 队列侧：waiting/delayed job 尽力移除（规则 6）；active 不动，handler 读到
+  // 终态 no-op 兜底。内部自带 try/catch，失败仅记日志
+  await cancelQueuedTask(taskId);
+
   return c.json(ok(null, "cancelled"));
 });
 

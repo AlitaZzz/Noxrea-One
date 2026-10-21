@@ -82,6 +82,14 @@ model GenerationTask {
   startedAt      DateTime? @map("started_at")
   completedAt    DateTime? @map("completed_at")
 
+  // 提交闸门标记（specs/task-queue-bullmq.md 规则 3）：not_sent = 尚未进入上游发送路径；
+  // in_flight = 已通过闸门（闸门 CAS 独占），上游请求可能已在途——中断后绝不重发
+  submissionState String   @default("not_sent") @map("submission_state")
+  // 轮询 tick 调度：下一次轮询到期时间（null = 未进入轮询等待；清扫据此判定 tick 逾期）
+  nextPollAt        DateTime? @map("next_poll_at")
+  // 当轮轮询已执行次数：重入队（预算耗尽）时归零，退避与 maxPollAttempts 判定共用
+  asyncPollAttempts Int       @default(0) @map("async_poll_attempts")
+
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at")
 

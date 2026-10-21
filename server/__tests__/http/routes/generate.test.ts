@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getAllowedFields: vi.fn(),
   taskWatcher: {},
   quotaGate: vi.fn(),
+  reactivateBestEffort: vi.fn(),
+  cancelQueuedTask: vi.fn(),
 }));
 
 vi.mock("@server/http/middleware/auth", () => ({
@@ -49,6 +51,10 @@ vi.mock("@server/services/storage/service", () => ({
 vi.mock("@server/services/storage/quota", () => ({
   findQuotaGateViolation: mocks.quotaGate,
 }));
+vi.mock("@server/services/worker/queue", () => ({
+  reactivateBestEffort: mocks.reactivateBestEffort,
+  cancelQueuedTask: mocks.cancelQueuedTask,
+}));
 
 import { router } from "@server/http/routes/generate";
 import { jsonBodyLimit } from "@server/http/middleware/body-limit";
@@ -61,6 +67,8 @@ app.route("/", router);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.reactivateBestEffort.mockResolvedValue("added");
+  mocks.cancelQueuedTask.mockResolvedValue(undefined);
 });
 
 describe("生成任务请求体限制", () => {
@@ -115,6 +123,33 @@ describe("创建任务入参校验", () => {
     );
     const config = mocks.createTask.mock.calls[0][0].config as Record<string, unknown>;
     expect(config).not.toHaveProperty("protocol");
+  });
+
+  it("创建成功后经重激活原语派发（规则 7）", async () => {
+    const response = await app.request("/api/generate/task", {
+      method: "POST",
+      body: JSON.stringify({ type: "image", providerId: 7 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.reactivateBestEffort).toHaveBeenCalledWith("task-1", {
+      channel: "http.generate",
+      stage: "enqueue_failed",
+    });
+  });
+
+  it("入队失败不回滚不 503：任务创建成功返回，派发交对账清扫自愈（规则 7）", async () => {
+    mocks.reactivateBestEffort.mockResolvedValue(null); // 自愈语义单源：失败返回 null 不抛
+
+    const response = await app.request("/api/generate/task", {
+      method: "POST",
+      body: JSON.stringify({ type: "image", providerId: 7 }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { id: "task-1" } });
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * 终态编排单源回归测试。
  * 锁定：下载成功/部分成功/全失败/空结果/已取消/终态守卫拒绝六条路径，
- * 以及 executor 与 resume-polling 共用后的语义一致性。
+ * 以及 executor 与 poll-attempt 共用后的语义一致性。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -12,11 +12,15 @@ vi.mock("@server/services/protocols/base", () => ({
 vi.mock("@server/services/request-builder/engine", () => ({
   build: vi.fn(() => ({})),
 }));
+vi.mock("@server/crud/task", () => ({
+  takeSubmissionGate: vi.fn().mockResolvedValue(true),
+}));
 
 import "@server/services/capabilities/llm/service";
 import { getCapability } from "@server/services/capabilities/base";
 import { getProtocol } from "@server/services/protocols/base";
-import { GenerationFailureError } from "@server/services/tasks/failure";
+import { GenerationFailureError, GenerationGateRejectedError } from "@server/services/tasks/failure";
+import { takeSubmissionGate } from "@server/crud/task";
 import { resetTestSettings } from "../../../helpers/settings";
 
 const fakeProtocol = {
@@ -51,6 +55,7 @@ function stubFetch(handler: () => Promise<Response>): void {
 beforeEach(() => {
   resetTestSettings();
   vi.mocked(getProtocol).mockReturnValue(fakeProtocol as never);
+  vi.mocked(takeSubmissionGate).mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -59,11 +64,20 @@ afterEach(() => {
 });
 
 describe("LlmCapabilityService.generate", () => {
-  it("成功路径：解析文本原样返回", async () => {
+  it("成功路径：解析文本原样返回（闸门在 fetch 前通过）", async () => {
     stubFetch(async () => new Response(JSON.stringify({ text: "hello" }), { status: 200 }));
     const svc = getCapability("llm")!;
     const result = await svc.generate(ctx, { prompt: "hi" });
     expect(result).toEqual({ urls: [], text: "hello" });
+    expect(takeSubmissionGate).toHaveBeenCalledWith("task-1", null);
+  });
+
+  it("提交闸门拒绝 → 抛闸门错误，不发上游请求（规则 3：不写任何终态）", async () => {
+    vi.mocked(takeSubmissionGate).mockResolvedValue(false);
+    const svc = getCapability("llm")!;
+    await expect(svc.generate(ctx, { prompt: "hi" })).rejects.toBeInstanceOf(
+      GenerationGateRejectedError
+    );
   });
 
   it("空文本 → 判失败 upstream_no_result（A3 回归：此前静默 completed）", async () => {

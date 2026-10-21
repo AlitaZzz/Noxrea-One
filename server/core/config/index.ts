@@ -15,6 +15,10 @@ const configSchema = z.object({
   JWT_SECRET_KEY: z.string().min(1, "JWT_SECRET_KEY is required"),
   JWT_ALGORITHM: z.string().default("HS256"),
 
+  // 任务队列（specs/task-queue-bullmq.md）：Redis 连接串，专用实例。
+  // 启动探测 PING 失败即启动失败（无队列无法服务，规则 7）
+  REDIS_URL: z.string().min(1, "REDIS_URL is required"),
+
   LOG_LEVEL: z.string().default("INFO"),
 
   // HTTP Server（Hono 监听地址；前端代理目标见 web/next.config.ts 的 WEB_API_ORIGIN）

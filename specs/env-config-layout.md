@@ -36,6 +36,7 @@
 | 前端 | `APP_NAME` | `WEB_APP_NAME` | 浏览器端应用名（构建期固化，映射为 `NEXT_PUBLIC_APP_NAME`）；从后端 config 中删除 |
 | 共用 | `UPLOAD_BATCH_MAX_MB` | 不变 | 后端批次校验与前端代理请求体上限共用同一来源 |
 | 后端 | 其余（`DATABASE_URL`、`DB_TIMEOUT`、`JWT_SECRET_KEY`、`JWT_ALGORITHM`、`ALLOW_INSECURE_SECRETS`、`LOG_LEVEL`、`UPLOAD_DIR`、`FFMPEG_PATH`、`RESOURCES_DIR`） | 不变 | 仅重新归入「后端」分区 |
+| 后端 | `REDIS_URL`（task-queue-bullmq.md 新增） | — | BullMQ 专用 Redis 连接串（必填，启动探测失败即启动失败）；归属「后端」分区，通用外部约定名不另起前缀 |
 
 命名规则：后端监听用 `API_*`（它就是 API 服务）；前端 Next 进程读取的变量统一 `WEB_*` 前缀，变量名即表明由哪个进程读取；`DATABASE_URL` 等通用/外部约定名保持不变。
 
@@ -73,3 +74,13 @@
 ## 当前状态
 
 已实现（2026-10-12，随代码审查修正 Docker 端口为固定值）：后端 `API_HOST` / `API_PORT`（并删除后端死配置 `APP_NAME`）、前端 `WEB_API_ORIGIN`（默认随 `API_PORT` 推导）/ `WEB_AUTH_GATE_MODE` / `WEB_APP_NAME`，`.env.example`、`docker-entrypoint.sh`、`Dockerfile`、README、本地 `.env` 与对应前端测试同步。已有部署的 `/data/.env` 需手工改名。
+
+增量（2026-10-20，随 task-queue-bullmq.md 实现）：`REDIS_URL` 归入「后端」分区（BullMQ 专用 Redis 连接串，必填——docker-entrypoint.sh 启动校验缺失即退出，`.env.example` 与 NAS compose 同步注入）。
+
+增量（2026-10-20，env 注入点收敛）：
+
+- 移除 `server/core/config/index.ts` 模块级的 `process.loadEnvFile(".env")` 兜底加载——它是隐式的全局副作用：谁先加载 config 谁就改写共享 `process.env`，单 worker 测试进程内环境内容随模块加载顺序漂移（曾致 `video-frames` 用例的门控在全量 / 单文件两种执行模式下行为不同：全量跑时其他文件先加载 config 注入 `FFMPEG_PATH=bin` 使门控开启，单文件跑时读到默认值而整体跳过）。缺失必填项由 config schema 校验在首次读取时大声失败。
+- 各进程入口的 env 供给（本需求未新增或修改任何 script）：`dev` / `start` / `storage:*` 的 `tsx --env-file=.env` 为 HEAD 既有；`prisma:generate` / `db:migrate:new` 无 `--env-file` 且不读 env，无功能缺口；容器经 entrypoint `source /app/.env`，compose 经 `-e`。
+- 测试树注入点：`vitest.config.ts` 主进程求值期 `process.loadEnvFile` 一次，worker 继承；仅容忍 .env 不存在（ENOENT），其余错误原样抛出——与生产 script 的 `tsx --env-file=.env` 对坏 .env 的大声失败对称；需要 env 的用例由 schema 报缺。测试 script 此前从未携带 `--env-file`，全仓测试的 env 实际一直依赖 config 模块的兜底加载，该收敛使这一点显式化。
+- 测试侧收口：新增 `server/__tests__/helpers/ffmpeg.ts` 统一 ffmpeg 目录供给（`FFMPEG_TEST_DIR` 缺省仓库 `bin/`，`ffmpegAvailable` 整体跳过），video-frames / media-pool-concurrency 的门控不再读生产进程 env（仅测试变量 FFMPEG_TEST_DIR）。
+- 验证：全量服务端 932/932（`npm run test:server` 干净 shell 直跑）、web 934/934、typecheck、lint。

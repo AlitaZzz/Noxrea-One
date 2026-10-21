@@ -1,11 +1,12 @@
 /**
  * 服务启动引导。
- * 幂等初始化配置、数据库迁移、网关等全局依赖，
- * 供 HTTP 服务与 Worker 循环在同进程中共用。
+ * 幂等初始化配置、数据库迁移、任务队列、网关等全局依赖，
+ * 供 HTTP 服务与 Worker（BullMQ）在同进程中共用。
  */
 import { describeConnectionTarget, ensureLocalMigrations, isServerMode } from "@server/core/database/client";
 import { loadConfig } from "@server/core/config";
 import { getSetting, initSettings } from "@server/core/settings";
+import { initTaskQueue } from "@server/services/worker/queue";
 import { logEvent } from "@server/core/logger/utils";
 
 let initialized = false;
@@ -30,14 +31,19 @@ export async function bootstrap(): Promise<void> {
   await initSettings();
   logEvent("bootstrap", { stage: "settings_loaded" });
 
-  // 4. initGateway（懒加载，避免循环依赖）
+  // 4. 任务队列探测（规则 7）：PING 失败即启动失败——Redis 宕机时启动期快速暴露，
+  //    禁止带着不可用队列进入服务态（运行期瞬断由 stalled / 清扫自愈兜底）
+  await initTaskQueue();
+  logEvent("bootstrap", { stage: "queue_ready" });
+
+  // 5. initGateway（懒加载，避免循环依赖）
   // 初始化失败直接让进程崩溃：注册表缺失意味着所有协议/能力路由不可用，
   // 静默跳过只会让第一个请求才暴露问题
   const { initGateway } = await import("@server/services/gateway/registry");
   initGateway();
   logEvent("bootstrap", { stage: "gateway_initialized" });
 
-  // 5. 存储层：按 `storage.backend` 设置构建进程级后端单例（不支持热切换，
+  // 6. 存储层：按 `storage.backend` 设置构建进程级后端单例（不支持热切换，
   //    参数变更重启生效）。s3 后端启动即 HeadBucket 探测端点与凭据，
   //    失败直接抛错终止启动——禁止静默降级到 local（spec 业务规则 10）。
   //    再清空本地工作区临时目录：只剩上个进程进行中写入的残骸，
@@ -60,7 +66,7 @@ export async function bootstrap(): Promise<void> {
     });
   }
 
-  // 6. 存储引用 GC 循环（幂等，内部自带延迟首跑与异常兜底）
+  // 7. 存储引用 GC 循环（幂等，内部自带延迟首跑与异常兜底）
   const { startStorageGc } = await import("@server/services/storage/gc");
   startStorageGc();
   logEvent("bootstrap", { stage: "storage_gc_scheduled" });

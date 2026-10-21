@@ -7,7 +7,7 @@
  * 心跳只负责在合法长下载期间标记执行者存活，不会再为无限挂起的传输续命。
  *
  * finalizeGeneratedResult：「下载落盘 → 空结果判失败 → safe 终态写入 → 收尾日志」
- * 的单源编排——此前 executor（首次执行）与 resume-polling（恢复轮询）各持一份对称
+ * 的单源编排——此前 executor（首次执行）与恢复轮询路径各持一份对称
  * 实现，终态语义靠人肉保持一致。
  */
 import { logger } from "@server/core/logger";

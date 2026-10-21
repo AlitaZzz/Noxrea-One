@@ -1,6 +1,8 @@
 /**
- * 单任务执行器。
- * 解析任务上下文、路由到对应能力并驱动生成，更新任务状态与结果。
+ * 单任务执行段（提交路径，specs/task-queue-bullmq.md 规则 1/3）。
+ * 仅处理无 upstreamTaskId 的任务：供应商解析 → 参考素材 → routeGenerate（提交闸门
+ * 在能力层提交点内，见规则 3）→ 同步终态 / 异步受理（moveToDelayed 调度首 tick）。
+ * 已有 upstreamTaskId 的任务由 handler 直接分派到轮询尝试路径，不经过本模块。
  */
 
 import { routeGenerate } from "@server/services/gateway/router";
@@ -14,42 +16,32 @@ import { resolveAndValidate } from "@server/core/ssrf";
 import { stripTrailingSlash } from "@noxrea/shared/url";
 import { getModelParams, modelFieldDefaults, hostFromBaseUrl } from "@server/services/model-config";
 import {
-  GenerationFailureError,
+  GenerationAsyncDispatchedError,
   GenerationCancelledError,
-  GenerationRequeuedError,
+  GenerationFailureError,
+  GenerationGateRejectedError,
   extractFailureCode,
 } from "@server/services/tasks/failure";
 import { buildContext } from "./context";
-import { resumeAsyncPolling } from "./resume-polling";
+import { deferActiveTickOrThrow, type TickDeferContext } from "./queue";
 import { finalizeGeneratedResult } from "./download-results";
 import { logEvent, classifyError } from "@server/core/logger/utils";
 
 import type { HydratedGenerationTask } from "@server/crud/task";
-import type { StopSignal } from "./loop";
 
 /**
- * 执行单个任务的生命周期：
- * 解析 → 供应商配置 → 参考图 → AI 调用 → 结果下载落盘 → 落库 → 发事件
+ * 执行单个任务的提交生命周期：
+ * 解析 → 供应商配置 → 参考图 → 提交闸门 → AI 调用 → 结果下载落盘 → 落库 → 发事件
  *
  * 同步/异步判定由 CapabilityService 内部的 TaskManager.submitAndWait 完成，
- * Executor 不再感知异步流程（对齐 Python 架构）。
- * stopSignal 贯穿全程：恢复轮询感知停机，上游请求经 route signal 在停机收尾时被中止。
+ * Executor 不再感知异步轮询流程（异步受理经 GenerationAsyncDispatchedError 返回）。
+ * signal 为 per-job 中止信号：停机 drain 超时后中止在途上游请求。
  */
-export async function executeTask(task: HydratedGenerationTask, stopSignal: StopSignal): Promise<void> {
-  // 已有 upstreamTaskId 说明上游受理过（典型场景：异步任务被僵尸清理重置后重新认领）。
-  // 此时必须恢复轮询而不是再提交一次——否则上游会重复生成、重复计费，旧任务还会
-  // 变成无人接收的孤儿。首次执行时该字段为空，照常走提交流程。
-  if (task.upstreamTaskId) {
-    logEvent("executor", {
-      stage: "resume_poll",
-      taskId: task.id,
-      upstreamTaskId: task.upstreamTaskId,
-      retryCount: task.retryCount,
-    });
-    await resumeAsyncPolling(task, stopSignal);
-    return;
-  }
-
+export async function executeSubmissionPhase(
+  task: HydratedGenerationTask,
+  signal: AbortSignal,
+  deferCtx: TickDeferContext
+): Promise<void> {
   const ctx = buildContext(task);
 
   logEvent("executor", {
@@ -119,7 +111,7 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
       taskId: task.id,
       startedAt: task.startedAt,
       params: rawParams,
-      signal: stopSignal.signal,
+      signal,
     };
 
     // SSRF 校验 + DNS pinning
@@ -133,7 +125,8 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
       );
     }
 
-    // 调用 CapabilityService（同步/异步由内部 TaskManager 自动判定）
+    // 调用 CapabilityService（同步/异步由内部 TaskManager 自动判定；提交闸门
+    // 在能力层提交点内执行，见 manager / llm service）
     const result = await routeGenerate(routeCtx);
 
     // LLM 文本结果：直接完成，不走 URL 下载（对齐 Python _finalize_result）
@@ -142,7 +135,7 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
         resultText: result.text,
       }, { startedAt: task.startedAt });
       // null = 所有权守卫拒绝或写库失败（safeCompleteTask 已记日志）；
-      // 写库失败时任务停留 processing 交僵尸清理重试，不能流入 catch 误判失败
+      // 写库失败时任务停留 processing 交清扫收口，不能流入 catch 误判失败
       if (!finalized) return;
 
       logEvent("executor", {
@@ -174,10 +167,19 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
       logEvent("executor", { stage: "cancelled", taskId: task.id });
       return;
     }
-    // 轮询预算耗尽已重置 pending：结束本次执行不写终态，任务会被重新认领
-    // 恢复轮询同一个上游任务（retryCount 预算烧完时 requeue 返回 false 走终态失败）
-    if (err instanceof GenerationRequeuedError) {
-      logEvent("executor", { stage: "poll_requeued", taskId: task.id });
+    // 提交闸门拒绝（能力层提交点抛出，规则 3）：已失权或闸门已被占——
+    // 不提交上游、不写任何终态，静默收口
+    if (err instanceof GenerationGateRejectedError) {
+      logEvent("executor", { stage: "submission_gate_rejected", taskId: task.id });
+      return;
+    }
+    // 上游已受理（upstreamTaskId 与首个 nextPollAt 已落库）：首 tick 原位自调度
+    // （moveToDelayed，规则 2 回写——processor 内同 jobId 必为 active，重激活原语
+    // 恒 skipped）后结束本次执行，不写任何终态（任务处于 processing 轮询段语义）。
+    // 延迟单源：以已落库的 nextPollAt 推算，禁止再读设置重复换算。
+    // 调度失败不致命：nextPollAt 已落库，tick 逾期后清扫重激活自愈
+    if (err instanceof GenerationAsyncDispatchedError) {
+      await deferActiveTickOrThrow(deferCtx, task.id, err.nextPollAt);
       return;
     }
     const errorMsg = (err as Error)?.message ?? "Unknown error";
@@ -192,10 +194,10 @@ export async function executeTask(task: HydratedGenerationTask, stopSignal: Stop
       errorCode: code,
     });
 
-    // 所有权守卫：任务在执行期间被僵尸清理重置（pending）或重新认领（startedAt
-    // 变化）时，本执行者的 failTask 会被终态守卫拒绝——重试属于新执行者，不能误杀。
+    // 所有权守卫：任务在执行期间被重置（pending）或重新认领（startedAt 变化）时，
+    // 本执行者的 failTask 会被终态守卫拒绝——重试属于新执行者，不能误杀。
     // safeFailTask 自身不抛：failTask 写库失败时记日志返回 null，不会让 DB 错误
-    // 冒充生成错误上报给 loop
+    // 冒充生成错误上报给 worker
     await safeFailTask(task.id, {
       // 可重试标记仅体现在日志 stage 中，不再拼进展示给用户的错误文案
       error: errorMsg,

@@ -1,26 +1,22 @@
 /**
- * 任务管理器。
- * 提交生成任务并优先同步等待，超时则转为异步轮询兜底。
+ * 任务管理器（specs/task-queue-bullmq.md 规则 1/3）。
+ * 上游提交边界的单一入口：发送请求 → 同步结果 / 受理异步（落库 + 首 tick）/ 失败分类。
+ * 异步轮询不再在进程内长驻——受理后由 BullMQ 延迟 tick 逐次驱动（见 worker/handler）。
  */
 
-import { getSetting } from "@server/core/settings";
 import { logEvent, errText } from "@server/core/logger/utils";
 import {
   fetchUpstream,
   httpUpstreamFailure,
   noUpstreamResult,
 } from "@server/services/tasks/sync-fetch";
-import {
-  markTaskProcessing,
-  isTaskCancelled,
-  touchTaskHeartbeat,
-  requeueProcessingAsyncTask,
-} from "@server/crud/task";
-import { defaultPollUrl, type ProtocolService } from "@server/services/protocols/base";
-import { pollUpstreamTask } from "@server/services/tasks/poll-loop";
+import { acceptUpstreamTask, isTaskCancelled, takeSubmissionGate } from "@server/crud/task";
+import { getSetting } from "@server/core/settings";
+import { GenerationGateRejectedError } from "@server/services/tasks/failure";
+import type { ProtocolService } from "@server/services/protocols/base";
 
 export interface SubmitAndWaitResult {
-  status: "completed" | "failed" | "cancelled" | "requeued";
+  status: "completed" | "failed" | "cancelled" | "async";
   urls: string[];
   text?: string;
   error?: string;
@@ -30,12 +26,14 @@ export interface SubmitAndWaitResult {
    */
   errorCode?: string;
   metadata?: Record<string, unknown>;
+  /** status=async 时携带已落库的首个轮询到期时间（首 tick 延迟单源） */
+  asyncNextPollAt?: Date;
 }
 
 export interface SubmitAndWaitInput {
   taskId: string;
   userId: number;
-  /** 认领时间戳：markTaskProcessing 用它校验本执行者仍持有任务所有权 */
+  /** 认领时间戳：acceptUpstreamTask 用它校验本执行者仍持有任务所有权 */
   startedAt: Date | null;
   protocol: ProtocolService;
   capability: string;
@@ -48,45 +46,45 @@ export interface SubmitAndWaitInput {
   buildRequest: () => { url: string; method: string; headers: Record<string, string>; body?: unknown };
   /** 解析同步响应 */
   parseResponse: (data: unknown) => { urls: string[]; text?: string };
-  /** Worker 停机中止信号：中止在途提交请求与轮询 */
+  /** Worker 停机中止信号：中止在途提交请求 */
   signal?: AbortSignal;
-  pollInterval?: number;
-  maxPollAttempts?: number;
-  initialDelay?: number;
+}
+
+/**
+ * 闸门通过后的模糊失败分类：上游接口无幂等键，请求可能已在途（计费可能已发生），
+ * 这类失败绝不自动重发，以 submission_uncertain 留痕（规则 3 残余风险处置）。
+ * safe-rejection 集合（拿到上游明确应答、确定未受理）沿用现行失败分类：
+ * 4xx 且非 408/425（408 请求超时与 425 too early 无法排除上游已受理；429 = 明确限流拒绝）。
+ * 5xx 经网关转发，无法判断源站是否已建任务 → 同样归入不确定。
+ */
+function isAmbiguousSubmissionFailure(status: number): boolean {
+  return !(status >= 400 && status < 500 && ![408, 425].includes(status));
 }
 
 // 核心：submit_and_wait
 
 /**
- * 同步优先异步兜底：提交上游请求，自动判断/轮询。
- * 对齐 Python TaskManager.submit_and_wait()
- *
+ * 同步优先异步受理：提交上游请求，同步提取结果或固化异步任务 ID。
  * 流程：
  * 1. 提交 HTTP 请求
- * 2. 尝试同步提取结果（parseResponse）
- * 3. 同步无结果 → 尝试 extractTaskId → 进入轮询
- * 4. 都没有 → 失败
+ * 2. 尝试同步提取结果（parseResponse）→ completed
+ * 3. 提取异步 task_id → 落库受理（acceptUpstreamTask + 首个 nextPollAt）→ async
+ * 4. 都没有 → 失败（分类按闸门语义：明确拒绝 vs 提交不确定）
  */
 export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAndWaitResult> {
-  const {
-    taskId,
-    protocol,
-    capability,
-    baseUrl,
-    apiKey,
-    channelConfig,
-    signal,
-    pollInterval = getSetting("worker.async_poll_interval_seconds"),
-    maxPollAttempts = getSetting("worker.async_poll_max_attempts"),
-    initialDelay = getSetting("worker.async_poll_initial_delay_seconds"),
-  } = input;
+  const { taskId, protocol, capability, channelConfig, signal } = input;
 
-  // 1. 提交上游请求
+  // 1. 构建上游请求（闸门在下方 fetch 前执行）
   const req = input.buildRequest();
 
-  // 从请求体提取 model，供轮询 URL 的 {model} 占位符使用
-  const reqModel = (req.body as Record<string, unknown> | undefined)?.model;
-  const model = typeof reqModel === "string" ? reqModel : undefined;
+  // 1. 提交闸门（规则 3，唯一位置 = 上游提交点内、请求发出前）：紧贴 fetch 之前的
+  //    最后一次异步边界执行条件更新——双提交被结构性排除；引用解析等前置 await 全部
+  //    退到闸门前，in_flight 之后的窗口仅剩同步代码。拒绝 = 已失权或闸门已被占，
+  //    抛闸门错误终止（不提交上游、不写任何终态），executor 静默收口
+  const gated = await takeSubmissionGate(taskId, input.startedAt);
+  if (!gated) {
+    throw new GenerationGateRejectedError();
+  }
 
   // 开始发送请求（同步阻塞前打印，便于在等待期间观察出参）
   logEvent("taskmgr", {
@@ -102,26 +100,21 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   const outcome = await fetchUpstream(req, taskId, "taskmgr", signal);
 
   if (outcome.kind === "failure") {
-    return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
+    // 闸门已过、请求可能已在途：模糊失败不区分超时/网络细节，一律按提交不确定留痕。
+    // 任务终态由 executor 写入（safeFailTask），此后绝无自动重发路径
+    return {
+      status: "failed",
+      urls: [],
+      error: outcome.error,
+      errorCode: "generation.submission_uncertain",
+    };
   }
 
   if (outcome.kind === "http-error") {
-    // 错误体中可能携带 task_id：视为上游已受理，升级为轮询
+    // 错误体中可能携带 task_id：视为上游已受理，升级为异步受理
     const extractedId = protocol.extractTaskId?.(outcome.errData, channelConfig, capability);
     if (extractedId) {
-      // 检查是否已被取消
-      if (await isTaskCancelled(taskId)) {
-        return { status: "cancelled", urls: [] };
-      }
-      return await _poll({
-        taskId, startedAt: input.startedAt,
-        protocol, capability, baseUrl, apiKey,
-        upstreamTaskId: extractedId,
-        channelConfig,
-        model,
-        pollInterval, maxPollAttempts, initialDelay,
-        signal,
-      });
+      return await _acceptAsync(taskId, input.startedAt, extractedId);
     }
 
     // 原始响应体只进日志；对外只回传上游自带的可读文案，取不到时退化为状态码
@@ -132,6 +125,14 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       status: outcome.status,
       body: outcome.errText.slice(0, 500),
     });
+    if (isAmbiguousSubmissionFailure(outcome.status)) {
+      return {
+        status: "failed",
+        urls: [],
+        error: `上游提交结果不确定（HTTP ${outcome.status}），为避免重复提交已放弃重试`,
+        errorCode: "generation.submission_uncertain",
+      };
+    }
     const { error, errorCode } = httpUpstreamFailure(outcome.status, outcome.errText);
     return { status: "failed", urls: [], error, errorCode };
   }
@@ -151,7 +152,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
     return { status: "completed", urls: result.urls, text: result.text };
   }
 
-  // 3. 尝试提取异步 task_id → 进入轮询
+  // 3. 尝试提取异步 task_id → 异步受理
   const upstreamTaskId = protocol.extractTaskId?.(data, channelConfig, capability);
   if (upstreamTaskId) {
     logEvent("taskmgr", {
@@ -160,28 +161,7 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
       body: data,
       maxLen: Infinity,
     });
-    const pollUrlPreview = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
-      ?? defaultPollUrl(baseUrl, upstreamTaskId);
-    logEvent("taskmgr", {
-      banner: true,
-      bannerTitle: "已获取任务 ID，开始轮询",
-      stage: "polling",
-      taskId,
-      upstreamTaskId,
-      pollUrl: pollUrlPreview,
-    });
-    if (await isTaskCancelled(taskId)) {
-      return { status: "cancelled", urls: [] };
-    }
-    return await _poll({
-      taskId, startedAt: input.startedAt,
-      protocol, capability, baseUrl, apiKey,
-      upstreamTaskId,
-      channelConfig,
-      model,
-      pollInterval, maxPollAttempts, initialDelay,
-      signal,
-    });
+    return await _acceptAsync(taskId, input.startedAt, upstreamTaskId);
   }
 
   // 4. 两者都无 → 失败
@@ -203,77 +183,29 @@ export async function submitAndWait(input: SubmitAndWaitInput): Promise<SubmitAn
   };
 }
 
-// 内部轮询
+// 内部：异步受理
 
-interface PollInput {
-  taskId: string;
-  startedAt: Date | null;
-  protocol: ProtocolService;
-  capability: string;
-  baseUrl: string;
-  apiKey: string;
-  upstreamTaskId: string;
-  channelConfig?: Record<string, unknown>;
-  model?: string;
-  pollInterval: number;
-  maxPollAttempts: number;
-  initialDelay: number;
-  /** Worker 停机中止信号 */
-  signal?: AbortSignal;
-}
-
-async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
-  const {
-    taskId, startedAt, protocol, capability, baseUrl, apiKey,
-    upstreamTaskId, channelConfig, model, pollInterval, maxPollAttempts, initialDelay, signal,
-  } = input;
-
-  // 若协议完全不支持轮询，直接失败，避免无限 pending
-  if (!protocol.buildPollUrl && !protocol.parsePollResponse) {
-    logEvent("taskmgr", {
-      stage: "poll_no_support",
-      taskId,
-      upstreamTaskId,
-      protocol: protocol.name,
-    });
-    return {
-      status: "failed",
-      urls: [],
-      error: `Protocol does not support polling for upstream task ${upstreamTaskId}`,
-    };
+/**
+ * 固化上游受理（specs/task-queue-bullmq.md 规则 1）：upstreamTaskId + 首个轮询到期
+ * 时间落库（acceptUpstreamTask，startedAt 令牌守卫）。落库成功后本执行段结束，
+ * 轮询交给延迟 tick。守卫拒绝 = 任务已离开本次认领（取消/重置/重新认领），结果丢弃。
+ */
+async function _acceptAsync(
+  taskId: string,
+  startedAt: Date | null,
+  upstreamTaskId: string
+): Promise<SubmitAndWaitResult> {
+  // 受理前取消检查：用户取消先于落库到达时保持 cancelled 语义（终态守卫同样兜底）
+  if (await isTaskCancelled(taskId)) {
+    return { status: "cancelled", urls: [] };
   }
 
-  const pollUrl = protocol.buildPollUrl?.(baseUrl, upstreamTaskId, channelConfig, capability, model)
-    ?? defaultPollUrl(baseUrl, upstreamTaskId);
+  const firstPollAt = new Date(Date.now() + getSetting("worker.async_poll_initial_delay_seconds") * 1000);
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-
-  logEvent("taskmgr", {
-    level: "debug",
-    stage: "poll_start",
-    taskId,
-    upstreamTaskId,
-    pollUrl,
-    maxAttempts: maxPollAttempts,
-    interval: pollInterval,
-  });
-
-  // 保存 upstream_task_id（带 processing + startedAt 守卫：期间被取消、被僵尸
-  // 清理重置、或已被重新认领时写入被丢弃，不会污染新所有者的状态）
-  // 守卫拒绝的真实原因（用户取消 / 僵尸重置 / 已被重新认领）在此无法区分，
-  // 不硬编码 cancelled 误导遥测；该结果只进执行日志，不会写库
-  const ownershipLost = (): SubmitAndWaitResult => ({
-    status: "failed",
-    urls: [],
-    error: "Task ownership lost",
-  });
   const logWriteFailed = (attempt: number | string, err: unknown) => {
-    // 写库失败不能静默吞掉：upstreamTaskId 落不了盘，进程重启后恢复不到轮询态，
-    // 任务会被按中断策略判失败（不重新提交，见 recoverProcessingTasks）
     logEvent("taskmgr", {
       level: "warn",
-      stage: "processing_write_failed",
+      stage: "accept_write_failed",
       taskId,
       attempt,
       error: errText(err),
@@ -281,111 +213,47 @@ async function _poll(input: PollInput): Promise<SubmitAndWaitResult> {
   };
 
   let persisted = false;
-  let persistPending = false;
   for (let attempt = 1; attempt <= 3 && !persisted; attempt++) {
     let threw = false;
     try {
-      persisted = await markTaskProcessing(taskId, upstreamTaskId, startedAt);
+      persisted = await acceptUpstreamTask(taskId, upstreamTaskId, startedAt, firstPollAt);
     } catch (err: unknown) {
       threw = true;
       logWriteFailed(attempt, err);
     }
     if (persisted) break;
     if (!threw) {
-      // 守卫拒绝 = 任务已离开本次认领，本轮执行者已失去所有权，继续轮询上游
-      // 只会产生无人接收的结果。不能在这里写终态：重置/重认领场景下任务属于
-      // 新执行者，failTask 的所有权守卫会拒绝本次写入。
-      logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
-      return ownershipLost();
+      // 守卫拒绝 = 任务已离开本次认领，本轮执行者已失去所有权。不能在这里写终态：
+      // 重置/重认领场景下任务属于新执行者，failTask 的所有权守卫会拒绝本次写入
+      logEvent("taskmgr", { stage: "skipped_accept_write", taskId });
+      return {
+        status: "failed",
+        urls: [],
+        error: "Task ownership lost",
+      };
     }
     if (attempt < 3) await new Promise((r) => setTimeout(r, 200 * attempt));
   }
   if (!persisted) {
-    // 重试耗尽仍写不进去——不判死：上游已受理（必然计费），此刻判死等于让用户
-    // 付费却拿不到结果。upstreamTaskId 保留在内存中继续轮询，随心跳周期重试落盘；
-    // DB 恢复后落盘成功，进程重启走恢复轮询不重提上游。若重启时仍未落盘，任务按
-    // 中断策略直接判失败（不重新提交，见 recoverProcessingTasks）——宁可让用户
-    // 收到失败文案，也不重复生成、重复计费。
-    persistPending = true;
-    logEvent("taskmgr", { level: "warn", stage: "processing_persist_deferred", taskId });
+    // 重试耗尽仍写不进去（DB 不可用）：本执行者无法固化 upstreamTaskId，job 结束后
+    // 该 ID 随执行者消亡——行停留 processing/in_flight，租约过期后由清扫 → handler
+    // 判失败 submission_uncertain（绝不重发）。宁可让用户收到失败文案，也不重复提交
+    logEvent("taskmgr", { level: "error", stage: "accept_persist_failed", taskId, upstreamTaskId });
+    return {
+      status: "failed",
+      urls: [],
+      error: "生成已提交上游，但任务状态落库失败，无法继续查询进度；请稍后重试",
+      errorCode: "generation.submission_uncertain",
+    };
   }
 
-  // 初始等待在 pollUpstreamTask 内进行；心跳、取消检查、轮询节奏、4xx 判定与
-  // 协议解析统一由共享轮询核心处理，这里只保留本执行者特有的持久化语义
-  const outcome = await pollUpstreamTask({
+  logEvent("taskmgr", {
+    banner: true,
+    bannerTitle: "已获取任务 ID，等待轮询",
+    stage: "async_accepted",
     taskId,
     upstreamTaskId,
-    pollUrl,
-    headers,
-    protocol,
-    pollInterval,
-    maxPollAttempts,
-    initialDelay,
-    logChannel: "taskmgr",
-    onHeartbeat: async () => {
-      if (!persistPending) {
-        return touchTaskHeartbeat(taskId, startedAt);
-      }
-      // 落盘被推迟的补投递：与心跳同周期重试（重试失败不影响主轮询）
-      try {
-        if (await markTaskProcessing(taskId, upstreamTaskId, startedAt)) {
-          persistPending = false;
-          logEvent("taskmgr", { stage: "processing_persist_recovered", taskId });
-          return true;
-        }
-        // 守卫拒绝 = 任务已离开本次认领，同 persist 首次写入的处理
-        logEvent("taskmgr", { stage: "skipped_processing_write", taskId });
-        return false;
-      } catch (err: unknown) {
-        logWriteFailed("heartbeat", err);
-        return touchTaskHeartbeat(taskId, startedAt);
-      }
-    },
-    shouldStop: async () => {
-      // Worker 停机强制收尾（drain 超时后的 abort）：轮询立即终止
-      if (signal?.aborted) {
-        logEvent("taskmgr", { stage: "poll_stopped", taskId, reason: "shutdown_abort" });
-        return true;
-      }
-      // isTaskCancelled 自身吞 DB 错误视为未取消
-      if (await isTaskCancelled(taskId)) {
-        logEvent("taskmgr", { stage: "poll_cancelled", taskId });
-        return true;
-      }
-      return false;
-    },
+    firstPollAt: firstPollAt.toISOString(),
   });
-
-  switch (outcome.kind) {
-    case "completed":
-      logEvent("taskmgr", {
-        level: "debug",
-        stage: "poll_completed",
-        taskId,
-        urls: outcome.urls,
-        text: outcome.text,
-      });
-      return { status: "completed", urls: outcome.urls, text: outcome.text };
-    case "failed":
-      return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
-    case "stopped":
-      return { status: "cancelled", urls: [] };
-    case "lost":
-      return ownershipLost();
-    case "exhausted": {
-      // 预算耗尽 ≠ 上游失败：任务重置 pending 重新认领后走恢复轮询
-      //（upstreamTaskId 已固化，天然不重提上游），retryCount 预算封顶。
-      const requeued = await requeueProcessingAsyncTask(taskId, startedAt, getSetting("worker.max_retries"));
-      if (requeued) {
-        logEvent("taskmgr", {
-          stage: "poll_exhausted_requeued",
-          taskId,
-          upstreamTaskId,
-        });
-        return { status: "requeued", urls: [] };
-      }
-      // 预算烧完（或所有权已丢——守卫会让终态写入自然失败）才真正终态失败
-      return { status: "failed", urls: [], error: outcome.error, errorCode: outcome.errorCode };
-    }
-  }
+  return { status: "async", urls: [], asyncNextPollAt: firstPollAt };
 }

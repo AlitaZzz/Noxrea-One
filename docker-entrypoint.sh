@@ -7,7 +7,8 @@ set -e
 #   - 已通过 -e 传入的变量原样写入（环境变量优先）
 #   - 未传入的使用 Docker 默认值
 #   - JWT_SECRET_KEY 缺失时自动生成随机密钥并持久化（重启不变）
-# 数据库固定为服务器模式（真 PostgreSQL，连接串由 compose 注入 DATABASE_URL）。
+# 数据库固定为服务器模式（真 PostgreSQL，连接串由 compose 注入 DATABASE_URL）；
+# 任务队列 Redis 连接串由 compose 注入 REDIS_URL（不可达时启动失败）。
 # ------------------------------------------------------------
 if [ ! -f /data/.env ]; then
   cat > /data/.env <<EOF
@@ -26,6 +27,9 @@ JWT_SECRET_KEY="${JWT_SECRET_KEY:-$(node -e "console.log(require('crypto').rando
 
 # ---------- 后端：数据库（服务器模式：真 PostgreSQL，由 compose 注入） ----------
 DATABASE_URL="${DATABASE_URL}"
+
+# ---------- 后端：任务队列（BullMQ，由 compose 注入；Redis 不可达时启动失败） ----------
+REDIS_URL="${REDIS_URL}"
 
 # ---------- 后端：服务 ----------
 # 容器内 API 监听 0.0.0.0:4000，与镜像构建期固化的前端 /api 代理目标一致，不提供配置
@@ -97,6 +101,11 @@ case "$DATABASE_URL" in
     exit 1
     ;;
 esac
+if [ -z "$REDIS_URL" ]; then
+  echo "ERROR: 必须设置 REDIS_URL（任务队列，形如 redis://:pass@redis:6379）。" >&2
+  echo "       NAS compose 已自动注入；手工 docker run 时请用 -e REDIS_URL=... 传入。" >&2
+  exit 1
+fi
 
 # ------------------------------------------------------------
 # 数据目录
@@ -126,6 +135,25 @@ c.connect().then(() => c.end()).then(() => process.exit(0)).catch(() => process.
   i=$((i+1))
   if [ "$i" -ge 30 ]; then
     echo "ERROR: 连接 PostgreSQL 超时（60 秒）。请检查 postgres 服务与 DATABASE_URL。" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+# ------------------------------------------------------------
+# 等待 Redis 就绪（任务队列，specs/task-queue-bullmq.md 规则 7）
+# ------------------------------------------------------------
+echo "== 等待 Redis 就绪 =="
+i=0
+until node -e "
+const IORedis = require('ioredis');
+const c = new IORedis(process.env.REDIS_URL, { connectTimeout: 2000, retryStrategy: null });
+c.ping().then((p) => { c.disconnect(); process.exit(p === 'PONG' ? 0 : 1); });
+c.on('error', () => process.exit(1));
+" 2>/dev/null; do
+  i=$((i+1))
+  if [ "$i" -ge 30 ]; then
+    echo "ERROR: 连接 Redis 超时（60 秒）。请检查 redis 服务与 REDIS_URL。" >&2
     exit 1
   fi
   sleep 2

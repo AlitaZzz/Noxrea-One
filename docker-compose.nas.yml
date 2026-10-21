@@ -1,7 +1,7 @@
 # NAS 部署用：直接从 GitHub 容器仓库拉取现成镜像（无需在 NAS 上构建）
-# 架构：双容器 —— PostgreSQL 17 + 应用（web 3000 / api 4000），见 specs/postgres-dialect-unification.md
-# 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（PG 数据 + 上传文件）
-# 配置文件：首次启动前只需在 /share/Container/noxreaone/.env 写一行 POSTGRES_PASSWORD=...，
+# 架构：三容器 —— PostgreSQL 17 + Redis 7（任务队列）+ 应用（web 3000 / api 4000）
+# 数据持久化到 NAS 宿主机目录 /share/Container/noxreaone（PG 数据 + Redis AOF + 上传文件）
+# 配置文件：首次启动前只需在 /share/Container/noxreaone/.env 写 POSTGRES_PASSWORD=... 与 REDIS_PASSWORD=...，
 #           其余配置（JWT 密钥等）由容器首次启动自动生成；之后编辑该文件并重启容器即可修改
 # 容器加入已存在的 mihomo_shared_network 共享网络（需先确保该网络已创建）
 services:
@@ -29,16 +29,48 @@ services:
     networks:
       - mihomo_shared_network
 
+  redis:
+    image: redis:7-alpine
+    container_name: noxrea-redis
+    # 任务队列专用实例（specs/task-queue-bullmq.md 规则 7）：
+    # - requirepass 必填（REDIS_PASSWORD 由 compose 同目录 .env 提供）
+    # - appendonly yes + everysec：队列派发状态崩溃后可恢复
+    # - maxmemory 256MB + noeviction：队列键被驱逐 = 派发丢失，宁可写失败（由
+    #   DB 行 + 对账清扫兜底自愈），不可静默丢数据
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD:?请在 compose 同目录 .env 设置 REDIS_PASSWORD=...}
+                   --appendonly yes --appendfsync everysec
+                   --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - /share/Container/noxreaone/redisdata:/data
+    ports:
+      # 本地开发机与运维直达（内网）；不需要时删掉这两行，仅容器网络内可达
+      - "9835:6379"
+    healthcheck:
+      # 密码为部署期插值（容器内无该环境变量）；-a 会在命令行可见，与 requirepass 同级别暴露面
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a ${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - mihomo_shared_network
+
   noxrea:
     image: ghcr.io/alitazzz/noxrea-one:latest
     container_name: noxrea-one
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       # 服务器模式：连接串指向 compose 内的 postgres 服务；
       # 迁移由 entrypoint 的 prisma migrate deploy 自动执行
       DATABASE_URL: postgres://noxrea:${POSTGRES_PASSWORD}@postgres:5432/noxrea
+      # 任务队列（BullMQ）：指向 compose 内的 redis 服务；Redis 不可达时应用启动失败
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     ports:
       - "3000:3000"
     volumes:

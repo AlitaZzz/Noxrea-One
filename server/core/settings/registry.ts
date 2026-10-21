@@ -52,9 +52,6 @@ const MAX_QUOTA_MB = Math.floor(Number.MAX_SAFE_INTEGER / 1024 ** 2);
 const timerSeconds = (value: number, { integer = false } = {}): SettingDef<number> =>
   integer ? int(value, 1, MAX_TIMER_SECONDS) : positive(value, MAX_TIMER_SECONDS);
 
-/** 用作定时器延迟的毫秒数 */
-const timerMillis = (value: number): SettingDef<number> => int(value, 1, MAX_TIMER_SECONDS * 1000);
-
 const text = (value = ""): SettingDef<string> => ({
   schema: z.string(),
   default: value,
@@ -133,16 +130,15 @@ export const SETTING_DEFS = {
   /** sharp 缩放的最长排队时间（秒） */
   "media.sharp_max_wait_seconds": timerSeconds(10),
 
-  // Worker
-  "worker.poll_interval_seconds": timerSeconds(1, { integer: true }),
+  // Worker（specs/task-queue-bullmq.md：派发由 BullMQ 驱动，无进程内轮询间隔键）
   "worker.max_concurrency": int(10),
   "worker.api_timeout_seconds": timerSeconds(240, { integer: true }),
-  /** 僵尸判定阈值（分钟）：轮询期间有心跳持续推进 updatedAt，这里只需兜住「轮询线程真的挂了」 */
+  /** 租约判定阈值（分钟）：执行段经心跳/闸门/下载持续推进 updatedAt，
+   *  轮询段由 tick 持续推进 nextPollAt；这里只兜「执行者真的挂了」 */
   "worker.stuck_timeout_minutes": int(15),
   "worker.zombie_scan_interval_seconds": int(60),
   "worker.max_retries": int(2, 0),
   "worker.drain_timeout_seconds": timerSeconds(15, { integer: true }),
-  "worker.poll_check_interval_ms": timerMillis(200),
   "worker.async_poll_interval_seconds": timerSeconds(3),
   "worker.async_poll_max_attempts": int(120),
   "worker.async_poll_initial_delay_seconds": timerSeconds(0.5),

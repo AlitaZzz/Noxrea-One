@@ -95,6 +95,12 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
    不设置 `DATABASE_URL` 即为本地模式：进程内 PGlite，零安装，数据存于 `data/pglite`（自动创建）。需要连接已有 PostgreSQL 时再设置 `DATABASE_URL`（见下方环境变量表）。
 
+   生成异步任务队列所需的 Redis（BullMQ 派发，连接串 `REDIS_URL` 必填；Redis 不可达时应用启动失败）。本地可临时用 Docker 起一个带密码的 Redis 7：
+
+   ```bash
+   docker run -d --name noxrea-dev-redis -p 6379:6379 redis:7-alpine redis-server --requirepass devredis --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+   ```
+
    生成密钥示例：
 
    ```bash
@@ -139,6 +145,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | 变量 | 说明 |
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
+| `REDIS_URL` | 任务队列（BullMQ）Redis 连接串，必填；Redis 不可达时启动失败，运行期瞬断由 stalled 重跑与对账清扫自愈（specs/task-queue-bullmq.md） |
 | `DATABASE_URL` | 数据库连接串（双模式）：不设置即本地模式（进程内 PGlite，数据在 `data/pglite`）；设为 `postgres://` 连接串即服务器模式（外置 PostgreSQL，迁移由部署侧 `prisma migrate deploy` 负责） |
 | `API_HOST` / `API_PORT` | 后端（Hono）监听地址与端口，默认 `0.0.0.0:4000` |
 | `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
@@ -162,7 +169,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `auth.*` | 注册开关 `registration_enabled`、登录态有效期 `token_ttl_minutes` |
 | `network.*` | 可信代理网段、SSRF 内网白名单、出网代理、对外访问地址 `public_base_url` |
 | `upload.*` | 单文件大小、单批文件数、单用户并发批次数与排队深度 |
-| `worker.*` | 生成任务 Worker 的轮询、并发、超时、重试等 |
+| `worker.*` | 生成任务 Worker 的并发、超时、重试与异步轮询节奏等 |
 | `http.*` | 下载、轮询、API 请求超时，响应体空闲与下载总时长 |
 | `storage.*` | 存储后端选择与 S3 连接配置（`storage.backend` / `storage.s3.*`）、读取分发与上游引用策略、存储引用 GC 宽限期与试运行开关 |
 
@@ -174,16 +181,17 @@ UPDATE system_settings SET value = 'false' WHERE key = 'auth.registration_enable
 
 ## Docker 部署
 
-镜像将前端与后端封装在同一容器中，配置与上传文件统一持久化到 `/data`；数据库为外置 PostgreSQL（compose 示例内置 postgres 服务，也可指向自备实例），entrypoint 会等待数据库就绪并自动执行 `prisma migrate deploy`。
+镜像将前端与后端封装在同一容器中，配置与上传文件统一持久化到 `/data`；数据库为外置 PostgreSQL（compose 示例内置 postgres 服务，也可指向自备实例），entrypoint 会等待数据库就绪并自动执行 `prisma migrate deploy`。任务队列使用 compose 示例内置的 Redis 7 服务（AOF 持久化 + noeviction，队列专用实例），entrypoint 同样等待其就绪。
 
 1. 准备 `docker-compose.nas.yml`
 
    默认 compose 文件使用以下配置：
 
    - 镜像：`ghcr.io/alitazzz/noxrea-one:latest`
-   - 端口：宿主机 `3000` → 容器 `3000`
-   - 数据目录：`/share/Container/noxreaone` → 容器 `/data`
+   - 端口：宿主机 `3000` → 容器 `3000`；Redis 宿主机 `9835` → 容器 `6379`（内网开发/运维与集成测试直达，compose 注释为基准；收紧部署可删除该映射，仅容器网络内互通）
+   - 数据目录：`/share/Container/noxreaone` → 容器 `/data`（含 PG 数据与 Redis AOF 子目录）
    - 网络：外部网络 `mihomo_shared_network`
+   - 首次启动前需在同目录 `.env` 写入 `POSTGRES_PASSWORD=...` 与 `REDIS_PASSWORD=...`（`DATABASE_URL` / `REDIS_URL` 由 compose 注入容器）
 
    如果不需要连接已有共享网络，请将 `networks` 部分调整为你的实际 Docker 网络。
 
@@ -217,6 +225,21 @@ docker build -t noxrea-one .
 
 容器内后端固定监听 `0.0.0.0:4000`，与构建期固化的前端 `/api` 代理目标一致，不读取 `API_HOST` / `API_PORT`。前后端分开部署时，用构建参数 `--build-arg WEB_API_ORIGIN=http://backend-host:4000` 指定后端地址；应用名用 `--build-arg WEB_APP_NAME=...`。
 
+### 任务队列运维与告警（Redis）
+
+任务队列（BullMQ）依赖 Redis 派发；`/api/health` 的 `redis` 字段为运行期 readiness（LB/人工核查用），`queueDepth` 为 waiting + delayed + active 总深度。建议的外部监控口径：
+
+- **`/api/health` 返回 `redis: false`** ⇒ 运行期 Redis 不可达，立即告警。此时任务仍落库 pending、恢复后由对账清扫自动排水，但创建侧体验降级，不应长时间持续。
+- **`queueDepth` 持续增长不回落** ⇒ 消费能力不足或 Redis 写入后 worker 停摆；正常水位应随提交量波动并在分钟级回落。
+- **Redis `used_memory` 逼近 `maxmemory`（256mb）** ⇒ 告警并复核容量；策略为 noeviction，写满后队列写入将报错（自愈路径依赖清扫，但应扩容根除）。
+- **failed 计数**（基础设施级瞬断重试耗尽）用 `redis-cli` 查看：
+
+  ```bash
+  docker exec <redis 容器名> redis-cli -a "$REDIS_PASSWORD" --no-auth-warning zcard noxrea:queue:generation-tasks:failed
+  ```
+
+  持续增长说明存在反复崩溃的任务（毒任务），结合后端日志 `task_row_missing` / `submission_uncertain` 事件定位。
+
 ## 数据与持久化
 
 Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初始化以下路径：
@@ -227,7 +250,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 | `/data/uploads` | 上传与生成结果 |
 | `/data/resources` | 模型配置、Prompt 模板与技能文件 |
 
-数据库在外置 PostgreSQL 中（compose 示例使用独立数据卷），不落在 `/data` 卷内。
+数据库在外置 PostgreSQL 中（compose 示例使用独立数据卷），不落在 `/data` 卷内。Redis 数据（AOF）落在数据卷的 `redisdata` 子目录。
 
 升级镜像前建议先备份整个数据目录。
 

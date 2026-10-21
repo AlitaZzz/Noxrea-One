@@ -26,6 +26,8 @@ import { router as cropVideoRouter } from "./routes/crop-video";
 import { router as uploadRouter } from "./routes/upload";
 import { router as uploadDirectRouter } from "./routes/upload-direct";
 import { router as filesRouter } from "./routes/files";
+import { getQueueHealth } from "@server/services/worker/queue";
+import { isTaskWorkerRunning } from "@server/services/worker/worker";
 
 // Hono 应用实例
 const app = new Hono();
@@ -44,8 +46,12 @@ app.use("/api/model-config/*", jsonBodyLimit(1024 * 1024));
 app.use("/api/models/*", jsonBodyLimit(1024 * 1024));
 app.use("/api/auth/*", jsonBodyLimit(64 * 1024));
 
-// 健康检查
-app.get("/api/health", (c) => c.json(ok({ status: "ok" })));
+// 健康检查（规则 8）：redis 可达性 / worker 存活 / 队列深度（waiting+delayed+active）。
+// redis=false 时 queueDepth 为 null——编排层据此告警，恢复后自动排水
+app.get("/api/health", async (c) => {
+  const queue = await getQueueHealth();
+  return c.json(ok({ status: "ok", redis: queue.redis, worker: isTaskWorkerRunning(), queueDepth: queue.queueDepth }));
+});
 
 // 路由注册（具体路径优先于通配符 /api/files/*）
 app.route("/", authRouter);

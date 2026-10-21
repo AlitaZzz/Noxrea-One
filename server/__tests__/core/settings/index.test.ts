@@ -239,7 +239,7 @@ describe("系统设置播种与读取（真实 PGlite 库）", () => {
     ["media.ffmpeg_heavy_max_wait_seconds", "86400.5"],
     ["http.api_timeout_seconds", "2147484"],
     ["worker.drain_timeout_seconds", "86401"],
-    ["worker.poll_check_interval_ms", "86400001"],
+    ["worker.async_poll_interval_seconds", "86401"],
   ])("定时器类时长 %s 超过 1 天（%s）启动失败", async (key, value) => {
     await prisma.systemSetting.create({ data: { key, value } });
     const settings = await restart();
@@ -251,8 +251,7 @@ describe("系统设置播种与读取（真实 PGlite 库）", () => {
     await prisma.systemSetting.createMany({
       data: [
         { key: "media.ffmpeg_light_max_wait_seconds", value: "86400" },
-        { key: "worker.poll_interval_seconds", value: "86400" },
-        { key: "worker.poll_check_interval_ms", value: "86400000" },
+        { key: "worker.async_poll_interval_seconds", value: "86400" },
       ],
     });
     const settings = await restart();
@@ -260,8 +259,7 @@ describe("系统设置播种与读取（真实 PGlite 库）", () => {
     await settings.initSettings();
 
     expect(settings.getSetting("media.ffmpeg_light_max_wait_seconds")).toBe(86400);
-    expect(settings.getSetting("worker.poll_interval_seconds")).toBe(86400);
-    expect(settings.getSetting("worker.poll_check_interval_ms")).toBe(86_400_000);
+    expect(settings.getSetting("worker.async_poll_interval_seconds")).toBe(86400);
   });
 
   it("不换算成定时器的时长不受 1 天上限约束", async () => {
