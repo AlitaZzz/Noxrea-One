@@ -29,5 +29,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["server/**/*.test.ts"],
+    // 真实库用例的全局准备：TEST_DATABASE_URL 安全校验 + prisma migrate deploy（见文件注释）
+    globalSetup: [path.resolve(__dirname, "server/__tests__/helpers/global-setup.ts")],
   },
 });

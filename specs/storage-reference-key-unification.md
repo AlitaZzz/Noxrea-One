@@ -82,7 +82,7 @@
 
 验证：typecheck（server+web）、lint:web（0 error，26 条既有 img 警告）、lint:server、test:server（664 过/15 skip）、web test（918 过）全部串行通过；源码断言测试 `server/__tests__/storage/storage-key-contract.test.ts`（schema 无 source_url/cover_url、旧字段名消灭、crud 层无托管 URL 字面量）通过。
 
-未验收项：全链路人工走查待用户确认。数据迁移已于 2026-10-16 在 NAS PG（10.10.10.2:9832/noxrea）执行完成：DDL（20261016090045）+ 数据重写（asset 9 条、canvas JSON 值 575 处、generation_tasks 1220 列值、users 1 条），幂等重跑全 0 命中、告警清单为空；本地 PGlite 同样完成迁移（2026-10-17）：本地模式执行本脚本时经 ensureLocalMigrations 自动应用 DDL 20261016090045 后重写数据（asset 9 条、canvas JSON 值 575 处、generation_tasks 1220 列值、users 1 条），幂等重跑全 0 命中。
+未验收项：全链路人工走查待用户确认。数据迁移已于 2026-10-16 在 NAS PG（10.10.10.2:9832/noxrea）执行完成：DDL（20261016090045）+ 数据重写（asset 9 条、canvas JSON 值 575 处、generation_tasks 1220 列值、users 1 条），幂等重跑全 0 命中、告警清单为空；本地 PGlite 同样完成迁移（2026-10-17）：本地模式执行本脚本时经 ensureLocalMigrations 自动应用 DDL 20261016090045 后重写数据（asset 9 条、canvas JSON 值 575 处、generation_tasks 1220 列值、users 1 条），幂等重跑全 0 命中（历史记录；PGlite 本地模式已于 2026-10-21 移除，相关执行路径已失效，见 [pglite-removal.md](pglite-removal.md)；NAS PG 记录仍有效）。
 
 code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟方案、不向后兼容、不打补丁」处置）：
 - 引用值 → 访问 URL 规则收敛为 shared `resolveFileUrl` 单点（规则 2 的「两处派生」收敛为「DTO 与前端渲染共用同一函数」）；web `managedFileUrl` 与服务端 crud DTO 构造均改为委托该函数。

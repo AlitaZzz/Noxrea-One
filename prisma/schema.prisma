@@ -1,8 +1,8 @@
 // ── Noxrea One - Prisma Schema ──
 // 字段 camelCase + @map("snake_case")，表名 @@map
 // JSON 列统一存 TEXT，CRUD 层集中序列化
-// 方言统一 PostgreSQL：本地模式经 driver adapter 连 PGlite（进程内 PG），
-// 服务器模式连真 PG；连接配置见 prisma.config.ts（v7 不再允许 schema 内 url）
+// 方言统一 PostgreSQL：应用只连外置 PostgreSQL（PGlite 本地模式已移除，
+// specs/pglite-removal.md）；连接配置见 prisma.config.ts（v7 不再允许 schema 内 url）
 
 generator client {
   provider = "prisma-client"

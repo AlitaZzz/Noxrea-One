@@ -3,7 +3,8 @@
  * 按 ID 与用户名查询用户信息，用户名匹配大小写不敏感。
  */
 import { prisma } from "@server/core/database/client";
-import { isUniqueConstraintError } from "@server/core/database/errors";
+import { USERS_USERNAME_KEY } from "@server/core/database/constraint-names";
+import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
 import { hashFromStorageKey, resolveFileUrl } from "@noxrea/shared/url";
 import { replaceSourceFileRef } from "@server/services/storage/file-ref-ledger";
@@ -28,16 +29,20 @@ export async function getUserByUsername(username: string) {
 
 /** 判断唯一约束冲突是否来自用户名：注册查重在事务外，并发同名注册的败方会撞到该约束。 */
 export function isUsernameTakenError(error: unknown): boolean {
-  return isUniqueConstraintError(error, "username");
+  return isUniqueConstraintViolation(error, USERS_USERNAME_KEY);
 }
 
 export async function createUser(data: {
   username: string;
   hashedPassword: string;
 }) {
-  // 首个注册用户自动 admin：判定在创建事务内（语义为"注册时无其他用户"）。
-  // SQLite 写入经 Prisma 连接串行化，并发首注册不会产生双 admin（user.test.ts 并发用例锁定）。
+  // 首个注册用户自动 admin：判定在创建事务内，并由事务级 advisory lock 跨连接/跨实例串行化。
+  // PostgreSQL READ COMMITTED 下两个并发事务都可能读到 count=0；SQLite 的写串行化已随 PGlite 移除。
+  // 锁 key 含 current_database()：advisory lock 是集群级的，必须按库隔离，避免开发库与测试库互相阻塞。
+  // 锁在提交/回滚时自动释放；注册频率低，串行化成本可接受。
   return prisma.$transaction(async (tx) => {
+    // 子查询把 void 返回值包成可反序列化的 int：Prisma 无法反序列化 void 列。
+    await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended('noxrea:first-user-registration:' || current_database(), 0))) AS first_user_lock`;
     const role = (await tx.user.count()) === 0 ? "admin" : "user";
     return tx.user.create({
       data: {

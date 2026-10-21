@@ -9,7 +9,7 @@ import { bootstrap } from "@server/core/bootstrap";
 import { startTaskWorker, stopTaskWorker } from "@server/services/worker/worker";
 import { startReconcileSweep, stopReconcileSweep } from "@server/services/worker/reconcile";
 import { closeTaskQueue } from "@server/services/worker/queue";
-import { closeLocalDatabase, prisma } from "@server/core/database/client";
+import { closeDatabase } from "@server/core/database/client";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
@@ -52,11 +52,9 @@ async function main(): Promise<void> {
 
     taskWatcher.dispose();
 
-    // 4d. 关闭队列连接，断开数据库并关闭本地模式 PGlite
-    //     （close 触发 checkpoint 把 WAL 落盘 + 释放数据目录锁）
+    // 4d. 关闭队列连接并断开数据库
     await closeTaskQueue();
-    await prisma.$disconnect();
-    await closeLocalDatabase();
+    await closeDatabase();
     logEvent("server", { stage: "shutdown_complete" });
     process.exit(0);
   };

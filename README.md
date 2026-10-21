@@ -39,7 +39,7 @@ Noxrea One 是一个面向创意生产流程的 AI Canvas 应用。你可以在�
 | --- | --- | --- |
 | 前端 | Next.js、React、TypeScript | 画布、项目管理、设置中心与登录界面 |
 | 后端 | Hono、TypeScript | REST API、SSE、文件与媒体处理 |
-| 数据库 | Prisma、PostgreSQL | 用户、项目、任务、模型、素材与 Agent 数据；本地开发用进程内 PGlite（零安装），部署用外置 PostgreSQL |
+| 数据库 | Prisma、PostgreSQL | 用户、项目、任务、模型、素材与 Agent 数据；开发与部署统一使用外置 PostgreSQL |
 | 模型网关 | Hono Services | 能力路由、协议适配、参数映射与任务执行 |
 | 媒体处理 | FFmpeg、Sharp | 视频抽帧、音频分离与图像处理 |
 | 部署 | Docker、Node.js 20 | 单容器运行前端与后端（数据库外置 PostgreSQL），`/data` 持久化数据 |
@@ -56,7 +56,6 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 │   ├── services/         # 模型网关、任务 Worker、存储与 Agent 服务
 │   └── resources/        # 模型 UI、供应商预设、Prompt 与技能配置
 ├── prisma/               # Prisma schema 与迁移
-├── data/                 # 本地模式 PGlite 数据目录（首次启动自动创建）
 ├── uploads/              # 本地上传文件
 ├── Dockerfile            # 构建单容器镜像
 ├── docker-entrypoint.sh  # 容器初始化入口
@@ -87,13 +86,14 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
    cp .env.example .env
    ```
 
-   编辑 `.env`，设置 JWT 密钥即可：
+   编辑 `.env`，设置数据库连接串与 JWT 密钥：
 
    ```env
+   DATABASE_URL=postgres://用户:密码@主机:5432/库名
    JWT_SECRET_KEY=替换为随机长密钥
    ```
 
-   不设置 `DATABASE_URL` 即为本地模式：进程内 PGlite，零安装，数据存于 `data/pglite`（自动创建）。需要连接已有 PostgreSQL 时再设置 `DATABASE_URL`（见下方环境变量表）。
+   `DATABASE_URL` 必填，仅支持外置 PostgreSQL（`postgres://` / `postgresql://`）；缺失或非法时启动失败。首次使用先执行 `npm run db:migrate:deploy` 建表（`npm run dev` 的 `predev` 钩子也会自动执行）。
 
    生成异步任务队列所需的 Redis（BullMQ 派发，连接串 `REDIS_URL` 必填；Redis 不可达时应用启动失败）。本地可临时用 Docker 起一个带密码的 Redis 7：
 
@@ -109,7 +109,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 4. 启动开发服务
 
-   首次启动会自动应用 `prisma/migrations` 建表（本地模式由内置迁移 runner 完成），无需手动初始化数据库。
+   启动前由 `predev` 钩子执行 `db:migrate:deploy` 应用 `prisma/migrations`（幂等），无需手动初始化数据库。
 
    ```bash
    npm run dev
@@ -135,7 +135,8 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `npm run typecheck` | 运行根目录与前端 TypeScript 检查 |
 | `npm test` | 运行后端与前端 Vitest 测试 |
 | `npm run test:watch` | 以监听模式运行 Vitest |
-| `npm run db:migrate:new -- <name>` | 修改 `prisma/schema.prisma` 后生成新迁移（本地模式下次启动自动应用） |
+| `npm run db:migrate:new -- <name>` | 修改 `prisma/schema.prisma` 后生成新迁移（`prisma migrate diff`，只读 `SHADOW_DATABASE_URL`，不触碰 `DATABASE_URL`；审阅 SQL 后执行 `db:migrate:deploy`） |
+| `npm run db:migrate:deploy` | 应用未执行的迁移（`prisma migrate deploy`；开发机由 `predev` 自动执行） |
 | `npm run prisma:generate` | 生成 Prisma Client |
 
 ## 环境变量
@@ -146,7 +147,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | --- | --- |
 | `JWT_SECRET_KEY` | JWT 签名密钥，必填 |
 | `REDIS_URL` | 任务队列（BullMQ）Redis 连接串，必填；Redis 不可达时启动失败，运行期瞬断由 stalled 重跑与对账清扫自愈（specs/task-queue-bullmq.md） |
-| `DATABASE_URL` | 数据库连接串（双模式）：不设置即本地模式（进程内 PGlite，数据在 `data/pglite`）；设为 `postgres://` 连接串即服务器模式（外置 PostgreSQL，迁移由部署侧 `prisma migrate deploy` 负责） |
+| `DATABASE_URL` | 外置 PostgreSQL 连接串（必填，`postgres://` / `postgresql://`）；应用启动不自动迁移，需先执行 `npm run db:migrate:deploy` |
 | `API_HOST` / `API_PORT` | 后端（Hono）监听地址与端口，默认 `0.0.0.0:4000` |
 | `WEB_API_ORIGIN` | 前端（Next）转发 `/api/*` 的后端地址；默认 `http://localhost:${API_PORT}`，仅前后端分开部署时设置（`next build` 时固化） |
 | `WEB_AUTH_GATE_MODE` | 前端路由门在后端不可达时的策略：`fail-open`（默认，可用性优先）/ `fail-closed`（安全优先） |
@@ -160,9 +161,11 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 生产环境务必使用随机 `JWT_SECRET_KEY`，不要开启 `ALLOW_INSECURE_SECRETS`。
 
+真实数据库测试使用 `TEST_DATABASE_URL`（专用测试库，库名必须包含 `test`，且不得与 `DATABASE_URL` 同库）；未设置时本地跳过这些用例，CI 环境（`CI=true` 或 `CI=1`）未设置则测试失败。`db:migrate:new` 必需 `SHADOW_DATABASE_URL`（可丢弃的 shadow 库，不得与 `DATABASE_URL` 相同）；迁移授权只在该库回放迁移并生成 SQL。
+
 ### 系统设置
 
-运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面：服务器模式可用 `psql` 执行 SQL，本地模式可用一次性脚本经 PGlite 执行同样的 SQL）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
+运行期业务参数不再通过环境变量配置，而是存放在数据库 `system_settings` 表。服务首次启动时会把缺失的键以默认值写入，之后以数据库为准；修改数据库中的值后重启服务生效（暂无后台管理界面：可用 `psql` 执行 SQL）。键、校验规则与默认值见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)，分组如下：
 
 | 前缀 | 内容 |
 | --- | --- |
@@ -353,7 +356,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 - 使用根目录工作区命令统一运行检查，而不是分别进入 `web` 执行重复命令。
 - 后端路由位于 `server/http/routes`，业务能力放在 `server/services`，请求校验放在 `server/schemas`。
 - 前端按 `features` 组织业务模块，通用组件放在 `web/src/components`。
-- 新增数据模型时同步更新 `prisma/schema.prisma`，并用 `npm run db:migrate:new -- <name>` 生成迁移（本地模式启动时由内置 runner 自动应用）。
+- 新增数据模型时同步更新 `prisma/schema.prisma`，并用 `npm run db:migrate:new -- <name>` 生成迁移，审阅 SQL 后执行 `npm run db:migrate:deploy` 应用。
 - 新增模型参数时优先通过 `model-ui.json` 定义字段与映射，避免在界面和后端重复硬编码。
 
 ## 贡献流程

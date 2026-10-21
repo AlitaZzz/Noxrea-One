@@ -1,23 +1,43 @@
 /**
- * Prisma 7 CLI 配置（specs/postgres-dialect-unification.md）。
- * v7 起 schema 内不再允许 datasource url，CLI（migrate diff / migrate deploy / db pull 等）
+ * Prisma 7 CLI 配置（specs/pglite-removal.md）。
+ * v7 起 schema 内不再允许 datasource url，CLI（migrate dev / migrate deploy / migrate diff 等）
  * 的数据库连接统一取自此处的 datasource.url。
- *  - 服务器模式（DATABASE_URL 为 postgres://）：CLI 直连真 PG（entrypoint 传环境变量）。
- *  - 本地模式：不设置 datasource，迁移 SQL 的应用由自研 runner（server/core/database/migrate.ts）
- *    在应用启动时完成；开发期新迁移的「授权/生成」走 scripts/db/author-migration.mts
- *    （createPgliteMigration API，规避 prisma-pglite CLI 的 Windows argv bug）。
+ *
+ * DATABASE_URL 由进程入口注入（tsx --env-file=.env / entrypoint source / CI job 环境）；
+ * v7 CLI 不再自动加载 .env，因此这里不引入 dotenv。
+ *
+ * datasource 在 URL 已设置时提供并先做校验：
+ * `prisma generate`（postinstall / 镜像构建）不依赖数据库连接，构建期没有连接串时
+ * 仍必须能生成客户端；一旦设置，非法值就属于配置错误，应在 CLI 启动前暴露。
  */
 import path from "node:path";
 import { defineConfig } from "prisma/config";
 
+import {
+  assertDistinctDatabaseTargets,
+  parsePostgresDatabaseTarget,
+} from "./server/core/database/connection-string";
+
 const databaseUrl = process.env.DATABASE_URL ?? "";
-const isServerDatabaseUrl =
-  databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://");
+const shadowDatabaseUrl = process.env.SHADOW_DATABASE_URL ?? "";
+
+if (databaseUrl) parsePostgresDatabaseTarget(databaseUrl, "DATABASE_URL");
+if (shadowDatabaseUrl) parsePostgresDatabaseTarget(shadowDatabaseUrl, "SHADOW_DATABASE_URL");
+
+assertDistinctDatabaseTargets(
+  { url: shadowDatabaseUrl, label: "SHADOW_DATABASE_URL" },
+  { url: databaseUrl, label: "DATABASE_URL" },
+  "shadow 库会被迁移授权回放/重置，可能删除业务数据。",
+);
+
+// url 与 shadowDatabaseUrl 相互独立：迁移授权只需要 shadow 库（不读取 DATABASE_URL），
+// 因此 DATABASE_URL 缺失时仍必须把 shadow 库交给 CLI。
+const datasource = {
+  ...(databaseUrl ? { url: databaseUrl } : {}),
+  ...(shadowDatabaseUrl ? { shadowDatabaseUrl } : {}),
+};
 
 export default defineConfig({
   schema: path.join(import.meta.dirname, "prisma", "schema.prisma"),
-  // 仅服务器模式向 CLI 提供连接；本地模式保持缺省，防止 CLI 误连 SQLite 时代的旧语义
-  ...(isServerDatabaseUrl
-    ? { datasource: { url: databaseUrl } }
-    : {}),
+  ...(Object.keys(datasource).length > 0 ? { datasource } : {}),
 });

@@ -100,7 +100,7 @@
 
 ## 异常与边界
 
-- 首次启动 / 全新数据库：先执行 migration（`prisma migrate deploy` 已在 entrypoint），再播种；本地开发需先 `prisma migrate dev`。
+- 首次启动 / 全新数据库：先执行 migration（`prisma migrate deploy` 已在 entrypoint），再播种；本地开发由 `npm run dev` 的 `predev` 钩子自动执行 `db:migrate:deploy`。
 - 播种中途失败：每项独立幂等，重启后补齐剩余项；不要求事务整体原子。
 - 多进程同时启动：当前为单进程（Hono + Worker 同进程），冲突忽略写入已覆盖偶发并发。
 - 库中出现注册表未定义的 `key`：忽略，不报错也不删除。

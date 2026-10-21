@@ -8,6 +8,7 @@
     "shared"
   ],
   "scripts": {
+    "predev": "npm run db:migrate:deploy",
     "dev": "concurrently -n web,server -c cyan,magenta \"npm -w web run dev\" \"tsx watch --env-file=.env server/index.ts\"",
     "dev:web": "npm -w web run dev",
     "dev:server": "tsx watch --env-file=.env server/index.ts",
@@ -22,7 +23,8 @@
     "test:server": "vitest run --config vitest.config.ts",
     "test:watch": "npm -w web run test:watch",
     "prisma:generate": "prisma generate",
-    "db:migrate:new": "tsx scripts/db/author-migration.mts",
+    "db:migrate:new": "tsx --env-file=.env scripts/db/author-migration.mts",
+    "db:migrate:deploy": "tsx --env-file=.env scripts/db/migrate-deploy.mts",
     "storage:audit": "tsx --env-file=.env scripts/storage/audit.mts",
     "storage:gc": "tsx --env-file=.env scripts/storage/gc.mts",
     "storage:migrate": "tsx --env-file=.env scripts/storage/migrate.mts",
@@ -35,7 +37,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
-    "@electric-sql/pglite": "^0.5.10",
     "@hono/node-server": "^2.0.12",
     "@noxrea/shared": "*",
     "@prisma/adapter-pg": "^7.10.0",
@@ -49,7 +50,6 @@
     "ipaddr.js": "^2.5.0",
     "jose": "^5.9.0",
     "p-limit": "^6.1.0",
-    "pglite-prisma-adapter": "^0.7.2",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
     "sharp": "^0.35.5",
@@ -59,10 +59,11 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "concurrently": "^9.1.0",
     "eslint": "^9.39.5",
+    "pg": "^8.23.1",
     "prisma": "^7.10.0",
-    "prisma-pglite": "^3.0.2",
     "tsx": "^4.19.0",
     "typescript": "^5",
     "typescript-eslint": "^8.67.0"

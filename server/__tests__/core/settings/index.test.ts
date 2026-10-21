@@ -2,22 +2,17 @@
  * 系统设置（specs/system-settings-db.md）的真实库回归测试。
  * 锁定：缺失键以默认值播种、已有值不覆盖、重启后读到手工修改、非法值（含空串 / 空白 / Infinity、
  * 超过 1 天的定时器类时长）启动失败并指明键名、初始化前读取直接报错。
- * 库结构由本地迁移 runner（与生产同一份 prisma/migrations）建立。
+ * 库结构由 global-setup 的 prisma migrate deploy（与生产同一份 prisma/migrations）建立。
  */
-import fs from "fs";
-import os from "os";
-import path from "path";
 import type { PrismaClient } from "@server/core/database/generated/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { databaseTestsEnabled, setupTestDatabase } from "../../helpers/test-database";
+
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 
-// 本地模式数据目录（PGlite）；client 模块在环境变量就位后才首次导入
-const dbDir = path.join(os.tmpdir(), `noxrea-settings-${process.pid}`);
-const dbUrl = "file:" + dbDir.replace(/\\/g, "/");
-
 let prisma: PrismaClient = null!;
-let savedEnv: Record<string, string | undefined> = {};
+let cleanup: (() => Promise<void>) | null = null;
 
 /** 模拟一次进程重启：丢弃模块缓存（含内存快照），重新加载设置模块。 */
 async function restart() {
@@ -26,28 +21,20 @@ async function restart() {
 }
 
 beforeAll(async () => {
-  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
-  process.env.DATABASE_URL = dbUrl;
-  process.env.LOG_LEVEL = "ERROR";
+  cleanup = await setupTestDatabase();
   const client = await import("@server/core/database/client");
-  // 与生产启动一致：应用 prisma/migrations 增量（幂等；模块缓存重置后靠全局实例避免重复建 PGlite）
-  await client.ensureLocalMigrations();
   prisma = client.prisma;
 }, 60_000);
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  await (await import("@server/core/database/client")).closeLocalDatabase();
-  try { fs.rmSync(dbDir, { recursive: true, force: true }); } catch { /* Windows 句柄延迟释放 */ }
-  process.env.DATABASE_URL = savedEnv.DATABASE_URL;
-  process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
+  await cleanup?.();
 });
 
 beforeEach(async () => {
   await prisma.systemSetting.deleteMany();
 });
 
-describe("系统设置播种与读取（真实 PGlite 库）", () => {
+describe.skipIf(!databaseTestsEnabled)("系统设置播种与读取（真实 PostgreSQL 库）", () => {
   it("初始化前读取直接报错，提示先 bootstrap", async () => {
     const settings = await restart();
     expect(() => settings.getSetting("auth.registration_enabled")).toThrow(/not initialized/);

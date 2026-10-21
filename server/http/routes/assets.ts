@@ -4,7 +4,8 @@
  */
 import { Hono } from "hono";
 import { z } from "zod";
-import { isUniqueConstraintError } from "@server/core/database/errors";
+import { ASSET_ITEMS_USER_SCOPE_FILE_KEY } from "@server/core/database/constraint-names";
+import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import {
   ASSET_BATCH_LIMIT,
@@ -62,7 +63,7 @@ function handleAssetError(error: unknown): Response | null {
 
 /** 判断唯一约束冲突是否来自资产来源引用；避免把目录唯一冲突误报为来源重复。 */
 function isFileKeyUniqueError(error: unknown): boolean {
-  return isUniqueConstraintError(error, "file_key");
+  return isUniqueConstraintViolation(error, ASSET_ITEMS_USER_SCOPE_FILE_KEY);
 }
 
 // ════════ Folders ════════

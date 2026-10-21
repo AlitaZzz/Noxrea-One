@@ -3,50 +3,35 @@
  *
  * removeSourceFileRefsBatch 已改为集合运算 SQL（聚合 UPDATE ... FROM + 分片 DELETE），
  * removeSourceFileRefs（单来源）委托同一实现。$executeRaw 无法在内存 mock 上验证，
- * 语义与规模必须在真实 PGlite 库上锁定（Gate 2 性能判定基座）；各用例使用独立 userId，互不干扰：
+ * 语义与规模必须在真实 PostgreSQL 库上锁定（Gate 2 性能判定基座）；各用例使用独立 userId，互不干扰：
  * - 语义：同 hash 多来源合并递减、跨分片累加、缺失 file_objects 行跳过、归零保留、账本行清空。
  * - 规模：5 万来源在 Prisma 默认 5s 交互式事务预算内完成（曾实测逐 hash 循环在此规模 P2028 回滚）。
  */
-import fs from "fs";
-import os from "os";
-import path from "path";
 import type { Prisma, PrismaClient } from "@server/core/database/generated/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// 本地模式数据目录（PGlite）；client 模块在环境变量就位后才首次导入
-const dbDir = path.join(os.tmpdir(), `noxrea-ledger-bulk-${process.pid}`);
-const dbUrl = "file:" + dbDir.replace(/\\/g, "/");
+import { databaseTestsEnabled, setupTestDatabase } from "../../helpers/test-database";
 
 let prisma: PrismaClient | null = null;
 let removeSourceFileRefsBatch: typeof import("@server/services/storage/file-ref-ledger").removeSourceFileRefsBatch = null!;
 let removeSourceFileRefs: typeof import("@server/services/storage/file-ref-ledger").removeSourceFileRefs = null!;
-let savedEnv: Record<string, string | undefined> = {};
+let cleanup: (() => Promise<void>) | null = null;
 
 beforeAll(async () => {
-  // 保存并最终恢复被本测试改写的环境，避免污染同 worker 的后续测试文件
-  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
-  process.env.DATABASE_URL = dbUrl;
-  process.env.LOG_LEVEL = "ERROR";
+  cleanup = await setupTestDatabase();
   // 环境变量就位后才能实例化客户端（连接串在构造时读取）
   const client = await import("@server/core/database/client");
   const ledger = await import("@server/services/storage/file-ref-ledger");
   prisma = client.prisma;
   removeSourceFileRefsBatch = ledger.removeSourceFileRefsBatch;
   removeSourceFileRefs = ledger.removeSourceFileRefs;
-
-  // 与生产启动一致：应用 prisma/migrations 增量（幂等）
-  await client.ensureLocalMigrations();
 }, 60_000);
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  await (await import("@server/core/database/client")).closeLocalDatabase();
-  try { fs.rmSync(dbDir, { recursive: true, force: true }); } catch { /* Windows 句柄延迟释放 */ }
-  process.env.DATABASE_URL = savedEnv.DATABASE_URL;
-  process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
+  await cleanup?.();
 });
 
-describe("removeSourceFileRefsBatch（真实 PGlite 库）", () => {
+describe.skipIf(!databaseTestsEnabled)("removeSourceFileRefsBatch（真实 PostgreSQL 库）", () => {
   it("多来源同 hash 合并递减、缺失聚合行跳过、账本行清空", async () => {
     // hash a：两个来源共 3 个引用，file_objects 行存在 → 递减到 0（归零保留）
     // hash b：来源行存在但 file_objects 缺失 → 跳过不报错
@@ -141,10 +126,12 @@ describe("removeSourceFileRefsBatch（真实 PGlite 库）", () => {
     expect(await prisma!.fileRef.count({ where: { userId: 1, sourceType: "asset_item" } })).toBe(0);
     expect(await prisma!.fileObject.count({ where: { userId: 1, refCount: { not: 0 } } })).toBe(0);
     expect(await prisma!.fileObject.count({ where: { userId: 1, refCount: { lt: 0 } } })).toBe(0);
-  }, 30_000);
+  // 数据准备本身约 20s；单 worker 全量运行叠加其他用例后 30s 上限会被环境抖动击穿，
+  // 超时又会把文件级 advisory lock 留在未完成的查询上，导致后续文件连锁超时。
+  }, 120_000);
 });
 
-describe("removeSourceFileRefs（真实 PGlite 库，单来源委托批量实现）", () => {
+describe.skipIf(!databaseTestsEnabled)("removeSourceFileRefs（真实 PostgreSQL 库，单来源委托批量实现）", () => {
   it("按行数量递减聚合并清空该来源账本，其他来源与其他类型不受影响", async () => {
     await prisma!.fileObject.createMany({ data: [
       { userId: 3, hash: "a", refCount: 4, size: 1 },

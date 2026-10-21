@@ -84,3 +84,9 @@
 - 测试树注入点：`vitest.config.ts` 主进程求值期 `process.loadEnvFile` 一次，worker 继承；仅容忍 .env 不存在（ENOENT），其余错误原样抛出——与生产 script 的 `tsx --env-file=.env` 对坏 .env 的大声失败对称；需要 env 的用例由 schema 报缺。测试 script 此前从未携带 `--env-file`，全仓测试的 env 实际一直依赖 config 模块的兜底加载，该收敛使这一点显式化。
 - 测试侧收口：新增 `server/__tests__/helpers/ffmpeg.ts` 统一 ffmpeg 目录供给（`FFMPEG_TEST_DIR` 缺省仓库 `bin/`，`ffmpegAvailable` 整体跳过），video-frames / media-pool-concurrency 的门控不再读生产进程 env（仅测试变量 FFMPEG_TEST_DIR）。
 - 验证：全量服务端 932/932（`npm run test:server` 干净 shell 直跑）、web 934/934、typecheck、lint。
+
+增量（2026-10-21，随 [pglite-removal.md](pglite-removal.md) 实施）：
+
+- `DATABASE_URL` 改为必填（仅 `postgres://` / `postgresql://`；缺失或非法启动失败）。
+- `TEST_DATABASE_URL`（真实库测试专用，库名必须包含 `test`，不得与 `DATABASE_URL` 同库）与 `SHADOW_DATABASE_URL`（`db:migrate:new` 必需：只在该可丢弃 shadow 库回放迁移并生成 SQL，不得与 `DATABASE_URL` 相同）归入后端测试/开发工具配置，在 `.env.example` 注释说明。
+- 新增 `db:migrate:deploy`、`predev` script；`db:migrate:new` 增加 `--env-file=.env`（Prisma 7 CLI 不自动加载 `.env`）；迁移授权由 `migrate dev` 改为 `migrate diff --from-migrations --to-schema`，不读取 `DATABASE_URL`。

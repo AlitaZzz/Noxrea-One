@@ -1,23 +1,28 @@
 /**
- * Prisma 错误解读（双模式均为 driver adapter，specs/postgres-dialect-unification.md）。
- * driver adapter 下 P2002 的约束信息在 meta.driverAdapterError.cause.constraint（列名为
- * snake_case 落库列名），经典引擎的 meta.target 形态不存在；判重逻辑统一收敛在此。
+ * Prisma 错误解读（PostgreSQL driver adapter，specs/pglite-removal.md）。
+ *
+ * 已验证事实（@prisma/adapter-pg 7.10）：PostgreSQL 23505 的 `error.constraint`
+ * 被映射为 meta.driverAdapterError.cause.constraint.index（约束/索引名）；当约束名
+ * 存在时 adapter 不填充 fields（fields 仅在无约束名时由 DETAIL 解析）。因此唯一
+ * 冲突的判定基准是索引名，而不是列名。
+ *
+ * 索引名由 prisma/migrations 定义；重命名索引时必须同步调用方与真实库回归测试。
  */
 import { Prisma } from "./generated/client";
 
-/** P2002 唯一约束冲突命中的列名（snake_case）；非 P2002 或取不到约束信息时为空数组。 */
-function uniqueConstraintFields(error: unknown): string[] {
+/** P2002 命中的唯一索引名；非 P2002 或取不到约束名时返回 null。 */
+function uniqueConstraintIndex(error: unknown): string | null {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return [];
+    return null;
   }
   const meta = error.meta as {
-    driverAdapterError?: { cause?: { constraint?: { fields?: string[] } } };
+    driverAdapterError?: { cause?: { constraint?: { index?: string } } };
   } | undefined;
-  return meta?.driverAdapterError?.cause?.constraint?.fields ?? [];
+  return meta?.driverAdapterError?.cause?.constraint?.index ?? null;
 }
 
-/** 判断唯一约束冲突是否命中指定列（任一命中即可，列名与 @map 后的落库列名一致）。 */
-export function isUniqueConstraintError(error: unknown, ...columns: string[]): boolean {
-  const fields = uniqueConstraintFields(error);
-  return columns.some((column) => fields.includes(column));
+/** 判断唯一约束冲突是否命中指定的 PostgreSQL 索引名（任一命中即可）。 */
+export function isUniqueConstraintViolation(error: unknown, ...indexNames: string[]): boolean {
+  const index = uniqueConstraintIndex(error);
+  return index !== null && indexNames.includes(index);
 }

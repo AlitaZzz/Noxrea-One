@@ -3,31 +3,22 @@
  * 锁定：首个注册用户自动 admin、并发首注册只有一个 admin、重名唯一约束识别、
  * lastLoginAt 写入、email 唯一约束、多个 NULL email 共存、toPublicUser 的 displayName 展示回退。
  */
-import fs from "fs";
-import os from "os";
-import path from "path";
 import type { PrismaClient } from "@server/core/database/generated/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { databaseTestsEnabled, setupTestDatabase } from "../helpers/test-database";
 import { makeUser } from "../helpers/user-fixture";
-
-// 本地模式数据目录（PGlite）；client 模块在环境变量就位后才首次导入
-const dbDir = path.join(os.tmpdir(), `noxrea-user-upgrade-${process.pid}`);
-const dbUrl = "file:" + dbDir.replace(/\\/g, "/");
 
 let prisma: PrismaClient | null = null;
 let createUser: typeof import("@server/crud/user").createUser = null!;
 let isUsernameTakenError: typeof import("@server/crud/user").isUsernameTakenError = null!;
 let touchLastLogin: typeof import("@server/crud/user").touchLastLogin = null!;
 let toPublicUser: typeof import("@server/crud/user").toPublicUser = null!;
-let savedEnv: Record<string, string | undefined> = {};
+let cleanup: (() => Promise<void>) | null = null;
 
 beforeAll(async () => {
-  // 保存并最终恢复被本测试改写的环境，避免污染同 worker 的后续测试文件
-  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
-  process.env.DATABASE_URL = dbUrl;
-  process.env.LOG_LEVEL = "ERROR";
-  // 环境变量就位后才能实例化客户端（连接串在构造时读取）
+  // helper 校验测试库、清空表并将 DATABASE_URL 临时指向测试库；环境变量就位后才能实例化客户端
+  cleanup = await setupTestDatabase();
   const client = await import("@server/core/database/client");
   const crud = await import("@server/crud/user");
   prisma = client.prisma;
@@ -35,21 +26,14 @@ beforeAll(async () => {
   isUsernameTakenError = crud.isUsernameTakenError;
   touchLastLogin = crud.touchLastLogin;
   toPublicUser = crud.toPublicUser;
-
-  // 与生产启动一致：应用 prisma/migrations 增量（幂等）
-  await client.ensureLocalMigrations();
 }, 60_000);
 
-// afterAll 必须在顶层注册：嵌套在 beforeAll 内注册不会生效，临时库与环境变量永远不会被清理
+// afterAll 必须在顶层注册：嵌套在 beforeAll 内注册不会生效，测试库连接与环境变量永远不会被清理
 afterAll(async () => {
-  await prisma?.$disconnect();
-  await (await import("@server/core/database/client")).closeLocalDatabase();
-  try { fs.rmSync(dbDir, { recursive: true, force: true }); } catch { /* Windows 句柄延迟释放 */ }
-  process.env.DATABASE_URL = savedEnv.DATABASE_URL;
-  process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
+  await cleanup?.();
 });
 
-describe("用户表升级（真实 PGlite 库）", () => {
+describe.skipIf(!databaseTestsEnabled)("用户表升级（真实 PostgreSQL 库）", () => {
   it("首个注册用户自动 admin，后续用户为 user", async () => {
     const first = await createUser({ username: "alice", hashedPassword: "h1" });
     const second = await createUser({ username: "bob", hashedPassword: "h2" });

@@ -3,7 +3,7 @@
  * 幂等初始化配置、数据库迁移、任务队列、网关等全局依赖，
  * 供 HTTP 服务与 Worker（BullMQ）在同进程中共用。
  */
-import { describeConnectionTarget, ensureLocalMigrations, isServerMode } from "@server/core/database/client";
+import { assertDatabaseUrl, describeDatabaseTarget } from "@server/core/database/connection-string";
 import { loadConfig } from "@server/core/config";
 import { getSetting, initSettings } from "@server/core/settings";
 import { initTaskQueue } from "@server/services/worker/queue";
@@ -19,15 +19,15 @@ export async function bootstrap(): Promise<void> {
   const cfg = loadConfig();
   logEvent("bootstrap", { stage: "config_loaded", logLevel: cfg.LOG_LEVEL });
 
-  // 2. 数据库迁移：本地模式（PGlite）应用 prisma/migrations 增量；服务器模式由部署侧 migrate deploy 负责
-  await ensureLocalMigrations();
+  // 2. 数据库连接串校验：单一运行时（外置 PostgreSQL）。应用启动不执行迁移，
+  //    schema 由部署侧 `prisma migrate deploy`（entrypoint / 流水线）在启动前应用。
+  const databaseUrl = assertDatabaseUrl();
   logEvent("bootstrap", {
     stage: "database_ready",
-    mode: isServerMode() ? "server" : "local",
-    target: describeConnectionTarget(),
+    target: describeDatabaseTarget(databaseUrl),
   });
 
-  // 3. 系统设置：补齐缺失键并读入快照（依赖数据库，必须在迁移之后）
+  // 3. 系统设置：补齐缺失键并读入快照（依赖数据库，必须在连接校验之后）
   await initSettings();
   logEvent("bootstrap", { stage: "settings_loaded" });
 

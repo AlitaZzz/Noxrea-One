@@ -5,7 +5,8 @@
  */
 import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
-import { isUniqueConstraintError } from "@server/core/database/errors";
+import { ASSET_FOLDERS_UNCATEGORIZED_KEY } from "@server/core/database/constraint-names";
+import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { hashFromStorageKey, isFileRefValue, resolveFileUrl } from "@noxrea/shared/url";
 import {
   replaceSourceFileRef,
@@ -204,7 +205,7 @@ async function getOrCreateUncategorizedFolder(
   } catch (error) {
     // 并发首访撞部分唯一索引（asset_folders_uncategorized_key，迁移 20261015213000）：
     // 回读并发事务已建好的「未分类」目录
-    if (!isUniqueConstraintError(error, "user_id", "scope")) throw error;
+    if (!isUniqueConstraintViolation(error, ASSET_FOLDERS_UNCATEGORIZED_KEY)) throw error;
 
     const raced = await tx.assetFolder.findFirst({
       where: { userId, scope, kind: "uncategorized" },

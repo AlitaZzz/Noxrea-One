@@ -4,39 +4,29 @@
  * 置空清行减引用、白名单外字段丢弃、非 avatarKey 更新不触碰账本。
  */
 import fs from "fs";
-import os from "os";
 import path from "path";
 import type { PrismaClient } from "@server/core/database/generated/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { hashFromStorageKey } from "@noxrea/shared/url";
 
-// 本地模式数据目录（PGlite）；client 模块在环境变量就位后才首次导入
-const dbDir = path.join(os.tmpdir(), `noxrea-avatar-ledger-${process.pid}`);
-const dbUrl = "file:" + dbDir.replace(/\\/g, "/");
+import { databaseTestsEnabled, setupTestDatabase } from "../helpers/test-database";
 
 let prisma: PrismaClient | null = null;
 let updateUser: typeof import("@server/crud/user").updateUser = null!;
 let UserAvatarKeyError: typeof import("@server/crud/user").UserAvatarKeyError = null!;
-let savedEnv: Record<string, string | undefined> = {};
+let cleanup: (() => Promise<void>) | null = null;
 
 beforeAll(async () => {
-  savedEnv = { DATABASE_URL: process.env.DATABASE_URL, LOG_LEVEL: process.env.LOG_LEVEL };
-  process.env.DATABASE_URL = dbUrl;
-  process.env.LOG_LEVEL = "ERROR";
+  cleanup = await setupTestDatabase();
   const client = await import("@server/core/database/client");
   const crud = await import("@server/crud/user");
   prisma = client.prisma;
   updateUser = crud.updateUser;
   UserAvatarKeyError = crud.UserAvatarKeyError;
-  await client.ensureLocalMigrations();
 }, 60_000);
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  await (await import("@server/core/database/client")).closeLocalDatabase();
-  try { fs.rmSync(dbDir, { recursive: true, force: true }); } catch { /* Windows 句柄延迟释放 */ }
-  process.env.DATABASE_URL = savedEnv.DATABASE_URL;
-  process.env.LOG_LEVEL = savedEnv.LOG_LEVEL;
+  await cleanup?.();
 });
 
 const H1 = "a".repeat(64);
@@ -70,7 +60,7 @@ const ledgerRow = (userId: number, hash: string) =>
 const objectRow = (userId: number, hash: string) =>
   prisma!.fileObject.findUnique({ where: { userId_hash: { userId, hash } } });
 
-describe("updateUser 头像账本同步（真实 PGlite 库）", () => {
+describe.skipIf(!databaseTestsEnabled)("updateUser 头像账本同步（真实 PostgreSQL 库）", () => {
   it("设置头像：avatar 账本行 count=1，ref_count 递增到 1", async () => {
     const u = await setupUserWithObjects();
 
@@ -183,7 +173,7 @@ describe("updateUser 头像账本同步（真实 PGlite 库）", () => {
   });
 });
 
-describe("存量回填迁移 × 运行时判别交叉验证（20261018160000）", () => {
+describe.skipIf(!databaseTestsEnabled)("存量回填迁移 × 运行时判别交叉验证（20261018160000）", () => {
   const migrationSql = fs.readFileSync(
     path.resolve(import.meta.dirname, "../../../prisma/migrations/20261018160000_avatar_ref_ledger_backfill/migration.sql"),
     "utf-8",

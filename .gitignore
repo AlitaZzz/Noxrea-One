@@ -44,14 +44,14 @@ web/next-env.d.ts
 # Prisma
 # =====================================================
 
-# 本地模式数据目录（PGlite，specs/postgres-dialect-unification.md；默认 data/pglite，含测试临时实例）
-data/
-
 # Prisma Client 生成物（postinstall 的 prisma generate 自动生成，不入库）
 server/core/database/generated/
 
 # 迁移整理时的本地备份目录（不纳入版本控制）
 prisma/backups/
+
+# 迁移授权的临时目录（写入后原子改名；进程被强杀时可能残留）
+prisma/.tmp-migration-*/
 
 
 
@@ -88,6 +88,9 @@ htmlcov/
 *.db
 *.db-shm
 *.db-wal
+
+# 本地运行时数据目录（历史 PGlite 数据等，不入库；可自行删除）
+/data/
 
 
 
