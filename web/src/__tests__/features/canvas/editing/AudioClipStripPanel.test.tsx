@@ -2,6 +2,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 
 const mocks = vi.hoisted(() => ({
@@ -42,10 +43,16 @@ vi.mock("@/features/canvas/editing/use-playback-blocked", () => ({
   default: () => false,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.create.mockClear();
+});
 
-function renderPanel() {
-  return render(<AudioClipStripPanel nodeId="n1" audioSrc="/api/files/a.mp3" onClose={vi.fn()} />);
+const STORAGE_KEY = makeStorageKey("a", ".mp3");
+
+/** 默认引用值取生产值域（存储 key）；外部 URL 用例显式传入 */
+function renderPanel(audioRef = STORAGE_KEY) {
+  return render(<AudioClipStripPanel nodeId="n1" audioRef={audioRef} onClose={vi.fn()} />);
 }
 
 describe("音频截取条带层级契约", () => {
@@ -72,5 +79,23 @@ describe("音频截取条带层级契约", () => {
     expect(getByText("clip.loading")).toBeTruthy();
     const wrapper = container.querySelector('[class*="overflow-hidden"]');
     expect(wrapper!.className).toContain("pointer-events-none");
+  });
+});
+
+describe("音频引用值派生契约", () => {
+  // 回归：持久化 src 是存储 key，wavesurfer 按 URL 直接请求——未派生时浏览器
+  // 会相对 /canvas/{id} 解析成 /canvas/{id}/{key} 并 404（音频加载失败）
+  it("存储 key 派生为托管文件 URL 后再交给 wavesurfer", () => {
+    renderPanel();
+
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ url: `/api/files/${STORAGE_KEY}` }));
+  });
+
+  it("外部 URL 原样交给 wavesurfer，不派生托管路径", () => {
+    renderPanel("https://cdn.example.com/a.mp3");
+
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://cdn.example.com/a.mp3" }),
+    );
   });
 });

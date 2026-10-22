@@ -15,7 +15,7 @@ import { NavSvg } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
-import { createNodeFromUrl, uploadOne } from "@/features/canvas/upload";
+import { createImageNodeFromRef, uploadOne } from "@/features/canvas/upload";
 import type { CameraPresetCtx } from "@/features/director/core/camera-presets";
 import { CAMERA_PRESETS } from "@/features/director/core/camera-presets";
 import { CameraRig } from "@/features/director/core/camera-rig";
@@ -596,7 +596,7 @@ export default function DirectorViewport() {
             i.src = fileRefUrl(shot.ref);
           });
           // 节点 src 落快照引用原值（key）；展示由 CanvasImage 派生
-          await createNodeFromUrl(nodeId, shot.ref, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
+          await createImageNodeFromRef(nodeId, shot.ref, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
           feedback.success({ title: translate("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
         } catch {
           feedback.error({ title: translate("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });

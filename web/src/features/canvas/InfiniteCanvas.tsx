@@ -346,6 +346,17 @@ export default function InfiniteCanvas() {
     if (!(n.data as { src?: string }).src) return null;
     return n;
   }, [audioClipNodeId, nodes]);
+  // 三个编辑面板的 key 与引用值共用同一取值：源变化即重挂载，
+  // 不残留旧源的播放 / 选区 / 代理状态
+  const frameStripRef = frameStripNode
+    ? ((frameStripNode.data as { src?: string }).src ?? "")
+    : "";
+  const clipStripRef = clipStripNode
+    ? ((clipStripNode.data as { src?: string }).src ?? "")
+    : "";
+  const audioClipRef = audioClipNode
+    ? ((audioClipNode.data as { src?: string }).src ?? "")
+    : "";
 
   // 画面裁剪面板的宿主节点：面板本体挂在节点内部，但残留 id 的兜底
   // 清理与其它编辑面板一致（裁剪确认不自关，关闭由节点侧/这里的校验驱动）。
@@ -1274,9 +1285,9 @@ export default function InfiniteCanvas() {
             <FrameStripPanel
               // key 带 src：换源（替换/生成回填）时面板整体重挂，播放头与
               // 代理状态对新源重新初始化，而不是拿旧选区比例套新视频
-              key={`${frameStripNode.id}:${(frameStripNode.data as { src?: string }).src ?? ""}`}
+              key={`${frameStripNode.id}:${frameStripRef}`}
               nodeId={frameStripNode.id}
-              videoSrc={(frameStripNode.data as { src?: string }).src ?? ""}
+              videoRef={frameStripRef}
               onClose={closeFrameStripPanel}
             />
           </RfNodeToolbar>
@@ -1288,9 +1299,9 @@ export default function InfiniteCanvas() {
             <ClipStripPanel
               // key 带 src（与音频截取面板一致）：换源时面板重挂，选区与代理
               // 对新源重新初始化——否则旧区间比例会被静默套在新视频时长上
-              key={`${clipStripNode.id}:${(clipStripNode.data as { src?: string }).src ?? ""}`}
+              key={`${clipStripNode.id}:${clipStripRef}`}
               nodeId={clipStripNode.id}
-              videoSrc={(clipStripNode.data as { src?: string }).src ?? ""}
+              videoRef={clipStripRef}
               onClose={closeClipStripPanel}
             />
           </RfNodeToolbar>
@@ -1324,9 +1335,9 @@ export default function InfiniteCanvas() {
         {audioClipNode && (
           <RfNodeToolbar nodeId={audioClipNode.id} position={Position.Bottom} align="center" offset={12}>
             <AudioClipStripPanel
-              key={`${audioClipNode.id}:${(audioClipNode.data as { src?: string }).src ?? ""}`}
+              key={`${audioClipNode.id}:${audioClipRef}`}
               nodeId={audioClipNode.id}
-              audioSrc={(audioClipNode.data as { src?: string }).src ?? ""}
+              audioRef={audioClipRef}
               onClose={closeAudioClipPanel}
             />
           </RfNodeToolbar>

@@ -9,6 +9,7 @@
 
 import type { FrameSelection } from "@noxrea/shared";
 import { type CropRectPx } from "@noxrea/shared/crop-rect";
+import { storageKeyOf } from "@noxrea/shared/url";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,15 +29,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { useAssetsStore } from "@/features/assets/store";
 import {
-  type CapturedFrameInfo,
   captureFrame as captureFrameApi,
   cropVideo as cropVideoApi,
   detachAudio as detachAudioApi,
   type DetachAudioResult,
   extractClip as extractClipApi,
-  readEditEnvelope,
-  retryAfterOf,
-  toFileKey,
+  readCapturedFrame,
+  readDetachAudioResult,
+  readEditResultKey,
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import {
@@ -56,9 +56,9 @@ import { registerVideoElement } from "@/features/canvas/shared/video-playback-re
 import { markDirtyImmediate, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
 import {
-  createAudioNodeFromUrl,
-  createNodeFromUrl,
-  createVideoNodeFromUrl,
+  createAudioNodeFromRef,
+  createImageNodeFromRef,
+  createVideoNodeFromRef,
   DERIVED_BASE_GAP_Y,
   useNodeUpload,
 } from "@/features/canvas/upload";
@@ -200,7 +200,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = useAppFeedback();
   // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）；
-  // 元素消费用派生 URL（key → /api/files/{key}），媒体接口入参再经 toFileKey 取回 key
+  // 元素消费用派生 URL（key → /api/files/{key}）；媒体接口入参直接使用持久化值域的 key
   const src = data.src || "";
   const generating = isGenerating(data.taskBinding);
   let loadingSrc = fileRefUrl(src);
@@ -521,13 +521,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   }, [resolveAudioTrack, capturingFrame, data.duration, data.naturalWidth, id]);
 
   const captureFrame = useCallback(async (selection: FrameSelection) => {
-    if (!src) {
-      // 确认不自关契约的兜底：源已失效时抽帧无从进行——关掉仍打开的帧截取面板，
-      // 不留无响应的确认键（抽帧是服务端操作，不需要本地视频元素）
+    const videoKey = storageKeyOf(src);
+    if (!videoKey) {
+      // 确认不自关契约的兜底：源已失效或不是存储 key（外部 URL）时抽帧无从
+      // 进行——关掉仍打开的帧截取面板，不留无响应的确认键（抽帧是只接受
+      // 存储 key 的服务端操作，不需要本地视频元素）
       useCanvasStore.getState().setFrameCaptureNodeId(null);
       return;
     }
-    const videoKey = toFileKey(src);
     runEditTask({
       kind: "capture",
       // 抽帧被接受：关闭帧截取面板（面板不在确认时自关——busy 守卫拒绝时面板
@@ -536,29 +537,20 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       // 纯服务端任务（无客户端管线）：不提供取消入口，但支持换源中止
       serverTask: async ({ signal }) => {
         const res = await captureFrameApi(videoKey, selection, signal);
-        // 错误响应体可能非 JSON：防御解析一次，成功 / 失败共用（与其余 serverTask
-        // 同形状——单次 await 后单一中止检查点，覆盖下方全部提示分支）
-        const json = await res.json().catch(() => null) as { data?: CapturedFrameInfo; error?: string } | null;
-        if (signal.aborted) return undefined;
-        if (!res.ok) {
-          // 后端按错误码给出结论（视频缺失 / 组件未就绪 / 抽帧失败），优先用本地化文案；
-          // 限流 / 繁忙响应带 Retry-After，文案附带可重试秒数
-          notifyActionFailed(notification, t, json?.error, "error.capture_frame.capture_failed", id, retryAfterOf(res));
-          return undefined;
-        }
-        const frame = json?.data;
-        if (!frame?.url) {
-          notifyActionFailed(notification, t, undefined, "error.capture_frame.capture_failed", id);
-          return undefined;
-        }
-        return frame;
+        return readCapturedFrame(res, signal, {
+          notification,
+          t,
+          errorKey: "error.capture_frame.capture_failed",
+          nodeId: id,
+        });
       },
       onSuccess: async (frame) => {
         // 源已被替换：旧源的抽帧产物不再写入
         if (!expectSource(src)) return;
         const { width: nw, height: nh, time: capturedTime } = frame;
         const label = `${data.label || t("common.frame")} #${Math.round(capturedTime * 10) / 10}s`;
-        await createNodeFromUrl(id, frame.url, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
+        // 投影只暴露持久化 key；响应 url 不进入节点构建
+        await createImageNodeFromRef(id, frame.key, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
       },
       errorKey: "error.capture_frame.capture_failed",
       logLabel: "Frame capture failed:",
@@ -577,8 +569,8 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 撤销一次即整体删除两个派生节点及其连线。
    */
   const handleDetachAudio = useCallback(async () => {
-    if (!src) return;
-    const videoKey = toFileKey(src);
+    const videoKey = storageKeyOf(src);
+    if (!videoKey) return;
     runEditTask({
       kind: "detach",
       // 客户端管线：用户取消静默复位；不支持（非 ISO-BMFF 容器 / 非 AAC 音轨 /
@@ -593,7 +585,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       },
       serverTask: async ({ signal }) => {
         const res = await detachAudioApi(videoKey, signal);
-        return readEditEnvelope<DetachAudioResult>(res, signal, {
+        return readDetachAudioResult(res, signal, {
           notification,
           t,
           errorKey: "detach.failed",
@@ -614,9 +606,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const store = useCanvasStore.getState();
 
         // 1. 仅构建两个节点（write:false 不写 store），随后同批写入
-        const mutedNode = createVideoNodeFromUrl(
+        const mutedNode = createVideoNodeFromRef(
           id,
-          video.url,
+          video.key,
           nw,
           nh,
           t("detach.mutedSuffix"),
@@ -627,9 +619,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
           { write: false },
         );
         // 音频节点排在静音视频正下方，避免同批产物重叠
-        const audioNode = createAudioNodeFromUrl(
+        const audioNode = createAudioNodeFromRef(
           id,
-          audio.url,
+          audio.key,
           t("detach.audioSuffix"),
           store,
           { source: "derived" },
@@ -684,27 +676,27 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * 同批写入，撤销一次即整体删除。
    */
   const handleExtractClip = useCallback(async (start: number, end: number) => {
-    if (!src) return;
-    const videoKey = toFileKey(src);
+    const videoKey = storageKeyOf(src);
+    if (!videoKey) return;
     runEditTask({
       kind: "clip",
       // 退出截取模式：选区已被接受，面板随之卸载（与音频截取确认同一约定）
       onAccept: () => useCanvasStore.getState().setClipCaptureNodeId(null),
       // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-      // 产物投影为与服务端响应同形的 url，onSuccess 单一形状消费
+      // 产物投影为与服务端响应同形的存储 key（节点 src 持久化值域），onSuccess 单一形状消费
       clientTask: async ({ signal, onProgress }) =>
-        (await tryClipOnClient(videoKey, { start, end }, { signal, onProgress })).url,
+        (await tryClipOnClient(videoKey, { start, end }, { signal, onProgress })).key,
       serverTask: async ({ signal }) => {
         const res = await extractClipApi(videoKey, start, end, signal);
-        // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
-        return (await readEditEnvelope<{ url: string }>(res, signal, {
+        // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
+        return readEditResultKey(res, signal, {
           notification,
           t,
           errorKey: "error.clip.extract_failed",
           nodeId: id,
-        }))?.url;
+        });
       },
-      onSuccess: (url) => {
+      onSuccess: (key) => {
         // 源已被替换：旧源的派生产物不再写入
         if (!expectSource(src)) return;
         const v = videoRef.current;
@@ -713,9 +705,9 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         const store = useCanvasStore.getState();
         const range = `${formatTime(start)}-${formatTime(end)}`;
 
-        const clipNode = createVideoNodeFromUrl(
+        const clipNode = createVideoNodeFromRef(
           id,
-          url,
+          key,
           nw,
           nh,
           t("clip.suffix", { range }),
@@ -745,41 +737,41 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
    * （历史栈策略与片段截取一致）。
    */
   const handleCropVideoApply = useCallback(async (rect: CropRectPx) => {
-    if (!src) {
-      // 源已失效（清除/撤销）：裁剪无从进行，关掉仍打开的裁剪面板而不是留一个
-      // 无响应的确认键（croppingNodeId 的宿主校验兜底见 InfiniteCanvas）
+    const videoKey = storageKeyOf(src);
+    if (!videoKey) {
+      // 源已失效或不是存储 key（外部 URL）：裁剪无从进行，关掉仍打开的裁剪面板
+      // 而不是留一个无响应的确认键（croppingNodeId 的宿主校验兜底见 InfiniteCanvas）
       useCanvasStore.getState().setCroppingNodeId(null);
       return;
     }
-    const videoKey = toFileKey(src);
     runEditTask({
       kind: "crop",
       // 裁剪被接受：关闭裁剪面板（面板不在确认时自关——busy 拒绝时面板保持
       // 打开、选区原样保留可重试，与截取面板的「确认不自关」契约一致）
       onAccept: () => useCanvasStore.getState().setCroppingNodeId(null),
       // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-      // 产物投影为与服务端响应同形的 url（裁剪尺寸取调用方 rect，与服务端路径一致）
+      // 产物投影为与服务端响应同形的存储 key（裁剪尺寸取调用方 rect，与服务端路径一致）
       clientTask: async ({ signal, onProgress }) =>
-        (await tryCropOnClient(videoKey, rect, { signal, onProgress })).url,
+        (await tryCropOnClient(videoKey, rect, { signal, onProgress })).key,
       serverTask: async ({ signal }) => {
         const res = await cropVideoApi(videoKey, rect, signal);
-        // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
-        return (await readEditEnvelope<{ url: string }>(res, signal, {
+        // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
+        return readEditResultKey(res, signal, {
           notification,
           t,
           errorKey: "error.crop.failed",
           nodeId: id,
-        }))?.url;
+        });
       },
-      onSuccess: (url) => {
+      onSuccess: (key) => {
         // 源已被替换：旧源的派生产物不再写入
         if (!expectSource(src)) return;
         const store = useCanvasStore.getState();
         const size = `${rect.width}×${rect.height}`;
 
-        const cropNode = createVideoNodeFromUrl(
+        const cropNode = createVideoNodeFromRef(
           id,
-          url,
+          key,
           rect.width,
           rect.height,
           t("crop.suffix", { size }),

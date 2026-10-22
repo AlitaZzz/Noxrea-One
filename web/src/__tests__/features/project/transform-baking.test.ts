@@ -2,7 +2,7 @@
  * P0-4: CSS transform 烘焙流程
  *
  * 核心验证：
- *   - createNodeFromUrl 正确计算衍生节点位置、尺寸、label
+ *   - createImageNodeFromRef 正确计算衍生节点位置、尺寸、label
  *
  * 注：原 uploadBlob / uploadAndAddNode 已随统一上传管道删除，
  * 上传与落库现由 runMediaUpload / uploadOne 承载，此处只保留纯函数与落库逻辑。
@@ -12,7 +12,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { type CanvasStoreApi,createNodeFromUrl } from "@/features/canvas/upload";
+import { type CanvasStoreApi, createImageNodeFromRef } from "@/features/canvas/upload";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 
 // ── Mock @/lib/api/client（upload-pipeline 的传递依赖，防测试环境加载真实客户端）──
@@ -69,11 +69,11 @@ const mockStoreApi = {
 
 describe("P0-4: CSS transform baking flow", () => {
 
-  // ── createNodeFromUrl ─────────────────────────────────────────
+  // ── createImageNodeFromRef ───────────────────────────────────
 
-  describe("createNodeFromUrl", () => {
+  describe("createImageNodeFromRef", () => {
     it("should place derivative node to the right of source", () => {
-      const node = createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
+      const node = createImageNodeFromRef("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
       expect(node).not.toBeNull();
       // x = source.x(100) + source width(600) + 60 = 760
       expect(node.position.x).toBe(760);
@@ -91,7 +91,7 @@ describe("P0-4: CSS transform baking flow", () => {
       };
       mockNodes.push(occupied as (typeof mockNodes)[number]);
       try {
-        const node = createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
+        const node = createImageNodeFromRef("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi);
         // 不再与占用节点重叠：顺延到右侧下一格
         expect(node.position.x).toBe(760 + 600 + 12);
         expect(node.position.y).toBe(200);
@@ -101,13 +101,13 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should accept position override", () => {
-      const node = createNodeFromUrl("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi, undefined, { x: 999, y: 888 });
+      const node = createImageNodeFromRef("n1", "http://img.url/result.png", 800, 600, " (baked)", mockStoreApi, undefined, { x: 999, y: 888 });
       expect(node.position.x).toBe(999);
       expect(node.position.y).toBe(888);
     });
 
     it("should scale display dimensions by NODE_DISPLAY_MAX", () => {
-      const node = createNodeFromUrl("n1", "http://img.url/result.png", 4000, 3000, " (baked)", mockStoreApi);
+      const node = createImageNodeFromRef("n1", "http://img.url/result.png", 4000, 3000, " (baked)", mockStoreApi);
       const w = node.style?.width as number;
       const h = node.style?.height as number;
       expect(w).toBe(600);
@@ -115,14 +115,14 @@ describe("P0-4: CSS transform baking flow", () => {
     });
 
     it("should append label suffix after extension-stripped source label", () => {
-      const node = createNodeFromUrl("n1", "http://img.url/result.png", 1024, 1024, " (baked)", mockStoreApi);
+      const node = createImageNodeFromRef("n1", "http://img.url/result.png", 1024, 1024, " (baked)", mockStoreApi);
       const label = node.data.label as string;
       expect(label).toContain(" (baked)");
       expect(label.endsWith(".jpg")).toBe(false);
     });
 
     it("should merge extraNodeData", () => {
-      const node = createNodeFromUrl("n1", "http://img.url/result.png", 100, 100, "",
+      const node = createImageNodeFromRef("n1", "http://img.url/result.png", 100, 100, "",
         mockStoreApi, { customField: "hello", naturalWidth: 999 }
       );
       expect((node.data as Record<string, unknown>).customField).toBe("hello");
@@ -130,7 +130,7 @@ describe("P0-4: CSS transform baking flow", () => {
 
     it("should accept position override explicitly", () => {
       const pos = { x: 50, y: 60 };
-      const node = createNodeFromUrl("n1", "http://img.url/r.png", 200, 200, "", mockStoreApi, undefined, pos);
+      const node = createImageNodeFromRef("n1", "http://img.url/r.png", 200, 200, "", mockStoreApi, undefined, pos);
       expect(node.position.x).toBe(50);
       expect(node.position.y).toBe(60);
     });

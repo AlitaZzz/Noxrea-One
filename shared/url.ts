@@ -58,6 +58,17 @@ export function isStorageKey(value: unknown): value is string {
 }
 
 /**
+ * 引用值 → 存储 key 的单点归一：严格 key 形态原样返回，其余值域（外部 http(s)、
+ * data:、blob:、空值）返回 null。
+ *
+ * 只接受 key 的接口（媒体编辑 / 雪碧图 / 代理）以此判定能否发起请求；调用方不得
+ * 再自行编写 isStorageKey 三元式，避免同一门控规则多处漂移。
+ */
+export function storageKeyOf(value: string | null | undefined): string | null {
+  return isStorageKey(value) ? value : null;
+}
+
+/**
  * 从存储 key 中提取 64 位内容 hash（file_objects PK 的构成要素）。
  * 仅识别 key 严格形态：外部 URL 与非法值返回 null（与外部 URL 不入账本的语义一致）。
  * 中段 2 位是 hash 前缀冗余（hash[:2]），完整 hash 即末段扩展名前部分，由捕获组 2 提取。

@@ -6,6 +6,7 @@
 
 "use client";
 
+import { storageKeyOf } from "@noxrea/shared/url";
 import { type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect } from "react";
@@ -18,8 +19,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
   applyAudioSpeed as applyAudioSpeedApi,
   extractAudioClip as extractAudioClipApi,
-  readEditEnvelope,
-  toFileKey,
+  readEditResultKey,
 } from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { tryApplyAudioSpeedOnClient, tryExtractAudioClipOnClient } from "@/features/canvas/editing/client-media/client-video";
@@ -27,7 +27,7 @@ import { resolveBusyLabelKey, useMediaEditTask } from "@/features/canvas/editing
 import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
-import { createAudioNodeFromUrl } from "@/features/canvas/upload";
+import { createAudioNodeFromRef } from "@/features/canvas/upload";
 import { useNodeUpload } from "@/features/canvas/upload";
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { AUDIO_NODE_HEIGHT, AUDIO_NODE_WIDTH, EventNames, isGenerating } from "@/lib/constants";
@@ -96,8 +96,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       （历史栈策略与视频片段截取一致：addNodes 压一条截取前快照） */
   const handleExtractAudioClip = useCallback(
     async (start: number, end: number) => {
-      if (!src) return;
-      const audioKey = toFileKey(src);
+      const audioKey = storageKeyOf(src);
       if (!audioKey) return;
       runEditTask({
         kind: "audio-clip",
@@ -105,26 +104,26 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
         // 节点进入忙浮层状态
         onAccept: () => useCanvasStore.getState().setAudioClipNodeId(null),
         // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-        // 产物投影为与服务端响应同形的 url，onSuccess 单一形状消费
+        // 产物投影为与服务端响应同形的存储 key（节点 src 持久化值域），onSuccess 单一形状消费
         clientTask: async ({ signal, onProgress }) =>
-          (await tryExtractAudioClipOnClient(audioKey, { start, end }, { signal, onProgress })).url,
+          (await tryExtractAudioClipOnClient(audioKey, { start, end }, { signal, onProgress })).key,
         serverTask: async ({ signal }) => {
           const res = await extractAudioClipApi(audioKey, start, end, signal);
-          // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
-          return (await readEditEnvelope<{ url: string }>(res, signal, {
+          // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
+          return readEditResultKey(res, signal, {
             notification,
             t,
             errorKey: "error.clip.extract_failed",
             nodeId: id,
-          }))?.url;
+          });
         },
-        onSuccess: (url) => {
+        onSuccess: (key) => {
           // 源已被替换：旧源的派生产物不再写入
           if (!expectSource(src)) return;
           const rangeLabel = `${formatTime(start)}-${formatTime(end)}`;
-          createAudioNodeFromUrl(
+          createAudioNodeFromRef(
             id,
-            url,
+            key,
             t("clip.suffix", { range: rangeLabel }),
             useCanvasStore.getState(),
             { source: "derived" },
@@ -143,32 +142,31 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       派生音频节点连回源节点 */
   const handleApplyAudioSpeed = useCallback(
     async (speed: number) => {
-      if (!src) return;
-      const audioKey = toFileKey(src);
+      const audioKey = storageKeyOf(src);
       if (!audioKey) return;
       runEditTask({
         kind: "audio-speed",
         // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-        // 产物投影为与服务端响应同形的 url，onSuccess 单一形状消费
+        // 产物投影为与服务端响应同形的存储 key（节点 src 持久化值域），onSuccess 单一形状消费
         clientTask: async ({ signal, onProgress }) =>
-          (await tryApplyAudioSpeedOnClient(audioKey, speed, { signal, onProgress })).url,
+          (await tryApplyAudioSpeedOnClient(audioKey, speed, { signal, onProgress })).key,
         serverTask: async ({ signal }) => {
           const res = await applyAudioSpeedApi(audioKey, speed, signal);
-          // data 形状为 { url }：投影出 url 作为 onSuccess 的单一形状
-          return (await readEditEnvelope<{ url: string }>(res, signal, {
+          // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
+          return readEditResultKey(res, signal, {
             notification,
             t,
             errorKey: "error.speed.failed",
             nodeId: id,
-          }))?.url;
+          });
         },
-        onSuccess: (url) => {
+        onSuccess: (key) => {
           // 源已被替换：旧源的派生产物不再写入
           if (!expectSource(src)) return;
           const speedLabel = `${Number(speed.toFixed(2))}x`;
-          createAudioNodeFromUrl(
+          createAudioNodeFromRef(
             id,
-            url,
+            key,
             t("node.speedSuffix", { speed: speedLabel }),
             useCanvasStore.getState(),
             { source: "derived" },

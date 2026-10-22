@@ -11,10 +11,10 @@
  */
 "use client";
 
-import { isStorageKey } from "@noxrea/shared/url";
+import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError, toFileKey } from "@/features/canvas/api/file-api";
+import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError } from "@/features/canvas/api/file-api";
 import { fileRefUrl } from "@/lib/file-url";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
@@ -129,7 +129,7 @@ function loadSpriteSize(url: string): Promise<{ width: number; height: number } 
  * 组件卸载或地址变化时会中止未完成的加载；失败时轨道退化为「无缩略图但可定位」，
  * 同时带出失败原因与 retry——面板据此提示并由用户手动重试（不做自动重试）。
  */
-export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { retry: () => void } {
+export function useFrameSprite(videoRef: string | null): FrameSpriteState & { retry: () => void } {
   // 结果连同它所属的视频地址一起存：地址切换后旧结果即失效，靠这个标记区分，
   // 不必在 effect 里同步 setState 重置（那会引发级联渲染）
   const [entry, setEntry] = useState<{ src: string; sprite: FrameSpriteState }>({
@@ -141,22 +141,21 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { re
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
 
   useEffect(() => {
-    if (!videoSrc) return;
+    if (!videoRef) return;
     const controller = new AbortController();
     let cancelled = false;
     const apply = (sprite: FrameSpriteState) => {
       if (cancelled) return;
-      setEntry({ src: videoSrc, sprite });
+      setEntry({ src: videoRef, sprite });
     };
 
     void (async () => {
       // 只有存储 key 引用才能请求服务端生成雪碧图；
       // 本地预览地址（blob 等）与外部 URL 没有对应键，直接走兜底读时长
-      const videoKey = toFileKey(videoSrc);
-      const managed = isStorageKey(videoKey);
+      const videoKey = storageKeyOf(videoRef);
       let fetchError: MediaRequestError | null = null;
 
-      if (managed) {
+      if (videoKey) {
         const info = await fetchFrameSprite(videoKey, controller.signal)
           .then(async (res) => {
             if (!res.ok) {
@@ -204,7 +203,7 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { re
       // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
       // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴；
       // 服务端失败原因（fetchError）随状态带出，面板据此提示并重试
-      const duration = await probeDuration(fileRefUrl(videoSrc));
+      const duration = await probeDuration(fileRefUrl(videoRef));
       apply(
         duration
           ? { ...INITIAL, duration, durationSource: "fallback", status: "ready", error: fetchError }
@@ -216,8 +215,8 @@ export function useFrameSprite(videoSrc: string | null): FrameSpriteState & { re
       cancelled = true;
       controller.abort();
     };
-  }, [videoSrc, attempt]);
+  }, [videoRef, attempt]);
 
   // 地址已切换但新结果还没回来时返回初始态，避免短暂沿用上一条视频的缩略图
-  return entry.src === videoSrc ? { ...entry.sprite, retry } : { ...INITIAL, retry };
+  return entry.src === videoRef ? { ...entry.sprite, retry } : { ...INITIAL, retry };
 }

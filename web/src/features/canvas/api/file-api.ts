@@ -3,23 +3,24 @@
  */
 import type { FrameSelection } from "@noxrea/shared";
 import { type CropRectPx } from "@noxrea/shared/crop-rect";
-import { MANAGED_FILE_PATH } from "@noxrea/shared/url";
 import type { TFunction } from "i18next";
 
 import { notifyActionFailed } from "@/features/canvas/shared/notify";
 import { apiRaw } from "@/lib/api/client";
 import type { NotificationApi } from "@/lib/feedback";
 
-/** 从 `/api/files/<key>` 形式的 URL 提取存储键（去掉查询串）。
-    后端媒体接口的统一入参格式，抽帧/代理/雪碧图/截取等调用方共用 */
-export function toFileKey(url: string): string {
-  return (url.startsWith(MANAGED_FILE_PATH) ? url.slice(MANAGED_FILE_PATH.length) : url).split("?")[0];
-}
-
-/** 响应包含图片 URL、尺寸和抽帧时间。 */
+/** 抽帧服务端响应：持久化 key、渲染 URL、尺寸和抽帧时间。 */
 export interface CapturedFrameInfo {
   frame_key: string;
   url: string;
+  time: number;
+  width: number;
+  height: number;
+}
+
+/** 抽帧产物的持久化投影：存储 key + 派生节点所需尺寸 / 时间（不含渲染 URL）。 */
+export interface CapturedFrameRef {
+  key: string;
   time: number;
   width: number;
   height: number;
@@ -100,7 +101,7 @@ export interface MediaRequestError {
 }
 
 /** 读取 Retry-After（秒）；缺失或非法时为 null */
-export function retryAfterOf(res: Response): number | null {
+function retryAfterOf(res: Response): number | null {
   const seconds = Number(res.headers.get("Retry-After"));
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
@@ -115,30 +116,34 @@ export async function readMediaError(res: Response): Promise<MediaRequestError> 
   };
 }
 
+/** 编辑动作 serverTask 的响应信封上下文（readEditEnvelope / readEditResultKey 共用） */
+export interface EditEnvelopeContext {
+  notification: NotificationApi;
+  t: TFunction;
+  /** 失败文案的兜底 key */
+  errorKey: string;
+  /** 通知去重的节点 id */
+  nodeId: string;
+  /** 特定错误码的节点侧联动（如分离音轨确认无音轨后禁用入口）；无错误码时收到 undefined */
+  onErrorCode?: (code: string | undefined) => void;
+}
+
 /**
  * 编辑动作 serverTask 的统一响应信封解析：{ data, error } 形状由各编辑路由约定。
  * 响应返回后先复核中止信号（取消与响应收尾竞态时不弹虚假失败通知），失败经
  * notifyActionFailed 按 error.<code> 本地化（fallbackKey 回落 + Retry-After 附注
  * + 按节点去重）并返回 undefined——服务端兜底失败不抛（useMediaEditTask 契约）。
  */
-export async function readEditEnvelope<T>(
+async function readEditEnvelope<T>(
   res: Response,
   signal: AbortSignal,
-  ctx: {
-    notification: NotificationApi;
-    t: TFunction;
-    /** 失败文案的兜底 key */
-    errorKey: string;
-    /** 通知去重的节点 id */
-    nodeId: string;
-    /** 特定错误码的节点侧联动（如分离音轨确认无音轨后禁用入口）；无错误码时收到 undefined */
-    onErrorCode?: (code: string | undefined) => void;
-  },
+  ctx: EditEnvelopeContext,
 ): Promise<T | undefined> {
   // 错误响应体可能非 JSON：防御解析，成功 / 失败共用
   const json = (await res.json().catch(() => null)) as { data?: T; error?: string } | null;
   if (signal.aborted) return undefined;
-  if (!res.ok || !json?.data) {
+  // 「缺失」以 undefined 判定而非 falsy：泛型 T 为原始值时 0 / "" 是合法载荷
+  if (!res.ok || json?.data === undefined) {
     const code = json?.error;
     notifyActionFailed(ctx.notification, ctx.t, code, ctx.errorKey, ctx.nodeId, retryAfterOf(res));
     ctx.onErrorCode?.(code);
@@ -147,12 +152,99 @@ export async function readEditEnvelope<T>(
   return json.data;
 }
 
+/**
+ * 信封成功但缺持久化 key：属响应契约破坏（服务端正常路径不可能出现），
+ * 与抽帧「200 但载荷缺字段」同一处理——按失败提示，不静默产出空值。
+ */
+function rejectMissingKey(res: Response, ctx: EditEnvelopeContext): undefined {
+  // 与信封失败路径同一联动契约：无错误码时 onErrorCode 收到 undefined
+  notifyActionFailed(ctx.notification, ctx.t, undefined, ctx.errorKey, ctx.nodeId, retryAfterOf(res));
+  ctx.onErrorCode?.(undefined);
+  return undefined;
+}
+
+/**
+ * 编辑信封的持久化字段基座：成功信封缺少持久化 key 属响应契约破坏。
+ * 单产物 / 双产物 / 抽帧的差异只在必填字段判定，失败提示与联动契约共用。
+ */
+async function readPersistedEnvelope<T>(
+  res: Response,
+  signal: AbortSignal,
+  ctx: EditEnvelopeContext,
+  hasPersistedKey: (data: T) => boolean,
+): Promise<T | undefined> {
+  const data = await readEditEnvelope<T>(res, signal, ctx);
+  // 只有 undefined 表示已中止或已按 ctx 提示失败（不得重复提示）；
+  // 与信封层的「缺失 = undefined」判定同一条规则，不对载荷做 falsy 归一
+  if (data === undefined) return undefined;
+  return hasPersistedKey(data) ? data : rejectMissingKey(res, ctx);
+}
+
+/**
+ * 编辑产物的持久化值投影：单产物响应只取 `data.key`。
+ *
+ * 派生节点的 data.src 持久化值域是存储 key；响应里的 `url` 是渲染期派生物，
+ * 不得写入节点（specs/storage-reference-key-unification.md）。单产物编辑动作
+ * （音频截取/变速、视频截取/裁剪）统一经此投影，禁止各自再按 url 消费。
+ */
+export async function readEditResultKey(
+  res: Response,
+  signal: AbortSignal,
+  ctx: EditEnvelopeContext,
+): Promise<string | undefined> {
+  const data = await readPersistedEnvelope<{ key?: string }>(
+    res,
+    signal,
+    ctx,
+    (data) => !!data.key,
+  );
+  return data?.key;
+}
+
 /** 音轨分离结果：独立音轨 + 静音视频 */
 export interface DetachAudioResult {
   /** 音轨产物。format 为 copy 时是原编码无损拷贝，wav 为不兼容时的回退重编码 */
   audio: DetachedMedia & { format: "copy" | "wav" };
   /** 去掉音轨后的视频（视频流原样拷贝，未重新编码） */
   video: DetachedMedia;
+}
+
+/**
+ * 分离音轨双产物的持久化值投影：`audio.key` 与 `video.key` 都进入节点
+ * data.src，缺一即响应契约破坏，与 readEditResultKey 同一失败提示与联动契约。
+ * 客户端管线的产物类型在编译期保证 key 非空，此投影只守服务端兜底信封。
+ */
+export async function readDetachAudioResult(
+  res: Response,
+  signal: AbortSignal,
+  ctx: EditEnvelopeContext,
+): Promise<DetachAudioResult | undefined> {
+  return readPersistedEnvelope<DetachAudioResult>(
+    res,
+    signal,
+    ctx,
+    (data) => !!data.audio?.key && !!data.video?.key,
+  );
+}
+
+/**
+ * 抽帧响应投影：只暴露持久化 key 与展示所需的尺寸 / 时间。
+ * `frame_key` 是写入派生图片节点的存储 key；响应中的 `url` 是渲染期派生物，
+ * 不进入投影，调用方无从误写节点。缺 `frame_key` 属响应契约破坏。
+ */
+export async function readCapturedFrame(
+  res: Response,
+  signal: AbortSignal,
+  ctx: EditEnvelopeContext,
+): Promise<CapturedFrameRef | undefined> {
+  const frame = await readPersistedEnvelope<CapturedFrameInfo>(
+    res,
+    signal,
+    ctx,
+    (data) => !!data.frame_key,
+  );
+  if (!frame) return undefined;
+  return { key: frame.frame_key, time: frame.time, width: frame.width, height: frame.height };
 }
 
 /**

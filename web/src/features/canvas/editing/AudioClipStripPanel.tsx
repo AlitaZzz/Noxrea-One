@@ -12,6 +12,7 @@
  */
 "use client";
 
+import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import WaveSurfer from "wavesurfer.js";
@@ -27,6 +28,7 @@ import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { DEFAULT_NODE_COLOR, SEEK_MARGIN_S } from "@/lib/constants";
+import { fileRefUrl } from "@/lib/file-url";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
@@ -45,12 +47,17 @@ const BAND_MOVE_THRESHOLD = 0.005;
 
 interface AudioClipStripPanelProps {
   nodeId: string;
-  audioSrc: string;
+  /** 引用值：存储 key 或外部 URL；访问 URL 在面板内派生（wavesurfer 只接受 URL） */
+  audioRef: string;
   onClose: () => void;
 }
 
-export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: AudioClipStripPanelProps) {
+export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: AudioClipStripPanelProps) {
   const { t } = useTranslation();
+  // 持久化值域是存储 key，wavesurfer 不做 key 识别：交给它之前必须派生为访问 URL
+  const audioUrl = fileRefUrl(audioRef);
+  // 截取接口只接受存储 key；外部 URL 可试听但不提供编辑
+  const audioKey = storageKeyOf(audioRef);
   const trackRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
@@ -121,7 +128,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       barWidth: 3,
       barGap: 2,
       barRadius: 2,
-      url: audioSrc,
+      url: audioUrl,
       interact: false,
     });
     wsRef.current = ws;
@@ -170,7 +177,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
     };
     // resume / enforceLoop 引用稳定（play thunk 为 useCallback []），
     // 进 deps 不引发重建
-  }, [audioSrc, resume, enforceLoop]);
+  }, [audioUrl, resume, enforceLoop]);
 
   const operable = ready && !failed && duration > 0;
   const inTime = clipRange ? clipRange.inR * duration : 0;
@@ -371,9 +378,9 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       面板（与 onClose 幂等）。src 失效（清除/撤销）时宿主 memo 判空，画布会
       自动清除 audioClipNodeId 关闭面板；Esc / 点空白是通用退出路径 */
   const handleConfirm = useCallback(() => {
-    if (!rangeValid) return;
+    if (!rangeValid || !audioKey) return;
     dispatchNodeAction(nodeId, "extract-audio-clip", { start: inTime, end: outTime });
-  }, [rangeValid, nodeId, inTime, outTime]);
+  }, [rangeValid, audioKey, nodeId, inTime, outTime]);
 
   const clipHandleRenderer = (which: "in" | "out", ratio: number) => (
     <div
@@ -494,7 +501,7 @@ export default function AudioClipStripPanel({ nodeId, audioSrc, onClose }: Audio
       <Separator orientation="vertical" className="h-5 self-center" />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
-      <IconActionButton onClick={handleConfirm} disabled={!rangeValid} />
+      <IconActionButton onClick={handleConfirm} disabled={!rangeValid || !audioKey} />
     </Card>
   );
 }

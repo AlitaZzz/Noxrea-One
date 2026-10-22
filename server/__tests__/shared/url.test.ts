@@ -1,8 +1,8 @@
 /**
  * shared/url.ts 存储引用值域契约测试。
- * 锁定三个单点规则的输入输出：key 严格形态判别、key → hash 提取、
- * 入库值域（key 或外部 http(s) URL）——资产 fileKey / 头像 avatarKey
- * 的 schema 校验与 crud 层 fail-closed 防线共用这些实现。
+ * 锁定四个单点规则的输入输出：key 严格形态判别、引用值 → key 归一、
+ * key → hash 提取、入库值域（key 或外部 http(s) URL）——资产 fileKey /
+ * 头像 avatarKey 的 schema 校验与 crud 层 fail-closed 防线共用这些实现。
  */
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +12,7 @@ import {
   isFileRefValue,
   isStorageKey,
   STORAGE_KEY_STEM_PATTERN,
+  storageKeyOf,
   storageKeyStem,
 } from "@noxrea/shared/url";
 
@@ -35,6 +36,22 @@ describe("isStorageKey / hashFromStorageKey（key 严格形态）", () => {
     expect(hashFromStorageKey(`1/zz/${HASH_A}.png`)).toBeNull();
     expect(hashFromStorageKey(`1/aa/${"g".repeat(64)}.png`)).toBeNull();
     expect(hashFromStorageKey("https://example.com/a.png")).toBeNull();
+  });
+});
+
+describe("storageKeyOf（引用值 → key 单点归一）", () => {
+  it("严格 key 原样返回", () => {
+    expect(storageKeyOf(key(HASH_A))).toBe(key(HASH_A));
+    expect(storageKeyOf(key(HASH_A, ".mp3"))).toBe(key(HASH_A, ".mp3"));
+  });
+
+  it("外部 URL / data: / blob: / 空值不在 key 值域，一律 null", () => {
+    expect(storageKeyOf("https://example.com/a.png")).toBeNull();
+    expect(storageKeyOf("data:image/png;base64,AAAA")).toBeNull();
+    expect(storageKeyOf("blob:https://example.com/uuid")).toBeNull();
+    expect(storageKeyOf("")).toBeNull();
+    expect(storageKeyOf(null)).toBeNull();
+    expect(storageKeyOf(undefined)).toBeNull();
   });
 });
 

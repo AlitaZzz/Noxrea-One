@@ -10,6 +10,7 @@
  */
 "use client";
 
+import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -19,8 +20,8 @@ import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fetchVideoProxy, type MediaRequestError,readMediaError, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
+import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
@@ -37,12 +38,14 @@ const FALLBACK_FRAME_STEP = 1 / 50;
 
 interface FrameStripPanelProps {
   nodeId: string;
-  videoSrc: string;
+  videoRef: string;
   onClose: () => void;
 }
 
-function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
+function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   const { t } = useTranslation();
+  // 媒体接口只接受存储 key：代理 / 抽帧都以此判定；外部 URL 仍可播放但不提供编辑
+  const videoKey = storageKeyOf(videoRef);
   // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道；
   // spriteError 带失败原因（限流 / 繁忙 / 生成失败），在轨道上提示并由用户手动重试
   const {
@@ -59,14 +62,9 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     status,
     error: spriteError,
     retry: retrySprite,
-  } = useFrameSprite(videoSrc);
-  // 代理地址单独留存：它同时也是拖动时节点播放器的临时播放源
-  const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  // 代理请求的失败原因（服务端错误码）：失败时面板退回原视频 scrub，同时提示可重试
-  const [proxyError, setProxyError] = useState<MediaRequestError | null>(null);
-  // 手动重试的触发计数：入参不变时也要重新发起代理请求
-  const [proxyAttempt, setProxyAttempt] = useState(0);
-  const retryProxy = useCallback(() => setProxyAttempt((a) => a + 1), []);
+  } = useFrameSprite(videoRef);
+  // 代理地址同时也是拖动时节点播放器的临时播放源；失败原因在轨道上提示并可重试
+  const { url: proxyUrl, error: proxyError, retry: retryProxy } = useVideoProxy(videoRef);
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -83,43 +81,6 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
     userDrivenRef.current = true;
     setRatio(next);
   }, []);
-
-  // 取预览代理：拖动播放头时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
-  //
-  // 这里刻意不做「超时就放弃」的竞速：转码通常 1–3 秒，一旦放弃，proxyUrl 就停在
-  // null，切换 effect 不会再触发——本次会话再也用不上代理，用户只能一直拿长 GOP
-  // 的原视频拖动，而后端其实还在转，转完也白白落到缓存里等下次打开才命中。
-  // 改成等请求自然完成：期间节点先用原视频 scrub，代理就绪后自动切过去，
-  // swapVideoSource 会把当前时间点写回，切换不跳位。
-  // 面板卸载 / 换视频 / 手动重试都会中止在途请求；服务端拒绝时记录原因供轨道提示。
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-    const videoKey = toFileKey(videoSrc);
-    // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub；
-    // 请求失败只有两种：本组件中止（忽略），或真实网络失败（进入失败态，可重试）
-    const request: Promise<{ url: string | null; error: MediaRequestError | null } | undefined> = videoKey
-      ? fetchVideoProxy(videoKey, controller.signal)
-          .then(async (res) => {
-            if (!res.ok) return { url: null, error: await readMediaError(res) };
-            const json = (await res.json()) as { data?: { url?: string } };
-            return { url: json.data?.url ?? null, error: null };
-          })
-          .catch((): { url: string | null; error: MediaRequestError | null } | undefined => {
-            if (controller.signal.aborted) return undefined;
-            return { url: null, error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() } };
-          })
-      : Promise.resolve({ url: null, error: null });
-    void request.then((outcome) => {
-      if (cancelled || outcome === undefined) return;
-      setProxyUrl(outcome.url);
-      setProxyError(outcome.error);
-    });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [videoSrc, proxyAttempt]);
 
   // 选帧期间暂停节点播放，避免 hover 播放干扰视觉判断
   useEffect(() => {
@@ -249,13 +210,13 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
   }, [ready, nodeId, ratio, duration]);
 
   const handleCapture = useCallback(() => {
-    if (!ready) return;
+    if (!ready || !videoKey) return;
     // 末帧留 SEEK_MARGIN_S 余量：贴着 duration 抽帧可能落到视频结尾之外
     const time = Math.max(0, Math.min(currentTime, duration - SEEK_MARGIN_S));
     // 不在这里关面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、播放
     // 位置原样保留可重试；抽帧被接受后节点会清除 frameCaptureNodeId 关闭面板
     dispatchNodeAction(nodeId, "capture-frame", { selection: { kind: "time", seconds: time } });
-  }, [ready, currentTime, duration, nodeId]);
+  }, [ready, currentTime, duration, nodeId, videoKey]);
 
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
@@ -358,7 +319,7 @@ function FrameStripPanel({ nodeId, videoSrc, onClose }: FrameStripPanelProps) {
       <Separator orientation="vertical" className="h-5 self-center" />
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致） */}
-      <IconActionButton onClick={handleCapture} disabled={!ready} />
+      <IconActionButton onClick={handleCapture} disabled={!ready || !videoKey} />
     </Card>
   );
 }

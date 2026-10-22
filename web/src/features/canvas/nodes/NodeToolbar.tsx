@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { storageKeyOf } from "@noxrea/shared/url";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -266,6 +267,8 @@ function NodeToolbar({
   const { t } = useTranslation();
   const nodes = useCanvasStore((s) => s.nodes);
   const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
+  // 媒体编辑接口只接受存储 key；外部 URL 节点保留下载/预览，但禁用编辑入口
+  const editableKey = storageKeyOf(assetSrc);
   // 音轨探测结论：undefined = 尚未确定（按「可能有音轨」处理，真无音轨时由后端兜底）；
   // false = 确定无音轨，禁用分离入口
   const videoHasAudio = (nodes.find(n => n.id === nodeId)?.data as { hasAudio?: boolean })?.hasAudio;
@@ -450,7 +453,7 @@ function NodeToolbar({
           }}>
             <Tooltip><TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" disabled={!assetSrc}><FrameCaptureIcon /></Button>
+                  <Button size="icon" variant="ghost" disabled={!editableKey}><FrameCaptureIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("node.captureFrame")}</TooltipContent></Tooltip>
             <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss}>
@@ -468,20 +471,20 @@ function NodeToolbar({
           {/* 片段截取：独立入口（与帧家族分开——产物是视频节点而非图片节点） */}
           <Tooltip><TooltipTrigger asChild>
               <Button size="icon" variant="ghost"
-                disabled={!assetSrc}
+                disabled={!editableKey}
                 onClick={() => onOpenClipStrip(nodeId)}
               ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
             </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
           {/* 画面裁剪：与图片节点同语义（源像素矩形重编码为派生视频） */}
           <Tooltip><TooltipTrigger asChild>
               <Button size="icon" variant="ghost"
-                disabled={!assetSrc}
+                disabled={!editableKey}
                 onClick={() => dispatchNodeAction(nodeId, "crop-video")}
               ><Crop size={16} /></Button>
             </TooltipTrigger><TooltipContent>{t("node.crop")}</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
               <Button size="icon" variant="ghost"
-                disabled={!assetSrc || videoHasAudio === false}
+                disabled={!editableKey || videoHasAudio === false}
                 onClick={() => dispatchNodeAction(nodeId, "detach-audio")}
               ><WaveIcon /></Button>
             </TooltipTrigger><TooltipContent>{videoHasAudio === false ? t("node.detachAudioNoTrack") : t("node.detachAudio")}</TooltipContent></Tooltip>
@@ -522,13 +525,13 @@ function NodeToolbar({
               <Separator orientation="vertical" className="mx-1 h-5 self-center" />
               <Tooltip><TooltipTrigger asChild>
                   <Button size="icon" variant="ghost"
-                    disabled={!assetSrc}
+                    disabled={!editableKey}
                     onClick={() => onOpenAudioClip(nodeId)}
                   ><ClipTrimIcon style={{ fontSize: 16 }} /></Button>
                 </TooltipTrigger><TooltipContent>{t("clip.menu")}</TooltipContent></Tooltip>
               <Tooltip><TooltipTrigger asChild>
                   <Button size="icon" variant="ghost"
-                    disabled={!assetSrc}
+                    disabled={!editableKey}
                     onClick={() => {
                       setSpeedDraft(1);
                       setSpeedMode(true);

@@ -1,5 +1,5 @@
 /**
- * 派生节点创建：从「已有 URL」或「源节点」生成新图片节点并连线。
+ * 派生节点创建：从「已有引用值」或「源节点」生成新图片节点并连线。
  *
  * 这是统一上传管道的「落库」半边（另一半是上传本身）。
  * 供管道（derived sink）与导演视图「截图发送到画布」复用。
@@ -124,21 +124,21 @@ export function spawnPromptDerivedNode(
 }
 
 /**
- * 从已有 URL 创建图片节点 -> 写入 store -> 连线到源节点。
+ * 从已有引用值创建图片节点 -> 写入 store -> 连线到源节点。
  *
- * 适用于「URL 已存在、无需再上传」的场景（如导演视图把已上传的截图发送到画布）。
+ * 适用于「引用值已存在、无需再上传」的场景（如导演视图把已上传的截图发送到画布）。
  * 需要走上传的场景请用 runMediaUpload 的 derived-node sink。
  *
  * @param sourceId    源节点 ID（新节点连线到它）
- * @param url         已存在的图片 URL
+ * @param ref         引用值：存储 key 或外部 URL（与节点 data.src 同值域；展示 URL 由渲染期派生）
  * @param naturalW    图片自然宽度
  * @param naturalH    图片自然高度
  * @param labelSuffix 标题后缀
  * @param storeApi    由调用方注入的 store 操作接口
  */
-export function createNodeFromUrl(
+export function createImageNodeFromRef(
   sourceId: string,
-  url: string,
+  ref: string,
   naturalW: number,
   naturalH: number,
   labelSuffix: string,
@@ -149,7 +149,7 @@ export function createNodeFromUrl(
 ): AnyNode {
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
-  const node = createImageNode({ x: 0, y: 0 }, url);
+  const node = createImageNode({ x: 0, y: 0 }, ref);
   node.data.label = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;
@@ -172,7 +172,7 @@ export function createNodeFromUrl(
   return node;
 }
 
-/** createXxxNodeFromUrl 的可选行为 */
+/** 派生节点创建 helper 的可选行为 */
 export interface CreateNodeOptions {
   /** 是否自动在 sourceId 与新节点之间建立一条边。默认 true */
   connectToSource?: boolean;
@@ -187,14 +187,15 @@ export interface CreateNodeOptions {
 }
 
 /**
- * 从已有 URL 创建音频节点 -> 写入 store -> 连线到源节点。
+ * 从已有引用值创建音频节点 -> 写入 store -> 连线到源节点。
  *
  * 用于「服务端已落盘、前端直接引用」的场景（如音视频分离产出的音轨），
- * 无需再走上传管道。
+ * 无需再走上传管道。引用值必须是存储 key 或外部 URL；编辑接口返回的
+ * `/api/files/` 展示 URL 不得写入节点（持久化值域见 storage-reference-key-unification）。
  */
-export function createAudioNodeFromUrl(
+export function createAudioNodeFromRef(
   sourceId: string,
-  url: string,
+  ref: string,
   labelSuffix: string,
   storeApi: CanvasStoreApi,
   extraNodeData?: Record<string, unknown>,
@@ -208,7 +209,7 @@ export function createAudioNodeFromUrl(
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
 
-  const node = createAudioNode({ x: 0, y: 0 }, url);
+  const node = createAudioNode({ x: 0, y: 0 }, ref);
   node.data.label = label;
   if (extraNodeData) Object.assign(node.data, extraNodeData);
   // 宫格找空位：连续截取/变速等重复派生不再叠在同一处
@@ -228,13 +229,14 @@ export function createAudioNodeFromUrl(
 }
 
 /**
- * 从已有 URL 创建视频节点 -> 写入 store -> 连线到源节点。
+ * 从已有引用值创建视频节点 -> 写入 store -> 连线到源节点。
  *
- * 用于音量分离产出的静音视频等「服务端已落盘」的场景。
+ * 用于音量分离产出的静音视频等「服务端已落盘」的场景。引用值必须是存储 key
+ * 或外部 URL；编辑接口返回的 `/api/files/` 展示 URL 不得写入节点。
  */
-export function createVideoNodeFromUrl(
+export function createVideoNodeFromRef(
   sourceId: string,
-  url: string,
+  ref: string,
   naturalW: number,
   naturalH: number,
   labelSuffix: string,
@@ -250,7 +252,7 @@ export function createVideoNodeFromUrl(
   const origNode = storeApi.nodes.find((n) => n.id === sourceId);
   const label = resolveDerivedLabel(origNode, labelSuffix, labelOverride);
 
-  const node = createVideoNode({ x: 0, y: 0 }, url);
+  const node = createVideoNode({ x: 0, y: 0 }, ref);
   node.data.label = label;
   node.data.naturalWidth = naturalW;
   node.data.naturalHeight = naturalH;

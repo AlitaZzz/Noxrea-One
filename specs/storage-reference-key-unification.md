@@ -36,7 +36,7 @@
 | `agent_messages.ref_images` 等 | 含 hash 的值（2026-10-17 已核实：双库实库 0 行、客户端唯一调用方不传该字段、请求侧已收紧 fileRefSchema） | 统一 key |
 | `file_refs.hash` | 已存 hash | 不动 |
 
-前端 `withManagedFileWidth`（托管缩略参数派生）与 `isManagedFileUrl`（托管 URL 形态识别，用于下载参数判定）保留为渲染期工具；`toFileKey` 仅用于媒体 API（抽帧 / 截取 / 代理）从引用值取回 key。不存在「粘贴 `/api/files/` URL 转 key」的用户流程（2026-10-17 审查核实：原条款描述的能力并不存在，按非投机原则删除该条款）。
+前端 `withManagedFileWidth`（托管缩略参数派生）与 `isManagedFileUrl`（托管 URL 形态识别，用于下载参数判定）保留为渲染期工具；媒体 API（抽帧 / 截取 / 代理）的入参直接消费引用值本身（存储 key），需要 key 的请求与编辑入口统一经 `storageKeyOf` 单点归一判定（严格 key → 自身，其余值域 → null，2026-10-22 第十二轮），外部 URL / 本地预览地址不发起只接受 key 的请求，节点保留下载 / 预览但禁用编辑入口。`toFileKey` 的 `/api/files/` 前缀剥离属旧 URL 值域的兼容逻辑，已随值域统一删除（2026-10-22 第十一轮）。不存在「粘贴 `/api/files/` URL 转 key」的用户流程（2026-10-17 审查核实：原条款描述的能力并不存在，按非投机原则删除该条款）。
 
 **节点字段取舍**：保留单字段 `data.src`（值域 = key 或外部 URL），不拆 `fileKey` 双字段——外部 URL 是前端必须长期支持的值域（[canvas-image-http-url-rendering.md](canvas-image-http-url-rendering.md)），union 本身不构成债；拆双字段的改造面（undo/redo 载荷、upload pipeline、SSE monitor、全部渲染点）高一个量级而收益相同。配套新增 **key 格式判别 helper**（`{userId}/{hash[:2]}/{hash}{ext}` 严格校验）：服务端画布保存收集引用与账本登记、前端渲染分流共用，替代对 `/api/files/` 前缀的字符串解析。
 
@@ -54,7 +54,7 @@
 - `scripts/`：key 化迁移脚本（独立于 S3 对象搬迁脚本）。
 - `shared/url.ts`、web 渲染点（AssetCard / VideoNode / ImageRefCard / CanvasExplorer / 生成面板等）、上传与生成响应 DTO（SSE 需补 key 字段）、服务端 routes（assets / canvas / generate）与 crud 层。
 - 画布 undo/redo 载荷仅值变化、结构不变（[canvas-undo-redo-integrity.md](canvas-undo-redo-integrity.md) 语义不受影响）。
-- 验收含源码断言：server / web 源码中不再存在「把 `/api/files/` URL 写入 DB」的路径（粘贴识别除外）。
+- 验收含源码断言：server / web 源码中不再存在「把 `/api/files/` URL 写入 DB」的路径（粘贴识别除外）；web 侧由 AST 绊线（字段清单全量；对象字面量 / `*.data.<field>` / 一层 data 别名写入形状）与五条编辑路径的运行期回归共同覆盖，静态扫描的更深别名 / 间接派发盲区如实记录在测试与第七、八轮。
 
 ## 异常与边界
 
@@ -132,3 +132,50 @@ code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟�
 - MentionChip import 逗号空格订正。
 - 其余审核判定不动（记录理由）：迁移脚本标量重写形状 ×3（一次性已执行脚本，抽取无收益）；资产访问 URL 的 DTO 预派生与前端派生本就同源于 resolveFileUrl 单点（S3 阶段改分发只动一处）；avatarKey 无 max(200) 不构成不对称（isStorageKey 锚定模式本身严格限长）。
 - 第六轮验证：typecheck、lint:server、lint:web、test:server、web test 串行通过。
+
+第七轮审查与修复（2026-10-22，web 写入侧源码断言补齐 + 编辑产物值域回归）：
+- 验收标准「server / web 源码中不再存在把托管 URL 写入 DB 的路径」此前只落了 server 半边（`storage-key-contract.test.ts` 扫描 crud 层）；新增 web 架构断言 `web/src/__tests__/architecture/storage-key-write-contract.test.ts`：节点创建调用（`create*Node` / `create*NodeFromRef`）实参不得出现 `url` 标识符（含裸 `url` 与 `.url`）、节点数据 `src` 写入不得来自 URL 表达式（覆盖上传派生 sink 等不经 helper 的路径）、编辑信封不得按 `{ url }` 声明 / `onSuccess` 不得以 `url` 为形参、上传写入层不得做引用值 → URL 派生；扫描器排除函数定义（否则定义项会掩盖零调用点），并含调用点计数与历史回归形态自检。静态扫描不穷举解构别名等形态，运行期由编辑路径的客户端 / 服务端回归测试补充。派生 helper 注释中的托管路径字面量按既有「绊线测试保持粗暴字面量断言」先例改写为「托管展示 URL」。
+- 同批修复派生节点持久化值域（编辑响应 `url` 被写入 `data.src`）与音频截取面板缺访问 URL 派生两个缺陷；`readEditResultKey` 对「信封成功但缺 key」按失败提示，不再静默丢弃任务。详见 [client-video-editing.md](client-video-editing.md) 轮十七。
+- 第七轮验证：typecheck、lint:web（0 error，26 条既有 img 警告）、web test（130 文件 / 954 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+第八轮审查与修复（2026-10-22，web 源码断言 AST 化 + 持久化引用字段覆盖面补齐）：
+- 文本扫描改为 TypeScript AST（`ts.createSourceFile`）：注释与字符串字面量不参与匹配，函数 / 生成器 / 方法定义不是 `CallExpression`，消除注释误报、注释内括号破坏实参配对、生成器 / 方法定义被计为调用点三类缺陷。
+- 值域判定覆盖 `.url`、url 结尾标识符、六个托管 URL 派生 helper（`resolveFileUrl` / `fileRefUrl` / `managedFileUrl` / `buildManagedFileUrl` / `getManagedFilePathname` / `withManagedFileWidth`）、`/api/files/` 字面量与模板字符串；递归检查条件、数组、对象、箭头函数表达式体与 `map(...)` 等间接形态，堵住 `data.src = fileRefUrl(key)` 盲区。
+- 覆盖面从节点 `data.src` 扩展到全部持久化引用字段（`src` / `ref` / `fileKey(s)` / `refImages|Audios|Videos` / `multiResultKeys` / `resultKeys` / `avatarKey` / `coverKey`）；对象字面量、`*.data.<field>` 赋值（含元素访问）与一层节点数据别名（`const nd = node.data; nd.src = …`）同时检查。导演镜头 `shot.ref` 与多图 `multiResultKeys` 因此纳入验收；节点创建调用的引用实参（第 2 参）单独检查。
+- 扫描面自检从「调用点 > 0」升级为精确基线 23：helper / 工厂更名或扫描器失明时直接失败。上传写入层的 URL helper 与托管路径 token 禁令保留。
+- 限制如实记录：更深层对象别名（一层 `const nd = node.data` 已覆盖）与间接派发不覆盖；JSX 渲染属性（如 `<img src={fileRefUrl(...)}>`）属渲染期派生、不是持久化写入，不检查。运行期由五条编辑路径的客户端 / 服务端回归用例补充。
+- 第七轮为迁就文本扫描而改写的派生 helper 注释恢复「`/api/files/` 展示 URL」准确措辞（AST 不扫描注释）。
+- 分离音轨服务端兜底投影补缺 key 守卫（`readDetachAudioResult`：`audio.key` 与 `video.key` 缺一即按失败提示，不创建半成品节点）；详见 [client-video-editing.md](client-video-editing.md) 轮十八。
+- 第八轮验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 45 用例、web test（130 文件 / 958 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+第九轮审查与修复（2026-10-22，第六轮未提交代码审查后）：
+- 绊线补一层节点数据别名跟踪：`const nd = node.data; nd.src = fileRefUrl(key)` 这类别名写入纳入检查（自检样本同步）；验收措辞由「持久化引用字段全量」改为「字段清单全量 + 已列写入形状」，解除「全量」与实际形状覆盖不符的过度声明。
+- URL 命名词判定改为词边界（`url` / `*Url` / `*URL` / `*_url`），删除 `curl` 硬编码例外。
+- 抽帧 `serverTask` 的信封解析收敛到共享投影 `readCapturedFrame`（含 `frame_key` 缺失守卫），删除 VideoNode 手写解析 / 中止 / 通知块；详见 [client-video-editing.md](client-video-editing.md) 轮十九。
+- 测试夹具 `detachedMedia` 移入 `storage-fixtures`，VideoNode 与 file-api 测试共用。
+- 审查处置：`readEditResultKey` 注释「undefined 表示已中止或已按 ctx 提示失败」经复核准确——`readEditEnvelope` 对 200 缺 `data` / 非 JSON 同样先走失败通知再返回 undefined，不存在「无提示的 undefined」路径（file-api.ts 信封分支）。
+- 第九轮验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 46 用例、web test（130 文件 / 959 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+第十轮审查与修复（2026-10-22，第七轮未提交代码审查后）：
+- 绊线头注释的限制表述与 Spec 对齐：明确「只跟踪一层 `const nd = node.data`；更深层数据别名与 helper 别名等间接形态不覆盖」，消除只写「helper 别名」造成的口径差。
+- VideoNode 回归夹具源值改为存储 key，播放 / 海报断言改为派生 URL；见 [client-video-editing.md](client-video-editing.md) 轮二十。
+- 第十轮验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 46 用例、web test（130 文件 / 959 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+第十一轮审查与修复（2026-10-22，第八轮未提交代码审查后）：
+- 删除 `toFileKey`：持久化值域统一为 key 后，其 `/api/files/` 前缀剥离与查询串剥离只服务于旧 URL 值域，属无调用场景的兼容逻辑（AGENTS 一.2 / 三.4）。9 个调用点改为直接消费引用值；雪碧图 / 代理等只接受 key 的服务端请求改以 `isStorageKey` 判定，外部 URL / 本地预览地址不再发出必然失败的请求。（2026-10-22 第十三轮补注：该判定已由第十二轮的 `storageKeyOf` 单点归一取代，本条保留为历史记录。）
+- 测试脚手架去重：新增 `canvas-node.ts`（`nodeViewProps` + `flushMicrotasks`），VideoNode / AudioNode 编辑测试共用；`stubNode` 使用 Vitest `Mock`；AudioClipStripPanel 默认夹具改为存储 key 并补外部 URL 透传用例；`file-api` 补 `readCapturedFrame` 直接单测（成功投影不含 url / 缺 `frame_key` 契约）。
+- 命名：`readEditKey` → `readEditResultKey`、`editKeyResponse` → `editResultResponse`（历史轮次引用已同步改为现名）。
+- 审查处置：`expectDerivedVideoNode` / `expectDerivedAudioNode` 保持独立（两种工厂的位置参数顺序不同，合并会隐藏实参位置，AGENTS 三.5）。
+- 第十一轮验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 用例、web test（130 文件 / 962 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+第十二轮审查与修复（2026-10-22，第九轮未提交代码审查后）：
+- 「引用值 → key」归一收口 `shared/url.ts` 的 `storageKeyOf(value): string | null`：严格 key 原样返回，外部 URL / data: / blob: / 空值返回 null。此前 `isStorageKey(x) ? x : null` 在 FrameStripPanel / ClipStripPanel / use-frame-sprite 各写一份，同一门控规则多处独立维护；三处调用点与六个编辑处理函数（视频抽帧 / 分离音轨 / 片段截取 / 裁剪，音频截取 / 变速）统一改经该函数判定，接口入参使用归一后的 key。
+- 编辑入口按值域门控：NodeToolbar 的视频 / 音频编辑按钮在无 key 时禁用（外部 URL 节点保留下载 / 预览 / 收藏 / 反推）；三个编辑面板的确认键同域禁用，VideoNode 抽帧 / 裁剪处理函数在无 key 时关闭面板。语义是接口能力的如实表达，非特判兜底。
+- 测试：`server/__tests__/shared/url.test.ts` 补 `storageKeyOf` 值域用例；`file-api.test.ts` 的共享可变上下文改为 `makeCtx` 工厂（完整 `NotificationApi` 桩、诚实的 `TFunction` 断言），抽帧 / 分离音轨断言改用真实调用点的兜底 key。
+- 验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 web 用例 + 9 个 server shared url 用例、web test（130 文件 / 962 用例）串行通过；server 仅新增 url 契约测试，未改动业务代码，未重跑 server 全量套件。
+
+第十三轮审查与修复（2026-10-22，第十轮未提交代码审查后）：
+- **存量脏数据盘点（缺陷窗口：key 迁移后至轮十七修复前，编辑响应 `url` 被写入派生节点 `data.src`）**：对当前启用的 server 模式 PostgreSQL 做只读审计，遍历 `canvas_projects.canvas_data` 全部节点的 `data.src`。结果：4 个项目、349 个严格存储 key、0 个 `/api/files/` 展示 URL、3 个空值；缺陷窗口未留下脏行，无需数据改写。审计用一次性只读脚本执行后删除，不进入版本控制。
+- **server 全量套件对本批次补跑**：89 个测试文件 / 977 用例通过、11 用例 skip（2 个文件 skip）；此前各轮「server 业务代码未改动」的记录不再作为省略全量套件的依据，本批次的最终验证包含 server 全量。
+- 轮十一日志中「雪碧图 / 代理改以 `isStorageKey` 判定」为历史表述，已就地补注其被 `storageKeyOf` 取代。
+- 验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 + 4 用例、web test（131 文件 / 966 用例）、server 全量（89 文件 / 977 用例）串行通过。

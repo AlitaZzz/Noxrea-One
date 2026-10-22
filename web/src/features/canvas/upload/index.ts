@@ -4,9 +4,9 @@
 export { createNodesFromFiles } from "./create-nodes-from-files";
 export {
   type CanvasStoreApi,
-  createAudioNodeFromUrl,
-  createNodeFromUrl,
-  createVideoNodeFromUrl,
+  createAudioNodeFromRef,
+  createImageNodeFromRef,
+  createVideoNodeFromRef,
   DERIVED_BASE_GAP_Y,
   spawnPromptDerivedNode,
 } from "./derived-node";

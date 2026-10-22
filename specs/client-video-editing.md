@@ -71,7 +71,7 @@
 
 ### 3. 产物入库契约
 
-1. 产物经既有 `POST /api/files/upload?source=derived` 上传（复用按用户上传租约、批量与大小限制、哈希去重、元数据探测），响应的 `url` / `key` 交给既有节点创建逻辑——与服务端路径共用同一段节点创建代码。
+1. 产物经既有 `POST /api/files/upload?source=derived` 上传（复用按用户上传租约、批量与大小限制、哈希去重、元数据探测），节点创建只消费响应的 `key`——派生节点 `data.src` 的持久化值域是存储 key，`url` 是渲染期派生值、不得写入节点（`specs/storage-reference-key-unification.md`）；单产物服务端兜底路径的响应投影统一为 `readEditResultKey`（只取 `data.key`），分离音轨为双产物、统一经 `readDetachAudioResult` 投影（要求 `video.key` 与 `audio.key` 同时存在，缺一按失败提示，不创建半成品节点）。客户端与服务端两条路径共用同一段节点创建代码。
 2. 视频产物的服务端完整性体检按上传既有行为执行（best-effort，1.5s 预算），客户端硬件编码产物预期无截断。
 3. 相同产物经哈希去重天然合并。
 
@@ -181,7 +181,7 @@
 
 审查修复轮六（2026-10-14，第六轮复审后用户确认全量根因修复）：①**分离音轨探测放宽**——打开探测不再要求视频轨可解码（`canDecode()` 含 WebCodecs 解码能力判定），纯重封装只要求容器可给出编码描述（`getDecoderConfig()`，封装 sample entry 的必要输入）；规则 1.1 改写为按操作探测真实所需，消除与「分离音轨不解码视频」的规则内矛盾——无硬解的机器现在也能客户端重封装 ISO-BMFF+AAC 源；②**双路 Conversion 共用同一 Input 补证**——库源码核读 `Conversion.execute()` 不消费 / 不 dispose Input、轨级 sink 每次新建迭代器，串行两路 execute 安全（注释已记于实现处，浏览器走查分离音轨路径时一并复核）；③**音频变速补 SoundTouch 采样率**——Stretch 构造默认按 44100 自调谐 WSOLA 窗口，改为按源采样率 `setParameters`（0 值参数保持库内自动档），48kHz 源的窗口时长不再偏短约 8%（仅音质；时长换算本不受影响）；④`runWithAbortCancel` 收敛三处重复的「挂监听前检查已中止 + once 监听 + finally 清理」取消脚手架；⑤`readEditEnvelope`（file-api）收敛五处 serverTask 信封解析（防御解析 + 响应后中止复核 + 失败通知 + Retry-After 附注），抽帧保留双分支实现（200 但载荷缺 url 是无错误码的独立失败模式）；⑥删除 `tryCropOnClient` 无消费方的 `width` / `height` 返回字段；⑦节点元数据探测缺失时由会话元素回填 `naturalWidth` / `naturalHeight`（skipHistory，同 duration 回填先例；服务端探测值是权威、不覆盖）——元数据从未回填的源裁剪入口不再永久禁用；⑧Spec 同步：1.1 按操作探测、4.1 进度口径改为混合口径（修正轮五的过度概括）、业界对标行同步。
 
-审查修复轮七（2026-10-14，用户实测 mkv 片段截取失败 + 兜底产物落空，全量根因修复）：①**`resolveVideoBitrate` 返回值恒取整**——mediabunny `averageBitrate = 8×字节数/时长` 是浮点，原实现 `Math.min(sourceBitrate, raw)` 在 ratio=1（片段截取）时把未取整的源码率原样作为上限返回，`Quality` 校验「must be a positive integer」抛 TypeError（画面裁剪因 pixelRatio<1 返回的是折减后的整数而侥幸通过，形成「能裁剪不能截取」的表象）；②**轮六回归：serverTask 信封投影**——轮六的 `readEditEnvelope<T>` 返回信封 `data` 对象本身，而片段截取 / 画面裁剪 / 音频截取 / 变速四处的 `data` 形状为 `{ url }`，对象被直接当作 url 传给节点创建（`src=[object Object]` 空节点；服务端产物实际已正常落盘，属纯前端投影错误）；改为调用点显式投影 `?.url`，分离音轨（data 为完整对象）与抽帧路径不受影响；③补 `resolveVideoBitrate` 整数保证回归测试。教训入档：`readEditEnvelope<string>` 的泛型是对运行时形状的未校验断言，data 的形状投影必须在调用点显式写出。
+审查修复轮七（2026-10-14，用户实测 mkv 片段截取失败 + 兜底产物落空，全量根因修复）：①**`resolveVideoBitrate` 返回值恒取整**——mediabunny `averageBitrate = 8×字节数/时长` 是浮点，原实现 `Math.min(sourceBitrate, raw)` 在 ratio=1（片段截取）时把未取整的源码率原样作为上限返回，`Quality` 校验「must be a positive integer」抛 TypeError（画面裁剪因 pixelRatio<1 返回的是折减后的整数而侥幸通过，形成「能裁剪不能截取」的表象）；②**轮六回归：serverTask 信封投影**——轮六的 `readEditEnvelope<T>` 返回信封 `data` 对象本身，而片段截取 / 画面裁剪 / 音频截取 / 变速四处的 `data` 形状为 `{ url }`，对象被直接当作 url 传给节点创建（`src=[object Object]` 空节点；服务端产物实际已正常落盘，属纯前端投影错误）；改为调用点显式投影 `?.url`，分离音轨（data 为完整对象）与抽帧路径不受影响；③补 `resolveVideoBitrate` 整数保证回归测试。教训入档：`readEditEnvelope<string>` 的泛型是对运行时形状的未校验断言，data 的形状投影必须在调用点显式写出。（2026-10-22 补注：本段 `?.url` 为当时实现的如实记录；存储引用值域统一后四处投影已收敛为 `readEditResultKey` 的 `?.key`，见轮十七。）
 
 审查修复轮八（2026-10-14，第八轮复审后用户确认全量根因修复）：①**探测负缓存档位化**——缓存键从裸 URL 改为「探测档位 + URL」（`unsupportedProbes`：video-mux / video-decode / audio 三档，弱档失败蕴含强档必败、强档失败不封杀弱档操作），修复「无硬解 HEVC 源试过片段截取后，分离音轨的 mux-only 弱探测被缓存命中错杀」的轮六放宽失效；②**音频操作纳入缓存与探测收敛**——音频变速 / 音频截取的自建 Input 探测块抽为 `openAudioSourceOrThrow`（与 `openOrThrow` 同契约：audio 档负缓存 + 步骤间中止检查 + 失败归一），两处逐字重复的探测块收敛、Spec 1.2 的缓存覆盖补全；③`resolveVideoBitrate` 补 `Number.isFinite` 守卫——`computePacketStats` 在时长为 0 时给出 `Infinity`（8×bytes/0），原 `<= 0` 守卫拦不住，`Quality({bitrate: Infinity})` 抛错且该 URL 进负缓存后客户端编辑永久回退；④**取消路径跳过二次 cancel**——带 abort 监听的三个操作（片段截取 / 分离音轨 / 音频截取）的 catch 在 `signal.aborted` 时不再重复 cancel（abort 监听已取消，二次调用安全但 mediabunny 会对已取消状态打 warn，纯噪音），非取消失败仍统一取消；⑤`apiUploadWithProgress` 的四处 `xhr.abort()` 统一为 `abortXhr()`（部分浏览器对已完成请求 abort 会抛错，原三处 try/catch 一处裸调不一致）；⑥删除 file-api 死类型 `ExtractedClipInfo`（HEAD 既有无消费者）；⑦BusyOverlay 头注释补音频节点消费方；⑧Spec 同步：1.1 的 canEncodeAudio 限定为片段截取（裁剪非 AAC 直接回退）、1.2 缓存档位语义、补回归测试（Infinity/NaN → undefined）。
 
@@ -200,6 +200,73 @@
 审查修复轮十五（2026-10-15，第十五轮复审后用户确认根因修复）：①**音频轨 AAC 守卫按业务规则抽成对助手**——四处同形守卫收口为 `ensureAacConvertible`（转编前提，片段截取 / 音频截取共用：非 AAC 需可解码出 PCM + 平台有 AAC 编码器；轮十二①「codec 未知静默丢轨、不依赖产物形状事故」的理由并入助手注释）与 `ensureAacCopyable`（包级拷贝前提，画面裁剪 / 分离音轨共用：音轨编码必须是 AAC）；同规则错误消息归一（控制台日志口径，不涉 UI 文案：片段「音频编码」→「音轨编码」、音频截取「无法拷贝或转编」→「无法转编为 AAC」消息头统一为「音轨编码」、分离音轨「不支持客户端拷贝」→「不支持包级拷贝」）；②`openVideoSourceOrThrow` 的探测档位三元式收敛为 `probeTier` 局部量（缓存读写共用，表达「每次调用一个逻辑档位」）；③**取消触发方式 Spec 措辞修正**——取消规则、规则 8 与验收标准三处原写「面板关闭 / Esc 可中止」，实际任务在面板确认后才启动、二者在管线运行中不可达，按真实杠杆改写为「busy 浮层『取消』/ 节点换源 / 节点卸载」；④**i18n 历史遗留修复**——en-US `common` 块补 `play`/`stop`（AssetCard / AudioRefCard 消费，此前英文环境经 fallbackLng 显示中文），删除 en-US `crop.play`/`crop.stop` 死键（零消费者，历史迁移残留）；⑤Spec 轴「三个范围外测试文件」经 git ls-files 核验为 HEAD 既有提交内容，发现不成立，无处置。
 
 审查修复轮十六（2026-10-15，未提交改动代码审查后，用户指示按根因修复）：①**`expectSource` 对已删除节点抛 TypeError**——`(node?.data as { src?: string }).src`：类型断言抹掉了 `undefined`，括号又截断可选链，节点查不到时 `(undefined).src` 抛错而不是判不一致（轮五⑤的本意是「换源 / 删除节点」都不写旧源产物）；断言改为保留 `| undefined` 并以 `?.` 取值，今后漏写 `?.` 由 tsc 直接拦截；同类写法 `DirectorNode` 一并修正；补 `expectSource` 回归测试（一致 / 换源 / 节点已删除）；②**会话失败浮层补回裁剪态「取消」**——轮十二⑦删除 cropOpen 加载浮层时，同一浮层里的取消按钮一并丢失，而失败态下裁剪面板让位、其自带关闭键随之不可见，退出裁剪态只剩点击画布空白；失败浮层在裁剪态下恢复「取消」，与裁剪面板关闭键共用 `closeCrop`；补回归测试（并断言非裁剪态失败浮层没有取消）；③**上传响应契约单一来源**——删除 client-video 自行声明的 `UploadEnvelope`，复用 `lib/utils/upload` 导出的 `UploadBatchResponse` 与 `isUploadResult`（与拖入上传同一份契约与校验）；`size` 取本地 `File.size`（产物即上传对象）；④Spec 订正：规则 2.3 去掉与 2.5 矛盾的「变速 = 时间戳缩放」（变速只作用于音频轨）、规则 2.9 背压机制改为如实描述 `await add()`（Mediabunny 约定，非 `encodeQueueSize` 阈值）；media-processing-concurrency.md 规则 6 与第六轮条目补记「源文件删除时 `deleteDerivedArtifacts` 遍历全部分组一并清除旧分组产物」（原表述「代码只访问档位路径 / 不自动清理」与 `local.ts` 不符）。以上两处措辞订正（2.3 对齐决策 4 与规则 2.5，2.9 对齐实现与库约定）不改变任何已确认决策、接口契约或验收标准，2026-10-15 经用户授权由 Agent 判定为订正，无需另行确认；依赖许可证的处置见技术影响「依赖许可证」。
+
+审查修复轮十七（2026-10-22，音频截取产物 404 与派生节点生成参考 422 的根因修复）：①**音频截取面板按引用值域派生访问 URL**——`AudioClipStripPanel` 把节点的 `audioSrc` 原样交给 wavesurfer，而持久化值域是存储 key（wavesurfer 只接受 URL）：浏览器把 key 按当前页面解析成 `/canvas/{key}` 请求而 404。面板内以 `fileRefUrl(audioSrc)` 统一派生（key → `/api/files/{key}`，外部 URL 透传），wavesurfer 与重建依赖改用派生值。②**派生节点持久化值域统一为存储 key**——编辑接口响应同时携带 `key` 与展示 `url`，四条单产物编辑路径（音频截取 / 变速、视频截取 / 裁剪）的 serverTask 按 `data` 形状投影 `?.url`，客户端管线也投影 `.url`，派生节点 `data.src` 因此落成 `/api/files/...` 展示 URL——该值不在持久化值域内，作为下游生成参考会被服务端 file-ref 校验拒绝（422，值域约定见 `specs/storage-reference-key-unification.md`）。新增 `readEditResultKey`（`readEditEnvelope<{ key }>` 的单一投影，只取 `?.key`；信封成功但缺 `key` 按失败提示，与抽帧「200 缺字段」同形，不静默丢弃任务；信封上下文类型同时提取为 `EditEnvelopeContext`，两条投影共用），四条路径的 serverTask 统一经其投影；客户端管线的 `clientTask` 改取 `.key`，`onSuccess` 形参更名 `url → key`；抽帧改为要求响应携带 `frame_key`（原判 `url`），分离音轨改用 `video.key` / `audio.key`。③**派生节点创建 helper 按引用值域更名**——`createNodeFromUrl` / `createAudioNodeFromUrl` / `createVideoNodeFromUrl` → `createImageNodeFromRef` / `createAudioNodeFromRef` / `createVideoNodeFromRef`，参数 `url → ref`（存储 key 或外部 URL），VideoNode / AudioNode / DirectorViewport 的调用点全部同步迁移（上传派生 sink 直接构建节点并已写 `src: result.key`，不在更名范围），函数注释写明展示 URL 不得写入节点。④**回归测试与源码防线**——`readEditResultKey` 单测（key 优先于 url / 成功缺 key 按失败提示 / 失败按 errorKey 通知 / 中止丢弃且不通知）；音频截取 / 变速 / 视频截取 / 裁剪 / 分离音轨五条路径的客户端与服务端兜底均断言派生节点收到存储 key；抽帧断言 `frame_key` 交给 `createImageNodeFromRef`；AudioClipStripPanel 断言波形 URL 为 `fileRefUrl` 派生的托管 URL；新增 web 侧源码断言 `web/src/__tests__/architecture/storage-key-write-contract.test.ts`（节点创建调用实参不含 `url` 标识符、节点数据 `src` 写入不来自 URL 表达式、编辑信封不按 `{ url }` 声明、上传写入层不做引用值 → URL 派生；含函数定义排除、调用点计数与历史回归形态自检）。静态扫描不穷举解构别名等形态，运行期由五条路径的客户端 / 服务端回归测试补充，不宣称覆盖全部写入形态。⑤Spec 同步：规则 3.1 明确节点创建只消费 `key`（`url` 为渲染期派生值，分离音轨按双产物信封消费各自 `key`），轮七补注投影已由 `?.url` 收敛为 `?.key`。⑥审查处置（记录理由）：编辑任务的 `clientTask` / `serverTask` / `onSuccess` 三元组重复属既有结构，各调用点参数、标签与产物节点不同，抽公共助手需传 8 个以上参数（AGENTS 三.5 过度抽象约束），维持现状；`frame_key` 与 `data.key` 的命名差异属服务端既有契约，不在本轮更名。
+
+审查修复轮十八（2026-10-22，第五轮未提交代码审查后用户指示根因修复）：
+①**web 源码绊线改用 TypeScript AST**——原文本扫描不剥注释（注释中的历史形态误报、注释内括号会破坏实参配对）且只能靠前缀猜函数定义（生成器 / 方法简写会被计为调用点），并留有 `data.src = fileRefUrl(key)` 这类 helper 派生值的盲区。改为 `ts.createSourceFile` + AST 遍历：注释与字符串天然不参与匹配，定义不是 `CallExpression`，URL 值判定覆盖 `.url` / url 结尾标识符 / `fileRefUrl` 等六个派生 helper（含 `withManagedFileWidth`）/ 托管路径字面量，递归覆盖条件、数组、对象、箭头函数表达式体与 `map(...)` 等间接形态。扫描面从「节点 `data.src`」扩展到全部持久化引用字段（`src` / `ref` / `fileKey(s)` / `refImages|Audios|Videos` / `multiResultKeys` / `resultKeys` / `avatarKey` / `coverKey`），对对象字面量与 `*.data.<field>` 赋值同时生效；节点创建调用改查第 2 参（引用形参）。上传写入层的 token 禁令保留（helper 标识符 + `/api/files/` 字面量）。调用点基线固定为 23，helper / 工厂更名或扫描器失明时直接失败。静态扫描仍不穷举 helper 别名与间接派发，该限制写入测试头注释与 Spec，运行期回归为准。派生 helper 注释恢复「`/api/files/` 展示 URL」的准确措辞（AST 不再把注释当代码）。
+②**分离音轨双产物补缺 key 守卫**——`readDetachAudioResult` 对 `readEditEnvelope<DetachAudioResult>` 要求 `audio.key` 与 `video.key` 同时存在，缺一即按失败提示并触发 `onErrorCode(undefined)`（与 `readEditResultKey` 同一联动契约），不再把 `undefined` 当 `src` 创建节点；`readEditResultKey` 的缺 key 提示同批补齐 `retryAfterOf(res)` 实参。补 `file-api` 投影单测（双 key 优先 / 任一缺失属契约破坏）与 VideoNode 集成回归（服务端 200 缺 `audio.key` 时不创建任何派生节点）。
+③测试夹具 `jsonResponse(body, ok)` 的布尔控制参数拆分为 `jsonResponse` / `errorResponse`，消除控制标志。
+④审查处置（记录理由，不改代码）：`createVideoNodeFromRef` 的 10 个位置参数为既有 API 形状，本批未新增参数且改名属于跨调用方的无关重构（AGENTS 六.1），维持现状；`StorageRef` 品牌类型是可选的领域类型强化，但当前值域校验已在服务端 schema 与运行期回归双层覆盖，改名会扩散到本 Spec 范围外，暂不引入；`clearAllMocks` 不清 `mockResolvedValueOnce` 队列是既有测试卫生风险，本批用例未在队列中留残留，不新增全仓级夹具改造。
+
+审查修复轮十九（2026-10-22，第六轮未提交代码审查后用户指示根因修复）：
+①**抽帧信封解析收敛**——`VideoNode` 的抽帧 `serverTask` 仍手写「防御解析 → 中止检查 → `!res.ok` 通知 → 缺字段通知」，与 `readEditResultKey` 已封装的契约重复且已随本次改动被触及。新增 `readCapturedFrame`（`readEditEnvelope<CapturedFrameInfo>` + `frame_key` 缺失守卫），调用点只剩请求 + 投影两行；200 缺 `frame_key` 仍按失败提示（轮六保留独立实现的理由由共享投影承接），补回归用例锁定「不创建节点 + 有提示」。
+②测试夹具去重：`detachedMedia` 移入 `storage-fixtures`，VideoNode 与 file-api 测试共用，删除两份同形构造。
+③审查处置（记录理由，不改代码）：`readEditResultKey` 的「undefined 表示已中止或已按 ctx 提示失败」经复核无过度声明——`readEditEnvelope` 对 200 缺 `data` / 非 JSON 同样先走失败通知再返回 undefined；`NODE_CREATION_CALLS` 基线耦合为有意的扫描面绊线，非缺陷。
+
+审查修复轮二十（2026-10-22，第七轮未提交代码审查后用户指示根因修复）：
+①**编辑信封持久化投影收敛**——`readEditResultKey` / `readDetachAudioResult` / `readCapturedFrame` 三处重复的「读信封 → 缺 key 拒绝」骨架收敛为 `readPersistedEnvelope(res, signal, ctx, hasPersistedKey)` 基座，差异只剩必填字段判定，失败提示与联动契约单点维护。
+②**抽帧投影去掉渲染期 url**——`readCapturedFrame` 返回 `CapturedFrameRef { key, time, width, height }`（服务端 `CapturedFrameInfo` 的 `url` 不进入投影），调用方在类型层面无从把展示 URL 写入节点，与 `readEditResultKey` 的 key 值域对称。
+③**视频回归夹具改用 key 值域**——VideoNode 测试的源节点 `data.src` 由 `/api/files/test.mp4` 改为 `storageKey(...)`；播放源与海报断言改为组件派生的 `/api/files/{key}`，编辑接口入参断言为存储 key。五条编辑路径的回归自此以生产实际持久化形态（存储 key）行使，轮十七的值域前提在测试层闭环。
+④**测试助手去重**——新增 `expectDerivedAudioNode` 补齐视频 / 音频断言对称；`stubNode` 收口六处派生工厂占位节点字面量。
+⑤验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 46 用例、web test（130 文件 / 959 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+审查修复轮二十一（2026-10-22，第八轮未提交代码审查后用户指示根因修复）：
+①**删除 `toFileKey` 兼容层**——持久化值域统一为存储 key 后，`toFileKey` 的 `/api/files/` 前缀剥离与查询串剥离只服务于已不存在的旧 URL 值域；节点编辑动作（抽帧 / 分离音轨 / 视频截取 / 裁剪 / 音频截取 / 变速）直接把节点 `src` 交给客户端管线与服务端接口，雪碧图与代理请求以 `isStorageKey` 判定（服务端接口只接受 key，外部 URL / 本地预览地址不再发起必然失败的请求，与两处面板注释的既有契约一致）。全部 9 个调用点同步迁移，不保留别名或兼容 wrapper。
+②**单产物投影命名表意化**——`readEditKey` → `readEditResultKey`，测试夹具 `editKeyResponse` → `editResultResponse`（旧名读作「编辑 key」易误解为 key 本身的编辑；投影语义是编辑结果里的持久化 key，与 `readDetachAudioResult` 对称）。
+③**测试脚手架去重**——新增 `web/src/__tests__/test-utils/canvas-node.ts`：`nodeViewProps` 收口 VideoNode / AudioNode 编辑测试的 React Flow 静止态 props 组装，`flushMicrotasks` 收口两份相同的 8 轮微任务冲洗；`stubNode` 形参改用 Vitest `Mock` 类型，删除手写结构类型。音频测试再以 `openNode` 收口「挂载 + 首帧冲洗」。
+④**夹具值域与投影覆盖补齐**——`AudioClipStripPanel.test.tsx` 默认夹具由托管 URL 改为 `storageKey(...)`（生产值域），并补外部 URL 原样透传用例；`file-api.test.ts` 补 `readCapturedFrame` 直接单测（成功投影只含 key / time / width / height，展示 url 不暴露；200 信封成功但缺 `frame_key` 按失败提示并触发 `onErrorCode(undefined)`）。
+⑤审查处置（记录理由，不改代码）：`expectDerivedVideoNode` / `expectDerivedAudioNode` 保持独立——两种派生工厂的位置参数顺序不同（视频为 key + 宽高 + 标签 + store，音频为 key + 标签 + store + position），合并只能共享 `(sourceId, key)` 前缀并把尾参拼成数组，反而隐藏各工厂的实参位置，违反 AGENTS 三.5；两项工厂共享的创建契约已由 `deriveWrites` 等既有 helper 与各自断言注释表达。
+⑥验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 用例、web test（130 文件 / 962 用例）串行通过；server 代码未改动，未重跑 server 测试套件。
+
+审查修复轮二十二（2026-10-22，第九轮未提交代码审查后用户指示根因修复）：
+①**引用值 → key 归一收口 `storageKeyOf`**——`isStorageKey(x) ? x : null` 的三元式在 FrameStripPanel / ClipStripPanel / use-frame-sprite 各写一份，属同一条「媒体接口只接受存储 key」门控规则的多处独立实现，后续任何一处改判都会漂移。`shared/url.ts` 新增 `storageKeyOf(value): string | null` 单点归一（严格 key 原样返回，外部 http(s) / data: / blob: / 空值一律 null），三处调用点与六个编辑处理函数（VideoNode 抽帧 / 分离音轨 / 片段截取 / 画面裁剪，AudioNode 音频截取 / 变速）统一经它判定并以归一后的 key 作为接口入参。
+②**编辑入口按 key 值域门控**——媒体编辑接口只接受存储 key，对非 key 源发起请求必然失败，故 NodeToolbar 的抽帧 / 片段截取 / 裁剪 / 分离音轨 / 音频截取 / 变速按钮在 `storageKeyOf(assetSrc)` 为 null 时禁用；外部 URL 节点的播放、下载、预览、收藏、反推等不需要 key 的入口保持可用。这是接口能力的如实表达（[storage-reference-key-unification.md](storage-reference-key-unification.md) 规则 3.1），而非对特定来源的特判。
+③**面板确认键同域门控**——FrameStripPanel / ClipStripPanel / AudioClipStripPanel 的确认键在无 key 时禁用，处理函数同步早退；VideoNode 的抽帧 / 裁剪处理函数在无 key 时关闭对应面板，避免留下无响应的确认入口（面板只能由工具栏打开，此为纵深防御）。
+④**属性命名如实化**——`AudioClipStripPanel` 的 `audioSrc` → `audioRef`，与 VideoNode / DirectorViewport 的引用值域命名一致（值可以是存储 key 或外部 URL，不是可直接播放的 src）；VideoNode 调用点同步。
+⑤**测试**——`file-api.test.ts` 的共享可变 `ctx` 改为 `makeCtx(overrides)` 工厂：`NotificationApi` 完整实现（四通道 `vi.fn()`），`t` 诚实断言为 `TFunction`；抽帧 / 分离音轨断言改用各自调用点的真实兜底 key（`error.capture_frame.capture_failed` / `detach.failed`，原断言误用 `error.clip.extract_failed`，锁定的是测试自己的假设）；`server/__tests__/shared/url.test.ts` 补 `storageKeyOf` 值域用例（key 原样返回；外部 URL / data: / blob: / 空值 → null）。
+⑥审查处置（记录理由，不改语义）：`nodeViewProps` 的 `as unknown as ComponentProps<T>` 双重断言保留并注释——React Flow 运行时注入的 handle bounds 等字段测试无法构造，节点组件也不读取；`flushMicrotasks` 的固定 8 轮提为 `MICROTASK_TURNS` 常量并注释理由——编辑管线每个 `await` 消耗一轮微任务，且部分用例在 fake timers 下调用，不能用宏任务冲刷。
+⑦验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 web 用例 + 9 个 server shared url 用例、web test（130 文件 / 962 用例）串行通过；server 仅新增 url 契约测试，未改动业务代码，未重跑 server 全量套件。
+
+审查修复轮二十三（2026-10-22，第十轮未提交代码审查后用户指示根因修复）：
+①**预览代理加载收口 `useVideoProxy`**——`ClipStripPanel` 与 `FrameStripPanel` 各有一份同形的 `fetchVideoProxy` effect（中止、外部 URL 跳过、失败归类、手动重试），本次 diff 同时改了两份，属典型 shotgun 形状。新增 `web/src/features/canvas/hooks/use-video-proxy.ts`：暴露 `status / url / duration / error / retry / markFailed`；`ClipStripPanel` 与 `FrameStripPanel` 只消费返回值，删除各自的代理状态、重试计数与请求 effect，顺带消除 `[videoSrc, videoKey, proxyAttempt]` 里由 `videoSrc` 派生的冗余依赖。
+②**换源失效改为派生状态**——hook 内部以「来源 + 重试代数」标识已定论结果，输入不一致即派生为 pending：换视频源或点击重试时旧代理地址立即失效，不会在新源上继续沿用；不在 effect 体内同步 `setState`（react-hooks 规则的 error 级约束，也避免级联渲染）。`markFailed` 承接「代理可下载但浏览器解码不了」的上报（无 error：重试同一份缓存产物不会成功）。
+③**测试夹具命名去歧义**——`storageKey(seed, ext)` → `makeStorageKey`（它是构造器，与 shared/url 的 `isStorageKey` / `storageKeyOf` 谓词家族区分），四个测试文件的导入与调用同步；新增 `use-video-proxy.test.ts`（4 用例：key 发起请求 / 外部 URL 不请求 / 失败码与重试 / 换源失效与 markFailed）。
+④**信封基座精确判定**——`readPersistedEnvelope` 的 `if (!data)` 改为 `if (data === undefined)`：只有「已中止 / 已按 ctx 提示」走该分支，泛型 T 若为原始值（0 / ""）是合法载荷，不应被 falsy 判断吞掉。
+⑤**存量脏数据盘点**——对当前启用的 server 模式 PG 只读审计画布节点 `data.src`：4 个项目、349 个严格存储 key、0 个 `/api/files/` 展示 URL、3 个空值；缺陷窗口未留下脏行，无需改写。明细与结论见 [storage-reference-key-unification.md](storage-reference-key-unification.md) 第十三轮。
+⑥验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 + 4 用例、web test（131 文件 / 966 用例）、server 全量（89 文件 / 977 用例通过、11 skip）串行通过。
+
+审查修复轮二十四（2026-10-22，第十一轮未提交代码审查后用户指示根因修复）：
+①**非 key 源的定论语义显式化**——`useVideoProxy` 新增 `NO_PROXY` 常量（`ready` + `url: null`：没有代理可用，且不是请求失败，无处重试），替代 `{ ...PENDING, status: "ready" }` 这种「把 pending 展开成 ready」的写法。旧 ClipStripPanel 内联实现用 `"error" in outcome` 判别，会把非 key 源归类为 `failed`；统一后语义为「已定论、无代理」。面板可操作性判定不变（仍要求 `proxyUrl !== null`），且外部 URL 节点的编辑入口已在轮二十二禁用，不存在可达的 UI 回归。区分两种「无 url」：非 key 源是设计内定论；**key 请求成功却缺 `url` 属响应契约破坏**，归类为 `failed`（无错误码、重试无意义），与编辑响应缺 key 的判定同形。
+②**测试夹具去投机参数**——`makeStorageKey(seed, ext, userId = 1)` 无调用方传 `userId`，删除该参数并在注释声明测试固定用户 1。
+③**InfiniteCanvas 重复取值收敛**——音频截取面板的 `key` 与 `audioRef` 各写一遍同一 `src` 取值，抽为 `audioClipRef` 局部量共用。
+④**文档引用修正**——`use-video-proxy.test.ts` 头部引用的轮次由二十二改为二十三（hook 抽取所在轮）。
+⑤验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 5 + 49 用例、web test（131 文件 / 967 用例）串行通过；本轮未触碰 server 代码，server 全量沿用轮二十三结果。
+
+审查修复轮二十五（2026-10-22，第十二轮未提交代码审查后用户指示根因修复）：
+①**信封「缺失」判定统一为 undefined**——`readEditEnvelope` 原用 `!json?.data` 拒绝任何 falsy 载荷，与轮二十三 `readPersistedEnvelope` 的 `data === undefined` 形成两套互相矛盾的「缺失」定义（前者的注释声称保护原始值载荷，实际在信封层已被拦掉）。两处统一为「缺失 = undefined」，泛型 T 为原始值时 0 / "" 是合法载荷；`readEditEnvelope` 仅被同文件投影使用，取消导出（死导出面）。
+②**InfiniteCanvas 取值重复收敛**——帧序列 / 片段截取 / 音频截取三个面板的 `key` 与媒体 prop 各自重复写同一 `src` 取值，抽为 `frameStripRef` / `clipStripRef` / `audioClipRef`，源变化时 key 与 prop 必然一致。
+③**测试 mock 卫生统一**——`AudioNode.edit.test.tsx` 与 `VideoNode.test.tsx` 的收尾由 `vi.clearAllMocks()` 改为 `vi.resetAllMocks()`（清掉未消费的 Once 队列与实现），与 `use-video-proxy.test.ts` 一致；默认实现仍在各文件 `beforeEach` 重新建立。
+④**措辞对齐**——NodeToolbar 注释「隐藏编辑入口」改为「禁用编辑入口」，与 Spec 规则 3.1 及轮二十二的实现一致。
+⑤审查处置（记录理由，不改代码）：`NO_PROXY` 的 `ready + url: null` 保留——为非 key 源引入第四种状态只会给不可达 UI 路径增加分支（AGENTS 三.5），语义已由常量名与注释表达；`storageKeyOf` 的单行委托由三.3 单点规则覆盖；10 参数工厂、`ref: string`、AST 绊线计数均为前轮已记录的设计处置。
+⑥验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 50 用例、web test（131 文件 / 967 用例）串行通过；本轮未触碰 server 代码，server 全量沿用轮二十三结果。
+
+审查修复轮二十六（2026-10-22，第十三轮未提交代码审查后用户指示根因修复）：
+①**引用值命名全族统一**——轮二十二④只把 `AudioClipStripPanel` 的 `audioSrc` 改为 `audioRef`，同一值域的 `FrameStripPanel` / `ClipStripPanel` 的 `videoSrc`、`useFrameSprite` / `useVideoProxy` 的形参仍是旧名。全部改为 `videoRef`，`InfiniteCanvas` 两处调用点同步；与「值可以是存储 key 或外部 URL，不是可直接播放的 src」的约定一致，不保留别名。
+②**死导出清理**——`retryAfterOf` 最后一个外部导入方（VideoNode）已随本轮改动消失，取消导出，仅同文件使用。
+③**无代理提示如实化**——`ClipStripPanel` 在 `ready` 且 `proxyUrl === null` 时原先落入「缓冲中」分支；改为显示「代理不可用」。该状态在工具栏门控下不可达（非 key 源编辑入口已禁用），但兜底提示不应把「已定论、无代理」表达成永久等待。
+④审查处置（记录理由，不改代码）：`markFailed` 在 pending 时为 no-op——swap effect 只在 `proxyUrl` 非空（即已就绪）时运行，报告不可能先于定论到达；保守守卫也避免迟到的解码失败覆盖更新的 ready。`InfiniteCanvas` 三个面板的取值三元式形式相同但各自绑定不同宿主，抽 helper 仅为三行赋值增加间接层（AGENTS 三.5），保留。
+⑤验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 54 用例、web test（131 文件 / 967 用例）串行通过；本轮未触碰 server 代码，server 全量沿用轮二十三结果。
 
 分离音轨补充：静音视频输出容器 = MP4 封装（扩展名 .mp4，与源扩展名可能不同）；webm / mkv / avi 容器与非 AAC 音轨 → 回退服务端（服务端沿用「copy 失败转 PCM wav」的既有回退）。
 

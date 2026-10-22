@@ -11,6 +11,7 @@
  */
 "use client";
 
+import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -20,8 +21,8 @@ import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fetchVideoProxy, type MediaRequestError,readMediaError, toFileKey } from "@/features/canvas/api/file-api";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
+import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, isVideoPlaying, onVideoEnded, pauseVideo, playVideo, seekVideo, setVideoTime, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
@@ -38,12 +39,14 @@ const FALLBACK_FRAME_STEP = 1 / 50;
 
 interface ClipStripPanelProps {
   nodeId: string;
-  videoSrc: string;
+  videoRef: string;
   onClose: () => void;
 }
 
-function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
+function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   const { t } = useTranslation();
+  // 媒体接口只接受存储 key：代理 / 截取都以此判定；外部 URL 仍可播放但不提供编辑
+  const videoKey = storageKeyOf(videoRef);
   // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道；
   // spriteError 带失败原因（限流 / 繁忙 / 生成失败），在轨道上提示并由用户手动重试
   const {
@@ -61,18 +64,17 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
     status,
     error: spriteError,
     retry: retrySprite,
-  } = useFrameSprite(videoSrc);
-  // 代理地址单独留存：它同时也是拖动时节点播放器的临时播放源
-  const [proxyUrl, setProxyUrl] = useState<string | null>(null);
-  // 代理生命周期：pending = 转码中 / ready = 已挂到节点上 / failed = 生成失败（面板禁用）
-  const [proxyState, setProxyState] = useState<"pending" | "ready" | "failed">("pending");
-  // 代理请求的失败原因（服务端错误码）：区分「服务端拒绝（可重试）」与「代理解不出来（重开面板）」
-  const [proxyError, setProxyError] = useState<MediaRequestError | null>(null);
-  // 代理文件的真实时长（服务端转码完探测，随响应返回）
-  const [proxyDuration, setProxyDuration] = useState<number | null>(null);
-  // 手动重试的触发计数：入参不变时也要重新发起代理请求
-  const [proxyAttempt, setProxyAttempt] = useState(0);
-  const retryProxy = useCallback(() => setProxyAttempt((a) => a + 1), []);
+  } = useFrameSprite(videoRef);
+  // 代理地址同时也是拖动时节点播放器的临时播放源；状态 / 失败原因 / 真实时长与重试
+  // 由共享 hook 提供（pending 禁用面板 / failed 提示可重试），换源时自动回到 pending
+  const {
+    status: proxyState,
+    url: proxyUrl,
+    duration: proxyDuration,
+    error: proxyError,
+    retry: retryProxy,
+    markFailed: markProxyFailed,
+  } = useVideoProxy(videoRef);
   // 代理缓冲就绪（canplay）：首次打开时代理刚生成、浏览器缓存全冷，立即拖动
   // 会触发一串 Range 拉取 + 解码跟不上指针（重开时代理已入缓存故无此问题），
   // 因此缓冲就绪前保持禁用，拖动发生时数据必在本地
@@ -125,52 +127,6 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
   const [rangeInitialized, setRangeInitialized] = useState(false);
   const initializedRef = useRef(false);
 
-  // 取预览代理：拖动时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
-  // 不做「超时就放弃」的竞速：转码完成后自动切过去，swapVideoSource 会把当前
-  // 时间点写回，切换不跳位（与 FrameStripPanel 一致）。
-  // 面板卸载 / 换视频 / 手动重试都会中止在途请求：开发模式双挂载与快速开关面板
-  // 不再白白发请求（服务端对被中止的搭车请求只退出等待，不影响仍在等待的生成）。
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-    const videoKey = toFileKey(videoSrc);
-    // 拿不到源键（例如本地预览地址）时不请求代理，节点继续用原视频 scrub；
-    // 请求失败只有两种：本组件中止（忽略），或真实网络失败（进入失败态，可重试）
-    type ProxyOutcome = { url: string; duration: number | null } | { error: MediaRequestError | null };
-    const request: Promise<ProxyOutcome | undefined> = videoKey
-      ? fetchVideoProxy(videoKey, controller.signal)
-          .then(async (res): Promise<ProxyOutcome> => {
-            if (!res.ok) return { error: await readMediaError(res) };
-            const json = (await res.json()) as { data?: { url?: string; duration?: number } };
-            return json.data?.url
-              ? { url: json.data.url, duration: json.data.duration ?? null }
-              : { error: null };
-          })
-          .catch((): ProxyOutcome | undefined => {
-            if (controller.signal.aborted) return undefined;
-            return { error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() } };
-          })
-      : Promise.resolve<ProxyOutcome>({ error: null });
-    void request.then((outcome) => {
-      if (cancelled || outcome === undefined) return;
-      if ("error" in outcome) {
-        setProxyUrl(null);
-        setProxyDuration(null);
-        setProxyState("failed");
-        setProxyError(outcome.error);
-        return;
-      }
-      setProxyUrl(outcome.url);
-      setProxyDuration(outcome.duration);
-      setProxyState("ready");
-      setProxyError(null);
-    });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [videoSrc, proxyAttempt]);
-
   // 选帧期间暂停节点播放，避免 hover 播放干扰视觉判断
   useEffect(() => {
     pauseVideo(nodeId);
@@ -190,10 +146,10 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
       resume: isVideoPlaying(nodeId),
       onReady: (ok) => {
         if (ok) setBufferReady(true);
-        else setProxyState("failed");
+        else markProxyFailed();
       },
     });
-  }, [nodeId, proxyUrl]);
+  }, [nodeId, proxyUrl, markProxyFailed]);
 
   // 可操作 = 雪碧图时长可信 + 代理已就绪 + 代理缓冲就绪：三者缺一，时间轴与
   // 画面都不可信（拖原视频长 GOP 必然不跟手、冷缓存 seek 跟不上指针），
@@ -551,9 +507,9 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
       面板（与 onClose 幂等）。src 失效（清除/撤销）时宿主 memo 判空，画布会
       自动清除 clipCaptureNodeId 关闭面板；Esc / 点空白是通用退出路径 */
   const handleConfirm = useCallback(() => {
-    if (!rangeValid) return;
+    if (!rangeValid || !videoKey) return;
     dispatchNodeAction(nodeId, "extract-clip", { start: inTime, end: outTime });
-  }, [rangeValid, nodeId, inTime, outTime]);
+  }, [rangeValid, videoKey, nodeId, inTime, outTime]);
 
   /** 整段平移：按住亮带中段拖动，时长不变地平移整个区间（两端同步钳在轨道内）。
       画面连续 scrub 到新区间的入点帧（与拖手柄一致），松手后恢复循环播放 */
@@ -795,6 +751,14 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
               >
                 {t("clip.proxyLoading")}
               </span>
+            ) : proxyUrl === null ? (
+              // 已定论但没有代理可用（非 key 源；编辑入口本应已禁用）：
+              // 如实显示不可用，而不是永远停在「缓冲中」
+              <span
+                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
+              >
+                {t("clip.proxyFailed")}
+              </span>
             ) : (
               <span
                 className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
@@ -831,7 +795,7 @@ function ClipStripPanel({ nodeId, videoSrc, onClose }: ClipStripPanelProps) {
 
       {/* 确认：反色 ↑（与其它编辑工具栏一致）；转码/缓冲未就绪时整段禁用，
           避免可点击却静默无响应 */}
-      <IconActionButton onClick={handleConfirm} disabled={!rangeValid} />
+      <IconActionButton onClick={handleConfirm} disabled={!rangeValid || !videoKey} />
     </Card>
   );
 }
