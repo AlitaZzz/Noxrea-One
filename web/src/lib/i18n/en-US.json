@@ -146,7 +146,7 @@
     "video": "Video",
     "audio": "Audio",
     "audioSpeed": "Speed",
-    "speedSuffix": "Speed {speed}",
+    "speedSuffix": "Speed {{speed}}",
     "group": "Group",
     "groupWithCount": "Group of {{count}} nodes",
     "groupNamedWithCount": "{{label}} · {{count}} nodes",
