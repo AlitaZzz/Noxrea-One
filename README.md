@@ -42,7 +42,7 @@ Noxrea One 是一个面向创意生产流程的 AI Canvas 应用。你可以在�
 | 数据库 | Prisma、PostgreSQL | 用户、项目、任务、模型、素材与 Agent 数据；开发与部署统一使用外置 PostgreSQL |
 | 模型网关 | Hono Services | 能力路由、协议适配、参数映射与任务执行 |
 | 媒体处理 | FFmpeg、Sharp | 视频抽帧、音频分离与图像处理 |
-| 部署 | Docker、Node.js 20 | 单容器运行前端与后端（数据库外置 PostgreSQL），`/data` 持久化数据 |
+| 部署 | Docker、Node.js 22.12+ | 单容器运行前端与后端（数据库外置 PostgreSQL），`/data` 持久化数据 |
 
 Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署中，前端端口为 `3000`，后端端口为 `4000`；容器只对外暴露 `3000`。
 
@@ -69,7 +69,7 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 
 1. 准备环境
 
-   - Node.js 20 或更高版本
+   - Node.js 22.12+（Vite 7 的下限；部署镜像同为 node:22-slim）
    - npm
    - FFmpeg 完整发行包（包含 `ffmpeg` 和 `ffprobe`）；默认在项目根目录的 `bin` 下查找这两个可执行文件，Windows 使用 `.exe` 后缀
 
@@ -160,6 +160,8 @@ Next.js 将 `/api/*` 请求透明转发到 Hono 服务。本地单容器部署�
 | `FFMPEG_PATH` | `ffmpeg` 和 `ffprobe` 所在目录，默认 `bin` |
 | `RESOURCES_DIR` | 模型配置、Prompt 与技能资源目录 |
 | `LOG_LEVEL` | 日志级别，可选 `DEBUG`、`INFO`、`WARN`、`ERROR` |
+| `METRICS_ENABLED` | 是否暴露 `GET /metrics`，默认 `false`（关闭时返回 404）；只接受 `true` / `false` / `1` / `0` |
+| `METRICS_TOKEN` | `/metrics` 的 Bearer token；`METRICS_ENABLED` 开启时必填，否则启动失败 |
 | `ALLOW_INSECURE_SECRETS` | 是否允许占位密钥启动，仅建议本地开发使用 |
 
 生产环境务必使用随机 `JWT_SECRET_KEY`，不要开启 `ALLOW_INSECURE_SECRETS`。
@@ -234,11 +236,19 @@ docker build -t noxrea-one .
 
 容器内后端固定监听 `0.0.0.0:4000`，与构建期固化的前端 `/api` 代理目标一致，不读取 `API_HOST` / `API_PORT`。前后端分开部署时，用构建参数 `--build-arg WEB_API_ORIGIN=http://backend-host:4000` 指定后端地址；应用名用 `--build-arg WEB_APP_NAME=...`。
 
-### 任务队列运维与告警（Redis）
+### 健康检查、指标与告警（Redis）
 
-任务队列（BullMQ）依赖 Redis 派发；`/api/health` 的 `redis` 字段为运行期 readiness（LB/人工核查用），`queueDepth` 为 waiting + delayed + active 总深度。建议的外部监控口径：
+存活与就绪分开暴露（specs/observability-baseline.md）：
 
-- **`/api/health` 返回 `redis: false`** ⇒ 运行期 Redis 不可达，立即告警。此时任务仍落库 pending、恢复后由对账清扫自动排水，但创建侧体验降级，不应长时间持续。
+- `GET /api/health/live`：进程存活，无条件 200；编排的 **liveness** 探针指向这里。
+- `GET /api/health/ready`：依赖就绪，`checks` 含 `database` / `redis` / `worker` / `queueDepth` / `storage`；数据库、Redis 或存储探测任一失败返回 503（摘流，不重启）；编排的 **readiness** 探针指向这里。
+
+`GET /metrics`（Prometheus 文本）默认 404；设置 `METRICS_ENABLED=true` 时必须同时配置 `METRICS_TOKEN`，否则启动失败。该端点要求 `Authorization: Bearer <METRICS_TOKEN>`，自身不参与限流与请求统计。
+
+任务队列（BullMQ）依赖 Redis 派发；`/api/health/ready` 的 `redis` 字段为运行期就绪，`queueDepth` 为 waiting + delayed + active 总深度（Redis 不可达时为 `null`）。建议的外部监控口径：
+
+- **`/api/health/ready` 返回 `checks.redis: false`** ⇒ 运行期 Redis 不可达，立即告警。此时任务仍落库 pending、恢复后由对账清扫自动排水，但创建侧体验降级，不应长时间持续。
+- **`metrics` 的 `queue_depth` 持续增长、`worker_up` 为 0** ⇒ 消费能力不足或 worker 停摆；两者均由抓取时读数给出（Redis 不可达时保持上一个值，不冒充 0）。
 - **`queueDepth` 持续增长不回落** ⇒ 消费能力不足或 Redis 写入后 worker 停摆；正常水位应随提交量波动并在分钟级回落。
 - **Redis `used_memory` 逼近 `maxmemory`（256mb）** ⇒ 告警并复核容量；策略为 noeviction，写满后队列写入将报错（自愈路径依赖清扫，但应扩容根除）。限流键按窗口 TTL 自动过期，但大量不同来源 IP 会在窗口内推高键数量（每个键一个 ZSET）；此类增长应结合 `noxrea:ratelimit:*` 键数量一并观察。
 - **failed 计数**（基础设施级瞬断重试耗尽）用 `redis-cli` 查看：
@@ -265,28 +275,67 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 
 ## 对象存储（S3 兼容后端）
 
-存储后端按 `system_settings` 的 `storage.backend` 二选一（`local` 本地盘 / `s3` 兼容对象存储，重启生效，不支持热切换）。S3 模式下文件字节默认不经过应用服务器：读取 302 重定向到预签名 URL、上传走预签名直传；连接参数与分发策略同样存放在 `system_settings`（键定义见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)）：
+存储后端按 `system_settings` 的 `storage.backend` 二选一（`local` 本地盘 / `s3` 兼容对象存储，重启生效，不支持热切换）。读取形态由后端类型决定、不可配置：`s3` 走**签名直连**——浏览器先向 `POST /api/files/access` 换取预签名 URL，再直连 bucket 取字节（应用不转发字节、无 302）；`local` 由应用流式返回。上传走预签名直传。连接参数同样存放在 `system_settings`（键定义见 [`server/core/settings/registry.ts`](server/core/settings/registry.ts)）：
 
 | 设置键 | 默认 | 说明 |
 | --- | --- | --- |
 | `storage.s3.endpoint` / `bucket` / `region` | 空 | 连接三要素；`backend=s3` 时必填，缺失则启动失败并指明键名 |
 | `storage.s3.access_key_id` / `secret_access_key` | 空 | 访问凭据；`backend=s3` 时必填 |
-| `storage.s3.path_style` | `true` | path-style 寻址（MinIO 等自建为 true） |
+| `storage.s3.provider` | `generic` | 提供方 profile：`minio \| aws \| r2 \| oss \| cos \| generic`。决定寻址风格与能力基线（见下方对照表）；`generic` 由启动探测决定寻址 |
 | `storage.s3.prefix` | 空 | 对象 key 统一前缀（bucket 复用） |
-| `storage.s3.signed_url_ttl_seconds` | `3600` | 预签名有效期 |
-| `storage.s3.delivery` | `redirect` | `redirect`（302 预签名）/ `proxy`（服务器流式转发；预签名 URL 对浏览器不可达时的显式备选，须显式设置） |
 | `storage.upstream_ref_delivery` | `signed-url` | 上游 AI 拉取引用媒体的唯一开关：`signed-url`（签名 URL；签发不能成立——S3 签名故障 / local 未配 `public_base_url` / 签名操作故障——明确失败）/ `base64`（读盘转 data URL） |
 
-`backend=s3` 时启动即对 bucket 做 HeadBucket 探测，连通性或凭据失败会直接终止启动（不静默降级到本地盘）。
+浏览器读路径的签名 TTL（4 小时）与签名窗口（1 小时）是代码常量，不可配置（`server/services/storage/signing.ts`）：签名时间对齐到窗口的 epoch 绝对边界，窗口内同一 key 签出字节一致的 URL；**URL 寿命 = TTL**，窗口只决定稳定期（缓存寿命取 TTL，即 `expiresAt - issuedAt`），实际剩余有效期落在 `[TTL - 窗口, TTL]`。描述接口同时给出 `expiresAt` 与 `refreshAt`（寿命 80% 处），前端据此刷新。
+
+`backend=s3` 时启动即做六项能力探测（连通 `HeadBucket` → 写 → 回读字节一致 → `stat` → 预签名 GET 回读 → `response-*` 覆盖头；另有 CORS 与时钟偏差），致命项失败直接终止启动（不静默降级到本地盘）。探测摘要以一条结构化日志输出，能力位进 `/metrics`（`storage_probe_ok` / `storage_probe_clock_skew_seconds`），`/api/health/ready` 的 `checks.storage` 只报告探测是否成功。
+
+### 提供方对照表（`storage.s3.provider`）
+
+| provider | 典型端点 | 寻址风格 | `region` | 已知限制 |
+| --- | --- | --- | --- | --- |
+| `minio` | 自建 `http(s)://host:port` | path-style | 任意（常用 `us-east-1`，MinIO 不校验） | 自建端点无通配 DNS/证书时只能 path-style；CORS 需显式配置 |
+| `aws` | `https://s3.<region>.amazonaws.com` | virtual-hosted | 桶所在区域 | 启用 SSE-KMS/SSE-C 会使 ETag≠MD5（迁移校验自动降级为 size + 重读哈希） |
+| `r2` | `https://<account>.r2.cloudflarestorage.com` | virtual-hosted（两种皆可） | `auto` | 无对象 ACL；ETag 语义与 AWS 不同 |
+| `oss` | `https://s3.oss-<region>.aliyuncs.com` 或自定义域名 | 仅 virtual-hosted | 区域串，以厂商文档为准 | **不支持 path-style**；ACL 语义与 AWS 不同；原生能力（`x-oss-process`、样式、归档类型）不接入 |
+| `cos` | `https://cos.<region>.myqcloud.com` | 仅 virtual-hosted（2024-01-01 后新建桶强制） | 区域串，以厂商文档为准 | 同 OSS：不支持 path-style，仅使用 S3 兼容子集 |
+| `generic` | 任意 | 启动探测决定（先 virtual-hosted，失败退 path-style） | 端点要求的值 | 两种寻址都失败时启动失败，错误信息包含各自 URL 形态与 HTTP 状态 |
+
+所需权限（最小集）：`s3:HeadBucket`、`s3:PutObject`、`s3:GetObject`、`s3:DeleteObject`、`s3:ListBucket`（GC、派生删除联动、迁移与审计依赖列举）。
+
+### OSS / COS：只使用 S3 兼容子集
+
+阿里云 OSS 与腾讯云 COS 都提供 S3 兼容接口，本项目只用其 S3 子集，以下能力**不接入**（配了也不生效，或会以错误信息与本项无关的形态失败）：
+
+| 能力 | OSS / COS 原生形态 | 本项目的行为 |
+| --- | --- | --- |
+| 原生 ACL 语义 | 桶/对象级 ACL、`x-oss-acl` 等 | 不使用；访问控制只靠桶策略与凭据（与 AWS/R2 同一口径） |
+| 图片处理 / 媒体处理 | OSS `x-oss-process`、COS 数据万象（`imageMogr2` 等） | 不使用；缩放、抽帧、雪碧图全部由应用侧（sharp / ffmpeg）产出并落 `_cache`/`_posters`/`_sprite`/`_proxy` |
+| 样式 / 图片样式名 | OSS 图片样式、COS 样式 | 不使用 |
+| 存储类型与归档 | OSS 归档/冷归档/低频，COS 归档/深度归档 | 不使用；对象必须可即时 GET（读取路径不做解冻等待） |
+| Bucket 版本控制 | OSS/COS 版本控制 | 不使用；删除语义按「删当前版本即删」设计（派生删除联动、GC、迁移都按此假设） |
+| 静态网站 / 自定义域名 | 各自控制台配置 | 不使用；浏览器直连走预签名 URL，域名只用于 CORS 与 TLS |
+| 对象标签 / 元数据检索 | OSS 对象标签、COS 标签 | 不使用；对象身份由内容寻址 key（sha256）决定 |
+
+`response-*` 覆盖与 CORS 是**必须**验证的两项：前者决定下载走签名直连还是应用流（`storage_provider` 探测会给出 `responseOverrides` 能力位），后者决定浏览器能否直连读图（`browserCors` 能力位）。两者在 OSS/COS 上均有实现，但须以 `npm run storage:provider-check` 在真实桶上确认——官方文档与实测不一致时以探测结果为准。
+
+能力位（provider + 探测得出，业务代码只读能力位）：`addressing`（实际寻址）、`responseOverrides`（端点是否遵守 `response-*`；为 `false` 时下载降级为应用流）、`browserCors`（浏览器跨源是否放行；未放行只告警，但 s3 部署验收要求为 `true`）。预签名回读是探测致命项（不通过即启动失败），因此不是能力位。校验和策略固定为 `WHEN_REQUIRED`（请求与响应两向），不按厂商分叉；单测断言预签名 PUT 的查询串不含任何 `x-amz-checksum-*`。
+
+`browserCors` 的探测用 `network.public_base_url` 的 scheme+host 作为 `Origin`——CORS 按来源白名单放行，只有拿真实站点来源去问才能得到有意义的结果。未配置该设置时退回固定探测源，此时只有通配放行能通过，启动日志会输出说明。
+
+接入新厂商或厂商升级后回归：`npm run storage:provider-check`——用真实凭据执行探测六项 + 256KB 往返，逐项输出结果，致命项失败退出码 1（检查对象全部落在 `_probe/` 命名空间并尽力删除）。
+
+存储后端的契约测试：`server/__tests__/services/storage/s3.integration.test.ts` 在 `TEST_S3_*` 环境变量齐备时对真桶执行（缺省整组跳过，与 Redis 集成测试同口径）；`TEST_S3_PROVIDER` 指定 profile，`TEST_S3_PREFIX` 指定隔离前缀（缺省 `it-probe`，结束即删）。**禁止指向生产桶**——探测会写入并删除对象。
+
+本机无真桶时用容器矩阵跑同一套契约测试：`docker compose -f docker-compose.test.yml up -d` 起一个只绑回环的 MinIO（`minio-init` 负责建桶），再 `npm run test:storage:minio`——该脚本用 `vitest.minio.config.ts` 注入 `TEST_S3_*`（MinIO 地址 + `provider=minio`），跑完 `docker compose -f docker-compose.test.yml down -v`。注入用 `??=`：shell 或 `.env` 里已有的 `TEST_S3_*` 优先，所以同一命令也可直接对演练桶跑。
 
 > **开发 / 演练环境**：`signed-url` 交付（默认）要求签发结果对上游可拉取。`backend=local` 未配 `network.public_base_url` 时，参考生成在**签发环节即明确失败**并提示配置动作——补配置或显式设 `storage.upstream_ref_delivery=base64`（无自动兜底）。`backend=s3` 若 endpoint 对上游不可达（如内网 MinIO），签发仍会成功、失败在**上游拉取时**才暴露（生成环节无信号）——部署期按生产切换核对单做可达性核对，或显式设 `storage.upstream_ref_delivery=base64`。
 
 ### Bucket 初始化清单（切换前必配）
 
-1. **CORS 规则（必配，redirect 读与直传写共同依赖）**：
-   - `AllowedOrigins`：生产域名 + 本地开发来源（如 `http://localhost:9898`）；
+1. **CORS 规则（必配：直传写 + 签名直连读）**：
+   - `AllowedOrigins`：生产域名 + 本地开发来源（如 `http://localhost:9898`）；生产域名须与 `network.public_base_url` 的 scheme+host 一致——启动探测正是拿它当 `Origin` 判定 `browserCors`；
    - `AllowedMethods`：`GET`（读取 / 解码 / 抓帧 / Range 请求）与 `PUT`（预签名直传）；
-   - `AllowedHeaders`：`Range`、`Content-Type`（PUT 只签/只发 Content-Type；Range 不参与签名，但浏览器跨源发送需在 CORS 放行）；
+   - `AllowedHeaders`：`Range`、`Content-Type`（PUT 只签名 host，`Content-Type` 由浏览器原样发送、不参与签名；`Range` 同样不参与签名，但两者都需在 CORS 放行）；
    - `ExposeHeaders`：`Content-Length`、`Content-Range`、`Content-Type`（浏览器侧不消费 ETag：客户端哈希本地计算，复验以服务端重算为准）；
    - `MaxAgeSeconds`：86400。
    - 配置入口：MinIO 用 `mc cors set` / 控制台，R2 与各云 S3 网关用各自仪表盘 / API。
@@ -295,7 +344,9 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 
 ### 对账与维护
 
-低频维护命令：`npm run storage:audit` 对 bucket 与 `file_objects` 全量对账（孤儿 / 缺失 / 超龄 staging / 未知对象清单，只读不修改，发现异常退出码 1）；`npm run storage:gc` 手动触发一轮 GC（与进程内定时任务共用同一周期实现，受 `storage.gc_dry_run` 护栏约束）。
+低频维护命令：`npm run storage:provider-check` 验证对象存储提供方连通性、写读一致性与 `response-*`/CORS 能力（只写 `_probe/` 并删除）；`npm run storage:audit` 对 bucket 与 `file_objects` 全量对账（孤儿 / 缺失 / 超龄 staging / 未知对象清单，只读不修改，发现异常退出码 1）；`npm run storage:gc` 手动触发一轮 GC（与进程内定时任务共用同一周期实现，受 `storage.gc_dry_run` 护栏约束）。
+
+`npm run storage:purge-legacy-cache` 是一次性迁移，不是日常维护：删除 `_cache/` 下旧的无版本档位目录（v1 的 8 档），只用于 [`specs/canvas-media-resolution-lod.md`](specs/canvas-media-resolution-lod.md) 的 `_cache v2` 升级。**破坏性操作**，执行前需确认服务端已全量升级到 v2；幂等可重试，不触碰 `_cache/v2/`、`_posters/`、`_sprite/`、`_proxy/`、`_tmp/` 与源文件。任一枚举失败或存在删除失败的键时退出码 1，可重试。
 
 ### 数据迁移（local ↔ s3）
 
@@ -310,7 +361,7 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 - [ ] 反向代理统一终止 https：应用与 bucket 两个地址经同一代理出 https（消除 mixed-content）；代理**原样透传 `Host` 头**（SigV4 预签名校验依赖）；`storage.s3.endpoint` 填代理后公网地址
 - [ ] 生产凭据全新签发：专用最小权限用户（仅本 bucket 读写），与任何演练值（用户名 / 密钥 / 端点 / 桶名）零关联
 - [ ] CORS 按生产域名配置（上一节清单）；lifecycle 仅限派生前缀、主对象前缀禁配；bucket 未启用 SSE-KMS / SSE-C
-- [ ] bucket endpoint 自浏览器与上游 AI 网络均可达；无法可达的链路须**显式改配**对应模式（读链路 `delivery=proxy` / 上游引用 `upstream_ref_delivery=base64`）并记录决策——两种模式均为显式设置，无自动兜底
+- [ ] bucket endpoint 自浏览器与上游 AI 网络均可达：浏览器读路径始终直连 bucket（签名直连，CORS 必需），上游引用在 `signed-url` 模式下同样需要可达。上游不可达时显式改配 `upstream_ref_delivery=base64` 并记录决策——两种模式均为显式设置，无自动兜底
 
 **冷启动切换**
 
@@ -321,10 +372,10 @@ Docker 环境推荐只挂载 `/data`，入口脚本会使用容器默认值初�
 **验收（全部通过并留痕，任一失败即停止切换、保持或回退 local）**
 
 - [ ] 直传全流程（ticket → 预签名 PUT → complete 提升）与秒传命中
-- [ ] redirect 读：302 → https 预签名 URL 字节一致、Range/206、`?download`、`?w=` 档位派生与命中
+- [ ] 读链路自测：`POST /api/files/access` 返回签名直连 URL → 浏览器直连 bucket 取字节（`w` 派生与命中、下载 disposition、视频 Range/206）；`backend=local` 时同接口返回流式 URL，由应用返回 200/206
 - [ ] 视频抓帧 / 封面正常（crossOrigin × 生产 CORS 联合回归点）
 - [ ] 上游 AI 签名 URL 拉取成功、过期后失效
-- [ ] 删除联动四根派生 + GC 三阶段实跑 + `storage:audit` 对账一致
+- [ ] 删除联动四根派生 + GC 四阶段实跑 + `storage:audit` 对账一致
 
 **收尾**
 
