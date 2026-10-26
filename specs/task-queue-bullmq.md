@@ -138,7 +138,7 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 
 - Redis 宕机：启动期 → 启动失败；运行期 → pending 堆积 + `/api/health/ready` 告警 + 恢复自动排水（规则 7）。
 - 毒任务：`maxStalledCount=2` 封顶置 failed + DB 租约清扫兜底（两道防线阈值量级分离，不互相误杀）。
-- 轮询段 Redis 丢失（flush/宕机）：tick 逾期行由清扫重激活自愈；极端并发下重复轮询尝试对上游为只读 GET，无计费副作用，终态写入由 startedAt 守卫收口；finalize 并发重复为幂等内容寻址写入 + 终态守卫，最多浪费一次下载。
+- 轮询段 Redis 丢失（flush/宕机）：tick 逾期行由清扫重激活自愈；极端并发下重复轮询尝试对上游为只读 GET，无计费副作用，终态写入由 startedAt 守卫收口；finalize 并发重复的写入幂等由内容寻址 + 终态守卫保证，**结果集合的唯一性与去重口径见 [generation-artifact-identity.md](generation-artifact-identity.md)**（本条不再重复陈述），最多浪费一次下载。
 - 回滚：不留兼容层；回退部署 + 摘除 REDIS_URL；DB 状态机列均为 additive，回退后闲置无害，无数据迁移。
 - 残余风险（规则 3 设计定案）：闸门通过后、上游响应前的失权在途提交 = 单次孤儿提交计费；双提交已被闸门结构性排除。
 

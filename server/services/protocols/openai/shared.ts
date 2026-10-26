@@ -73,18 +73,62 @@ export function buildOpenAiPollUrl(
 }
 
 /**
- * 从 JSON 树中提取所有 https:// 和 data: 开头的 URL。
+ * 候选提取的两条表示各自独立成支（specs/generation-artifact-identity.md 规则 3）：
+ * - http(s)：排除 `,` `;` 等分隔符，避免把逗号分隔的多个 URL 粘成一条；
+ * - data：必须允许 `;`（mime 与 base64 标记）与 `,`（载荷分隔），否则
+ *   `data:image/png;base64,AAAA` 会被截断成 `data:image/png`（历史缺陷：
+ *   截断垃圾既丢失真正的产物，又让轮询误判 completed）。
+ * `(?!data:|https?:)` 保证一条匹配不会跨过紧随其后的另一个地址（逗号拼接的
+ * data URL、或 data URL + https URL 都按两个候选提取，前者不会被合成一条载荷，
+ * 后者不会因为被吞进 data 匹配而丢失）。base64 字母表不含 `:`，两种 scheme
+ * 都不可能出现在合法载荷内，故该前瞻只切分非载荷文本。
+ */
+const CANDIDATE_RE =
+  /https?:\/\/[^\s"',;}\]<>]+|(?<![A-Za-z0-9_])data:(?:(?!data:|https?:)[^\s"'<>\\])*/g;
+
+/**
+ * 单条候选的收尾归一；返回 null 表示不是可用候选。
+ * data URL 只做语法形状判定（至少 `data:<meta>,<载荷>`），不做内容校验——
+ * 候选的可信度由下游身份收口兜底，解析层不承担去重与正确性。
+ * 尾部只剔除标点：字母表含 base64url 的 `-` `_`，与 decodeDataUrl 的解码能力一致。
+ */
+function normalizeCandidate(raw: string): string | null {
+  if (raw.startsWith("data:")) {
+    const trimmed = raw.replace(/[^A-Za-z0-9+/=_-]+$/, "");
+    return /^data:[^,]*,./.test(trimmed) ? trimmed : null;
+  }
+  const trimmed = raw.replace(/[)\]}>.,;!?]+$/, "");
+  return trimmed.replace(/^https?:\/\//, "").length > 0 ? trimmed : null;
+}
+
+/**
+ * 候选在空白处结束时，base64 载荷是否可能被换行截断：
+ * 「…;base64,<载荷>␤逐行换行」与「…;base64,<载荷> 英文正文」形状相同，
+ * 空白之后若仍是 base64 字符（且不是另一个已知 scheme 的地址），边界不可判，
+ * 整条拒绝——宁可丢候选，也不能把截断前缀当成完整产物落盘（会静默产出损坏文件）。
+ */
+function truncatedPayloadTail(rest: string): boolean {
+  const next = /^\s+([^\s"'<>\\]+)/.exec(rest)?.[1];
+  if (!next || /^(?:https?:\/\/|data:)/.test(next)) return false;
+  return /^[A-Za-z0-9+/=_-]/.test(next);
+}
+
+/**
+ * 从 JSON 树中提取所有 https:// 和 data: 开头的候选地址。
  * 递归遍历字段值（prompt / prompts 回显在 walkResponseTree 统一跳过），
  * 避免请求参数回显中的 URL 被误判为产物地址。
+ * 同一响应内的字符串去重只是廉价剪枝，不承担去重正确性（规则 2）。
  */
 export function scanUrls(root: unknown): string[] {
   const urls: string[] = [];
-  const re = /(?:https?:\/\/|data:)[^\s"',;}\]<>]+/g;
   walkResponseTree(root, null, (_key, value) => {
     if (typeof value !== "string") return;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(value)) !== null) {
-      const u = match[0].replace(/[)\]}>.,;!?]+$/, "");
+    for (const match of value.matchAll(CANDIDATE_RE)) {
+      const u = normalizeCandidate(match[0]);
+      if (!u) continue;
+      if (u.startsWith("data:") && truncatedPayloadTail(value.slice((match.index ?? 0) + match[0].length))) {
+        continue;
+      }
       if (!urls.includes(u)) urls.push(u);
     }
   });

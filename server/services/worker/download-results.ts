@@ -19,25 +19,70 @@ import {
   touchTaskHeartbeat,
   TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
-import { downloadAndSave } from "@server/services/storage/download";
+import {
+  fetchMediaBytes,
+  identifyMediaBytes,
+  persistMediaBytes,
+} from "@server/services/storage/download";
 
+/** 下载阶段结果与计数（candidates 原始候选 / attempted 实际取字节 / merged 被合并） */
+export interface DownloadOutcome {
+  /** 以身份为键、首现顺序的产物 key */
+  urls: string[];
+  /** 上游给出的候选总数（含重复） */
+  candidates: number;
+  /** 实际发起取字节的候选数（含失败） */
+  attempted: number;
+  /** 被合并掉的候选数（已完成原串的重复 + 同字节不同表示） */
+  merged: number;
+}
+
+/**
+ * 候选 → 产物身份集合（specs/generation-artifact-identity.md 规则 4–6）：
+ * - L0：同一原串只发起一次取字节（廉价剪枝，零网络成本）；
+ * - L1：data URL 解码后即得身份，不必走到落盘；
+ * - L2：身份 = 内容 key，同字节不同表示在这里必然合并（跨 URL 也能兜住）。
+ * 结果按首现顺序输出，且同一身份自始至终只落盘一次。
+ * 剪枝只针对**已完成**的候选：取字节/落盘失败的候选不登记，后续同串候选仍可重试
+ * （若在尝试前就登记，剪枝会把一次失败固化成不可重试，错误地丢掉可恢复的产物）。
+ */
 export async function downloadResultsWithHeartbeat(
   taskId: string,
   userId: number,
   urls: string[],
   logLabel: string,
   startedAt: Date | null
-): Promise<string[]> {
+): Promise<DownloadOutcome> {
   const heartbeat = setInterval(() => {
     void touchTaskHeartbeat(taskId, startedAt);
   }, TASK_HEARTBEAT_INTERVAL_MS);
 
   const resultUrls: string[] = [];
+  const seenCandidates = new Set<string>();
+  const seenKeys = new Set<string>();
+  let attempted = 0;
+  let merged = 0;
   try {
-    for (const url of urls) {
+    for (const candidate of urls) {
+      if (seenCandidates.has(candidate)) {
+        merged += 1;
+        continue;
+      }
       try {
-        const key = await downloadAndSave(url, userId, taskId);
-        if (key) resultUrls.push(key);
+        attempted += 1;
+        const buffer = await fetchMediaBytes(candidate, taskId);
+        if (!buffer) continue;
+        const identity = await identifyMediaBytes(buffer, userId);
+        // 同字节不同表示（url + b64、不同签名地址）：合并，不重复落盘
+        if (seenKeys.has(identity.key)) {
+          merged += 1;
+          seenCandidates.add(candidate);
+          continue;
+        }
+        await persistMediaBytes(buffer, identity, userId);
+        seenKeys.add(identity.key);
+        seenCandidates.add(candidate);
+        resultUrls.push(identity.key);
       } catch (err) {
         logger.error({ err, taskId }, logLabel);
       }
@@ -45,7 +90,17 @@ export async function downloadResultsWithHeartbeat(
   } finally {
     clearInterval(heartbeat);
   }
-  return resultUrls;
+  const outcome: DownloadOutcome = { urls: resultUrls, candidates: urls.length, attempted, merged };
+  if (merged > 0) {
+    logEvent("storage.download", {
+      stage: "candidate_merged",
+      taskId,
+      candidates: outcome.candidates,
+      unique: resultUrls.length,
+      merged,
+    });
+  }
+  return outcome;
 }
 
 export interface FinalizeGeneratedResultInput {
@@ -79,11 +134,20 @@ export async function finalizeGeneratedResult(
   }
 
   // 下载落盘并保持心跳（大文件下载可能远超心跳间隔，防止僵尸清理误判重跑）
-  const resultUrls = await downloadResultsWithHeartbeat(taskId, userId, urls, logLabel, startedAt);
+  const outcome = await downloadResultsWithHeartbeat(taskId, userId, urls, logLabel, startedAt);
+  const resultUrls = outcome.urls;
 
-  // 上游有产物但全部下载失败：显式失败，不能空结果标记 completed
-  if (urls.length > 0 && resultUrls.length === 0) {
-    logEvent(logChannel, { level: "warn", stage: "download_failed", taskId, expected: urls.length });
+  // 上游有产物但全部候选都没落盘：显式失败，不能空结果标记 completed。
+  // 计数口径由下载阶段给出：原始候选 / 实际取字节 / 被合并，不用原始列表长度冒充预期数
+  if (outcome.candidates > 0 && resultUrls.length === 0) {
+    logEvent(logChannel, {
+      level: "warn",
+      stage: "download_failed",
+      taskId,
+      candidates: outcome.candidates,
+      attempted: outcome.attempted,
+      merged: outcome.merged,
+    });
     // 所有权守卫：执行期间被僵尸清理重置/重新认领时写入被拒绝，重试属于新执行者
     await safeFailTask(taskId, {
       error: "生成结果下载失败",

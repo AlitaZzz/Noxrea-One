@@ -13,7 +13,7 @@
 
 - [files.ts](../server/http/routes/files.ts) 双凭据放行：会话（任意登录用户）**或** key 绑定签名 URL；无对象归属比对。这是唯一缺失归属比对的读路由。
 - [media-edit.ts](../server/http/routes/media-edit.ts) 路由工厂已自建归属防护 `keyBelongsTo`（首段 == userId）+ stat 存在性 404；但该规则仅理解内容键命名空间（派生/暂存/畸形键一律 403），且为工厂私有实现，与读路由不共享。
-- download.ts 是服务函数（`downloadAndSave` 等，worker 内部调用），非 HTTP 路由，无缺口。
+- download.ts 是服务函数（`fetchMediaBytes` / `persistMediaBytes` 等，worker 内部调用），非 HTTP 路由，无缺口。
 - key 全集四类命名空间：
   - 内容对象 `{userId}/{hash[:2]}/{hash}{ext}`（buildStorageKey，含 AI 生成结果）
   - 直传暂存 `staging/{userId}/{uuid}`（归属编码在 key；直传 ticket 已有归属形态检查）

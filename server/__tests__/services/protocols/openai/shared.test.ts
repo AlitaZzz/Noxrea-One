@@ -25,12 +25,56 @@ describe("scanUrls", () => {
       nested: { deep: ["https://b.example/y.mp4"] },
       raw: "data:image/png;base64,AAAA",
     });
-    // 扫描正则在 ; , 等分隔符处截断（data URI 的 base64 段由 extractB64Fields 按字段名兜底）
     expect(urls).toEqual([
       "https://a.example/x.png",
       "https://b.example/y.mp4",
-      "data:image/png",
+      "data:image/png;base64,AAAA",
     ]);
+  });
+
+  it("data URL 取完整载荷（不因 ; , 截断）", () => {
+    expect(scanUrls({ url: "data:image/png;base64,iVBORw0KGgo=" })).toEqual([
+      "data:image/png;base64,iVBORw0KGgo=",
+    ]);
+    expect(scanUrls({ url: "data:image/jpeg;charset=utf-8;base64,AAAA" })).toEqual([
+      "data:image/jpeg;charset=utf-8;base64,AAAA",
+    ]);
+  });
+
+  it("逗号拼接的两个 data URL 不会被合成一条", () => {
+    expect(scanUrls({ msg: "data:;base64,AAAA,data:;base64,BBBB" })).toEqual([
+      "data:;base64,AAAA",
+      "data:;base64,BBBB",
+    ]);
+  });
+
+  it("data URL 后紧跟逗号拼接的 https URL → 两者都被提取", () => {
+    expect(scanUrls({ msg: "data:image/png;base64,AAAA,https://cdn.example.com/x.png" })).toEqual([
+      "data:image/png;base64,AAAA",
+      "https://cdn.example.com/x.png",
+    ]);
+  });
+
+  it("载荷疑似被空白换行截断（空白后仍是 base64 字符）→ 整条拒绝", () => {
+    expect(scanUrls({ url: "data:image/png;base64,iVBORw0KGgo\nAAAA" })).toEqual([]);
+    expect(scanUrls({ url: "data:image/png;base64,iVBORw0KGgo AAAA" })).toEqual([]);
+  });
+
+  it("载荷后是空白 + 非 base64 文本或另一个地址 → 候选保留", () => {
+    expect(scanUrls({ msg: "data:image/png;base64,AAAA 完成" })).toEqual(["data:image/png;base64,AAAA"]);
+    expect(scanUrls({ msg: "data:image/png;base64,AAAA https://cdn.example.com/x.png" })).toEqual([
+      "data:image/png;base64,AAAA",
+      "https://cdn.example.com/x.png",
+    ]);
+  });
+
+  it("data URL 尾部标点被剔除，无载荷的不是候选", () => {
+    expect(scanUrls({ msg: "见 data:image/png;base64,AAAA。" })).toEqual(["data:image/png;base64,AAAA"]);
+    expect(scanUrls({ msg: "前缀 data:image/png 无载荷" })).toEqual([]);
+  });
+
+  it("词中的 data: 不算候选（metadata:xxx,yyy）", () => {
+    expect(scanUrls({ meta: "metadata:foo,bar" })).toEqual([]);
   });
 
   it("键名为 prompt/prompts 的值不参与扫描（请求回显非产物）", () => {
@@ -128,6 +172,12 @@ describe("parseScanPollResult", () => {
   it("视频 b64 补通用前缀", () => {
     const r = parseScanPollResult({ b64: "ZZZZ" }, VIDEO_B64);
     expect(r.urls).toEqual(["data:;base64,ZZZZ"]);
+  });
+
+  it("url 字段里的 data URL 完整提取（不再截断成 data:image/png）", () => {
+    const r = parseScanPollResult({ status: "succeeded", data: [{ url: "data:image/png;base64,AAAA" }] }, IMAGE_B64);
+    expect(r.status).toBe("completed");
+    expect(r.urls).toEqual(["data:image/png;base64,AAAA"]);
   });
 });
 
