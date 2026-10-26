@@ -1,5 +1,8 @@
 {
   "name": "noxrea-one",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
@@ -21,6 +24,7 @@
     "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.json",
     "test": "npm run test:server && npm -w web run test",
     "test:server": "vitest run --config vitest.config.ts",
+    "test:storage:minio": "vitest run --config vitest.minio.config.ts",
     "test:watch": "npm -w web run test:watch",
     "prisma:generate": "prisma generate",
     "db:migrate:new": "tsx --env-file=.env scripts/db/author-migration.mts",
@@ -28,6 +32,8 @@
     "storage:audit": "tsx --env-file=.env scripts/storage/audit.mts",
     "storage:gc": "tsx --env-file=.env scripts/storage/gc.mts",
     "storage:migrate": "tsx --env-file=.env scripts/storage/migrate.mts",
+    "storage:purge-legacy-cache": "tsx --env-file=.env scripts/storage/purge-legacy-cache.mts",
+    "storage:provider-check": "tsx --env-file=.env scripts/storage/provider-check.mts",
     "postinstall": "prisma generate"
   },
   "overrides": {
@@ -41,15 +47,14 @@
     "@noxrea/shared": "*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "@prometheus-io/client": "^0.16.1",
     "@streamparser/json": "^0.0.26",
     "bcryptjs": "^2.4.3",
     "bullmq": "^6.3.17",
-    "gray-matter": "^4.0.3",
     "hono": "^4.12.33",
     "ioredis": "^6.0.0",
     "ipaddr.js": "^2.5.0",
     "jose": "^5.9.0",
-    "p-limit": "^6.1.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
     "sharp": "^0.35.5",
@@ -58,7 +63,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/pg": "^8.23.1",
     "concurrently": "^9.1.0",
     "eslint": "^9.39.5",
