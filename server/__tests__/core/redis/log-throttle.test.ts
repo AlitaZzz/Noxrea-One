@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RATE_LIMIT_ERROR_LOG_INTERVAL_MS } from "@server/core/ratelimit/constants";
-import { createFailureLogThrottle } from "@server/core/ratelimit/log-throttle";
+import { REDIS_FAILURE_LOG_INTERVAL_MS } from "@server/core/redis/constants";
+import { createFailureLogThrottle } from "@server/core/redis/log-throttle";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -16,10 +16,10 @@ describe("createFailureLogThrottle", () => {
     expect(shouldLog()).toBe(true);
     expect(shouldLog()).toBe(false);
 
-    vi.setSystemTime(RATE_LIMIT_ERROR_LOG_INTERVAL_MS - 1);
+    vi.setSystemTime(REDIS_FAILURE_LOG_INTERVAL_MS - 1);
     expect(shouldLog()).toBe(false);
 
-    vi.setSystemTime(RATE_LIMIT_ERROR_LOG_INTERVAL_MS);
+    vi.setSystemTime(REDIS_FAILURE_LOG_INTERVAL_MS);
     expect(shouldLog()).toBe(true);
     expect(shouldLog()).toBe(false);
   });

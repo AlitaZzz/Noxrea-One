@@ -13,7 +13,6 @@ const CONTRACT = {
   id: 1,
   username: "alice",
   avatarKey: PUBLIC_USER.avatarKey,
-  avatarUrl: PUBLIC_USER.avatarUrl,
   theme: "light",
   language: "en",
 };
@@ -29,10 +28,10 @@ describe("toUserInfo 转换", () => {
 });
 
 describe("parseUserCookie 严格校验", () => {
-  it("合法 cookie 原样还原（avatarKey/avatarUrl 允许为 null）", () => {
+  it("合法 cookie 原样还原（avatarKey 允许为 null）", () => {
     expect(parseUserCookie(encode(CONTRACT))).toEqual(CONTRACT);
-    expect(parseUserCookie(encode({ ...CONTRACT, avatarKey: null, avatarUrl: null })))
-      .toEqual({ ...CONTRACT, avatarKey: null, avatarUrl: null });
+    expect(parseUserCookie(encode({ ...CONTRACT, avatarKey: null })))
+      .toEqual({ ...CONTRACT, avatarKey: null });
   });
 
   it("多余字段不透传", () => {
@@ -42,7 +41,6 @@ describe("parseUserCookie 严格校验", () => {
   it("任一契约字段缺失或类型不符返回 null，不补默认值", () => {
     expect(parseUserCookie(encode({ id: 2, username: "bob" }))).toBeNull();
     expect(parseUserCookie(encode({ ...CONTRACT, id: "1" }))).toBeNull();
-    expect(parseUserCookie(encode({ ...CONTRACT, avatarUrl: 5 }))).toBeNull();
     expect(parseUserCookie(encode({ ...CONTRACT, avatarKey: 5 }))).toBeNull();
     expect(parseUserCookie(encode({ ...CONTRACT, theme: 1 }))).toBeNull();
     expect(parseUserCookie(encode({ ...CONTRACT, language: null }))).toBeNull();

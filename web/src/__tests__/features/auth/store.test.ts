@@ -37,7 +37,7 @@ import { useAuthStore } from "@/features/auth/store";
 
 import { PUBLIC_USER } from "./fixtures";
 
-const USER = { id: 1, username: "u", avatarKey: null, avatarUrl: "", theme: "dark", language: "zh" };
+const USER = { id: 1, username: "u", avatarKey: null, theme: "dark", language: "zh" };
 
 describe("auth store initialize 并发去重", () => {
   beforeEach(() => {
@@ -69,7 +69,7 @@ describe("auth store initialize 并发去重", () => {
     await useAuthStore.getState().initialize();
 
     expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
-      ["avatarKey", "avatarUrl", "id", "language", "theme", "username"],
+      ["avatarKey", "id", "language", "theme", "username"],
     );
   });
 
@@ -158,7 +158,7 @@ describe("cacheUser cookie 写端收口", () => {
     await useAuthStore.getState().login("alice", "pw");
 
     expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
-      ["avatarKey", "avatarUrl", "id", "language", "theme", "username"],
+      ["avatarKey", "id", "language", "theme", "username"],
     );
     const cookie = decodeURIComponent(doc.cookie);
     expect(cookie).toContain('"username":"alice"');
@@ -174,7 +174,7 @@ describe("cacheUser cookie 写端收口", () => {
     await useAuthStore.getState().register("alice", "pw");
 
     expect(Object.keys(useAuthStore.getState().user!).sort()).toEqual(
-      ["avatarKey", "avatarUrl", "id", "language", "theme", "username"],
+      ["avatarKey", "id", "language", "theme", "username"],
     );
   });
 

@@ -19,7 +19,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { authApi } from "@/features/auth/api";
 import { useAuthStore } from "@/features/auth/store";
 import { toUserInfo } from "@/features/auth/user-cache";
-import { managedFileUrl } from "@/lib/file-url";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { formatBytes } from "@/lib/utils/format";
 
 import AvatarCropModal from "./AvatarCropModal";
@@ -57,8 +57,6 @@ export default function SettingsModal({ open, onClose }: Props) {
       setNewPw("");
     }
   }
-  const avatarUrl = managedFileUrl(avatarKey);
-
   // 打开时拉新存储摘要：登录后未整页刷新（initialize 一次性）或页面加载后
   // 用量已变化（如其他标签页上传）时，仍能看到当前真实用量
   useEffect(() => {
@@ -106,11 +104,12 @@ export default function SettingsModal({ open, onClose }: Props) {
               onClick={() => fileRef.current?.click()}
               aria-label={t("auth.clickUpload")}
             >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-              ) : (
-                user?.username?.[0]?.toUpperCase() || "U"
-              )}
+              <ResolvedImage
+                value={avatarKey}
+                alt=""
+                className="h-full w-full object-cover"
+                fallback={user?.username?.[0]?.toUpperCase() || "U"}
+              />
               <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <CameraOutlined className="text-lg" />
               </span>

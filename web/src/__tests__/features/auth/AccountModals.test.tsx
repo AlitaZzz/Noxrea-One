@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   uploadOne: vi.fn(),
   feedback: { message: { error: vi.fn(), info: vi.fn(), success: vi.fn() } },
   authStore: {
-    user: { id: 1, username: "tester", avatarKey: null, avatarUrl: null, theme: "light", language: "zh" },
+    user: { id: 1, username: "tester", avatarKey: null, theme: "light", language: "zh" },
     storage: null,
     refreshStorage: vi.fn(),
     setState: vi.fn(),

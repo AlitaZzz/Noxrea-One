@@ -9,9 +9,7 @@ const mocks = vi.hoisted(() => {
   const queueInstance = {
     getJob: vi.fn(),
     add: vi.fn(),
-    getWaitingCount: vi.fn(),
-    getDelayedCount: vi.fn(),
-    getActiveCount: vi.fn(),
+    getJobCounts: vi.fn(),
     close: vi.fn(),
   };
   const connInstance = {
@@ -61,6 +59,7 @@ function makeJob(state: string, remove: () => Promise<void> = async () => {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.queueInstance.add.mockResolvedValue({});
+  mocks.queueInstance.getJobCounts.mockResolvedValue({ waiting: 0, delayed: 0, active: 0 });
 });
 
 describe("initTaskQueue", () => {
@@ -227,17 +226,67 @@ describe("cancelQueuedTask", () => {
 });
 
 describe("getQueueHealth", () => {
-  it("redis 可达 → 汇总 waiting + delayed + active", async () => {
-    mocks.queueInstance.getWaitingCount.mockResolvedValue(1);
-    mocks.queueInstance.getDelayedCount.mockResolvedValue(2);
-    mocks.queueInstance.getActiveCount.mockResolvedValue(3);
+  it("redis 可达 → 单条命令取三个状态计数并汇总", async () => {
+    mocks.queueInstance.getJobCounts.mockResolvedValue({ waiting: 1, delayed: 2, active: 3 });
 
     await expect(getQueueHealth()).resolves.toEqual({ redis: true, queueDepth: 6 });
+
+    expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledWith("waiting", "delayed", "active");
   });
 
   it("redis 异常 → 降级上报 redis=false / queueDepth=null", async () => {
-    mocks.queueInstance.getWaitingCount.mockRejectedValue(new Error("redis down"));
+    mocks.queueInstance.getJobCounts.mockRejectedValue(new Error("redis down"));
 
     await expect(getQueueHealth()).resolves.toEqual({ redis: false, queueDepth: null });
+  });
+
+  it("读数未结算时并发调用共用同一条命令，结算后都拿到结果", async () => {
+    let settle: (counts: Record<string, number>) => void = () => {};
+    mocks.queueInstance.getJobCounts.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        settle = resolve;
+      })
+    );
+
+    const first = getQueueHealth();
+    const second = getQueueHealth();
+    expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledTimes(1);
+
+    settle({ waiting: 0, delayed: 0, active: 0 });
+    await expect(first).resolves.toEqual({ redis: true, queueDepth: 0 });
+    await expect(second).resolves.toEqual({ redis: true, queueDepth: 0 });
+    expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledTimes(1);
+
+    // 结算后闸门放开：下一次读数重新取数
+    await expect(getQueueHealth()).resolves.toEqual({ redis: true, queueDepth: 0 });
+    expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledTimes(2);
+  });
+
+  it("读数超时不影响闸门：底层命令仍在路上时不发新命令（半开连接下不堆积）", async () => {
+    vi.useFakeTimers();
+    try {
+      let settle: (counts: Record<string, number>) => void = () => {};
+      mocks.queueInstance.getJobCounts.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          settle = resolve;
+        })
+      );
+
+      const first = getQueueHealth();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(first).resolves.toEqual({ redis: false, queueDepth: null });
+
+      const second = getQueueHealth();
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(second).resolves.toEqual({ redis: false, queueDepth: null });
+      expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledTimes(1);
+
+      settle({ waiting: 0, delayed: 0, active: 0 });
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(getQueueHealth()).resolves.toEqual({ redis: true, queueDepth: 0 });
+      expect(mocks.queueInstance.getJobCounts).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

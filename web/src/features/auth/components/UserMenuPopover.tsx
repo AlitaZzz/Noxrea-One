@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCurrentUser } from "@/features/auth/UserContext";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 
 type UserMenuItem =
   | { type: "divider"; key?: string }
@@ -54,14 +55,17 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
       <DropdownMenuContent side="bottom" align={placement === "bottomLeft" ? "start" : "end"}>
         <DropdownMenuLabel>
           <div className="flex items-center gap-2 py-1 text-foreground">
-            <div
-              className={`flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ${user?.avatarUrl ? "bg-transparent" : "bg-primary text-primary-foreground"}`}
-            >
-              {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                (user?.username || t("auth.defaultUser"))[0].toUpperCase()
-              )}
+            <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold">
+              <ResolvedImage
+                value={user?.avatarKey}
+                alt=""
+                className="h-full w-full object-cover"
+                fallback={(
+                  <span className="flex size-full items-center justify-center bg-primary text-primary-foreground">
+                    {(user?.username || t("auth.defaultUser"))[0].toUpperCase()}
+                  </span>
+                )}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium truncate">

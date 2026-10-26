@@ -21,6 +21,14 @@ const configSchema = z.object({
 
   LOG_LEVEL: z.string().default("INFO"),
 
+  // 指标端点（specs/observability-baseline.md 规则 2）：默认关闭；开启即必须配 token，
+  // 「开了指标但没鉴权」在启动期直接失败（公网部署下该端点不得匿名开放）
+  METRICS_ENABLED: z
+    .enum(["true", "false", "1", "0"])
+    .transform((v) => v === "true" || v === "1")
+    .default("false"),
+  METRICS_TOKEN: z.string().default(""),
+
   // HTTP Server（Hono 监听地址；前端代理目标见 web/next.config.ts 的 WEB_API_ORIGIN）
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default("0.0.0.0"),
@@ -81,6 +89,14 @@ export function loadConfig(): Config {
           `Set real values in .env, or set ALLOW_INSECURE_SECRETS=true for local dev.`
       );
     }
+  }
+
+  // 指标端点的鉴权前提（specs/observability-baseline.md 规则 2.3）：
+  // 不允许「开启指标但没配 token」，否则公网部署下等于匿名暴露运行数据
+  if (cfg.METRICS_ENABLED && cfg.METRICS_TOKEN.trim() === "") {
+    throw new Error(
+      "Invalid configuration:\n  - METRICS_TOKEN: required when METRICS_ENABLED is on",
+    );
   }
 
   _config = cfg;

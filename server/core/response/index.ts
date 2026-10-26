@@ -36,6 +36,11 @@ export interface ErrorPayload {
  * 错误响应：结构化错误码 + HTTP 状态码。
  * 所有业务接口一律使用本函数，前端按 error 查 i18n 展示本地化文案。
  * error 限定为错误码字典（@server/core/errors/codes）中已登记的值，确保不会漏配文案。
+ *
+ * **错误响应一律 `Cache-Control: no-store`**，在此单点给出：错误是瞬态的，同 URL 的下一次
+ * 请求可能成功，任何中间层（浏览器、反代、CDN）都不得把错误答复当作该资源的结果留存。
+ * 逐个调用点补头会漏——体积上限、全局 404、鉴权中间件都不经过业务路由；调用方仍可传入
+ * 自己的 `Cache-Control` 覆盖（例如需要 `no-cache` 的特殊场景）。
  */
 export function failCode(
   status: number,
@@ -48,7 +53,10 @@ export function failCode(
   // 请求 ID 由中间件注入异步上下文，此处自动带上，调用方无需感知
   const requestId = getRequestContext()?.requestId;
   if (requestId) payload.requestId = requestId;
-  return Response.json(payload, { status, headers });
+  return Response.json(payload, {
+    status,
+    headers: { "Cache-Control": "no-store", ...headers },
+  });
 }
 
 /**

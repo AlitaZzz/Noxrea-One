@@ -8,12 +8,11 @@
 import { type Context } from "hono";
 import { setCookie } from "hono/cookie";
 
-import { prisma } from "@server/core/database/client";
 import { minutesToSeconds } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { decodeAccessToken } from "@server/core/auth/jwt";
+import { readAuthSnapshot } from "@server/core/auth/snapshot";
 import { failCode } from "@server/core/response";
-import type { User } from "@server/core/database/generated/client";
 
 /** 鉴权 cookie 名：与 Next proxy.ts 的路由门共用 */
 export const AUTH_COOKIE = "noxrea-auth-token";
@@ -46,25 +45,15 @@ export function setAuthCookie(c: Context, token: string, maxAgeS = authCookieMax
   setCookie(c, AUTH_COOKIE, token, { ...AUTH_COOKIE_OPTS, secure: requestIsHttps(c), maxAge: maxAgeS });
 }
 
+/**
+ * 已鉴权请求的调用方身份。
+ *
+ * 只携带 `id`：鉴权只判定「这个请求属于谁」，其余账号信息（用户名、头像、
+ * 主题、语言）由需要它们的接口自行查询（`/api/auth/me` 走 `toPublicUser`）。
+ * 把画像字段挂在鉴权结果上会让调用方误以为它是新鲜值——快照缓存下它必然可陈旧。
+ */
 export interface AuthUser {
   id: number;
-  username: string;
-  /** 头像引用：存储 key（{userId}/{hash[:2]}/{hash}{ext}；头像只来自上传，无外部 URL 值域） */
-  avatarKey: string | null;
-  theme: string;
-  language: string;
-  isActive: boolean;
-}
-
-function toAuthUser(user: User): AuthUser {
-  return {
-    id: user.id,
-    username: user.username,
-    avatarKey: user.avatarKey,
-    theme: user.theme,
-    language: user.language,
-    isActive: user.isActive,
-  };
 }
 
 /** 从 Authorization: Bearer 或鉴权 cookie 中提取 token */
@@ -108,15 +97,17 @@ export async function authenticateRequest(
     return { error: failCode(401, "auth.token_invalid") };
   }
 
-  const dbUser = await prisma.user.findUnique({ where: { id: userId } });
-  if (!dbUser || !dbUser.isActive) {
+  // 账号状态来自 Redis 快照（specs/auth-request-verification.md）：稳态零数据库查询，
+  // 写路径在提交后覆盖快照，吊销对所有实例在下一个请求生效
+  const snapshot = await readAuthSnapshot(userId);
+  if (!snapshot || !snapshot.isActive) {
     return { error: failCode(401, "auth.user_inactive") };
   }
 
   // 凭据版本校验：密码修改会递增 tokenVersion，旧 token 立即失效（吊销能力）
-  if (payload.ver !== dbUser.tokenVersion) {
+  if (payload.ver !== snapshot.tokenVersion) {
     return { error: failCode(401, "auth.token_invalid") };
   }
 
-  return { user: toAuthUser(dbUser) };
+  return { user: { id: userId } };
 }

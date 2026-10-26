@@ -214,9 +214,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-// user 的任何变化（登录 / 偏好更新 / 回滚 / 登出）统一落盘缓存
+// user 的任何变化（登录 / 偏好更新 / 回滚 / 登出）统一落盘缓存。
+// 账号标识随会话切换一并交给 lib：设备本地缓存（签名描述）按账号作用域隔离，
+// lib 不得反向依赖 auth feature，所以账号身份从这一处注入
 useAuthStore.subscribe((state, previous) => {
-  if (state.user?.id !== previous.user?.id) changeSession();
+  if (state.user?.id !== previous.user?.id) {
+    changeSession(state.user ? String(state.user.id) : null);
+  }
   cacheUser(state.user);
 });
+// 初始身份：cookie 预置的 user 在模块加载时就已存在，不产生状态迁移，上面的订阅不会触发。
+// 账号作用域（设备本地描述缓存等）必须以它建立，否则刷新后 currentAccountKey() 一直为 null，
+// 持久化载入与写入整条链路都不会启动。身份来源是本模块，注入点也只能在这里。
+const initialUser = useAuthStore.getState().user;
+if (initialUser) changeSession(String(initialUser.id));
 onSessionChange(() => { authInitInFlight = null; storageRefreshInFlight = null; });

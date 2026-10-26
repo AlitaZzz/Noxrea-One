@@ -28,7 +28,7 @@ import { useProjectStore } from "@/features/project/store";
 import { useModelStore } from "@/lib/model-store";
 import { SessionChangedError } from "@/lib/session-lifecycle";
 
-const userA = { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "dark", language: "zh" };
+const userA = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
 const userB = { ...userA, id: 2, username: "b" };
 function summary(id: number) {
   return { folders: [{ id, name: `Folder ${id}`, scope: "personal", kind: "normal", parentId: null,

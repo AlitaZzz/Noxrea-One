@@ -12,5 +12,4 @@ export type RateLimitResult =
 /** 限流计数存储：生产为 Redis，多副本共享；测试可注入内存替身。 */
 export interface RateLimitStore {
   check(key: string, quota: RateLimitQuota): Promise<RateLimitResult>;
-  close(): Promise<void>;
 }

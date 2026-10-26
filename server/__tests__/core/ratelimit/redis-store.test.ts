@@ -1,51 +1,65 @@
 /**
- * RedisRateLimitStore 启动探测的失败路径：建连 / PING 失败必须主动断开客户端，
- * 否则 ioredis 会在后台持续重连并占用句柄。真 Redis 的正常路径见集成测试。
+ * RedisRateLimitStore 在共享请求路径连接上的挂载契约：Lua 命令注册到传入的连接、
+ * 业务键加限流前缀、Lua 返回值换算成限流结果。真 Redis 行为见集成测试。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  connect: vi.fn(),
-  ping: vi.fn(),
-  disconnect: vi.fn(),
-  on: vi.fn(),
-  defineCommand: vi.fn(),
-}));
-
-vi.mock("ioredis", () => ({
-  default: class FakeRedis {
-    on = mocks.on;
-    defineCommand = mocks.defineCommand;
-    connect = mocks.connect;
-    ping = mocks.ping;
-    disconnect = mocks.disconnect;
-  },
-}));
-vi.mock("@server/core/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
-
+import { RATE_LIMIT_KEY_PREFIX } from "@server/core/ratelimit/constants";
 import { RedisRateLimitStore } from "@server/core/ratelimit/redis-store";
+import type { Redis } from "ioredis";
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
+interface FakeCommandClient {
+  defineCommand: (name: string, def: { numberOfKeys: number; lua: string }) => void;
+  noxreaRateLimitCheck?: (...args: unknown[]) => Promise<[number, number]>;
+}
 
-describe("RedisRateLimitStore.connect（启动探测失败）", () => {
-  it("建连失败时断开客户端", async () => {
-    mocks.connect.mockRejectedValue(new Error("connect failed"));
+function fakeClient(result: [number, number]) {
+  const calls: unknown[][] = [];
+  const client: FakeCommandClient = {
+    defineCommand: (name, def) => {
+      expect(def.numberOfKeys).toBe(1);
+      expect(def.lua).toContain("ZREMRANGEBYSCORE");
+      client[name as "noxreaRateLimitCheck"] = async (...args) => {
+        calls.push(args);
+        return result;
+      };
+    },
+  };
+  return { client, calls };
+}
 
-    await expect(RedisRateLimitStore.connect("redis://localhost:6379")).rejects.toThrow(
-      "connect failed",
-    );
-    expect(mocks.disconnect).toHaveBeenCalledTimes(1);
+describe("RedisRateLimitStore.attach", () => {
+  it("在传入连接上定义命令，业务键加限流前缀", async () => {
+    const { client, calls } = fakeClient([1, 0]);
+    const store = RedisRateLimitStore.attach(client as unknown as Redis);
+
+    await expect(store.check("login:1.2.3.4", { maxRequests: 5, windowSeconds: 60 }))
+      .resolves.toEqual({ allowed: true });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe(`${RATE_LIMIT_KEY_PREFIX}login:1.2.3.4`);
+    expect(calls[0][1]).toBe(5);
+    expect(calls[0][2]).toBe(60_000);
+    expect(typeof calls[0][3]).toBe("string");
   });
 
-  it("PING 失败时断开客户端", async () => {
-    mocks.connect.mockResolvedValue(undefined);
-    mocks.ping.mockRejectedValue(new Error("auth failed"));
+  it("拒绝时透传剩余秒数", async () => {
+    const { client } = fakeClient([0, 7]);
+    const store = RedisRateLimitStore.attach(client as unknown as Redis);
 
-    await expect(RedisRateLimitStore.connect("redis://localhost:6379")).rejects.toThrow(
-      "auth failed",
-    );
-    expect(mocks.disconnect).toHaveBeenCalledTimes(1);
+    await expect(store.check("generate:9", { maxRequests: 1, windowSeconds: 10 }))
+      .resolves.toEqual({ allowed: false, retryAfterSeconds: 7 });
+  });
+});
+
+describe("RedisRateLimitStore.attach 幂等", () => {
+  it("同一连接上重复挂载覆盖同名命令，不抛错", () => {
+    const { client } = fakeClient([1, 0]);
+    const redis = client as unknown as Redis;
+
+    expect(() => {
+      RedisRateLimitStore.attach(redis);
+      RedisRateLimitStore.attach(redis);
+    }).not.toThrow();
   });
 });

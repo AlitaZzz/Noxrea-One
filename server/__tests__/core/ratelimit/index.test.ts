@@ -1,17 +1,23 @@
 /**
  * 业务限流服务：策略键名 / 维度映射、结果透传、Redis 故障 fail-open。
- * 滑动窗口本身由 redis-store 的 Lua 实现，真 Redis 集成测试见 redis-store.integration.test.ts；
+ * 滑动窗口本身由 redis-store 的 Lua 实现（真 Redis 集成测试见 redis-store.integration.test.ts）；
  * 这里用替身存储锁定服务层契约，不依赖外部 Redis。
+ *
+ * 连接已由 `core/redis` 统一提供，本层只负责在已建连的客户端上挂载计数器
+ * （specs/auth-request-verification.md 规则 5）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ connect: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  attach: vi.fn(),
+  requireClient: vi.fn(() => "redis-client"),
+}));
 
-vi.mock("@server/core/config", () => ({ getConfig: () => ({ REDIS_URL: "redis://test" }) }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
-vi.mock("@server/core/logger", () => ({ logger: { error: vi.fn() } }));
+vi.mock("@server/core/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+vi.mock("@server/core/redis/client", () => ({ requireRequestPathRedis: mocks.requireClient }));
 vi.mock("@server/core/ratelimit/redis-store", () => ({
-  RedisRateLimitStore: { connect: mocks.connect },
+  RedisRateLimitStore: { attach: mocks.attach },
 }));
 
 import {
@@ -29,16 +35,11 @@ class FakeStore implements RateLimitStore {
   readonly calls: Array<{ key: string; quota: RateLimitQuota }> = [];
   result: RateLimitResult = { allowed: true };
   failure: Error | null = null;
-  closed = false;
 
   async check(key: string, quota: RateLimitQuota): Promise<RateLimitResult> {
     this.calls.push({ key, quota });
     if (this.failure) throw this.failure;
     return this.result;
-  }
-
-  async close(): Promise<void> {
-    this.closed = true;
   }
 }
 
@@ -46,8 +47,9 @@ let store: FakeStore;
 
 beforeEach(() => {
   store = new FakeStore();
-  mocks.connect.mockReset();
-  mocks.connect.mockResolvedValue(store);
+  mocks.attach.mockReset();
+  mocks.requireClient.mockClear();
+  mocks.attach.mockReturnValue(store);
   resetTestSettings();
 });
 
@@ -119,29 +121,30 @@ describe("结果与故障策略", () => {
 });
 
 describe("初始化生命周期", () => {
-  it("初始化后可调用，关闭后拒绝服务并释放存储", async () => {
+  it("初始化后在共享连接上挂载计数器，关闭后拒绝服务", async () => {
     await initRateLimit();
 
+    expect(mocks.requireClient).toHaveBeenCalledTimes(1);
+    expect(mocks.attach).toHaveBeenCalledWith("redis-client");
     await expect(checkLoginRateLimit("203.0.113.10")).resolves.toEqual({ allowed: true });
-    await closeRateLimit();
 
-    expect(store.closed).toBe(true);
+    await closeRateLimit();
     await expect(checkLoginRateLimit("203.0.113.10")).rejects.toThrow(/not initialized/);
   });
 
-  it("并发初始化共享同一次建连", async () => {
+  it("重复初始化不再挂载", async () => {
     await Promise.all([initRateLimit(), initRateLimit()]);
+    await initRateLimit();
 
-    expect(mocks.connect).toHaveBeenCalledTimes(1);
+    expect(mocks.attach).toHaveBeenCalledTimes(1);
   });
 
-  it("初始化失败后可以重试", async () => {
-    mocks.connect.mockRejectedValueOnce(new Error("redis down"));
+  it("请求路径连接未就绪时初始化失败（启动流程不变量）", async () => {
+    mocks.requireClient.mockImplementationOnce(() => {
+      throw new Error("Request-path Redis is not initialized");
+    });
 
-    await expect(initRateLimit()).rejects.toThrow("redis down");
-    await expect(initRateLimit()).resolves.toBeUndefined();
-
-    expect(mocks.connect).toHaveBeenCalledTimes(2);
-    await expect(checkLoginRateLimit("203.0.113.10")).resolves.toEqual({ allowed: true });
+    await expect(initRateLimit()).rejects.toThrow(/not initialized/);
+    expect(mocks.attach).not.toHaveBeenCalled();
   });
 });

@@ -194,16 +194,49 @@ export interface QueueHealth {
   queueDepth: number | null;
 }
 
+/**
+ * 读数上限：Redis 半开（连接还在、命令不回）时等待会让 `/api/health/ready` 与
+ * 指标抓取一起悬挂——这是健康读数，必须自带时限，超时等同不可用
+ * （specs/observability-baseline.md 规则 1.2）。
+ */
+const QUEUE_HEALTH_TIMEOUT_MS = 1_000;
+
+type JobCounts = Record<string, number>;
+
+/**
+ * 在途读数：ioredis 在离线队列里保留未完成的命令，而就绪探针与指标抓取会周期性
+ * 调用这里。并发调用共用同一条命令，半开连接期间也不会把命令越堆越多；
+ * 闸门只在底层命令真正结算后放开（超时不解除——命令还在路上）。
+ */
+let pendingRead: Promise<JobCounts> | null = null;
+
+function readJobCounts(): Promise<JobCounts> {
+  if (pendingRead) return pendingRead;
+  // 一条命令取三个状态的计数：轮询读数不该占用三次往返
+  const counts = getTaskQueue().getJobCounts("waiting", "delayed", "active");
+  pendingRead = counts;
+  const release = () => {
+    if (pendingRead === counts) pendingRead = null;
+  };
+  void counts.then(release, release);
+  return counts;
+}
+
 export async function getQueueHealth(): Promise<QueueHealth> {
+  let timer: NodeJS.Timeout | undefined;
   try {
-    const q = getTaskQueue();
-    const [waiting, delayed, active] = await Promise.all([
-      q.getWaitingCount(),
-      q.getDelayedCount(),
-      q.getActiveCount(),
-    ]);
-    return { redis: true, queueDepth: waiting + delayed + active };
+    const counts = readJobCounts();
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("queue health timeout")), QUEUE_HEALTH_TIMEOUT_MS);
+    });
+    const result = await Promise.race([counts, timeout]);
+    return {
+      redis: true,
+      queueDepth: (result.waiting ?? 0) + (result.delayed ?? 0) + (result.active ?? 0),
+    };
   } catch {
     return { redis: false, queueDepth: null };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

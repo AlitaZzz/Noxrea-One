@@ -12,6 +12,7 @@ import { closeTaskQueue } from "@server/services/worker/queue";
 import { closeDatabase } from "@server/core/database/client";
 import { secondsToMs } from "@server/core/duration";
 import { closeRateLimit } from "@server/core/ratelimit";
+import { closeRequestPathRedis } from "@server/core/redis/client";
 import { taskWatcher } from "@server/services/tasks/watcher";
 import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
@@ -38,9 +39,11 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logEvent("server", { stage: "shutdown_requested" });
 
-    // 4a. 停止接受新 HTTP 连接，随后关闭限流连接（此后不应再有 HTTP 请求）
+    // 4a. 停止接受新 HTTP 连接，随后断开请求路径 Redis（限流与鉴权快照共用；
+    //     此后不应再有 HTTP 请求）
     await stopServer();
     await closeRateLimit();
+    await closeRequestPathRedis();
 
     // 4b. 停止清扫定时器（停机期间不再发起重激活）
     stopReconcileSweep();

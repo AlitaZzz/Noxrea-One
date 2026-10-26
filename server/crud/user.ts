@@ -4,9 +4,10 @@
  */
 import { prisma } from "@server/core/database/client";
 import { USERS_USERNAME_KEY } from "@server/core/database/constraint-names";
+import { invalidateAuthSnapshot } from "@server/core/auth/snapshot";
 import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
-import { hashFromStorageKey, resolveFileUrl } from "@noxrea/shared/url";
+import { hashFromStorageKey } from "@noxrea/shared/url";
 import { replaceSourceFileRef } from "@server/services/storage/file-ref-ledger";
 import { isKeyOwner } from "@server/services/storage/ownership";
 
@@ -72,7 +73,8 @@ type UpdatableUserFields = {
  * 对外安全的用户视图：剔除 hashedPassword 等敏感字段。
  * 所有返回给 HTTP 客户端的 user 对象都必须经此转换。
  * displayName 展示回退约定：为空时按 username 回退（Spec user-table-upgrade），消费方不做二次回退。
- * 头像同时携带存储 key（avatarKey）与派生访问 URL（avatarUrl，外部值原样透传），展示侧不重复派生。
+ * 头像只下发存储 key（avatarKey）：访问 URL 由前端访问解析层（useFileAccessUrl）按分发形态换取，
+ * 服务端不再预派生一个必然被签名直连取代的地址。
  */
 export function toPublicUser(user: User) {
   return {
@@ -82,20 +84,24 @@ export function toPublicUser(user: User) {
     email: user.email,
     role: user.role,
     avatarKey: user.avatarKey,
-    // 引用值 → 访问 URL 规则单点在 shared 的 resolveFileUrl（key → 托管文件访问 URL，外部值透传）
-    avatarUrl: resolveFileUrl(user.avatarKey),
     theme: user.theme,
     language: user.language,
     isActive: user.isActive,
   };
 }
 
-/** 修改密码的唯一入口：写入新哈希并递增凭据版本号，旧 JWT 立即失效 */
+/**
+ * 修改密码的唯一入口：写入新哈希并递增凭据版本号，旧 JWT 立即失效。
+ * 鉴权快照必须在提交后覆盖，否则新版本号要等 TTL 才对其他请求生效
+ * （specs/auth-request-verification.md 规则 4）。
+ */
 export async function setUserPassword(id: number, hashedPassword: string) {
-  return prisma.user.update({
+  const user = await prisma.user.update({
     where: { id },
     data: { hashedPassword, tokenVersion: { increment: 1 } },
   });
+  await invalidateAuthSnapshot(user);
+  return user;
 }
 
 export async function updateUser(
@@ -113,7 +119,7 @@ export async function updateUser(
     }
   }
 
-  return prisma.$transaction(async (tx) => {
+  const user = await prisma.$transaction(async (tx) => {
     const user = await tx.user.update({ where: { id }, data: allowed });
     // avatarKey 是托管引用：与引用账本（avatar 来源，sourceId=用户 id，每用户至多一行）
     // 同事务整替，防止头像对象因账本无行被 GC 当孤儿回收。产品值域 = 存储 key 严格
@@ -140,4 +146,10 @@ export async function updateUser(
     }
     return user;
   });
+
+  // 账号状态变更必须在提交后覆盖鉴权快照（specs/auth-request-verification.md 规则 4.2）；
+  // 画像字段（头像 / 主题 / 语言）不参与鉴权判定，不触发失效
+  if (allowed.isActive !== undefined) await invalidateAuthSnapshot(user);
+
+  return user;
 }

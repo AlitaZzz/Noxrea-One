@@ -14,9 +14,12 @@ const TEST_REDIS_URL = process.env.TEST_REDIS_URL;
 describe.skipIf(!TEST_REDIS_URL)("RedisRateLimitStore（真 Redis）", () => {
   let store: RedisRateLimitStore;
   let admin: IORedis;
+  let client: IORedis;
 
   beforeAll(async () => {
-    store = await RedisRateLimitStore.connect(TEST_REDIS_URL!);
+    // 存储不再自带连接：在一条普通连接上挂载计数器（生产由 core/redis 提供该连接）
+    client = new IORedis(TEST_REDIS_URL!, { maxRetriesPerRequest: 1 });
+    store = RedisRateLimitStore.attach(client);
     admin = new IORedis(TEST_REDIS_URL!, { maxRetriesPerRequest: null });
   });
 
@@ -36,7 +39,7 @@ describe.skipIf(!TEST_REDIS_URL)("RedisRateLimitStore（真 Redis）", () => {
       } while (cursor !== "0");
       await admin.quit();
     }
-    await store?.close();
+    await client?.quit();
   });
 
   it("窗口内达到上限后拒绝，并给出剩余秒数；窗口滑过后恢复", async () => {

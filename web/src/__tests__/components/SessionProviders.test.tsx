@@ -31,7 +31,7 @@ describe("page session boundary", () => {
   });
 
   it("does not resurrect the SSR user cache after logout", () => {
-    const cachedUser = { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "dark", language: "zh" };
+    const cachedUser = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
     useAuthStore.setState({ user: null, initialized: false });
     function UserLabel() {
       const user = useCurrentUser();
@@ -44,7 +44,7 @@ describe("page session boundary", () => {
   });
 
   it("syncs the persisted user theme to the document root", async () => {
-    const user = { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "light", language: "zh" };
+    const user = { id: 1, username: "a", avatarKey: null, theme: "light", language: "zh" };
     useAuthStore.setState({ user, initialized: true });
 
     render(
@@ -60,7 +60,7 @@ describe("page session boundary", () => {
   });
 
   it("preserves local state for profile changes and recreates it and query cache for another account", () => {
-    const userA = { id: 1, username: "a", avatarKey: null, avatarUrl: null, theme: "dark", language: "zh" };
+    const userA = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
     useAuthStore.setState({ user: userA });
     const clients: QueryClient[] = [];
     function Page() {

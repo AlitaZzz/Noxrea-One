@@ -34,14 +34,14 @@
 1. **队列层**：`loop.ts` 删除（进程全局 StopSignal 无留存消费方，随长驻循环一并删除；停机中止改为 worker 层 per-job AbortController，drain 超时后触发）；**`poll-loop.ts` 与 `resume-polling.ts` 的长驻轮询循环删除**，改为「单次轮询尝试 + defer 下一次 tick」形态；新增 BullMQ queue/worker 适配、对账清扫（含重激活原语）、提交闸门与 per-job abort；`claimPendingTasks` 改为单任务 CAS 认领；executor / finalize / TaskManager 按本 Spec 改造（相关测试同步调整）。
 2. **Schema**：`generation_tasks` 新增列——`submissionState`（`not_sent` 默认 / `in_flight`，提交闸门标记）与轮询调度列（下次 tick 时间 + 当轮预算计数，命名实现期定）。 additive 迁移，无数据回填（存量 processing 行按迁移完成时刻的租约清扫收口）。
 3. **设置**：`worker.max_concurrency` / `stuck_timeout_minutes` / `max_retries` / `zombie_scan_interval_seconds` / `drain_timeout_seconds` / `async_poll_*` 保留并按规则 5 映射；**删除 `worker.poll_interval_seconds` / `worker.poll_check_interval_ms`**（DB 轮询专用，迁移后无消费方，不留死配置）。
-4. **部署与运维**：`docker-compose.nas.yml` 增 Redis 7 服务；生产部署物按同一形态在 cutover Spec 交付时落 compose（本期以部署文档记录要求）；`/api/health` 扩展上报 `{ redis, worker, queueDepth }`。
+4. **部署与运维**：`docker-compose.nas.yml` 增 Redis 7 服务；生产部署物按同一形态在 cutover Spec 交付时落 compose（本期以部署文档记录要求）；健康端点扩展上报 `{ redis, worker, queueDepth }`（2026-10-26 订正：该端点后由 [observability-baseline.md](observability-baseline.md) 规则 1 拆为 `/api/health/live` 与 `/api/health/ready`，旧 `/api/health` 已删除；本 Spec 的字段要求落在 ready 端点）。
 5. **测试**：真实 Redis 集成测试，首选一次性容器（testcontainers 形态），备选专用 prefix + 专用 DB index（实现期按环境落定）；**禁止对共享实例 flushdb**。
 
 ## 非目标
 
 - 前端任何改动；客户端请求幂等键（另案——参考项目以 `CreationSubmissionID uniqueIndex` 在 schema 层实现重复提交返回既有任务，属创建 API 契约变更，与队列正确性正交，维持另案）。
 - per-user 创建侧限流（另案）。多实例部署本身（能力解锁，不做形态变更）。Redis HA（哨兵/集群另议）。
-- bull-board 面板（可选后续）。media-processing 第三阶段迁移。运行镜像 Node 版本调整（node:20 满足 engines ≥ 18）。
+- bull-board 面板（可选后续）。media-processing 第三阶段迁移。运行镜像 Node 版本调整（node:22 满足 engines ≥ 18）。
 - 计费/预扣系统（不存在）；多供应商路由切换（参考项目 DispatchState 中的 `rejected_no_job` 换路语义在本项目无消费方，不引入）。
 
 ## 业务规则
@@ -115,14 +115,14 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 ### 7. 创建语义与 outbox 边界
 
 - 创建 = DB 事务落行（`pending`，`submissionState='not_sent'`）+ 提交后 enqueue；**enqueue 失败不回滚、不 503**——行留 DB，对账清扫重激活。创建成功语义 = 「已受理落库」，派发最终一致（正常 < 1s，清扫兜底 ≤ 扫描周期）。
-- **运行期 Redis 宕机**：不 503——任务持续落库 pending（队列作为缓冲），`/api/health` 上报降级 + 告警；Redis 恢复后清扫自动排水。活跃 job 连接异常按 stalled 治理（规则 3 租约保证不误杀存活执行者）。Redis 宕机期间轮询 tick 调度失败：job 丢失由清扫按「tick 逾期 + 无 live job」自愈（最坏延迟 = 轮询间隔 + 扫描周期）。
+- **运行期 Redis 宕机**：不 503——任务持续落库 pending（队列作为缓冲），`/api/health/ready` 上报降级 + 告警；Redis 恢复后清扫自动排水。活跃 job 连接异常按 stalled 治理（规则 3 租约保证不误杀存活执行者）。Redis 宕机期间轮询 tick 调度失败：job 丢失由清扫按「tick 逾期 + 无 live job」自愈（最坏延迟 = 轮询间隔 + 扫描周期）。
 - **启动探测**：bootstrap PING 失败即启动失败（无队列无法服务）。
 
 ### 8. Redis 运维口径
 
 - Redis 7.x；AOF everysec；`maxmemory` 初值 256mb + `noeviction`（队列数据不可淘汰，容量随队列深度复核）；AOF rewrite 与磁盘占用纳入运维监控项。
 - 安全：`requirepass`（凭据与 PG 同级落 env）；仅内网监听；生产 TLS 经反向代理（与存储决策同构）；**本应用专用实例**（不与其他系统共享；BullMQ `prefix: "noxrea:queue:"`；2026-10-21 起分布式限流共用该实例，使用独立 `noxrea:ratelimit:` 前缀）。
-- 健康与告警：`/api/health` 扩展（启动探测管生死，health 管运行期 readiness 供 LB/人工核查）；queue depth / failed 计数 / redis 内存告警阈值列为部署文档项。
+- 健康与告警：`/api/health/ready` 扩展（启动探测管生死，ready 管运行期 readiness 供 LB/人工核查）；queue depth / failed 计数 / redis 内存告警阈值列为部署文档项。
 
 ### 9. 停机
 
@@ -130,13 +130,13 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 
 ## 技术影响
 
-- 依赖：`bullmq@^6` + `ioredis@^6`（实现期安装当前主版本 bullmq 6.3.17 / ioredis 6.0.0；engines：Node ≥ 18；运行镜像 node:20 满足，实现期以测试实测为准）。
-- 代码：`server/services/worker/` 重构（loop.ts / poll-loop.ts / resume-polling.ts 删除；shutdown.ts / queue 适配 / 清扫 / tick 调度新增；executor / finalize / TaskManager 改造）；`server/crud/task.ts`：删除 `recoverProcessingTasks` / `cleanupZombieTasks`（职责由 stalled 重跑 + 对账清扫 + handler 分派承接），增单任务 CAS 认领、提交闸门、接管 CAS 与 defer 原语；`server/core/config` 增 `REDIS_URL`；bootstrap 增探测；`/api/health` 扩展；prisma schema **新增 `submissionState` 与轮询调度列**（additive 迁移）。
+- 依赖：`bullmq@^6` + `ioredis@^6`（实现期安装当前主版本 bullmq 6.3.17 / ioredis 6.0.0；engines：Node ≥ 18；运行镜像 node:22 满足，实现期以测试实测为准）。
+- 代码：`server/services/worker/` 重构（loop.ts / poll-loop.ts / resume-polling.ts 删除；shutdown.ts / queue 适配 / 清扫 / tick 调度新增；executor / finalize / TaskManager 改造）；`server/crud/task.ts`：删除 `recoverProcessingTasks` / `cleanupZombieTasks`（职责由 stalled 重跑 + 对账清扫 + handler 分派承接），增单任务 CAS 认领、提交闸门、接管 CAS 与 defer 原语；`server/core/config` 增 `REDIS_URL`；bootstrap 增探测；`/api/health/ready` 扩展；prisma schema **新增 `submissionState` 与轮询调度列**（additive 迁移）。
 - 文档：README/env-config-layout 增 `REDIS_URL` 与 Redis 运维项；部署文档记录生产 compose 形态。
 
 ## 异常与边界
 
-- Redis 宕机：启动期 → 启动失败；运行期 → pending 堆积 + health 告警 + 恢复自动排水（规则 7）。
+- Redis 宕机：启动期 → 启动失败；运行期 → pending 堆积 + `/api/health/ready` 告警 + 恢复自动排水（规则 7）。
 - 毒任务：`maxStalledCount=2` 封顶置 failed + DB 租约清扫兜底（两道防线阈值量级分离，不互相误杀）。
 - 轮询段 Redis 丢失（flush/宕机）：tick 逾期行由清扫重激活自愈；极端并发下重复轮询尝试对上游为只读 GET，无计费副作用，终态写入由 startedAt 守卫收口；finalize 并发重复为幂等内容寻址写入 + 终态守卫，最多浪费一次下载。
 - 回滚：不留兼容层；回退部署 + 摘除 REDIS_URL；DB 状态机列均为 additive，回退后闲置无害，无数据迁移。
@@ -148,10 +148,10 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 2. 提交闸门测试：失权执行者在闸门被拦截，不发上游请求；闸门通过后失权的在途提交 ⇒ 恰好一次上游提交、任务终态 `submission_uncertain`、无第二次提交（结构性排除双计费的回归测试）；提交前中断接管受 `retryCount` 预算约束，超限判失败且不无限重试。
 3. 崩溃恢复注入测试：强杀 worker → stalled 重跑后同步/异步终态符合不变量；闸门前崩溃（`not_sent`）⇒ 接管后安全重提；重激活流程覆盖「终态 job 仍存在」场景（回归 P0.1）。
 4. enqueue 丢失窗口：清空 Redis job + DB pending 行 → 清扫重激活且并发双清扫不重复执行；轮询 tick job 丢失 → 清扫按逾期重激活续跑。
-5. Redis 停机演练：启动探测失败即失败；运行期创建不失败、pending 堆积、health 上报降级、恢复后排水。
+5. Redis 停机演练：启动探测失败即失败；运行期创建不失败、pending 堆积、`/api/health/ready` 上报降级、恢复后排水。
 6. 前端零改动；既有 server 测试（含轮询 tick 化改造更新部分）全绿；web 测试不回归；删除的两个设置键无残留消费方。
 7. 并发槽：`max_concurrency` 全局生效，执行段与轮询 tick 同受约束。
-8. 交付物：NAS compose 含 Redis 7 + AOF 卷；env 样例含 `REDIS_URL`；`/api/health` 上报 redis/worker/queueDepth；README/env-config-layout 同步；生产 compose 形态写入部署文档。
+8. 交付物：NAS compose 含 Redis 7 + AOF 卷；env 样例含 `REDIS_URL`；`/api/health/ready` 上报 redis/worker/queueDepth；README/env-config-layout 同步；生产 compose 形态写入部署文档。
 
 ## 待确认事项
 

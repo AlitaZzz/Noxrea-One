@@ -6,11 +6,11 @@
  * 运行期命令失败则 fail-open 放行并记录错误——可用性优先，避免 Redis 抖动放大为
  * 全站登录 / 生成 / 媒体编辑不可用。命令失败与连接错误日志均按固定间隔去重。
  */
-import { getConfig } from "@server/core/config";
 import { logger } from "@server/core/logger";
+import { requireRequestPathRedis } from "@server/core/redis/client";
+import { createFailureLogThrottle } from "@server/core/redis/log-throttle";
 import { getSetting } from "@server/core/settings";
 
-import { createFailureLogThrottle } from "./log-throttle";
 import { RedisRateLimitStore } from "./redis-store";
 import type { RateLimitQuota, RateLimitResult, RateLimitStore } from "./types";
 
@@ -43,8 +43,6 @@ const RATE_LIMIT_POLICIES = {
 type RateLimitPolicyName = keyof typeof RATE_LIMIT_POLICIES;
 
 let store: RateLimitStore | null = null;
-/** 建连中的单飞 Promise：并发初始化共享同一次连接，避免重复建连后泄漏其一。 */
-let pendingInit: Promise<RateLimitStore> | null = null;
 const shouldLogFailure = createFailureLogThrottle();
 
 async function checkPolicy(
@@ -76,22 +74,18 @@ function requireStore(): RateLimitStore {
   return store;
 }
 
-/** 幂等初始化；并发调用共享同一次建连。 */
+/**
+ * 幂等初始化：在请求路径连接（`core/redis`，bootstrap 已建连并 PING）上挂载计数器。
+ * 连接未就绪属于启动流程不变量，直接抛错而不是静默降级。
+ */
 export async function initRateLimit(): Promise<void> {
   if (store) return;
-  pendingInit ??= RedisRateLimitStore.connect(getConfig().REDIS_URL);
-  try {
-    store = await pendingInit;
-  } finally {
-    pendingInit = null;
-  }
+  store = RedisRateLimitStore.attach(requireRequestPathRedis());
 }
 
-/** 停机收尾：断开限流连接；后续请求不应再发生（HTTP 已停止接收）。 */
+/** 停机收尾：只解除计数器的挂载，连接由 `closeRequestPathRedis` 统一断开。 */
 export async function closeRateLimit(): Promise<void> {
-  const current = store;
   store = null;
-  if (current) await current.close();
 }
 
 // 具名入口把身份类型固定在调用边界（登录 / 注册为 IP，生成 / 媒体编辑为 userId），

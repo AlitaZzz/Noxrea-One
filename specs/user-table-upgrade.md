@@ -33,7 +33,7 @@
 - `prisma/schema.prisma` 的 User model + 一次 migration：SQLite 下 Prisma 采用 RedefineTables（重建表 + INSERT...SELECT 迁移数据）而非 ADD COLUMN，数据保留由 Prisma 迁移机制保证，已在 dev.db 真实数据上实测验证。
 - 注册路径（auth register）：事务内角色判定。
 - 登录路径（auth login）：写 `lastLoginAt`。
-- `toPublicUser` 序列化新增 `email`、`role` 字段（管理后台与前端消费的地基）与 `displayName` 回退。**前端 cookie 缓存随本次收口**：auth store 在服务端响应进入 store 的入口（`/me`、登录、注册、设置保存）经 `toUserInfo` 转换为 `UserInfo`（id/username/avatarUrl/theme/language），`state.user` 运行时即契约形状，cookie 写端直接序列化；`parseUserCookie` 作为不可信输入边界做严格校验（5 个字段类型任一不符即视为无缓存，交由 `/me` 校正），不补默认值。email/role 等新增字段因此不进 cookie。
+- `toPublicUser` 序列化新增 `email`、`role` 字段（管理后台与前端消费的地基）与 `displayName` 回退。**前端 cookie 缓存随本次收口**：auth store 在服务端响应进入 store 的入口（`/me`、登录、注册、设置保存）经 `toUserInfo` 转换为 `UserInfo`（id/username/avatarKey/theme/language，2026-10-24 按 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 移除 avatarUrl：访问地址由前端访问解析层换取，用户 DTO 只携带存储 key），`state.user` 运行时即契约形状，cookie 写端直接序列化；`parseUserCookie` 作为不可信输入边界做严格校验（5 个字段类型任一不符即视为无缓存，交由 `/me` 校正），不补默认值。email/role 等新增字段因此不进 cookie。
 - 前端仅做 cookie 投影收口（`user-cache.ts` / `store.ts`），UI 不改动（`displayName` 的 UI 消费另行处理）。
 - `lastLoginAt` 为只写审计列（登录写入），本次无读取消费方。
 
