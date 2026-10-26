@@ -15,8 +15,11 @@ vi.mock("@server/core/config", () => ({
 vi.mock("@server/core/logger/utils", () => ({ logEvent: vi.fn() }));
 vi.mock("@server/core/settings", async () => (await import("../../helpers/settings")).settingsModuleMock());
 
+import { AbortError } from "@server/core/abort";
+import { metrics } from "@server/core/metrics";
 import * as mediaPool from "@server/services/storage/media-pool";
-import { ensureArtifact } from "@server/services/storage/artifact";
+import { ArtifactSkipError, ensureArtifact } from "@server/services/storage/artifact";
+import { cacheKeyOf, posterMasterKey, spriteKeyOf } from "@server/services/storage/derived-keys";
 import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
@@ -24,7 +27,9 @@ import { resetTestSettings } from "../../helpers/settings";
 
 let root = "";
 let seq = 0;
-const nextKey = () => `_derived/artifact-${seq++}.webp`;
+/** 每个用例独占源键；产物键经生产构造器派生——档位由 key 推导，测试键必须是真实命名空间 */
+const sourceKey = () => `1/ab/${(seq++).toString(16).padStart(64, "0")}.png`;
+const nextKey = () => cacheKeyOf(sourceKey(), 480);
 const abs = (key: string) => path.join(root, key);
 const exists = (p: string) => fs.access(p).then(() => true, () => false);
 const tmpEntries = () => fs.readdir(path.join(root, "_tmp")).catch(() => [] as string[]);
@@ -229,10 +234,68 @@ describe("ensureArtifact", () => {
     expect(await fs.readFile(abs(key), "utf8")).toBe("kept");
   });
 
+  it("指标按结果分类：命中 / 产出 / 失败，哨兵失败记 skipped 而非 failed", async () => {
+    class SkipSentinel extends ArtifactSkipError {}
+    const report = vi.spyOn(metrics, "derivedArtifact");
+    try {
+      await expect(
+        ensureArtifact({
+          key: nextKey(),
+          produce: async () => { throw new SkipSentinel("no static derivation"); },
+        }),
+      ).rejects.toBeInstanceOf(ArtifactSkipError);
+      expect(report).toHaveBeenLastCalledWith("cache", "skipped");
+
+      await expect(
+        ensureArtifact({
+          key: posterMasterKey(sourceKey(), 1),
+          produce: async () => { throw new Error("boom"); },
+        }),
+      ).rejects.toThrow("boom");
+      expect(report).toHaveBeenLastCalledWith("poster", "failed");
+
+      const key = spriteKeyOf(sourceKey(), 5, 1);
+      await ensureArtifact({ key, produce: (tmpPath) => fs.writeFile(tmpPath, "x") });
+      expect(report).toHaveBeenLastCalledWith("sprite", "generated");
+
+      await ensureArtifact({ key, produce: async () => undefined });
+      expect(report).toHaveBeenLastCalledWith("sprite", "hit");
+    } finally {
+      report.mockRestore();
+    }
+  });
+
   it("媒体池过载原样向上抛出", async () => {
     const busy = new MediaPoolBusyError("sharp", "global", "queue_full");
     await expect(
       ensureArtifact({ key: nextKey(), produce: async () => { throw busy; } }),
     ).rejects.toBe(busy);
+  });
+
+  it("取消与媒体池过载不记 failed：前者不是故障，后者由 mediaBusyRejected 单点计数", async () => {
+    const report = vi.spyOn(metrics, "derivedArtifact");
+    try {
+      await expect(
+        ensureArtifact({
+          key: nextKey(),
+          produce: async () => { throw new AbortError("cancelled"); },
+        }),
+      ).rejects.toMatchObject({ name: "AbortError" });
+
+      const busy = new MediaPoolBusyError("sharp", "global", "queue_full");
+      await expect(
+        ensureArtifact({ key: nextKey(), produce: async () => { throw busy; } }),
+      ).rejects.toBe(busy);
+
+      expect(report).not.toHaveBeenCalled();
+    } finally {
+      report.mockRestore();
+    }
+  });
+
+  it("非派生命名空间的 key 拒绝：档位无从推导，指标标签也没有对的答案", async () => {
+    await expect(
+      ensureArtifact({ key: "artifacts/x.webp", produce: async () => undefined }),
+    ).rejects.toThrow(/derived namespaces/);
   });
 });

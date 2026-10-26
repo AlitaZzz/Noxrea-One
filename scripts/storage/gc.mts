@@ -1,6 +1,6 @@
 /**
  * GC 手动触发（specs/storage-s3-backend.md 规则 9）：与进程内定时同一周期实现
- * （引用回收 + staging/派生按龄清扫，gc_dry_run 护栏同口径，runGcCycle 单一来源）。
+ * （引用回收 + staging/派生/探测残留按龄清扫，gc_dry_run 护栏同口径，runGcCycle 单一来源）。
  *
  * 部分引导经 bootstrapCliStorage（与 audit 同口径，不触碰在途临时文件、不挂定时器）。
  * 并发安全：与运行中服务的 GC 互撞时，事务终检（行已删则跳过）与 backend.delete
@@ -33,11 +33,13 @@ async function main(): Promise<void> {
   }
   console.log(`staging 清扫=${result.swept ?? "失败"}`);
   console.log(`派生清扫=${result.derivedSwept ?? "失败"}`);
+  console.log(`探测残留清扫=${result.probeSwept ?? "失败"}`);
 
-  if (result.gcError || result.sweepError || result.derivedSweepError) {
+  if (result.gcError || result.sweepError || result.derivedSweepError || result.probeSweepError) {
     if (result.gcError) console.error(`引用回收失败：${result.gcError}`);
     if (result.sweepError) console.error(`staging 清扫失败：${result.sweepError}`);
     if (result.derivedSweepError) console.error(`派生清扫失败：${result.derivedSweepError}`);
+    if (result.probeSweepError) console.error(`探测残留清扫失败：${result.probeSweepError}`);
     process.exit(1);
   }
   console.log(`GC 完成（dryRun=${getSetting("storage.gc_dry_run")}）`);

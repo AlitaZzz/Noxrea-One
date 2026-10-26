@@ -1,7 +1,8 @@
 /**
  * 派生产物过期清扫（_cache/_posters/_sprite/_proxy 四根统一，specs/derived-deletion-linkage.md 规则 4）。
- * 挂接 GC 每日周期（runGcCycle 阶段，与引用回收、staging 清扫并列独立成败，路由顺带触发已迁除）；
- * 判龄、gc_dry_run 护栏与删除失败留痕的力学单点在 sweep.ts（与 staging 清扫共享）。
+ * 挂接 GC 每日周期（runGcCycle 阶段，与引用回收、staging 清扫、探测残留清扫并列独立成败，
+ * 路由顺带触发已迁除）；判龄、gc_dry_run 护栏与删除失败留痕的力学单点在 sweep.ts
+ * （与 staging / 探测残留清扫共享）。
  * 根间失败隔离：单根枚举失败留痕不中断其余根，全部根尝试后聚合上抛——
  * 阶段失败对调用方可见（GcCycleResult.derivedSweepError / CLI 退出码），下一周期自然重试。
  */

@@ -36,7 +36,7 @@ beforeEach(() => {
 describe("sweepStaleDerivedObjects", () => {
   it("四根逐一枚举（根清单同源 DERIVED_ROOT_PREFIXES），超龄条目回收", async () => {
     mocks.list.mockImplementation(async (prefix: string) => {
-      if (prefix === "_cache/") return [{ key: "_cache/64/3/ab/h.webp", size: 1, lastModifiedMs: oldMs() }];
+      if (prefix === "_cache/") return [{ key: "_cache/v2/64/3/ab/h.webp", size: 1, lastModifiedMs: oldMs() }];
       if (prefix === "_sprite/") return [{ key: "_sprite/3/ab/h_c20v2.webp", size: 1, lastModifiedMs: oldMs() }];
       return [];
     });

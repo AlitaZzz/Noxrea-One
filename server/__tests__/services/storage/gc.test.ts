@@ -2,9 +2,9 @@
  * runStorageGc 直测（mock prisma，契约级）：
  * 锁定候选池 SQL 形态（三类排除 + FIFO + LIMIT）、排除量上报、
  * dry-run 只列不删、事务终检三态（回收/引用回归/账本新行）；
- * runGcCycle 三阶段独立成败（引用回收 / staging 清扫 / 派生清扫互不拖累）。
+ * runGcCycle 四阶段独立成败（引用回收 / staging 清扫 / 派生清扫 / 探测残留清扫互不拖累）。
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   del: vi.fn(),
   sweepStaging: vi.fn(),
   sweepDerived: vi.fn(),
+  sweepProbe: vi.fn(),
   getConfig: vi.fn().mockReturnValue({ LOG_LEVEL: "silent" }),
 }));
 
@@ -22,6 +23,9 @@ vi.mock("@server/services/storage/upload-direct", () => ({
 }));
 vi.mock("@server/services/storage/derived-cleanup", () => ({
   sweepStaleDerivedObjects: mocks.sweepDerived,
+}));
+vi.mock("@server/services/storage/probe-cleanup", () => ({
+  sweepStaleProbeObjects: mocks.sweepProbe,
 }));
 
 vi.mock("@server/core/database/client", () => ({
@@ -42,6 +46,7 @@ vi.mock("@server/services/storage/service", async () => ({
 }));
 
 import type { Prisma } from "@server/core/database/generated/client";
+import { metrics } from "@server/core/metrics";
 import { runGcCycle, runStorageGc } from "@server/services/storage/gc";
 import { resetTestSettings } from "../../helpers/settings";
 
@@ -208,17 +213,25 @@ describe("runStorageGc 实删", () => {
   });
 });
 
-describe("runGcCycle 三阶段独立成败（specs/derived-deletion-linkage.md 规则 4）", () => {
+describe("runGcCycle 四阶段独立成败（specs/derived-deletion-linkage.md 规则 4、storage-provider-portability.md 规则 3.2）", () => {
+  let gcMetric: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     mocks.sweepStaging.mockResolvedValue(0);
     mocks.sweepDerived.mockResolvedValue(0);
+    mocks.sweepProbe.mockResolvedValue(0);
+    gcMetric = vi.spyOn(metrics, "storageGcRun").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    gcMetric.mockRestore();
   });
 
-  it("引用回收失败不拖累两路清扫", async () => {
+  it("引用回收失败不拖累三路清扫", async () => {
     mocks.queryRaw.mockReset();
     mocks.queryRaw.mockRejectedValue(new Error("db down"));
     mocks.sweepStaging.mockResolvedValue(2);
     mocks.sweepDerived.mockResolvedValue(5);
+    mocks.sweepProbe.mockResolvedValue(1);
 
     await expect(runGcCycle()).resolves.toEqual({
       gc: null,
@@ -227,7 +240,50 @@ describe("runGcCycle 三阶段独立成败（specs/derived-deletion-linkage.md �
       sweepError: null,
       derivedSwept: 5,
       derivedSweepError: null,
+      probeSwept: 1,
+      probeSweepError: null,
     });
+  });
+
+  it("指标终态按阶段成败聚合：全成 ok、部分成 partial、全败 failed", async () => {
+    // 四阶段全成
+    await runGcCycle();
+    expect(gcMetric).toHaveBeenLastCalledWith("ok", 0);
+
+    // 一个阶段失败：partial 必须可告警，不能被 ok 吞掉（日志不聚合，静默失败等于漏报）
+    mocks.sweepStaging.mockRejectedValueOnce(new Error("s3 down"));
+    await runGcCycle();
+    expect(gcMetric).toHaveBeenLastCalledWith("partial", 0);
+
+    // 四个阶段全败
+    mocks.queryRaw.mockReset();
+    mocks.queryRaw.mockRejectedValue(new Error("db down"));
+    mocks.sweepStaging.mockRejectedValue(new Error("s3 down"));
+    mocks.sweepDerived.mockRejectedValue(new Error("list failed"));
+    mocks.sweepProbe.mockRejectedValue(new Error("probe list failed"));
+    await runGcCycle();
+    expect(gcMetric).toHaveBeenLastCalledWith("failed", 0);
+  });
+
+  it("回收字节只计真正删除的部分：dry-run 列出候选但记 0", async () => {
+    setRawResponses([row(HASH_A)]);
+    await runGcCycle();
+    expect(gcMetric).toHaveBeenLastCalledWith("ok", 0);
+
+    // 同一份候选在实删模式下计入字节：试运行没有真的删除，不能虚报回收量
+    resetTestSettings({ "storage.gc_dry_run": false });
+    setRawResponses([row(HASH_A)]);
+    mocks.transaction.mockImplementation(async (cb: (tx: unknown) => Promise<boolean>) =>
+      cb({
+        fileObject: {
+          findUnique: vi.fn().mockResolvedValue({ refCount: 0 }),
+          delete: mocks.fileObjectDelete.mockResolvedValue({}),
+        },
+        fileRef: { findFirst: vi.fn().mockResolvedValue(null) },
+      }),
+    );
+    await runGcCycle();
+    expect(gcMetric).toHaveBeenLastCalledWith("ok", 100);
   });
 
   it("staging 清扫失败不拖累引用回收与派生清扫", async () => {
@@ -253,5 +309,21 @@ describe("runGcCycle 三阶段独立成败（specs/derived-deletion-linkage.md �
     expect(result.swept).toBe(1);
     expect(result.derivedSwept).toBeNull();
     expect(result.derivedSweepError).toContain("list failed");
+    expect(result.probeSwept).toBe(0);
+    expect(result.probeSweepError).toBeNull();
+  });
+
+  it("探测残留清扫失败独立记录，不拖累前三阶段", async () => {
+    setRawResponses([]);
+    mocks.sweepStaging.mockResolvedValue(1);
+    mocks.sweepDerived.mockResolvedValue(2);
+    mocks.sweepProbe.mockRejectedValue(new Error("probe list down"));
+
+    const result = await runGcCycle();
+    expect(result.gc).not.toBeNull();
+    expect(result.swept).toBe(1);
+    expect(result.derivedSwept).toBe(2);
+    expect(result.probeSwept).toBeNull();
+    expect(result.probeSweepError).toContain("probe list down");
   });
 });

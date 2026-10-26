@@ -14,7 +14,7 @@
  *   （撤销恢复 / 二次引用）终检放弃回收。残余竞态（引用恰好在删行与删文件之间回来）
  *   窗口为毫秒级，远小于 48h 宽限期语义，此时最多留下一个无账本行的孤儿磁盘文件，
  *   不影响任何引用的完整性。
- * - storage.gc_dry_run：引用回收与 staging 清扫都只报告不删除，观察扫描结果后再切换实删。
+ * - storage.gc_dry_run：引用回收与三路按龄清扫都只报告不删除，观察扫描结果后再切换实删。
  *
  * 启动后延迟首跑 + 按 storage.gc_interval_seconds 周期执行（进程内 interval），由 bootstrap 挂载，幂等。
  */
@@ -25,7 +25,9 @@ import { getSetting } from "@server/core/settings";
 import { buildStorageKey, getStorageBackend } from "./service";
 import { sweepStagingObjects } from "./upload-direct";
 import { sweepStaleDerivedObjects } from "./derived-cleanup";
+import { sweepStaleProbeObjects } from "./probe-cleanup";
 import { logEvent } from "@server/core/logger/utils";
+import { type GcResult, metrics } from "@server/core/metrics";
 
 export interface StorageGcReport {
   dryRun: boolean;
@@ -160,7 +162,7 @@ export async function runStorageGc(): Promise<StorageGcReport> {
 let timer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-/** GC 单周期结果：两阶段各自的报告与错误（阶段吞错不改判对方成败，调用方据此处置） */
+/** GC 单周期结果：四阶段各自的报告与错误（阶段吞错不改判对方成败，调用方据此处置） */
 export interface GcCycleResult {
   /** 引用回收报告；阶段抛错为 null */
   gc: StorageGcReport | null;
@@ -171,10 +173,13 @@ export interface GcCycleResult {
   /** 派生清扫回收数（四根统一 TTL，specs/derived-deletion-linkage.md 规则 4）；阶段抛错为 null */
   derivedSwept: number | null;
   derivedSweepError: string | null;
+  /** 启动探测残留清扫回收数（_probe/ 固定 24h，specs/storage-provider-portability.md 规则 3.2） */
+  probeSwept: number | null;
+  probeSweepError: string | null;
 }
 
 /**
- * GC 单周期：引用回收 + staging 按龄清扫 + 派生按龄清扫，三阶段独立成败。
+ * GC 单周期：引用回收 + staging 按龄清扫 + 派生按龄清扫 + 探测残留清扫，四阶段独立成败。
  * 进程内定时 tick 与 storage:gc 手动触发共用同一实现（护栏口径单一来源），
  * 结果返回给调用方各按需消费（tick 落日志，CLI 置退出码）。
  */
@@ -185,6 +190,8 @@ export async function runGcCycle(): Promise<GcCycleResult> {
   let sweepError: string | null = null;
   let derivedSwept: number | null = null;
   let derivedSweepError: string | null = null;
+  let probeSwept: number | null = null;
+  let probeSweepError: string | null = null;
   try {
     gc = await runStorageGc();
     logEvent("gc", {
@@ -217,7 +224,26 @@ export async function runGcCycle(): Promise<GcCycleResult> {
     derivedSweepError = String(err);
     logEvent("gc", { stage: "derived_sweep_failed", error: derivedSweepError });
   }
-  return { gc, gcError, swept, sweepError, derivedSwept, derivedSweepError };
+  // 探测对象删除是尽力而为，残留只能靠本阶段回收（不在可读键域，引用回收看不到）
+  try {
+    probeSwept = await sweepStaleProbeObjects();
+    logEvent("gc", { stage: "probe_swept", swept: probeSwept, dryRun: getSetting("storage.gc_dry_run") });
+  } catch (err) {
+    probeSweepError = String(err);
+    logEvent("gc", { stage: "probe_sweep_failed", error: probeSweepError });
+  }
+  // 指标口径覆盖四个阶段：某一阶段持续失败若仍记 ok，按指标告警会完全漏报
+  // （失败只落在日志里，而日志不聚合）。`partial` 是可告警的终态。
+  const failures = [gcError, sweepError, derivedSweepError, probeSweepError]
+    .filter((error) => error !== null).length;
+  const result: GcResult = failures === 0 ? "ok" : failures === 4 ? "failed" : "partial";
+  // 回收字节只计真正删除的部分（试运行不计，因为没有真的删除）
+  const reclaimedBytes = gc && !gc.dryRun
+    ? gc.reclaimed.reduce((sum, item) => sum + item.size, 0)
+    : 0;
+  metrics.storageGcRun(result, reclaimedBytes);
+
+  return { gc, gcError, swept, sweepError, derivedSwept, derivedSweepError, probeSwept, probeSweepError };
 }
 
 async function tick(): Promise<void> {
