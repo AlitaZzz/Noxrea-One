@@ -221,7 +221,15 @@
         ],
         "mapping": {
           "refImages": { "field": "image", "kind": "array" },
-          "ratio": { "field": "size", "kind": "single" }
+          "ratio": {
+            "field": "size",
+            "kind": "single",
+            "transform": {
+              "type": "lookup",
+              "composite": ["ratio", "resolution"],
+              "table": "$shared:gpt-image-sizes"
+            }
+          }
         }
       }
     }
