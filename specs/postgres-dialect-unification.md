@@ -1,8 +1,10 @@
 # Spec：数据库统一 PostgreSQL 方言与双模式部署
 
+状态：已实现
+
 ## 当前状态
 
-**已确认**（2026-10-15，用户逐项确认 Q1–Q3，见决策 D7–D9；方案获批，实现已完成，代码未提交，等待用户验收）。
+**已实现**（2026-10-15 用户逐项确认 Q1–Q3，见决策 D7–D9；2026-10-26 用户验收确认）。实现已完成并提交；PGlite 本地模式已由 [pglite-removal.md](pglite-removal.md) 移除，现行部署为外置 PostgreSQL 单一运行时。应用容器 compose（ghcr 镜像 + entrypoint）全链路仍未在 docker 部署机实测，保留为遗留项。
 
 实现进度（2026-10-15）：阶段 1 全部完成——Prisma 7.10.0 + `prisma-client` 生成器；双模式工厂（client.ts：按连接目标缓存实例、惰性初始化、本地模式跨进程数据目录锁 `noxrea.lock` 防 PGlite 双开互毁）；迁移 runner（migrate.ts，语义对齐 migrate deploy，记账与真 Prisma 兼容）；PG 基线迁移 `20261015061549_baseline`（createPgliteMigration 授权链路生成，`npm run db:migrate:new` 封装于 scripts/db/author-migration.mts）；dev 数据一次性搬迁完成（5507 行全表对账一致，序列重同步，API 冒烟 200）；测试基座迁 PG 方言。**Gate 1 于实装版本 0.5.10 回归通过**（SIGKILL 5 轮零丢失零缺洞 / 60 小事务 exit-不-close / 单大事务 5500 行 exit-不-close 全部存活；测试件在 G:/.Cache/temp/nox-gate1-recheck/gate1.mjs）；**Gate 2 正式判定通过**（bulk 套件 15.84s ≤ 基线 6.31s×3=18.9s，倍率 2.51）。阶段 2 文件就位（docker-compose.nas.yml 双容器 + entrypoint 等 PG→migrate deploy；本机无 docker 未实测）。**遗留清理已执行（2026-10-15，用户授权「不需要向后兼容」）**：删除 dev.db×3 / 根目录 _shadow_tmp.db / 一次性搬迁脚本 / 4 个排查期临时诊断脚本；卸载 better-sqlite3 与 @types/better-sqlite3；删除 getLocalPglite（唯一调用方即搬迁脚本）与 isUncategorizedFolderUniqueError（两个方言下 asset_folders 均无唯一索引，catch 永不命中）。**无约束竞态已修复（用户放行后实施，2026-10-15）**：手写迁移 `20261015213000_uncategorized_unique` 建 PG 部分唯一索引 `asset_folders(user_id, scope) WHERE kind='uncategorized'`（Prisma schema 无法表达，已实证 `db:migrate:new` 差分「No changes detected」——schema 引擎感知不到部分索引，未来授权不会生成 DROP 它的迁移）；crud/asset.ts 恢复竞态守卫（现在约束真实存在，撞索引回读并发方目录）；新增真实库回归测试 asset-folder-constraint.test.ts（3 用例：同用户同 scope 二次创建拒绝且冲突索引 asset_folders_uncategorized_key（列 user_id+scope）、普通目录不受限、跨 scope 互不影响）；本地 dev 库经真实启动应用迁移（local_migrations_applied 日志 + 完整 bootstrap）。审查另修复：closeLocalDatabase 先放锁后 close 的关停顺序（checkpoint 未完成时他进程可打开同目录，正是锁要防的场景）；.dockerignore 未排除本地 data/（PGlite 真实数据会被打进镜像层）。README 同步双模式现实（快速开始、常用命令、env 表、系统设置修改方式、Docker 部署、删除 SQLite 时代「升级旧版数据库」节、持久化表）。实现过程中发现并修复：driver adapter 下 P2002 约束信息在 meta.driverAdapterError（meta.target 不存在）→ 统一收敛为 core/database/errors.ts；2026-10-21 核实 adapter-pg 7.10 的约束形态为 constraint.index（不填充 fields），helper 已改为按索引名匹配（见 pglite-removal.md）；vitest 单 fork 跨文件 globalThis 实例泄漏 → 按连接目标键控；PGlite 同目录多实例无锁互斥（本次 dev 数据曾因此丢失后重做）→ 数据目录锁 + 优雅关停 close checkpoint。
 

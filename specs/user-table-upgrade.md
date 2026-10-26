@@ -1,6 +1,6 @@
 # User Table Upgrade
 
-状态：已确认
+状态：已实现
 
 决策记录：
 
@@ -30,7 +30,7 @@
 
 ## 技术影响
 
-- `prisma/schema.prisma` 的 User model + 一次 migration：SQLite 下 Prisma 采用 RedefineTables（重建表 + INSERT...SELECT 迁移数据）而非 ADD COLUMN，数据保留由 Prisma 迁移机制保证，已在 dev.db 真实数据上实测验证。
+- `prisma/schema.prisma` 的 User model + 一次 migration：SQLite 下 Prisma 采用 RedefineTables（重建表 + INSERT...SELECT 迁移数据）而非 ADD COLUMN，数据保留由 Prisma 迁移机制保证，已在当时 dev.db 真实数据上实测验证；SQLite 已随 pglite-removal 退役，users 表结构现由 PG 基线迁移覆盖。
 - 注册路径（auth register）：事务内角色判定。
 - 登录路径（auth login）：写 `lastLoginAt`。
 - `toPublicUser` 序列化新增 `email`、`role` 字段（管理后台与前端消费的地基）与 `displayName` 回退。**前端 cookie 缓存随本次收口**：auth store 在服务端响应进入 store 的入口（`/me`、登录、注册、设置保存）经 `toUserInfo` 转换为 `UserInfo`（id/username/avatarKey/theme/language，2026-10-24 按 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 移除 avatarUrl：访问地址由前端访问解析层换取，用户 DTO 只携带存储 key），`state.user` 运行时即契约形状，cookie 写端直接序列化；`parseUserCookie` 作为不可信输入边界做严格校验（5 个字段类型任一不符即视为无缓存，交由 `/me` 校正），不补默认值。email/role 等新增字段因此不进 cookie。
@@ -56,5 +56,6 @@
 
 ## 当前状态
 
-- 已实施：schema、migration（已应用 dev.db）、注册/登录最小改动与回归测试均完成；2026-10-11 审查修复（并发首注册回归、重名竞态 409、cookie 入口转换与严格校验）已按本版 Spec 实施并通过 typecheck、lint、全量 server 测试。
-- 迁移时点既有用户的 role 均落默认 'user'。开发库（dev.db）后续已清理其他测试账户，仅余 `noxrea`，并已按兜底手段提权为 admin；其他环境部署后需 admin 时同样按兜底手段手动 UPDATE（或等管理后台立项）。部署其他环境需执行 `prisma migrate deploy`。
+- 已实施：schema、migration（当时曾应用于 dev.db；dev.db 已随 pglite-removal 退役，结构现并入 PG 基线迁移）、注册/登录最小改动与回归测试均完成；2026-10-11 审查修复（并发首注册回归、重名竞态 409、cookie 入口转换与严格校验）已按本版 Spec 实施并通过 typecheck、lint、全量 server 测试。
+- 迁移时点既有用户的 role 均落默认 'user'。开发库 dev.db 已随 pglite-removal 退役，users 表结构并入 PG 基线迁移 `20261015061549_baseline`（含 role / display_name / email / email_verified_at / last_login_at），当前环境由 `prisma migrate deploy` 应用。其他环境部署后需 admin 时按兜底手段手动 UPDATE（或等管理后台立项）。
+- 2026-10-26 用户验收确认，状态更新为「已实现」；实现代码已提交入库。

@@ -1,6 +1,6 @@
 # File Ref Ledger Bulk Removal
 
-状态：已确认
+状态：已实现
 
 决策记录：
 
@@ -31,7 +31,7 @@
 
 ## 技术方案
 
-- 将"逐 hash 循环 `adjustFileRefCount`"改写为聚合 `UPDATE ... FROM (SELECT hash, SUM(count) ... GROUP BY hash)` + `DELETE`，使用 Prisma `$executeRaw`（SQLite 3.33+ 支持 UPDATE...FROM，Prisma 内置引擎满足）。
+- 将"逐 hash 循环 `adjustFileRefCount`"改写为聚合 `UPDATE ... FROM (SELECT hash, SUM(count) ... GROUP BY hash)` + `DELETE`，使用 Prisma `$executeRaw`（PostgreSQL 支持 UPDATE...FROM；测试基座已由 SQLite 迁移为 PostgreSQL）。
 - `IN` 列表按分片提交（每片 5000 个来源 id）；每片先 UPDATE 再 DELETE。同一 hash 的聚合递减按片累加；`sourceIds` 含重复 id 时，后一片已无账本行可匹配，不会重复递减（"全部 UPDATE 后再全部 DELETE"的顺序反而会对跨分片的重复 id 重复递减）。分片大小从 500 上调至 5000（实测 892ms vs 3817ms）；参数上限由 5 万来源回归测试（10 个分片）实际覆盖。
 - 推荐方案 A（保持 `sourceIds` 签名 + IN 分片），不采用耦合 `asset_items` 表的子查询变体（实测 558ms，收益不足以抵消账本模块的解耦破坏）。
 
@@ -53,7 +53,7 @@
 ## 验收标准
 
 - 既有 `file-ref-ledger.test.ts` 中 `replaceSourceFileRefs` 的用例不改动即通过；该文件中的 mock 基建（`makeTx` 的 `$executeRaw`）保留给"空来源列表不触发 SQL"用例。
-- 单来源与批量移除的语义测试均在真实 SQLite 库接缝（`$executeRaw` 无法在内存 mock 上验证）：混合存在与缺失的 `file_objects` 行、同一 hash 多来源合并、其他来源不受影响、空列表/空来源。
+- 单来源与批量移除的语义测试均在真实 PostgreSQL 库接缝（`$executeRaw` 无法在内存 mock 上验证）：混合存在与缺失的 `file_objects` 行、同一 hash 多来源合并、其他来源不受影响、空列表/空来源。
 - 5 万来源大规模回归（随 CI 常跑）：以 Prisma 默认 5s 事务预算本身为断言（超时会抛 P2028），不再设独立的耗时断言，避免 CI 慢机抖动；同时断言 `ref_count` 无负值、无残留账本行。
 - Web：超过 `ASSET_BATCH_LIMIT` 的批量删除/移动按上限分片，某分片失败时停止并保留已完成进度（既有 store 测试覆盖）。
 - 全量 server/web 测试、typecheck、lint 通过。
@@ -64,5 +64,6 @@
 
 ## 当前状态
 
-- 已实施：`removeSourceFileRefsBatch` 集合运算（每片 UPDATE + DELETE）、`removeSourceFileRefs` 委托批量实现；单来源/批量/跨分片/5 万规模回归均在真实 SQLite 上通过；Web 分片提交与 `ASSET_BATCH_LIMIT` 已随上一次提交落地。
+- 已实施：`removeSourceFileRefsBatch` 集合运算（每片 UPDATE + DELETE）、`removeSourceFileRefs` 委托批量实现；单来源/批量/跨分片/5 万规模回归已随测试基座迁移到真实 PostgreSQL（`file-ref-ledger-bulk.test.ts`，需 `TEST_DATABASE_URL`），2026-10-26 复跑 7/7 通过（5 万来源用例 16.8s 含插入与断言，事务本身未触发 P2028）；Web 分片提交与 `ASSET_BATCH_LIMIT` 已落地。
 - 2026-10-11 审查修复已通过 typecheck、lint、全量 server 测试。
+- 2026-10-26 用户验收确认，状态更新为「已实现」；实现代码已提交入库。

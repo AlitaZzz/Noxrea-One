@@ -1,6 +1,6 @@
 # Media Processing Concurrency Limit
 
-状态：已确认（用户 2026-10-13 确认；第一、二阶段均已实现，未提交）
+状态：已实现（用户 2026-10-13 确认，2026-10-26 验收；第一、二阶段均已实现并提交）
 
 ## 目标
 
@@ -12,8 +12,8 @@
 
 | 阶段 | 内容 | 状态 |
 | --- | --- | --- |
-| 一 | 全局媒体池（ffmpeg / sharp）与 503 过载响应、派生产物请求合并与原子落盘、统一取消语义 | 已实现，未提交 |
-| 二 | ffmpeg 按任务重量拆为重型 / 轻型两个池；重型池按用户限额；请求次数限流只计产出类编辑并返回 `Retry-After`；缩略图宽度档位化、视频海报高保真母版（落盘时同步生成）与派生产物随源删除清理；前端失败提示、重试、卸载中止与视频节点海报升档（由 Claude 实现） | 已实现，未提交 |
+| 一 | 全局媒体池（ffmpeg / sharp）与 503 过载响应、派生产物请求合并与原子落盘、统一取消语义 | 已实现，已提交 |
+| 二 | ffmpeg 按任务重量拆为重型 / 轻型两个池；重型池按用户限额；请求次数限流只计产出类编辑并返回 `Retry-After`；缩略图宽度档位化、视频海报高保真母版（落盘时同步生成）与派生产物随源删除清理；前端失败提示、重试、卸载中止与视频节点海报升档（由 Claude 实现） | 已实现，已提交 |
 | 三 | 重编码类编辑改为异步任务（提交即返回任务 ID，推送进度） | 另立 Spec，本次不做（已确认决策 16） |
 
 下文业务规则描述第二阶段完成后的目标状态；与第一阶段实现不同的地方注明「第二阶段」。
@@ -296,7 +296,7 @@
 
 ## 技术影响
 
-### 第一阶段（已实现，未提交）
+### 第一阶段（已实现，已提交）
 
 - **设置**：`server/core/settings/registry.ts` 新增 6 个键；无数据库结构变更（键值表自动播种）。两个等待时限使用注册表的定时器类时长类型（上限 1 天）；该类型同时用于其余换算成定时器的既有时长设置，规则与受影响键记录在 `system-settings-db.md`。
 - **并发门**：扩展 `server/core/ratelimit/concurrency.ts`，抽出可复用的有界 FIFO 门 `BoundedGate`（上限 + 队列深度 + 等待时限 + `AbortSignal`），按用户租约与全局池共用同一实现。`waitForUserConcurrency` 的签名与排队语义不变，以下随之变化：队列满抛 `GateRejectedError`（不再保留 `ConcurrencyQueueFullError`）；注册表由 `globalThis` 改为模块级变量；释放函数连同空闲清理严格只执行一次（重复调用若再清理一次，会把同一用户随后新建的门从注册表删掉，绕过按用户的并发上限）。
@@ -311,7 +311,7 @@
 - **完整性体检合并**：`probeVideoIntegrity` 经 `runSingleFlight` 合并同一视频的并发首次问询，并接收调用方的取消信号：雪碧图路由客户端断开且无其他等待者时取消解码。
 - **错误码**：`server/core/errors/codes.ts` 注册 `media.busy`；过载响应的构造集中在 `server/http/media-busy.ts` 一处，各路由复用。
 
-### 第二阶段（已实现，未提交）
+### 第二阶段（已实现，已提交）
 
 - **设置**：`media.*` 由 6 个键调整为 11 个（业务规则 3）：`media.ffmpeg_*` 三个键改名为 `media.ffmpeg_heavy_*`，新增 `media.ffmpeg_heavy_user_*` 两个与 `media.ffmpeg_light_*` 三个；无数据库结构变更。`system-settings-db.md` 中对等待时限键的引用同步更新。
 - **媒体池**：`media-pool.ts` 管理三个全局池（`ffmpeg_heavy`、`ffmpeg_light`、`sharp`）。重型池的个人阶段复用 `concurrency.ts` 的按用户门，补上等待时限参数，不另写实现。`MediaPoolBusyError` 增加 `scope: user | global`；`failMediaBusy` 按 `scope` 与池名映射 429 / 503 及对应 `Retry-After`。
@@ -467,7 +467,7 @@
 
 ## 当前状态
 
-已确认（用户 2026-10-13）。第一阶段与第二阶段均已实现、未提交；「已确认」状态由用户设置。
+已实现（用户 2026-10-13 确认，2026-10-26 验收）。第一阶段与第二阶段均已实现并提交。
 
 档位口径更新（2026-10-23，随 [canvas-media-resolution-lod.md](canvas-media-resolution-lod.md) 实现）：档位由 8 档 / 上限 1280 扩展为 12 档 / 上限 2560，档位表迁至 `@noxrea/shared/media-tiers` 单一来源；`_cache` 键增加版本段（当前 `v2`），派生解析/归属/删除联动只识别 v2；图片缩放管线加 `.autoOrient()`（EXIF 方向）；APNG 识别后回退原图。规则 8.1/8.6 与「验证」中的档位示例已同步为本口径。
 
@@ -502,3 +502,5 @@ ffprobe 瞬时空结果缺陷与尾帧扫描重试（2026-10-20 增量）：
 - 修复（对缺陷在产生层不可达时的成熟处置：精确识别签名 + 有界单次重试 + 日志可观测）：`scanFfprobe` 返回 `{ entryCount, stderr }`；`lastVideoFrame` 在「干净空结果」（零条目且 stderr 为空）时重试同一次尾帧扫描并记 `capture_tail_empty_retry` 日志——packets 索引刚刚证实关键帧存在，干净空结果必属该缺陷而非内容问题；损坏尾巴的扫描必带解码错误 stderr（已实证），不进重试分支，「回退前一个 GOP」语义不变。测试侧 three-hours 用例的 `-read_intervals 10799%` 参考探测走裸 `execFileSync`（exit 非零直接抛出），以「输出不含 best_effort_timestamp_time」判空（不看 stderr）重试一次——与生产契约的差别仅在判空依据。
 - 验证：新增 2 个回归用例（干净空结果触发重试取帧 / stderr 门控不触发直接回退）；`video-frames` 文件单 worker 30 连跑零失败（修复前同窗口预期 1～3 失败）；全量服务端 932/932（含真 Redis integration 9/9）；web 934/934；typecheck、lint 通过。
 - 遗留：生产 Linux 使用发行版 release 构建 ffmpeg，是否受同一缺陷影响未验证；`capture_tail_empty_retry` 日志可作为观测点，若实际出现再评估升级 `bin/` / 发行版版本。
+
+状态更新（2026-10-26）：用户验收确认，状态由「已确认」改为「已实现」。上述未验证项（目标环境压测与默认值校准、真实浏览器中的 429 / 503 面板浮层走查、sharp 生产镜像线程数假设、ffprobe 缺陷在发行版构建上的影响）仍为已知缺口，不因状态更新而视为已验证。

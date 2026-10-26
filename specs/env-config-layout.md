@@ -1,6 +1,6 @@
 # Env Config Layout
 
-状态：已确认（用户 2026-10-12 确认命名与不做兼容读取）
+状态：已实现（用户 2026-10-12 确认命名与不做兼容读取；2026-10-26 验收）
 
 ## 目标
 
@@ -99,3 +99,5 @@
 - `DATABASE_URL` 改为必填（仅 `postgres://` / `postgresql://`；缺失或非法启动失败）。
 - `TEST_DATABASE_URL`（真实库测试专用，库名必须包含 `test`，不得与 `DATABASE_URL` 同库）与 `SHADOW_DATABASE_URL`（`db:migrate:new` 必需：只在该可丢弃 shadow 库回放迁移并生成 SQL，不得与 `DATABASE_URL` 相同）归入后端测试/开发工具配置，在 `.env.example` 注释说明。
 - 新增 `db:migrate:deploy`、`predev` script；`db:migrate:new` 增加 `--env-file=.env`（Prisma 7 CLI 不自动加载 `.env`）；迁移授权由 `migrate dev` 改为 `migrate diff --from-migrations --to-schema`，不读取 `DATABASE_URL`。
+
+2026-10-26 用户验收确认，状态更新为「已实现」；实现代码已提交入库。
