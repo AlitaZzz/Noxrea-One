@@ -86,3 +86,4 @@
 - 已实施并通过验证（2026-10-11～12）：骨架占位（150ms 延迟 + 形状化骨架 + 图标叠加）与字节单次流转载入（fetch → Blob → object URL、调度器接管 URL 生命周期、失败先中止传输再撤销）均已落地。受影响测试 50 个全过（调度器 19 + CanvasImage 13 + VideoNode 18），typecheck、lint 通过；web 全量测试失败用例为既有用例间污染抖动（漂移于 MediaPreviewOverlay / HoverCard / Button / AudioWaveform，与无改动基线一致，单跑均过）。经两轮双轴代码审查：首轮发现的超时不中止传输、complete 守卫窄窗口泄漏、双名同物、aspect 同形两份均已根因修复并补失败路径单测；次轮复审确认修复彻底、无现行 bug / 死代码 / 兼容层，空源守卫与跨域边界已回写本 Spec。浏览器双主题实测与禁用缓存单请求验证因工具受阻待补。
 - 2026-10-12：按 `specs/canvas-image-http-url-rendering.md`（用户确认）完成 HTTP URL 渲染迁移——`prepareImage` 改为探测 `<img>` 预热 + 结果携带原 URL，删除全部 object URL 生命周期；受影响测试（调度器 17 + CanvasImage 13 + VideoNode 18，canvas 全量 477）全过，typecheck、lint 通过。骨架规则 1–5、9 不受影响。
 - 2026-10-23：随画布分辨率 LOD 实现补充规则 10（换档保留旧图、不闪骨架）；`CanvasImage` 的 stale 状态与逻辑源判定已按该规则实现并有单测覆盖（`CanvasImage.test.tsx` 的 LOD 用例：档位切换保留旧图、新档位失败保留旧图、逻辑源变化回骨架）。浏览器实测：0.1↔1.0 换档全程骨架数量保持 0。
+- 2026-10-26 状态核对：实现代码早已提交入库（`CanvasImage` 等当前代码见 `023f6489`）。未完成的验收项：浏览器双主题实测、禁用缓存下的单请求验证；状态维持「已确认」，「已实现」由用户设置。

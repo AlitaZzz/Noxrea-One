@@ -1,14 +1,14 @@
 # 请求鉴权与吊销（Auth Request Verification）
 
-状态：待确认（2026-10-26 起草，待用户确认）
+状态：已确认（2026-10-26 起草，同日用户确认方案；实现已提交 `1bff028d`，剩余实机走查待执行）
 
 上游与关联：
 
 - [user-table-upgrade.md](user-table-upgrade.md)（已实现）：用户表字段与 `toPublicUser`。
 - [file-access-ownership.md](file-access-ownership.md)（已实现）：会话归属与能力凭据边界（读路径鉴权语义不变）。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（待确认）：批量描述让「每请求一次用户查询」的成本按条目放大，本 Spec 为该成本的根因解法；该 Spec 只依赖本 Spec 的结果。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）：批量描述让「每请求一次用户查询」的成本按条目放大，本 Spec 为该成本的根因解法；该 Spec 只依赖本 Spec 的结果。
 - [task-queue-bullmq.md](task-queue-bullmq.md)（已实现）：Redis 依赖、启动探测口径（本 Spec 沿用同一口径）。
-- [observability-baseline.md](observability-baseline.md)（待确认）：快照命中率、回源与失效失败指标。
+- [observability-baseline.md](observability-baseline.md)（已确认）：快照命中率、回源与失效失败指标。
 
 ## 目标
 
@@ -195,20 +195,22 @@
 - 2026-10-26：用户明确要求「Redis 是必须上的，按行业内的前沿成熟方案做，不一定非得改动小为前提」——因此采用 Redis 快照 + 显式失效的结构性方案，而不是「缩短 TTL」或「进程内缓存」这类局部缓解。具体规则待确认。
 - 2026-10-26：`AuthUser` 收缩为 `{ id }` 是本次一并清理的既有冗余（已核实无消费点），不属于新增范围。
 
-## 待确认事项
+## 已确认事项（2026-10-26 用户确认）
 
-- 快照 TTL 取 60 秒（而非 300/600 秒）：60 秒把「绕过应用的直接改库」陈旧窗口压到一分钟，代价是每活跃用户每分钟一次回源。是否接受这个取舍。
-- Redis 命令失败时回源数据库（而非 fail-closed 401）：正确性与可用性优先，但意味着 Redis 故障期间数据库承压。是否接受。
-- 是否需要在 `/api/health` 暴露快照命中率（当前只记录指标，不进健康检查）。
-- 若将来引入「所有设备退出」，是否借 `tokenVersion` 递增实现（现有机制天然支持，只需接失效）。
+2026-10-26 用户确认本 Spec 方案通过，原待确认四项按当前实现口径定案：
+
+- 快照 TTL 取 60 秒（非 300/600 秒）：接受把「绕过应用的直接改库」陈旧窗口压到一分钟，代价是每活跃用户每分钟一次回源。
+- Redis 命令失败时回源数据库（非 fail-closed 401）：正确性与可用性优先，接受 Redis 故障期间数据库承压。
+- 快照命中率只记录指标，不进入 `/api/health`（就绪检查保持布尔与数值）。
+- 「所有设备退出」不属本次范围；将来若引入，借 `tokenVersion` 递增实现即可（现有失效接线天然支持），届时另立 Spec。
 
 ## 当前状态
 
-已按用户指示实现于工作区（未提交）：Redis 鉴权快照（`server/core/auth/snapshot.ts`，与限流共用请求路径连接）、写路径失效、单飞回源、无负缓存、`AuthUser` 仅 `id`，并接入 `auth_snapshot_total` / `auth_verify_duration_seconds` 指标。写路径的三种结果（`invalidated` / `invalidated_fallback` / `invalidate_error`）与读路径分开取值，覆盖了规则 4.4 的三种结局。
+已按用户指示实现，代码于 2026-10-26 随 `1bff028d` 提交并推送（此前记录中的「工作区（未提交）」已过时）：Redis 鉴权快照（`server/core/auth/snapshot.ts`，与限流共用请求路径连接）、写路径失效、单飞回源、无负缓存、`AuthUser` 仅 `id`，并接入 `auth_snapshot_total` / `auth_verify_duration_seconds` 指标。写路径的三种结果（`invalidated` / `invalidated_fallback` / `invalidate_error`）与读路径分开取值，覆盖了规则 4.4 的三种结局。
 
 测试（2026-10-26，串行、`--maxWorkers=1`）：`auth/snapshot.test.ts` 15 个用例通过（含「NX 竞争以键内值为准」「脏值不盲写」「写路径结果按结局记指标」回归用例）；server 全量 98 个文件 / 1132 个用例通过；typecheck 与 lint 通过。
 
-复审修复（2026-10-26，未提交）：
+复审修复（2026-10-26；代码同批随 `1bff028d` 提交）：
 
 - **输掉 NX 之后仍写一次**：规则 2.2 原只写四步，实现里「NX 失败 → 回读」之后还有一步无条件 `SET`（后改为仅对脏值 `SET ... XX`）。两次修法的共同缺陷是一样的：**读路径输掉竞争后仍可能写回**。回读为空时会把「查库那一刻的旧值」重建；回读为脏值时 `XX` 也是一次无 CAS 的盲写，可能落在并发写路径刚提交的新值上。最终修复：NX 失败后读路径**完全不写回**，脏值期间每请求回源一次作为有界代价；规则 2.2 第 4 步与 2.3 按此改述，验收补「键消失不复活」「脏值不盲写」两条。
 - **失效接线无回归覆盖**：规则 4.5 要求「回归测试覆盖 4.2 的每个写点都触发失效」，但此前没有任何用例约束 `setUserPassword` / `updateUser` 的接线。新增 `crud/user-auth-snapshot.test.ts`（5 用例，mock 快照模块与数据库客户端）：改密后以提交结果失效、写入 `isActive` 后失效、只改画像字段不失效、提交失败（含事务回滚）不失效，并用调用顺序断言失效发生在提交之后。
@@ -216,4 +218,4 @@
 
 （`updateUser` 的 `isActive` 分支目前仍无 HTTP 调用方——`updateMeSchema` 是 `.strict()` 且不含该字段；该字段按规则 4.2 保留为管理端写点的接线，接线本身现由上述用例锁定。）
 
-尚未执行：「实机走查」中的两实例改密、运行期停 Redis 故障注入，需部署环境配合。规格状态字段仍为「待确认」，只能由用户设置。
+尚未执行：「实机走查」中的两实例改密、运行期停 Redis 故障注入，需部署环境配合。状态已由用户于 2026-10-26 设为「已确认」；「已实现」待上述两项实机走查通过并经用户验收后设置。

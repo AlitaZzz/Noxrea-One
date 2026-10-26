@@ -1,13 +1,13 @@
 # 可观测性基线（Observability Baseline）
 
-状态：待确认（2026-10-26 起草，待用户确认）
+状态：已确认（2026-10-26 起草，同日用户确认方案；实现已提交 `1bff028d`，Prometheus 抓取与编排探针验收待执行）
 
 上游与关联：
 
 - [task-queue-bullmq.md](task-queue-bullmq.md)（已实现）：`/api/health` 的 `redis` / `worker` / `queueDepth` 口径与告警建议。
-- [storage-provider-portability.md](storage-provider-portability.md)（待确认）：启动探测的能力摘要进入健康检查与指标。
-- [auth-request-verification.md](auth-request-verification.md)（待确认）：快照命中/回源/失效失败需要指标。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（待确认）：描述接口与派生缓存的观测点。
+- [storage-provider-portability.md](storage-provider-portability.md)（已确认）：启动探测的能力摘要进入健康检查与指标。
+- [auth-request-verification.md](auth-request-verification.md)（已确认）：快照命中/回源/失效失败需要指标。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）：描述接口与派生缓存的观测点。
 
 ## 目标
 
@@ -196,17 +196,19 @@
 
 - 2026-10-26：用户同意把可观测性纳入本轮改进方向（「按建议做」），并强调以业内成熟前沿方案为准——因此选 Prometheus 拉模型 + `prom-client`，不引入需要 collector 的追踪栈。具体规则待确认。
 
-## 待确认事项
+## 已确认事项（2026-10-26 用户确认）
 
-- `/api/health` 直接删除而非保留别名（用户已声明不需要向后兼容；但外部监控配置可能指向旧路径，需在 README 标注升级动作）。
-- `/metrics` 的开启方式：`METRICS_ENABLED` + 强制 token（当前方案），还是独立监听端口（更彻底但增加部署面）。
-- 访问日志是否全量记录（当前方案），还是只记录慢请求与错误（全量便于按路由算错误率，但日志量随 QPS 线性增长）。
-- 是否需要在就绪响应里暴露 `queueDepth`（现有行为），还是只走指标。
-- 直方图桶是否需要按业务调（当前取 5ms–10s 的通用分布）。
+2026-10-26 用户确认本 Spec 方案通过，原待确认五项按当前实现口径定案：
+
+- `/api/health` 直接删除、不保留别名；README 只记录新端点（`live` / `ready`，编排探针指向此处），外部监控指向旧路径时须在部署升级时改配，不做兼容路由。
+- `/metrics` 以 `METRICS_ENABLED` + 强制 token 开启，不开独立监听端口。
+- 访问日志全量记录（便于按路由算错误率），`/metrics` 抓取流量不进日志也不进指标。
+- 就绪响应保留 `queueDepth`（布尔/数值口径），不只走指标。
+- 直方图桶沿用 5ms–10s 通用分布，出现业务需要时再调。
 
 ## 当前状态
 
-已按用户指示实现于工作区（未提交）：`/api/health/live` 与 `/api/health/ready`（旧 `/api/health` 删除）、`@prometheus-io/client` 指标层（globalThis 单例）、`METRICS_ENABLED` / `METRICS_TOKEN` 与启动期 token 必填校验、Bearer 常量时间比较、访问日志与 HTTP 指标中间件。
+已按用户指示实现，代码于 2026-10-26 随 `1bff028d` 提交并推送（此前记录中的「工作区（未提交）」已过时）：`/api/health/live` 与 `/api/health/ready`（旧 `/api/health` 删除）、`@prometheus-io/client` 指标层（globalThis 单例）、`METRICS_ENABLED` / `METRICS_TOKEN` 与启动期 token 必填校验、Bearer 常量时间比较、访问日志与 HTTP 指标中间件。
 
 实现口径（与规则对照）：健康响应为扁平 JSON 而非全站 `ok()` 信封（消费方是编排探针）；致命项 = 数据库 / Redis / 存储探测，worker 只报告不参与就绪；队列读数带 1s 上限；`/metrics` 自身既不进访问日志也不进指标；未匹配路由统一记为 `other`。
 
@@ -223,4 +225,4 @@
 
 2026-10-26 判断项修复：`derived_artifact_total{result="failed"}` 不再计入请求取消（`AbortError`）与媒体池过载（`MediaPoolBusyError`）——过载已由 HTTP 分类点的 `media_busy_rejected_total` 单点计数，取消不是生成故障；3.4 正文已补口径。GC 指标阶段数随第四条「探测残留清扫」阶段更新为四（3.7）；三阶段全败的 `failed` 阈值同步改为四阶段全败。测试：artifact 指标分类回归用例、gc 四阶段终态聚合用例。
 
-尚未验证：Prometheus 实际抓取与编排探针配置；真实部署下的指标连续性。规格状态字段仍为「待确认」，只能由用户设置。
+尚未验证：Prometheus 实际抓取与编排探针配置；真实部署下的指标连续性。状态已由用户于 2026-10-26 设为「已确认」；「已实现」待上述部署验收后设置。

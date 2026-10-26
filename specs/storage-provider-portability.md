@@ -1,13 +1,13 @@
 # S3 兼容提供方可移植性（Storage Provider Portability）
 
-状态：待确认（2026-10-26 起草，待用户确认）
+状态：已确认（2026-10-26 起草，同日用户确认方案；实现已提交 `023f6489`，OSS/COS 真实桶验证待执行）
 
 上游与关联：
 
 - [storage-s3-backend.md](storage-s3-backend.md)（已实现）：后端接口、双凭据、上传直传、迁移、GC、bucket CORS 清单。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（待确认，2026-10-26 修订）：浏览器读路径依赖 `presignGet` 的 `response-*` 覆盖能力；本 Spec 为其提供能力探测与降级。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认，2026-10-26 修订）：浏览器读路径依赖 `presignGet` 的 `response-*` 覆盖能力；本 Spec 为其提供能力探测与降级。
 - [storage-s3-production-cutover.md](storage-s3-production-cutover.md)（已确认）：生产部署演练。
-- [observability-baseline.md](observability-baseline.md)（待确认）：探测摘要进入健康检查与指标。
+- [observability-baseline.md](observability-baseline.md)（已确认）：探测摘要进入健康检查与指标。
 - 参考实现（只读调查，2026-10-26）：`H:\infinite-canvas\open-ai-canvas-main` 的 `backend/internal/storage/s3.go`（按端点形态决定寻址风格、path-style 自动探测）。
 
 ## 目标
@@ -183,7 +183,7 @@
 - **CORS 未配置**：启动只 warning，能力位 `browserCors = false`；浏览器侧按既有失败态展示，部署验收要求修正 bucket CORS。
 - **分片上传 ETag 非 MD5**：迁移降级矩阵已覆盖，不受本 Spec 影响。
 - **OSS 不支持 path-style**：`provider = oss` 时不做 path-style 尝试，避免无意义的失败与误导性错误。
-- **覆盖头取值含非 ASCII 文件名**：`response-content-disposition` 的编码在实现期按 RFC 5987 处理，并用真实桶验证（见待确认事项）。
+- **覆盖头取值含非 ASCII 文件名**：`response-content-disposition` 的编码在实现期按 RFC 5987 处理，并用真实桶验证（见「已确认事项」的真实桶验证项）。
 - **厂商对未知查询参数报错**：预签名 URL 上的 `response-*` 若厂商不识别，可能 400 而非忽略；由 3.4 的探测提前发现并降级。
 
 ## 验收标准
@@ -202,7 +202,7 @@
 ### 实机走查
 
 - MinIO（现有演练桶）：`provider = minio`，探测摘要完整，画布图片直连显示、下载文件名正确。
-- 至少一家公有云（OSS / COS / R2 之一）：`provider` 对应，探测六项通过，浏览器直连显示正常，`browserCors = true`；未通过项记录在待确认事项。
+- 至少一家公有云（OSS / COS / R2 之一）：`provider` 对应，探测六项通过，浏览器直连显示正常，`browserCors = true`；未通过项记录在「已确认事项」的真实桶验证项。
 - 故障注入：错误 secret → 启动失败；只读凭据 → 启动失败；系统时钟人为偏移 10 分钟 → 启动失败；删除 bucket CORS → 启动 warning 且 `browserCors = false`。
 
 ## 实施顺序（确认后）
@@ -218,18 +218,19 @@
 
 - 2026-10-26：用户同意按「provider profile + 启动探测 + 校验和收敛」的方向推进（原话「就按照建议做吧」），并声明「不需要太多自研方案，有成熟且前沿的库可以使用」——因此继续用 AWS SDK v3，不引入厂商原生 SDK。具体规则待确认。
 
-## 待确认事项
+## 已确认事项（2026-10-26 用户确认）
 
-- `storage.s3.provider` 是否应设为必填（必填能强制部署者表态，但会让未升级配置的现有部署启动失败；当前倾向缺省 `generic` + 探测）。
-- OSS/COS 的 `response-*` 覆盖语义与预签名 PUT 的参数集需真实桶验证；若厂商不识别覆盖参数而非忽略，按规则 4.2 降级。
-- OSS/COS 的 S3 兼容 `region` 取值（凭证作用域区域串）需真实桶验证后写入 README 对照表。
-- `storage.s3.path_style` 直接丢弃而非迁移为 provider 的取值（用户已声明不需要向后兼容）。
-- CORS 探测缺失时只 warning 不失败（规则 3.5）是否接受。
-- 一致性脚本是否纳入 CI（需要真实凭据，倾向只在本地/发布前手动执行）。
+2026-10-26 用户确认本 Spec 方案通过，原待确认六项按当前实现口径定案：
+
+- `storage.s3.provider` 不设为必填，缺省 `generic` + 启动探测（既有部署无需改配置即可启动）。
+- `storage.s3.path_style` 直接丢弃，不做迁移（无向后兼容）。
+- CORS 探测缺失只 warning 不失败（规则 3.5）。
+- 一致性脚本 `storage:provider-check` 不纳入 CI，保持本地 / 发布前手动执行（需真实凭据）。
+- 仍待真实桶验证（属部署验收项，不改变方案）：OSS/COS 的 `response-*` 覆盖语义与预签名 PUT 参数集（厂商不识别覆盖参数而非忽略时，按规则 4.2 降级）、S3 兼容 `region` 取值（验证后写入 README 对照表）。
 
 ## 当前状态
 
-已按用户指示实现于工作区（未提交）：`storage.s3.provider` 画像（`server/services/storage/providers.ts`，替代 `path_style`）、统一 `createS3Client`（`forcePathStyle` + 双向 `WHEN_REQUIRED`）、六项启动探测与 `generic` 寻址回退、能力位（`addressing` / `responseOverrides` / `browserCors`）、`storage:provider-check` 运维脚本、`s3.integration.test.ts`（按 `TEST_S3_*` 门控）。
+已按用户指示实现，代码于 2026-10-26 随 `023f6489` 提交并推送（此前记录中的「工作区（未提交）」已过时）：`storage.s3.provider` 画像（`server/services/storage/providers.ts`，替代 `path_style`）、统一 `createS3Client`（`forcePathStyle` + 双向 `WHEN_REQUIRED`）、六项启动探测与 `generic` 寻址回退、能力位（`addressing` / `responseOverrides` / `browserCors`）、`storage:provider-check` 运维脚本、`s3.integration.test.ts`（按 `TEST_S3_*` 门控）。
 
 测试（2026-10-26，串行、`--maxWorkers=1`）：storage 套件与 server 全量 1118 个用例通过（该轮基线；两轮复审修复后为 98 个文件 / 1132 个用例）；providers/s3 探测用例覆盖寻址表、校验和收敛、预签名只签 `host`、探测六项与失败诊断，以及 CORS 按真实站点来源判定（白名单回显）与「未配置公开地址」警告两条分支。
 
@@ -251,4 +252,4 @@
 
 2026-10-26 判断项根因修复：探测对象删除失败后的残留此前记为「由存储 GC 孤儿回收」，但引用回收只处理 `file_objects` 行、派生清扫只扫四根、staging 清扫只扫 `staging/`——`_probe/` 实际无人回收。现新增第四阶段 `probe-cleanup.ts`（`PROBE_ROOT_PREFIX`、固定 24h、`gc_dry_run` 同口径），`GcCycleResult` 增加 `probeSwept` / `probeSweepError`，GC 日志与 `storage:gc` 退出码纳入；覆盖头子探测的传输失败在规则 3.4 明示为按不支持降级。告警文案改为「覆盖头探测未通过」——原「端点不遵守」把传输失败也说成端点违约，与实现不符。测试：`probe-cleanup.test.ts` 4 用例、`gc.test.ts` 四阶段隔离与全败阈值更新。
 
-尚未验证：OSS / COS 的 `response-*` 覆盖与预签名行为仍只有官方文档依据（无真实凭据）；`generic` profile 在两种寻址都可用时的选择顺序只有单测覆盖；探测残留清扫尚未在真实桶上以「删除失败留下残留」的形态演练。规格状态字段仍为「待确认」，只能由用户设置。
+尚未验证：OSS / COS 的 `response-*` 覆盖与预签名行为仍只有官方文档依据（无真实凭据）；`generic` profile 在两种寻址都可用时的选择顺序只有单测覆盖；探测残留清扫尚未在真实桶上以「删除失败留下残留」的形态演练。状态已由用户于 2026-10-26 设为「已确认」；「已实现」待上述真实桶验证与部署验收后设置。

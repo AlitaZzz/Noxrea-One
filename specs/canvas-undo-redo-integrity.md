@@ -87,3 +87,4 @@
 ## 当前状态
 
 - 已实施并通过验证（2026-10-11）：七项业务规则全部落地（视口不恢复、Agent 回合即时压栈 + 无变更补偿、微调入栈、离散必定压栈 + 同步批量守卫 `withHistoryBatch`、预生成快照注册表、统一守卫 + 悬空清理、replace 上传压栈时机前移 + 瞬态/回填 skipHistory + 失败补偿弹出）。代码审查（双轴）后完成整改：批量守卫 try/finally 收口为 `withHistoryBatch` 单一入口、移除 `dropPendingHistory` 转发层（面板直调注册表）、`CanvasStoreApi` 复用 `HistoryPushOptions`、菜单置灰项悬停提示改 Tooltip 包裹层触发（禁用项 `pointer-events-none` 使原生 title 失效）、补齐 Agent 回合压栈时序/无变更补偿与 SSE→注册表接线单测。web 全量 884 用例中仅剩两个既有无关文件（HoverCard / AudioWaveform）在单 fork 全量模式下偶发污染抖动、单跑均过（与 poster spec 记录的既有现象一致）；typecheck、lint 零错误。撤销/重做交互的浏览器端到端验证未执行（画布页有登录与会话门禁，环境内无凭据），交互层面待人工验证。
+- 2026-10-26 状态核对：实现代码早已提交入库（`withHistoryBatch` / 快照注册表现位于 `canvas-store.ts` 等，当前代码见 `023f6489`）。唯一未完成的验收项仍是浏览器端到端交互走查；状态维持「已确认」，「已实现」由用户设置。

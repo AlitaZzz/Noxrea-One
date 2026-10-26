@@ -1,6 +1,6 @@
 # Storage 签名直连分发（Storage Signed Direct Delivery）
 
-状态：待确认（2026-10-23 用户确认原版并已实现；**2026-10-26 修订**：批量描述、签名寿命与刷新协议、描述结果持久化缓存、安全响应头，已按用户指示实现于工作区，状态字段待用户设置）
+状态：已确认（2026-10-23 用户确认原版；**2026-10-26 修订版**——批量描述、签名寿命与刷新协议、描述结果持久化缓存、安全响应头——经用户确认，实现已提交 `023f6489` / `b99e6855`；「已实现」待浏览器验收后设置）
 
 上游与关联：
 
@@ -10,8 +10,8 @@
 - [file-access-ownership.md](file-access-ownership.md)（已实现）：归属解析与双凭据语义不变。
 - [canvas-image-http-url-rendering.md](canvas-image-http-url-rendering.md)（已确认）：显示 URL 的缓存与调度语义；本 Spec 修订「URL 长期不变」的前提。
 - [canvas-media-resolution-lod.md](canvas-media-resolution-lod.md)（已确认）：`w` 档位派生不变。
-- [auth-request-verification.md](auth-request-verification.md)（待确认）：请求鉴权的账号状态校验改由 Redis 快照承载，本 Spec 的描述接口依赖其结果（不感知实现）。
-- [storage-provider-portability.md](storage-provider-portability.md)（待确认）：`presignGet` 的 `response-*` 覆盖与 CORS 可用性由 provider 探测的能力位决定。
+- [auth-request-verification.md](auth-request-verification.md)（已确认）：请求鉴权的账号状态校验改由 Redis 快照承载，本 Spec 的描述接口依赖其结果（不感知实现）。
+- [storage-provider-portability.md](storage-provider-portability.md)（已确认）：`presignGet` 的 `response-*` 覆盖与 CORS 可用性由 provider 探测的能力位决定。
 - 参考实现（只读调查，2026-10-23）：`H:\infinite-canvas\open-ai-canvas-main` 的 `backend/internal/assets/access.go`、`backend/internal/handler/resource_delivery.go`、`web/src/services/api/resources.ts`。
 
 ## 目标
@@ -298,7 +298,7 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 | Spec | 状态 | 当前职责 |
 | --- | --- | --- |
 | [storage-s3-backend.md](storage-s3-backend.md) | 已实现 | 后端实现：接口、上传直传、迁移、GC、CORS 清单；读路径规则外链本 Spec |
-| 本 Spec | 待确认（2026-10-26 修订） | 浏览器读路径：描述接口、前端解析层、签名常量与缓存头、鉴权边界 |
+| 本 Spec | 已确认（2026-10-26 修订） | 浏览器读路径：描述接口、前端解析层、签名常量与缓存头、鉴权边界 |
 | [storage-s3-production-cutover.md](storage-s3-production-cutover.md) | 已确认 | 生产部署演练：凭据、TLS、可达性、回滚、对账 |
 | [storage-edge-cache-delivery.md](storage-edge-cache-delivery.md) | 已废弃 | 无；只作「边缘共享缓存」方向的否决记录 |
 
@@ -417,15 +417,15 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 - 2026-10-26：**规则 3.6 的重试预算按失败地址计**（不再按逻辑源生命周期）——同一地址只重描述一次；换到新地址后再次失败可再重试，避免长会话第二次过期直接进入失败态。
 - 2026-10-26：**新增规则 3.8 主动刷新**——寿命 80%（`refreshAt`）后台重描述，只更新缓存与 Hook 内新鲜地址槽、不替换已挂载元素地址；共享调度 + 会话级 ±10% 抖动 + 瞬时失败指数退避；元素失败优先消费新鲜地址。原「是否需要抖动待实测」事项由此关闭。
 
-## 待确认事项
+## 已确认事项（2026-10-26 用户确认）
 
-- 修订版（2026-10-26）已按用户指示「开始实施」完成实现；规格「状态」字段仍为「待确认」，只能由用户设置。
-- IndexedDB 持久化的条目上限：实现取按条目数 500、按 `savedAt` 最早淘汰（`PERSISTED_ENTRY_LIMIT`）。若真实画布出现「刷新后大量未命中重新描述」，再评估上调。
-- 批量上限 50 是按 64KB 体积与媒体池并发推得，待实测调整。
+- 修订版（2026-10-26）经用户确认；状态由用户设为「已确认」。「已实现」待浏览器验收项走查通过后设置。
+- IndexedDB 持久化条目上限按条目数 500、按 `savedAt` 最早淘汰（`PERSISTED_ENTRY_LIMIT`）；若真实画布出现「刷新后大量未命中重新描述」，再评估上调。
+- 批量上限 50 按 64KB 体积与媒体池并发推得，作为已确认取值，实测后再调整。
 
 ## 当前状态
 
-原版（2026-10-23）与修订版（2026-10-26）均已实现于工作区（未提交）。修订版实现范围：`POST /api/files/access` 批量描述（1–50 条、整批 200、逐条 `error`、同序同长、服务端批内并发 6）、4h 寿命 / 1h 对齐窗口（`expiresIn = ttl`、`refreshAt` = 寿命 80%）、前端同拍合并（每批 ≤50 条、批并发 2）、IndexedDB 仅持久化 `signed` 描述、描述响应 `Referrer-Policy: no-referrer` 与 `Cache-Control: private, no-store`、`CAPABILITY_URL_TTL_SECONDS` 1h。规则 3.8 主动刷新落地为 `web/src/lib/file-access/proactive.ts`（共享定时器 + 焦点/可见性/网络唤醒、会话级 ±10% 抖动）与 Hook 内的缓存重描述/新鲜地址槽；瞬时故障 30s 起指数退避、5min 封顶，终态错误不重试，服务端未推进寿命即停止循环。参考实现调查为只读，未修改外部项目。
+原版（2026-10-23）与修订版（2026-10-26）均已实现；代码于 2026-10-26 随 `023f6489` / `b99e6855` 提交并推送（下文各轮记录中的「未提交」均指当时暂存状态，已过时）。修订版实现范围：`POST /api/files/access` 批量描述（1–50 条、整批 200、逐条 `error`、同序同长、服务端批内并发 6）、4h 寿命 / 1h 对齐窗口（`expiresIn = ttl`、`refreshAt` = 寿命 80%）、前端同拍合并（每批 ≤50 条、批并发 2）、IndexedDB 仅持久化 `signed` 描述、描述响应 `Referrer-Policy: no-referrer` 与 `Cache-Control: private, no-store`、`CAPABILITY_URL_TTL_SECONDS` 1h。规则 3.8 主动刷新落地为 `web/src/lib/file-access/proactive.ts`（共享定时器 + 焦点/可见性/网络唤醒、会话级 ±10% 抖动）与 Hook 内的缓存重描述/新鲜地址槽；瞬时故障 30s 起指数退避、5min 封顶，终态错误不重试，服务端未推进寿命即停止循环。参考实现调查为只读，未修改外部项目。
 
 静态检查与测试（2026-10-26，串行执行、`--maxWorkers=1` 单 worker）：
 
