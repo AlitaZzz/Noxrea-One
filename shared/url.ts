@@ -1,19 +1,37 @@
 /** 前后端共同使用的托管文件 URL 前缀。 */
 export const MANAGED_FILE_PATH = "/api/files/";
 
-/** 提取托管文件 URL 的 pathname，忽略 query、hash 和非 HTTP 资源。 */
-export function getManagedFilePathname(url: string | null | undefined): string | null {
-  if (typeof url !== "string" || !url) return null;
-  if (url.startsWith(MANAGED_FILE_PATH)) {
-    const end = url.search(/[?#]/);
-    return end === -1 ? url : url.slice(0, end);
-  }
-  if (!url.startsWith("//") && !/^https?:\/\//i.test(url)) return null;
+/**
+ * 提取站内托管文件 URL 的 pathname，忽略 query 与 hash。
+ *
+ * 托管值只有一个形态：站内相对路径 `"/api/files/…"`。唯一产出方是服务端
+ * `buildManagedFileUrl`（上传、派生、编辑产物全部返回相对路径），Web 以 rewrites
+ * 同源代理 `/api/*`，浏览器侧拿到的托管地址也始终是相对路径。
+ *
+ * 绝对 URL 一律不属于托管值：即便路径恰好形如 `/api/files/…`，它也可能是别的源
+ * （外部引用），按路径前缀猜归属会把它改写成本站地址、令外部引用失效。同源判定
+ * 需要运行期 origin，shared 层（服务端同样消费本模块）没有可靠来源，因此不做
+ * 「绝对 URL 是否本站」的推断——值域按形态收敛，而不是按前缀猜测。
+ */
+function getManagedFilePathname(url: string | null | undefined): string | null {
+  if (typeof url !== "string" || !url.startsWith(MANAGED_FILE_PATH)) return null;
+  const end = url.search(/[?#]/);
+  return end === -1 ? url : url.slice(0, end);
+}
 
+/**
+ * 托管 URL → 存储 key（pathname 前缀之后的解码值）。
+ *
+ * 「是否托管」的唯一判定：非托管值、畸形百分号编码（如 `/api/files/%zz`）与空 key
+ * 一律返回 null。URL 派生层（`withManagedFileWidth`）与访问解析层的值域分流共用本函数，
+ * 避免两处对同一输入给出不同结论。
+ */
+export function getManagedStorageKey(url: string | null | undefined): string | null {
+  const pathname = getManagedFilePathname(url);
+  if (!pathname) return null;
   try {
-    const parsed = new URL(url, "http://noxrea.invalid");
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-    return parsed.pathname.includes(MANAGED_FILE_PATH) ? parsed.pathname : null;
+    const key = decodeURIComponent(pathname.slice(MANAGED_FILE_PATH.length));
+    return key.length > 0 ? key : null;
   } catch {
     return null;
   }
@@ -97,6 +115,34 @@ export function isFileRefValue(value: string): boolean {
 /** 由存储 key 构造托管文件的访问路径（`/api/files/{key}`）。key 必须通过 isStorageKey 校验。 */
 export function buildManagedFileUrl(key: string): string {
   return `${MANAGED_FILE_PATH}${key}`;
+}
+
+/** 托管逻辑 URL 的查询参数：宽度、下载与附件名的语义单一来源。 */
+export interface ManagedFileQuery {
+  /** 派生图 / 缩略宽度（`w`）；原图不传 */
+  width?: number;
+  /** 下载语义（`download=1`）；附件名只在下载时生效 */
+  download?: boolean;
+  /** 下载附件名（仅 `download` 为真时输出） */
+  filename?: string;
+}
+
+/**
+ * 由存储 key 构造带查询参数的托管逻辑 URL。
+ *
+ * 描述接口的 local 分支与前端 `stream` 形态共用本函数：两处必须产出**字节一致**
+ * 的地址，否则同一对象会因参数顺序或转义差异形成两份缓存与两套失败路径。
+ * 规则：参数顺序固定 `w` → `download` → `filename`；`filename` 只在下载时输出。
+ */
+export function buildManagedFileQueryUrl(key: string, query: ManagedFileQuery = {}): string {
+  const params = new URLSearchParams();
+  if (query.width !== undefined) params.set("w", String(query.width));
+  if (query.download) {
+    params.set("download", "1");
+    if (query.filename) params.set("filename", query.filename);
+  }
+  const search = params.toString();
+  return `${buildManagedFileUrl(key)}${search ? `?${search}` : ""}`;
 }
 
 /**

@@ -1,5 +1,8 @@
 {
   "name": "@noxrea/shared",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,9 +15,21 @@
       "types": "./url.ts",
       "default": "./url.ts"
     },
+    "./media-tiers": {
+      "types": "./media-tiers.ts",
+      "default": "./media-tiers.ts"
+    },
+    "./file-access": {
+      "types": "./file-access.ts",
+      "default": "./file-access.ts"
+    },
     "./crop-rect": {
       "types": "./crop-rect.ts",
       "default": "./crop-rect.ts"
+    },
+    "./text": {
+      "types": "./text.ts",
+      "default": "./text.ts"
     }
   },
   "dependencies": {

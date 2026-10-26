@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildManagedFileQueryUrl,
   hashFromStorageKey,
   isExternalFileUrl,
   isFileRefValue,
@@ -99,10 +100,34 @@ describe("整键与 stem 模式一致性（hash 对片段单源派生，防双�
       `7/aa/${"g".repeat(64)}`, // hash 段非 hex
       `7/aa/${H.slice(1)}`, // hash 不足 64 位
       "staging/7/123e4567-e89b-12d3-a456-426614174000", // staging 不是内容键
-      `_cache/320/7/aa/${H}.webp`, // 派生 key 不是内容键
+      `_cache/v2/320/7/aa/${H}.webp`, // 派生 key 不是内容键
     ]) {
       expect(isStorageKey(bad), bad).toBe(false);
       expect(STORAGE_KEY_STEM_PATTERN.test(storageKeyStem(bad)), bad).toBe(false);
     }
+  });
+});
+
+describe("buildManagedFileQueryUrl（描述接口 local 分支与前端 stream 形态的共用构造）", () => {
+  it("无查询参数时与 buildManagedFileUrl 逐字节一致", () => {
+    expect(buildManagedFileQueryUrl(key(HASH_A))).toBe(`/api/files/${key(HASH_A)}`);
+    expect(buildManagedFileQueryUrl(key(HASH_A), {})).toBe(`/api/files/${key(HASH_A)}`);
+    expect(buildManagedFileQueryUrl(key(HASH_A), { width: undefined, download: false }))
+      .toBe(`/api/files/${key(HASH_A)}`);
+  });
+
+  it("参数顺序固定 w → download → filename，编码走 URLSearchParams", () => {
+    expect(buildManagedFileQueryUrl(key(HASH_A), {
+      width: 640,
+      download: true,
+      filename: "a b.png",
+    })).toBe(`/api/files/${key(HASH_A)}?w=640&download=1&filename=a+b.png`);
+    expect(buildManagedFileQueryUrl(key(HASH_A), { width: 64 }))
+      .toBe(`/api/files/${key(HASH_A)}?w=64`);
+  });
+
+  it("filename 只在 download 为真时输出（下载附件名的语义在构造层单点）", () => {
+    expect(buildManagedFileQueryUrl(key(HASH_A), { filename: "orphan.png" }))
+      .toBe(`/api/files/${key(HASH_A)}`);
   });
 });
