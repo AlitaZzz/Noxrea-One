@@ -271,3 +271,22 @@
 分离音轨补充：静音视频输出容器 = MP4 封装（扩展名 .mp4，与源扩展名可能不同）；webm / mkv / avi 容器与非 AAC 音轨 → 回退服务端（服务端沿用「copy 失败转 PCM wav」的既有回退）。
 
 依赖说明：原 Spec 的 mp4box.js + mp4-muxer 组合已按用户提议换为 **Mediabunny 单库**（同 mp4-muxer 作者的整合升级，原生按需 Range 读取使「片段截取只拉所需范围」成为默认行为，并支持 Matroska/WebM 解封装），Spec 相应章节已更新。裁剪面板同步简化：裁剪框直接叠加在会话视频上，删除快照链路（慢网络纯黑问题的根因修复）。
+
+2026-10-27 浏览器走查（CDP 预览，登录态，后端 `s3`，测试画布 `mvpfy0f2lp0gx2`，14→18 节点）：
+
+**已验证事实**
+
+- 客户端分离音轨全链路连跑两次成功（源为 h264+AAC 派生视频）：服务端只收到两次 `POST /api/files/upload?source=derived`（203 KB 音轨 m4a + 4.9 MB 静音 mp4），无服务端编辑路由（`crop-video` / `detach-audio` / `apply-audio-speed`）调用；静音 mp4 入库时触发上传链路既有的 `stage=poster_master` 海报生成。一次动作产出音轨 + 静音视频两个节点，并以单次 `PUT /api/canvas/projects/:id` 落库（`withHistoryBatch` 一批两节点）。
+- 服务端兜底可用：`POST /api/files/crop-video`（`stage=crop_video`）与 `POST /api/files/apply-audio-speed`（`stage=audio_speed`）各成功一次并产出节点。对无音轨的静音视频发起分离音轨时，客户端探测失败自动回退，服务端回 422，未创建任何派生节点（双产物无半写入）。
+- 客户端管线读取源为签名直连地址上的 `fetch`：同一源 mp4 在一次动作内出现 2 次 `fetch`（另有 1 次来自会话 `<video>`），与 UrlSource 按需分次读取的特征一致。
+- 发现并修复一处既有 i18n 缺陷：`node.speedSuffix` 在 zh-CN / en-US 使用单花括号 `{speed}`，节点标题显示字面量「变速 {speed}」；改为 `{{speed}}` 后新节点显示「变速 1.2x」。
+
+**仍然验不了（本次）**
+
+- 客户端裁剪 / 片段截取的帧精确性（需逐帧比对播放器所选帧与产物首帧）。
+- 客户端音频变速（soundtouch 路径）与音频片段截取：本次变速走的是服务端兜底。
+- 取消路径（busy 浮层「取消」/ 换源 / 节点卸载）与重复触发守卫。
+- 矩阵外容器（avi 等）回退、探测负缓存的跨会话行为。
+- `Range` 请求头本身：跨域资源计时不含请求头，只能证明分次 `fetch`，不能逐条确认 `Range`。
+
+以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。

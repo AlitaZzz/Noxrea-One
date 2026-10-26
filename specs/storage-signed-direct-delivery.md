@@ -533,3 +533,24 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 - **元素身份镜像抽公共 Hook**：`VideoNode`（会话纪元 + 重挂令牌 + 源）、`VideoPlayer`（令牌 + 地址）、`AudioRefCard`（令牌 + 地址）三处各写一套「按元素身份作废旧镜像」的簿记，且复位口径不一（两处渲染期重置、一处只对令牌）。现统一为 `web/src/lib/use-element-mirror.ts`（渲染期复位，身份 = 调用方拼装的元素标识），三处改用同一实现。回归用例：`UseElementMirror.test.tsx`。
 - **`src/hooks` 不再是分层中的一层**：通用 Hook（`use-file-access-url`、`use-online-status`）移入 `web/src/lib`，业务 Hook（`use-sse-task-monitor`）移入 `web/src/features/canvas/hooks`，`src/hooks` 目录删除；`web/AGENTS.md` 八.1 补充 `lib` 为最底层的分层说明，`components.json`、eslint 的 `no-restricted-syntax` 文件组随之收口（否则针对 `src/hooks/**` 的规则在目录消失后静默失效）。
 - **LOD 在途中止的复查结论**：缩小手势中止的高档位 job 在结算后若档位未变（滞回范围内）会被重新排队加载——这是「仍想要这张图」的正确结果，不是重复请求缺陷；abort 结果被 `complete()` 的守卫丢弃，不会写入失败态。本项不改代码，记录判定依据。
+
+2026-10-27 浏览器走查（CDP 预览，登录态，后端 `s3`，测试画布 `mvpfy0f2lp0gx2`；覆盖上文「尚未执行的验收项」中的首次加载、刷新复用、下载、视频 Range 四项）：
+
+**已验证事实**
+
+- 冷缓存首屏只发 2 次 `POST /api/files/access`（均 200，52ms / 19ms），13 个媒体请求全部直连 `10.10.10.2:9833`；整页无任何 `GET /api/files/<key>` 字节代理请求，Network 中 302 数为 0。
+- 同标签页刷新：IndexedDB `noxrea-file-access` 已有 19～293 条未过期 signed 描述时，刷新后描述请求为 0 次，媒体仍全部直连 bucket；清空该库后刷新恢复为 2 次批量描述，并回填 signed 条目。
+- `refreshAt` 到期语义：把一条记录的 `refreshAt` 改到过去后刷新，载入阶段丢弃该条并从磁盘删除，触发 1 次批量重描述，条目续期为 `refreshAt` = now+9962s、`expiresAt` = now+12842s（`savedAt` 更新）。同一签名窗口内 URL 逐字节相同，续期体现在字段而非地址。
+- 描述契约：50 条 → 200 且 50 条逐条结果；51 条 → 400 `common.invalid_request`；不存在的 key → 该条 `files.file_not_found`，整批仍 200 且同序同长；`download: true` 的 signed 描述 query 含 `response-content-disposition=attachment; filename*=UTF-8''…` 与 `response-content-type`；响应头 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer`；`X-Amz-Date=20261026T160000Z`（1h 边界对齐）、`X-Amz-Expires=14400`、`expiresAt − refreshAt = 2880s`（寿命 80%）。
+- 下载端到端：点击节点下载按钮生成的 `<a href>` 直指 bucket，跨域 signed 不带 `download` 属性；对同一 URL 发 Range 请求返回 206，`Content-Disposition: attachment; filename*=UTF-8''缓存验证图.png`，字节不经过应用。
+- 视频：`<video>` 直连 signed 地址播放（readyState 4），seek 到 8.97s 后继续播放；Network 中该 mp4 出现多条 206 Partial Content（含 Range 读取中途 abort 的请求）。
+
+**仍然验不了（本次）**
+
+- 「90 图项目」量级未复现（测试画布 14～18 节点，2 次批量描述对应整屏媒体），批量上限的行为已由 50 / 51 条请求直接验证。
+- bucket 命中浏览器缓存时「传输 0 字节」无法从页面上下文证明（跨域无 `Timing-Allow-Origin`，resource timing 的 `transferSize` / `decodedBodySize` 恒为 0）。
+- 跨签名窗口（1h 窗口到期后同一对象 URL 变化一次）未实测——需等到窗口边界或临时调小常量重编译。
+- 规则 3.8 主动刷新的会话内定时行为（到点后台重描述、会话抖动、退避）未在浏览器触发：寿命 4h、`refreshAt` 在 80% 处（约 1.8h 后），本次只验证了「载入时丢弃过期条目并重描述」这一半，其余由单测覆盖。
+- `local` 后端（`stream` 描述）未验证——当前运行时 `backend=s3`，切换后端属于运行时设置变更，本次未做。
+
+以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。

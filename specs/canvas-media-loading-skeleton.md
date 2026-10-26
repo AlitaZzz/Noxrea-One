@@ -87,3 +87,19 @@
 - 2026-10-12：按 `specs/canvas-image-http-url-rendering.md`（用户确认）完成 HTTP URL 渲染迁移——`prepareImage` 改为探测 `<img>` 预热 + 结果携带原 URL，删除全部 object URL 生命周期；受影响测试（调度器 17 + CanvasImage 13 + VideoNode 18，canvas 全量 477）全过，typecheck、lint 通过。骨架规则 1–5、9 不受影响。
 - 2026-10-23：随画布分辨率 LOD 实现补充规则 10（换档保留旧图、不闪骨架）；`CanvasImage` 的 stale 状态与逻辑源判定已按该规则实现并有单测覆盖（`CanvasImage.test.tsx` 的 LOD 用例：档位切换保留旧图、新档位失败保留旧图、逻辑源变化回骨架）。浏览器实测：0.1↔1.0 换档全程骨架数量保持 0。
 - 2026-10-26 状态核对：实现代码早已提交入库（`CanvasImage` 等当前代码见 `023f6489`）。未完成的验收项：浏览器双主题实测、禁用缓存下的单请求验证；状态维持「已确认」，「已实现」由用户设置。
+
+2026-10-27 浏览器走查（CDP 预览，dark 主题，测试画布 `mvpfy0f2lp0gx2`）：
+
+**已验证事实**
+
+- 将调度器探测 `<img>` 的 load 延后 60s 后触发的图片加载：进入 pending 后出现按容器查询（`cqw/cqh`）定形的骨架块，底色为静态 `bg-muted`（无 pulse 动画）；ready 后骨架移除，图片与骨架边界吻合、无形状跳变。
+- 骨架样式的取值来自主题 token（读取 pending 期间的计算样式确认是 `bg-muted` 静态底，非固定色值）。
+- 缓存命中侧：同一海报 URL（描述已在 IndexedDB、字节已在 HTTP 缓存）在 `clearResourceTimings()` 后每个 URL 只产生 1 条 resource 计时（initiator=`img`），未观察到同一 URL 的第二个请求。
+
+**仍然验不了（本次）**
+
+- 明 / 暗双主题对照：本轮只读取了 dark 主题下的骨架样式，明色主题未留可归档证据。
+- 「传输 0 字节」的缓存命中证明：MinIO 跨域响应无 `Timing-Allow-Origin`，resource timing 的 `transferSize` / `decodedBodySize` 恒为 0，且 `preview_network` 为累计视图，本环境无法给出逐 URL 的字节级证据；现有证据是「每 URL 仅 1 条计时记录」。
+- 媒体加载失败态 UI（视觉与 DOM 不变）与海报 404 失败态契约未回归。
+
+以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。
