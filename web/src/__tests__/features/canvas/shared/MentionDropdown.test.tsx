@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MentionDropdown from "@/features/canvas/shared/MentionDropdown";
+vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),

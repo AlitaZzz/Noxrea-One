@@ -9,6 +9,7 @@ import type { Readable } from "stream";
 
 import { isStorageKey } from "@noxrea/shared/url";
 import { derivedCandidatesOf } from "./derived-keys";
+import type { StorageCapabilities, StorageProvider } from "./providers";
 
 /** 直传在途暂存命名空间（staging/{userId}/{uuid}，归属编码在 key 里）；直传、staging 清扫、迁移/审计分类共用 */
 export const STAGING_PREFIX = "staging/";
@@ -28,6 +29,12 @@ export const STAGING_KEY_PATTERN = new RegExp(
  */
 export const DERIVED_ROOT_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/"] as const;
 
+/**
+ * 启动探测对象命名空间（specs/storage-provider-portability.md 规则 3.2）：
+ * 不在可读键域内，也不属于派生四根；删除失败由 GC 的独立按龄清扫兜底。
+ */
+export const PROBE_ROOT_PREFIX = "_probe/";
+
 export interface StorageBackend {
   /**
    * 保存（服务端直写：派生产物、AI 结果、local 中转上传）；S3 按 key 扩展名写 Content-Type。
@@ -36,7 +43,7 @@ export interface StorageBackend {
    * 内容寻址（key 即内容 hash）语义：目标已存在且大小一致 ⇒ 内容一致，视为成功（幂等 PUT）。
    */
   put(key: string, source: string | Buffer | ReadableStream): Promise<void>;
-  /** 读取流（Node Readable）；range 供 proxy 分发模式透传 Range（206/416 语义由路由层组装） */
+  /** 读取流（Node Readable）；range 供流式字节路由透传 Range（206/416 语义由路由层组装） */
   get(
     key: string,
     opts?: {
@@ -61,9 +68,16 @@ export interface StorageBackend {
    * 联动对 `_posters` 退化为全前缀 list 兜底（联动语义完整，成本回到全扫描）。
    */
   listCommonPrefixes?(prefix: string): Promise<string[]>;
-  /** 预签名 GET（重定向分发、媒体工具输入）；不支持的后端不实现 */
+  /** 预签名 GET（浏览器直连描述、媒体工具输入、上游引用）；不支持的后端不实现 */
   presignGet?(key: string, opts?: {
     ttlSeconds?: number;
+    /**
+     * 签名时间窗（正整数秒）：窗口内同一 key 签出字节一致的 URL，长度即缓存寿命上限。缺省为
+     * 后端既有的 TTL/4 对齐窗口——能力型凭据（上游拉取、媒体工具输入）用它保持
+     * 「URL 可作进程内缓存键、有效期短」的语义；浏览器读路径显式传长窗口以延长缓存寿命
+     * （两者均见 specs/storage-signed-direct-delivery.md 规则 4.2 / 4.6）。
+     */
+    windowSeconds?: number;
     /** 预签名响应应携带的 Content-Disposition 头值（调用方组装，单一来源 file-response.ts） */
     responseContentDisposition?: string;
     cacheControl?: string;
@@ -80,8 +94,27 @@ export interface StorageBackend {
    * S3 为 CopyObject（同 bucket 服务端复制，字节不出网）；目标已存在时覆盖。
    */
   copy?(fromKey: string, toKey: string): Promise<void>;
-  /** 启动连通性探测（S3：HeadBucket，失败即启动失败）；不支持的后端不实现 */
-  probe?(): Promise<void>;
+  /**
+   * 进程级能力位（规则 4.1）：能签预签名 URL 的后端必须实现，供读路径判定
+   * `response-*` 覆盖与下载形态（二者成对出现，缺一按「不支持签名直达」处理）。
+   * 不支持预签名的后端不实现。
+   */
+  capabilities?(): StorageCapabilities;
+  /**
+   * 启动探测（S3：六项连通/写/读/stat/预签名回读/覆盖头，失败即启动失败）；
+   * 返回能力摘要供启动日志与健康检查展示（规则 3.7）。不支持的后端不实现。
+   */
+  probe?(): Promise<StorageProbeReport>;
+}
+
+/** 启动探测摘要（规则 3.7）：结构化日志与健康检查共用的只读口径 */
+export interface StorageProbeReport {
+  provider: StorageProvider;
+  capabilities: StorageCapabilities;
+  /** 端点相对本机的时钟偏差（秒，正数表示端点更快；SigV4 容差 15 分钟） */
+  clockSkewSeconds: number;
+  /** 非致命发现（CORS 未放行、暴露头缺失、探测对象删除失败等） */
+  warnings: string[];
 }
 
 /**
@@ -104,12 +137,43 @@ export function supportsDirectUpload(
   return typeof backend.presignPut === "function" && typeof backend.copy === "function";
 }
 
+/**
+ * 签名直连读的成对能力：`presignGet` 与 `capabilities` 缺一不可——读路径要用能力位
+ * 决定覆盖头与下载形态（specs/storage-provider-portability.md 规则 4.2 / 4.3），
+ * 少任一项即按「不支持签名直达」走应用流，避免在能力未知时盲目签址。
+ */
+export type SignedReadBackend = StorageBackend & {
+  presignGet: NonNullable<StorageBackend["presignGet"]>;
+  capabilities: NonNullable<StorageBackend["capabilities"]>;
+};
+
+export function supportsSignedRead(
+  backend: StorageBackend,
+): backend is SignedReadBackend {
+  return typeof backend.presignGet === "function" && typeof backend.capabilities === "function";
+}
+
 /** key 试图逃出后端命名空间（本地路径穿越）；由后端在解析 key 时抛出，路由层映射 403 */
 export class StorageTraversalError extends Error {
   constructor(key: string) {
     super(`Storage key escapes backend namespace: ${key}`);
     this.name = "StorageTraversalError";
   }
+}
+
+/**
+ * 接口层 key 的形态守卫（全仓唯一实现）：绝对形态与含 `..` 的路径段一律不可寻址。
+ *
+ * 这两种形态在 local 后端是路径穿越（`path.resolve` 会以 `/` 起首的 key 整体替换
+ * base），在对象存储则是永不写入的脏 key。读管线据此回 403 `invalid_path`，各后端
+ * 在寻址前据此抛 {@link StorageTraversalError}——两处必须是同一条判定，否则一处
+ * 放宽就是另一处的洞。
+ *
+ * 只判形态，不判包含关系：真实落盘路径的包含判定仍由 `core/paths.ts` 的
+ * `isPathWithinBase` 负责（Windows 反斜杠、盘符等平台差异只有解析后的路径能看到）。
+ */
+export function isKeyWithinNamespace(key: string): boolean {
+  return !key.startsWith("/") && !key.split("/").some((segment) => segment.includes(".."));
 }
 
 /**

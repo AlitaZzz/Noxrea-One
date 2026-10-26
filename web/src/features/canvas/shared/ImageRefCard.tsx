@@ -11,8 +11,8 @@ import { useTranslation } from "react-i18next";
 
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
-import { withManagedFileWidth } from "@/lib/file-url";
 
 import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { findReferenceNode, useRevealCanvasNode } from "./reveal-node";
@@ -45,15 +45,12 @@ function ImageRefCard({
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
 
-  /** 存储服务上的图走缩略参数，外链原样使用（缩略按 56px 卡的 2 倍取 112） */
-  const thumbnail = withManagedFileWidth(src, 112);
-  /** 预览按显示上限 240 的 2 倍屏取图 */
-  const preview = withManagedFileWidth(src, 480);
-
   return (
     <ReferenceHoverPreview
       disabled={dragging || Boolean(dragActive) || dragOver}
-      src={preview}
+      value={src}
+      // 预览按显示上限 240 的 2 倍屏取图；解析推迟到浮层打开时（ResolvedHoverMedia）
+      width={480}
       mediaType="image"
     >
       <Card
@@ -100,8 +97,9 @@ function ImageRefCard({
           onReorder(dragged, src);
         }}
       >
-        <img
-          src={thumbnail}
+        <ResolvedImage
+          value={src}
+          width={112}
           draggable={false}
           alt={`Ref ${index + 1}`}
           className="block size-full cursor-grab rounded-md object-cover transition-shadow active:cursor-grabbing"

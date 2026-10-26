@@ -7,26 +7,37 @@
  * fail-closed 静默化为「缓存未命中」（新产物 404）、被删除联动静默化为「漏删」，唯有同址 +
  * 往返测试能即时暴露。key 形态基础（内容键 stem）单点在 shared/url。
  */
-import { STORAGE_KEY_STEM_PATTERN, storageKeyStem } from "@noxrea/shared/url";
+import {
+  RESIZE_CACHE_VERSION,
+  RESIZE_WIDTH_TIERS,
+} from "@noxrea/shared/media-tiers";
+import { isStorageKey, STORAGE_KEY_STEM_PATTERN, storageKeyStem } from "@noxrea/shared/url";
 
-/** 解析端形态（stem 捕获组 = 内嵌源键）；与上方构造函数一一对应，同址维护 */
-const DERIVED_KEY_PATTERNS: ReadonlyArray<RegExp> = [
-  /^_cache\/\d+\/(.+)\.webp$/,
-  /^_posters\/v\d+\/(.+)\.webp$/,
-  /^_sprite\/(.+)_c\d+v\d+\.webp$/,
-  /^_proxy\/(.+)_w\d+v\d+\.mp4$/,
+/** 当前 `_cache` 命名空间根：版本段由共享常量生成，运行期只识别当前版本（不兼容旧版本） */
+const RESIZE_CACHE_ROOT = `_cache/v${RESIZE_CACHE_VERSION}`;
+
+/** 派生档位：四个命名空间与指标 `tier` 标签同一取值集（`@server/core/metrics` 的联合类型与此同构） */
+type DerivedTier = "cache" | "poster" | "sprite" | "proxy";
+
+/** 解析端形态（stem 捕获组 = 内嵌源键）与档位同址：与上方构造函数一一对应，同址维护 */
+const DERIVED_KEY_PATTERNS: ReadonlyArray<{ tier: DerivedTier; pattern: RegExp }> = [
+  { tier: "cache", pattern: new RegExp(`^${RESIZE_CACHE_ROOT}/(?:\\d+)/(.+)\\.webp$`) },
+  { tier: "poster", pattern: /^_posters\/v\d+\/(.+)\.webp$/ },
+  { tier: "sprite", pattern: /^_sprite\/(.+)_c\d+v\d+\.webp$/ },
+  { tier: "proxy", pattern: /^_proxy\/(.+)_w\d+v\d+\.mp4$/ },
 ];
 
-/**
- * 缩放缓存档位域（`_cache` key 的 tier 段）：全部来自前端调用点的实际宽度；
- * 1280 供视频节点海报（画布缩放 / retina）。段域为枚举半边的静态展开清单，
- * 与构造端（cacheKeyOf）同址防漂移。
- */
-export const RESIZE_WIDTH_TIERS = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
+function matchDerivedKey(key: string): { tier: DerivedTier; stem: string } | null {
+  for (const { tier, pattern } of DERIVED_KEY_PATTERNS) {
+    const m = pattern.exec(key);
+    if (m) return { tier, stem: m[1] };
+  }
+  return null;
+}
 
-/** 缩放缓存（图片与视频海报档位共用）：`_cache/{tier}/{源键去扩展名}.webp` */
+/** 缩放缓存（图片与视频海报档位共用）：`_cache/v2/{tier}/{源键去扩展名}.webp` */
 export function cacheKeyOf(storageKey: string, tier: number): string {
-  return `_cache/${tier}/${storageKeyStem(storageKey)}.webp`;
+  return `${RESIZE_CACHE_ROOT}/${tier}/${storageKeyStem(storageKey)}.webp`;
 }
 
 /** 视频海报母版：`_posters/v{version}/{源键去扩展名}.webp`（版本由海报特性持有） */
@@ -49,11 +60,32 @@ export function proxyKeyOf(sourceKey: string, width: number, version: number): s
  * ownership.ts 据此取内嵌源键再判归属。
  */
 export function derivedSourceStemOf(key: string): string | null {
-  for (const pattern of DERIVED_KEY_PATTERNS) {
-    const m = pattern.exec(key);
-    if (m) return m[1];
-  }
-  return null;
+  return matchDerivedKey(key)?.stem ?? null;
+}
+
+/**
+ * 派生产物的指标档位（`specs/observability-baseline.md` 规则 3.4 的 `tier` 标签）：
+ * 与 key 的命名空间同址推导，非派生 key 返回 null。
+ *
+ * 标签不由调用方声明：档位是 key 形态的函数，声明式标签在复制一次 generate 调用后
+ * 就会与实际写入的命名空间各说各话（`_cache` 里的视频海报档位曾被标成 `poster`，
+ * 指标上凭空多出一个不存在的命名空间组合，且没有任何类型能拦住）。
+ */
+export function derivedTierOf(key: string): DerivedTier | null {
+  return matchDerivedKey(key)?.tier ?? null;
+}
+
+/**
+ * 托管文件的**可读键域**（specs/storage-signed-direct-delivery.md 规则 2.1）：内容键
+ * （严格 `STORAGE_KEY_PATTERN`）或四个派生命名空间。
+ *
+ * staging 键被刻意排除：它是直传在途的临时缓冲，尚未 promote 成托管文件，随时会被
+ * 按龄清扫；对它签出访问 URL 等于把「可能消失的对象」当正式文件交付。读路由据此
+ * 与「对象不存在」同响应（404，防存在性预言机）；归属解析（ownership.ts）仍接受
+ * staging——写路径与清扫需要它。
+ */
+export function isReadableFileKey(key: string): boolean {
+  return isStorageKey(key) || derivedSourceStemOf(key) !== null;
 }
 
 /** 删除联动枚举候选：精准 shard list 前缀 + 命中判定（specs/derived-deletion-linkage.md 规则 1/2） */
@@ -66,7 +98,8 @@ export interface DerivedCandidate {
 
 /**
  * 内容源 key 的派生枚举候选，四命名空间零全前缀扫描：
- * - `_cache`：tier 段域静态展开（RESIZE_WIDTH_TIERS），stem 唯一无参数段，命中判定为整键等值；
+ * - `_cache`：版本段固定为当前共享版本，tier 段域静态展开（RESIZE_WIDTH_TIERS），
+ *   stem 唯一无参数段，命中判定为整键等值；
  * - `_posters`：版本段动态累积，posterVersions 由调用方经 listCommonPrefixes 发现后传入；
  * - `_sprite`/`_proxy`：shard 段紧随根，参数段（帧数/宽度、版本）以锚定正则命中。
  * posterVersions 传 null 表示后端无子前缀列举能力：`_posters` 退化为一条全前缀候选
@@ -85,8 +118,8 @@ export function derivedCandidatesOf(
   const candidates: DerivedCandidate[] = [];
 
   for (const tier of RESIZE_WIDTH_TIERS) {
-    const derivedKey = `_cache/${tier}/${stem}.webp`;
-    candidates.push({ prefix: `_cache/${tier}/${shard}`, test: (k) => k === derivedKey });
+    const derivedKey = `${RESIZE_CACHE_ROOT}/${tier}/${stem}.webp`;
+    candidates.push({ prefix: `${RESIZE_CACHE_ROOT}/${tier}/${shard}`, test: (k) => k === derivedKey });
   }
 
   if (posterVersions === null) {

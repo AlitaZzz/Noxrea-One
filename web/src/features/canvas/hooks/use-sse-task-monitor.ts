@@ -1,0 +1,343 @@
+/**
+ * 生成任务监控 hook。
+ * 主路径：SSE 订阅任务状态，服务端经事件总线即时推送终态；
+ * 兜底：SSE 带心跳看门狗（连接静默死亡即断开重连），页面重新可见 /
+ * 网络恢复时按 DB 批量对账一次，保证「已落盘」的任务最终一定回填到节点。
+ */
+"use client";
+
+import { createElement, useEffect, useRef } from "react";
+
+import TaskErrorDetail from "@/components/ui/TaskErrorDetail";
+import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
+import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
+import { discardPreGenSnapshot, popPreGenSnapshot } from "@/features/canvas/panels/use-generation-submit";
+import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
+import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { MediaGenFields } from "@/features/canvas/types";
+import { TASK_STATUS_BATCH_SIZE } from "@/lib/constants";
+import type { NotificationApi, NotificationOptions } from "@/lib/feedback";
+import { resolveMediaUrlString } from "@/lib/file-access";
+import i18n from "@/lib/i18n/config";
+import { readSseStream,SSE_CONNECT_TIMEOUT_MS, SSE_WATCHDOG_CHECK_MS, SSE_WATCHDOG_TIMEOUT_MS } from "@/lib/sse";
+import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
+
+/** 失败详情的长度上限：仅用于拦截上游返回整页 HTML 等失控内容 */
+const MAX_ERROR_LEN = 1000;
+
+/**
+ * 截断错误文案。
+ * 常规失败原因由 TaskErrorDetail 折叠为两行摘要并可展开全文，
+ * 这里只兜底超长内容，避免通知区被撑破。
+ */
+function truncateError(text: string): string {
+  return text.length > MAX_ERROR_LEN ? `${text.slice(0, MAX_ERROR_LEN - 1)}…` : text;
+}
+
+/**
+ * 生成任务失败通知的描述文案。
+ * 服务端对自身可判定的失败（超时、网络不可达、任务取消等）会附带错误码，据此取本地化文案；
+ * 上游返回的原因无法翻译，截断后原样展示。
+ */
+function resolveTaskError(evt: { error?: string; errorCode?: string }): string {
+  if (evt.errorCode) {
+    const key = `error.${evt.errorCode}`;
+    if (i18n.exists(key)) return i18n.t(key);
+  }
+  return truncateError(evt.error ?? "");
+}
+
+/**
+ * SSE 任务监控 hook。
+ *
+ * 扫描画布中有 pendingAction/task_id 标记的节点，建立 SSE 流
+ * 监听生成任务完成/失败，自动更新节点数据。
+ *
+ * @param notif 项目通知接口，用于展示生成结果通知
+ */
+export function useSseTaskMonitor(notif: Pick<NotificationApi, "success" | "error">) {
+  const notifRef = useRef(notif);
+  useEffect(() => { notifRef.current = notif; }, [notif]);
+  const sseCtrlsRef = useRef<Map<string, AbortController>>(new Map());
+  const notifiedTasksRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const sseControllers = sseCtrlsRef.current;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let cleanupListeners: (() => void) | null = null;
+    // 卸载后 reconcile 不再落地：allSettled 期间卸载时，响应仍会回来，
+    // 不能再回填节点或弹通知
+    let disposed = false;
+
+    /**
+     * 终态落地：SSE 推送与批量对账共用。
+     * 按结果类型回填节点数据并清除 taskBinding（遮罩此时消失）；
+     * 节点已删除或绑定已换绑（重新生成）时静默忽略。
+     */
+    const handleTerminal = (nodeId: string, taskId: string, evt: TaskStatusEvent) => {
+      // 预生成快照生命周期（注册表见 use-generation-submit）：失败/取消弹出，
+      // 撤销不再出现「恢复到上传/提交瞬态」的无效步；成功保留在撤销栈（撤销一次
+      // = 移除生成结果），仅丢弃条目。放在节点守卫之前：节点已删除/换绑时条目
+      // 同样要收敛（此时 popIfTop 按引用比对天然不误弹）
+      if (evt.status === "cancelled" || evt.status === "failed") popPreGenSnapshot(taskId);
+      else discardPreGenSnapshot(taskId);
+
+      const cur = useCanvasStore.getState().nodes.find(n => n.id === nodeId);
+      const curBinding = cur ? (cur.data as MediaGenFields).taskBinding : undefined;
+      if (!cur || curBinding?.taskId !== taskId) return;
+
+      const isVideoNode = cur.type === "video-node";
+      const isTextNode = cur.type === "text-node";
+      const t = i18n.t;
+      // 同一任务只弹一次通知（SSE 与对账可能先后送达同一终态）；
+      // 失败类通知必须走 error 通道（红色/错误图标），不能与成功混用
+      const notifyOnce = (
+        kind: "success" | "error",
+        payload: NotificationOptions
+      ) => {
+        if (notifiedTasksRef.current.has(taskId)) return;
+        notifiedTasksRef.current.add(taskId);
+        const options = { ...payload, key: `generation-result-${nodeId}-${taskId}` };
+        if (kind === "success") notifRef.current.success(options);
+        else notifRef.current.error(options);
+      };
+
+      // LLM 文本结果：从 resultText 更新 content
+      if (evt.status === "completed" && evt.resultText) {
+        const resultText = evt.resultText;
+        // 生成结果回填是程序化写回，不算用户操作（用户操作感知不应记录）
+        runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
+          content: textToTiptapHtml(resultText),
+          plainText: resultText,
+          taskBinding: undefined,
+        }, undefined, { skipHistory: true }));
+        markDirtyImmediate();
+        notifyOnce("success", { title: t("generation.textSuccess"), placement: "bottomRight", duration: 5 });
+        return;
+      }
+
+      // 产物落库值为存储 key（resultKeys）；探测尺寸用的访问 URL 由 key 派生
+      const completedKeys = evt.resultKeys ?? [];
+      if (evt.status === "completed" && completedKeys.length) {
+        const firstKey = completedKeys[0];
+        // 节点尺寸不在此刻定死：保持生成前占位框当前尺寸，
+        // 待异步探测到真实分辨率后，统一用 computeNodeSize(真实宽高) 落地（与上传同一算法）。
+        // 一次性回填：图片 + 多图列表 + 产物大小 + 清除生成中状态（遮罩此时才消失）。
+        // naturalWidth/naturalHeight 先置 0（标题栏暂不显示），节点尺寸保持占位框不变，
+        // 异步探测到真实分辨率后再统一回填真实尺寸。
+        // fileSize 由服务端终态事件直接给出（resultSizes 与 resultKeys 对齐），重新生成时覆盖旧值。
+        runSuppressed(() => useCanvasStore.getState().updateNodeData(nodeId, {
+          src: firstKey,
+          naturalWidth: 0, naturalHeight: 0,
+          lockAspectRatio: true, taskBinding: undefined,
+          source: "generate",
+          fileSize: evt.resultSizes?.[0] ?? undefined,
+          // 多图结果：>=2 张写入 multiResultKeys 进入堆叠/网格模式；否则清空，回到单图
+          // （必须无条件处理，否则重新生成只返回 1 张时旧的 multiResultKeys 会残留，导致仍层叠）
+          multiResultKeys: completedKeys.length >= 2 ? completedKeys : undefined,
+          multiResultTotalCount: completedKeys.length >= 2 ? completedKeys.length : undefined,
+        }, undefined, { skipHistory: true }));
+        markDirtyImmediate();
+        notifyOnce("success", { title: t(isVideoNode ? "generation.videoSuccess" : "generation.imageSuccess"), placement: "bottomRight", duration: 5 });
+
+        // 异步回填真实分辨率与节点尺寸：与上传共用 computeNodeSize(真实宽高) 同一算法，
+        // 内容区比例与真实内容严格一致（无留白/无裁切）。与显示共享浏览器缓存，不双倍下载；
+        // 失败/节点内容已变更时静默放弃。
+        // 访问地址异步解析（S3 为签名直连），失败时静默放弃尺寸回填——不阻塞结果落地
+        void resolveMediaUrlString(firstKey)
+          .then((url) => loadMediaDimensions(url, isVideoNode))
+          .then((dims) => {
+            // effect 卸载后不再写 store（ disposed 只护 reconcile 路径，SSE 路径在此补防）
+            if (disposed) return;
+            if (dims.w <= 0 || dims.h <= 0) return;
+            const s = useCanvasStore.getState();
+            const n = s.nodes.find(x => x.id === nodeId);
+            if (!n) return;
+            if ((n.data as { src?: string }).src !== firstKey) return;
+            const natural = { naturalWidth: dims.w, naturalHeight: dims.h };
+            const { width, height } = computeNodeSize(dims.w, dims.h);
+            runSuppressed(() => s.updateNodeData(nodeId, natural, { width, height }, { skipHistory: true }));
+            markDirtyImmediate();
+          })
+          .catch(() => {
+            // 描述接口失败：尺寸回填放弃，节点仍以占位尺寸展示
+          });
+        return;
+      }
+
+      // 失败 / 取消 / completed 但无结果（上游未回传 resultText/resultKeys）：
+      // 三种情况都必须清理 taskBinding，否则节点永久停留在「生成中」遮罩，
+      // 且 hasGeneratingNode() 会全局禁用撤销 / 重做，用户只能刷新页面才能恢复。
+      useCanvasStore.getState().updateNodeData(nodeId, {
+        taskBinding: undefined,
+      }, undefined, { skipHistory: true });
+      markDirtyImmediate();
+      // 取消是用户主动操作，只清遮罩不弹「生成失败」——误导性通知比没有通知更糟
+      if (evt.status === "cancelled") return;
+      notifyOnce("error", {
+        title: t(
+          evt.status === "completed"
+            ? "generation.failed"
+            : isVideoNode ? "generation.videoFailed" : isTextNode ? "generation.failed" : "generation.imageFailed"
+        ),
+        description: createElement(TaskErrorDetail, {
+          message: evt.error || evt.errorCode ? resolveTaskError(evt) : t("error.unknown"),
+        }),
+        placement: "bottomRight",
+        duration: 15,
+      });
+    };
+
+    const scanAndConnect = () => {
+      const allNodes = useCanvasStore.getState().nodes;
+      // 清理 notifiedTasksRef：只保留当前节点中仍存在的任务 ID，避免 Set 无界增长
+      const activeTaskIds = new Set<string>();
+      for (const n of allNodes) {
+        const tb = (n.data as MediaGenFields).taskBinding;
+        if (tb?.taskId) activeTaskIds.add(tb.taskId);
+      }
+      for (const id of notifiedTasksRef.current) {
+        if (!activeTaskIds.has(id)) notifiedTasksRef.current.delete(id);
+      }
+      // 任务已从画布消失（节点被删 / taskBinding 被清/换）：这些流已无人消费，
+      // 但服务端会一直推送心跳，必须主动断开，否则连接与内存都挂着。
+      //
+      // ── GEN-02 生成任务生命周期语义（2026-09 定案，此处禁止加取消）──
+      // 断开本地流 ≠ 取消任务。任务宿命独立于节点存亡：任务一旦提交，
+      // 除非用户显式取消（cancelGenerationTask 的合法调用方只有生成面板的
+      // 取消/重新生成入口，以及 useGenerationSubmit 提交窗口的 owner fencing），
+      // worker 会一直执行到终态。删除节点只是解除消费关系——撤销复活节点时
+      // taskBinding 随快照恢复，scanAndConnect 会按 taskId 重连续跑或补取终态，
+      // 结果不丢。误删+撤销因此零浪费；即使不撤销，任务结果也保存在服务端。
+      // 为什么不能在这里「节点消失即取消」：
+      // 1. 切换项目时旧项目任务同样从画布消失（binding 随项目数据持久化，
+      //    切回后继续消费），按消失取消会误杀正常任务；
+      // 2. 上游 provider 普遍无取消能力（见 server/services/protocols/*，R4），
+      //    processing 阶段取消省不回积分，只会毁掉撤销复活的能力；
+      // 3. 该语义与参考实现 open-ai-canvas-main 一致（其节点删除只清 UI 态，
+      //    "A historical taskId is not a lock"）。
+      // 语义锁定测试：__tests__/features/canvas/hooks/use-sse-task-monitor.test.ts
+      // 「GEN-02 语义锁定」组。
+      for (const [id, ctrl] of sseControllers) {
+        if (activeTaskIds.has(id)) continue;
+        ctrl.abort();
+        sseControllers.delete(id);
+      }
+      for (const node of allNodes) {
+        const binding = (node.data as MediaGenFields).taskBinding;
+        if (!binding?.taskId) continue;
+        if (binding.status !== "pending" && binding.status !== "processing") continue;
+        if (sseControllers.has(binding.taskId)) continue;
+
+        const taskId = binding.taskId;
+        const nodeId = node.id;
+        const ctrl = new AbortController();
+        sseControllers.set(taskId, ctrl);
+        /** 收尾：先摘表再中断连接。
+         *  只摘表不 abort 的话，未读完的流会一直挂着，且卸载时已无法找到它。 */
+        const finish = () => {
+          if (sseControllers.get(taskId) === ctrl) sseControllers.delete(taskId);
+          ctrl.abort();
+        };
+
+        (async () => {
+          // 看门狗：连接静默死亡（代理掐流 / 睡眠唤醒 / 网络切换）时 read() 永远挂起，
+          // 任务完成后前台也不知道。30s 无任何字节即断开，交给扫描器重连并取快照。
+          // 连接建立阶段（fetch 未返回）用更宽的 60s 预算，避免慢握手被误杀。
+          let lastDataAt = Date.now();
+          let connected = false;
+          const watchdog = setInterval(() => {
+            const budget = connected ? SSE_WATCHDOG_TIMEOUT_MS : SSE_CONNECT_TIMEOUT_MS;
+            if (Date.now() - lastDataAt > budget) ctrl.abort();
+          }, SSE_WATCHDOG_CHECK_MS);
+          try {
+            const res = await generationApi.streamGenerationTask(taskId, ctrl.signal);
+            // 看门狗从收到响应头起算
+            lastDataAt = Date.now();
+            connected = true;
+            if (!res.ok || !res.body) return;
+            // 公共解析器单源；终态回调返回 false 即停（服务端推完即关流）
+            await readSseStream(
+              res.body,
+              (_event, data) => {
+                const evt = data as unknown as TaskStatusEvent;
+                if (isTerminalTaskStatus(evt.status)) {
+                  handleTerminal(nodeId, taskId, evt);
+                  return false;
+                }
+              },
+              { onActivity: () => { lastDataAt = Date.now(); } },
+            );
+          } catch { /* SSE 断开：扫描器稍后重连取快照 */ }
+          finally {
+            clearInterval(watchdog);
+            finish();
+          }
+        })();
+      }
+    };
+
+    // 对账兜底：页面重新可见 / 网络恢复时，按 DB 批量查询生成中任务的真实状态。
+    // SSE 推送全部丢失（连接挂死期间任务完成、token 过期等）时，这是唯一能收敛状态的路径。
+    const reconcile = async () => {
+      const nodes = useCanvasStore.getState().nodes;
+      const watching: { nodeId: string; taskId: string }[] = [];
+      for (const n of nodes) {
+        const b = (n.data as MediaGenFields).taskBinding;
+        if (b?.taskId && (b.status === "pending" || b.status === "processing")) {
+          watching.push({ nodeId: n.id, taskId: b.taskId });
+        }
+      }
+      if (watching.length === 0) return;
+      try {
+        // 服务端单次查询上限 TASK_STATUS_BATCH_SIZE：超出的 id 分批并行请求后合并。
+        // 单块失败只跳过该块——SSE 已死的场景下对账是唯一恢复路径，
+        // 一次瞬时 502 不能把已拿到的其余块结果一并丢掉。
+        const ids = [...new Set(watching.map(w => w.taskId))];
+        const byId = new Map<string, TaskStatusEvent>();
+        const chunkResults = await Promise.allSettled(
+          Array.from({ length: Math.ceil(ids.length / TASK_STATUS_BATCH_SIZE) }, (_, i) =>
+            generationApi.fetchTasksStatus(ids.slice(i * TASK_STATUS_BATCH_SIZE, (i + 1) * TASK_STATUS_BATCH_SIZE))
+          )
+        );
+        if (disposed) return;
+        for (const chunk of chunkResults) {
+          // 非 2xx / 网络失败在 api() 内抛错，allSettled 已归为 rejected 跳过
+          if (chunk.status !== "fulfilled") continue;
+          const events = chunk.value;
+          if (!Array.isArray(events)) continue;
+          for (const t of events) {
+            byId.set(t.taskId, t);
+          }
+        }
+        for (const { nodeId, taskId } of watching) {
+          const evt = byId.get(taskId);
+          if (evt && isTerminalTaskStatus(evt.status)) {
+            handleTerminal(nodeId, taskId, evt);
+          }
+        }
+      } catch { /* 网络不可达：等下次对账 */ }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reconcile();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", reconcile);
+    cleanupListeners = () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", reconcile);
+    };
+
+    scanAndConnect();
+    timer = setInterval(scanAndConnect, 3000);
+
+    return () => {
+      disposed = true;
+      if (timer) clearInterval(timer);
+      cleanupListeners?.();
+      for (const ctrl of sseControllers.values()) ctrl.abort();
+      sseControllers.clear();
+    };
+  }, []);
+}

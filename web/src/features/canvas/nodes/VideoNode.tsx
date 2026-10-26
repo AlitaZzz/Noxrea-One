@@ -50,6 +50,7 @@ import { useCanvasVideo } from "@/features/canvas/hooks/use-canvas-video";
 import { createEdge } from "@/features/canvas/node-defaults";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
+import { IDLE_PLAYBACK, type PlaybackMirror } from "@/features/canvas/shared/media-playback";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { notifyActionFailed } from "@/features/canvas/shared/notify";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
@@ -65,6 +66,8 @@ import {
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { fileRefUrl, withManagedFileWidth } from "@/lib/file-url";
+import { useElementMirror } from "@/lib/use-element-mirror";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { downloadManagedFile } from "@/lib/utils/download";
 import { formatBytes, formatTime } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, mediaAspect } from "@/lib/utils/media-utils";
@@ -200,12 +203,20 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const interaction = useCanvasStore((s) => s.interaction);
   const { notification } = useAppFeedback();
   // 播放源唯一真相是 data.src（撤销/清除整体替换 data，无需本地镜像与对账）；
-  // 元素消费用派生 URL（key → /api/files/{key}）；媒体接口入参直接使用持久化值域的 key
+  // 元素消费用最终访问地址（key → 描述接口 → 签名直连 / 流式）；媒体接口入参直接使用持久化值域的 key
   const src = data.src || "";
   const generating = isGenerating(data.taskBinding);
-  let loadingSrc = fileRefUrl(src);
-  if (data.upload?.uploading) loadingSrc = data.upload.previewUrl || "";
-  else if (data.upload?.error || generating) loadingSrc = "";
+  let logicalSrc = fileRefUrl(src);
+  if (data.upload?.uploading) logicalSrc = data.upload.previewUrl || "";
+  else if (data.upload?.error || generating) logicalSrc = "";
+  const {
+    url: accessSrc,
+    failed: accessFailed,
+    refresh: refreshAccess,
+    retrySigned,
+    reloadToken: accessReloadToken,
+  } = useFileAccessUrl(logicalSrc);
+  const loadingSrc = accessSrc ?? "";
   // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
   // 同一时刻只跑一个）。busy 形状与任务编排（守卫 / 取消 / 客户端失败切服务端
   // 兜底）统一由 useMediaEditTask 提供（specs/client-video-editing.md 降级契约）
@@ -213,7 +224,12 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playback, setPlayback] = useState({ src: loadingSrc, playing: false });
+  // 元素重挂纪元（失败重试）：与签名重挂令牌、源地址一起构成元素的真实身份。
+  // 播放镜像必须按元素身份记账而不是只按源地址——签名重描述成功后地址可能不变、
+  // 只有令牌 +1，元素已换成新实例（暂停在 0），旧镜像会停在「暂停」或残留播放态
+  const [sessionEpoch, setSessionEpoch] = useState(0);
+  const elementRevision = `${sessionEpoch}:${accessReloadToken}:${loadingSrc}`;
+  const [playback, patchPlayback] = useElementMirror<PlaybackMirror>(elementRevision, IDLE_PLAYBACK);
   const panelOpen = useCanvasStore(
     (s) => s.frameCaptureNodeId === id || s.clipCaptureNodeId === id,
   );
@@ -231,12 +247,15 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // 会卡在 true，元素将赖着不卸载（表现为图标停在暂停、hover 失效）
   const sessionActive = session !== null || panelOpen || cropOpen || busy !== null;
   // 渲染期派生状态重置（React 官方模式）：元素已不在会话中（面板退出/会话结束）
-  // 时播放镜像作废——load() 恢复源不触发 pause 事件，必须在此显式作废，勿"清理"
-  if (playback.src !== loadingSrc || (playback.playing && !sessionActive)) {
-    setPlayback({ src: loadingSrc, playing: false });
-  }
-  const playing = playback.src === loadingSrc && playback.playing;
-  const setPlaying = useCallback((value: boolean) => setPlayback({ src: loadingSrc, playing: value }), [loadingSrc]);
+  // 时播放镜像作废——load() 恢复源不触发 pause 事件，必须在此显式作废，勿"清理"。
+  // 元素换实例（sessionEpoch / reloadToken / 源地址任一变化）的作废由 useElementMirror
+  // 按元素身份（elementRevision）完成
+  if (playback.playing && !sessionActive) patchPlayback(IDLE_PLAYBACK);
+  const playing = playback.playing;
+  const setPlaying = useCallback(
+    (value: boolean) => patchPlayback({ playing: value }),
+    [patchPlayback],
+  );
   const playbackAttemptRef = useRef(0);
   /** 用户经控件条接管播放：鼠标离开不打断（与原逻辑一致），但页面隐藏/失焦/画布交互仍卸载 */
   const takeoverRef = useRef(false);
@@ -244,11 +263,17 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   // 失败重试：换 key 重挂元素，重新走一次加载（失败不粘滞，无定时器定终身）。
   // hover 会话存在时重新武装自动播放，重试成功即恢复起播；面板会话（session
   // 为空）重试不自动播放
-  const [sessionEpoch, setSessionEpoch] = useState(0);
   const retrySession = useCallback(() => {
+    void refreshAccess();
     setSessionEpoch((epoch) => epoch + 1);
     setSession((s) => (s ? { ...s, autoplay: true } : s));
-  }, []);
+  }, [refreshAccess]);
+  // signed URL 加载失败先重新描述一次（过期 / 跨窗口），仍失败才显示失败浮层；
+  // stream / 外部 URL 重试同一地址不会改变结果。闩锁与重挂令牌由 Hook 统一提供。
+  useEffect(() => {
+    if (sessionStatus !== "failed" || !loadingSrc) return;
+    void retrySigned();
+  }, [sessionStatus, loadingSrc, retrySigned]);
   // 退出画面裁剪态：裁剪面板的关闭键与会话失败浮层的取消入口共用
   const closeCrop = useCallback(() => useCanvasStore.getState().setCroppingNodeId(null), []);
 
@@ -798,7 +823,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   const addAsset = useAssetsStore((s) => s.addAsset);
 
   const handleDownload = useCallback(() => {
-    downloadManagedFile(src, data.label);
+    void downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
   const handleSaveToAssets = useCallback(async () => {
@@ -970,11 +995,14 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
             {/* 海报已由上方跨模式常驻元素垫底；无海报时保留黑底兜底 */}
             {!posterUrl && <div className="absolute inset-0 bg-black" />}
             {/* 片段截取面板打开期间关闭原生 loop（见 clipOpen 定义处的说明）：
-                用响应式属性而非命令式改 DOM，元素重挂也自动带上 */}
+                用响应式属性而非命令式改 DOM，元素重挂也自动带上。
+                src 只在解析出访问地址后输出：`src=""` 会被浏览器解析成页面自身 URL
+                并当媒体请求（ResolvedMedia 同款约定）；元素先挂载，地址就绪后由
+                elementRevision 变化触发重挂加载 */}
             <video
-              key={`${sessionEpoch}:${loadingSrc}`}
+              key={elementRevision}
               ref={setVideoRef}
-              src={loadingSrc}
+              src={accessSrc}
               crossOrigin="anonymous"
               className="absolute inset-0 w-full h-full rounded-lg"
               loop={!clipOpen}
@@ -1035,7 +1063,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
         {/* 会话失败浮层：视频加载失败时给出原因与重试；裁剪态另附取消——失败时裁剪面板
             让位（其自带关闭键随之不可见），浮层是退出裁剪态的直接入口。加载中的等待不做
             黑幕遮挡——海报垫底即可视，裁剪面板直接叠加在海报 / 视频上（空间操作无需等帧） */}
-        {sessionActive && sessionStatus === "failed" && (
+        {sessionActive && (sessionStatus === "failed" || accessFailed) && (
           <div className="nodrag nowheel absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/70 p-3 text-center text-white" role="alert">
             <span className="text-sm">{t("media.loadFailed")}</span>
             <div className="flex flex-wrap justify-center gap-2">
@@ -1055,7 +1083,7 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       </div>
 
       {/* 画面裁剪面板：挂 body 之外以露出顶部工具条（与图片裁剪同构） */}
-      {cropOpen && sessionStatus !== "failed" && (
+      {cropOpen && sessionStatus !== "failed" && !accessFailed && (
         <div className="pointer-events-none absolute inset-0 overflow-visible">
           <VideoCropPanel
             nodeId={id}

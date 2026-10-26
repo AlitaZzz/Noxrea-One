@@ -34,6 +34,7 @@ import {
 import { SoundTouch } from "soundtouchjs";
 
 import { apiUploadWithProgress } from "@/lib/api/client";
+import { credentialsForDelivery, type FileDelivery, resolveMediaUrlWithRetry } from "@/lib/file-access";
 import { isUploadResult, type UploadBatchResponse } from "@/lib/utils/upload";
 
 import { isProbeUnsupported, mapFraction, markProbeUnsupported, resolveVideoBitrate } from "./support";
@@ -42,6 +43,13 @@ import { isProbeUnsupported, mapFraction, markProbeUnsupported, resolveVideoBitr
 type AudioPacketMeta = Parameters<EncodedAudioPacketSource["add"]>[1];
 
 const noop = () => {};
+
+/** 媒体源请求：凭据模式由解析层的分发形态单点给出（规则 3.1），外部地址不加 Request 包装 */
+function mediaSourceOf(url: string, delivery: FileDelivery | undefined): UrlSource {
+  const credentials = credentialsForDelivery(delivery);
+  if (!credentials) return new UrlSource(url);
+  return new UrlSource(new Request(url, { credentials }));
+}
 
 /** 客户端不支持 / 管线失败：调用方据此回退服务端兜底 */
 export class ClientUnsupportedError extends Error {
@@ -87,7 +95,7 @@ interface ClientVideoSource {
  * 分离音轨不解码视频，无硬解的机器也能重封装）。
  */
 async function openVideoSourceOrThrow(
-  videoUrl: string,
+  videoRef: string,
   signal?: AbortSignal,
   opts: { videoMuxOnly?: boolean } = {},
 ): Promise<ClientVideoSource> {
@@ -95,13 +103,18 @@ async function openVideoSourceOrThrow(
   // 本次探测的唯一档位：按操作所需收口（Spec 规则 1.1），缓存读写共用
   const probeTier = opts.videoMuxOnly ? "video-mux" : "video-decode";
   // 缓存查询按档位：mux 档失败（无编码描述）蕴含解码必败，同时封杀两类
-  // 操作；解码档失败（描述在、无硬解）只封杀解码档，不拦 mux 档操作
-  if (isProbeUnsupported(probeTier, videoUrl)) {
+  // 操作；解码档失败（描述在、无硬解）只封杀解码档，不拦 mux 档操作。
+  // 键用逻辑引用（存储 key），不随签名 URL 跨窗口轮换
+  if (isProbeUnsupported(probeTier, videoRef)) {
     throw new ClientUnsupportedError("视频源此前探测失败（会话缓存命中）");
   }
 
+  // 字节按分发形态直连（S3 签名 URL / local 应用流式），与媒体元素同一解析层。
+  // 描述在途期间可被取消：signal 必须传入，取消后不再打开媒体源。
+  const { url: accessUrl, delivery } = await resolveMediaUrlWithRetry(videoRef, { signal });
+  ensureNotAborted(signal);
   const input = new Input({
-    source: new UrlSource(videoUrl),
+    source: mediaSourceOf(accessUrl, delivery),
     formats: ALL_FORMATS,
   });
   try {
@@ -127,7 +140,7 @@ async function openVideoSourceOrThrow(
     if (err instanceof ClientUnsupportedError) {
       // 只记本次操作的探测档位：mux 模式失败写 mux 键（蕴含解码必败），
       // 解码模式失败写解码键（不封杀 mux 模式）
-      markProbeUnsupported(probeTier, videoUrl);
+      markProbeUnsupported(probeTier, videoRef);
     }
     throw err;
   }
@@ -153,14 +166,19 @@ interface ClientAudioSource {
  * signal 在探测各步骤间检查。成功后 Input 归调用方 dispose。
  */
 async function openAudioSourceOrThrow(
-  audioUrl: string,
+  audioRef: string,
   signal?: AbortSignal,
 ): Promise<ClientAudioSource> {
   ensureNotAborted(signal);
-  if (isProbeUnsupported("audio", audioUrl)) {
+  // 键用逻辑引用（存储 key），不随签名 URL 跨窗口轮换
+  if (isProbeUnsupported("audio", audioRef)) {
     throw new ClientUnsupportedError("音频源此前探测失败（会话缓存命中）");
   }
-  const input = new Input({ source: new UrlSource(audioUrl), formats: ALL_FORMATS });
+  // 字节按分发形态直连（S3 签名 URL / local 应用流式），与媒体元素同一解析层。
+  // 描述在途期间可被取消：signal 必须传入，取消后不再打开媒体源。
+  const { url: accessUrl, delivery } = await resolveMediaUrlWithRetry(audioRef, { signal });
+  ensureNotAborted(signal);
+  const input = new Input({ source: mediaSourceOf(accessUrl, delivery), formats: ALL_FORMATS });
   try {
     if (!(await input.canRead())) {
       throw new ClientUnsupportedError("音频容器不可解析");
@@ -174,7 +192,7 @@ async function openAudioSourceOrThrow(
   } catch (err) {
     input.dispose();
     if (err instanceof ClientUnsupportedError) {
-      markProbeUnsupported("audio", audioUrl);
+      markProbeUnsupported("audio", audioRef);
     }
     throw err;
   }
@@ -305,7 +323,7 @@ export async function tryClipOnClient(
   let output: Output<Mp4OutputFormat, BufferTarget> | undefined;
   let conversion: Conversion | undefined;
   try {
-    source = await openVideoSourceOrThrow(`/api/files/${videoKey}`, opts.signal);
+    source = await openVideoSourceOrThrow(videoKey, opts.signal);
     const { input, videoTrack, audioTrack } = source;
 
     // 编码能力探测：视频 H.264 输出；音频 AAC 拷贝免编码，非 AAC 需可解码且可编码 AAC
@@ -384,7 +402,7 @@ export async function tryCropOnClient(
   let source: ClientVideoSource | undefined;
   let output: Output<Mp4OutputFormat, BufferTarget> | undefined;
   try {
-    source = await openVideoSourceOrThrow(`/api/files/${videoKey}`, opts.signal);
+    source = await openVideoSourceOrThrow(videoKey, opts.signal);
     const { videoTrack, audioTrack } = source;
 
     // 源码率（平均比特率）与显示尺寸：钳位与码率折减的基准
@@ -512,7 +530,7 @@ export async function tryDetachAudioOnClient(
   let audioConv: Conversion | undefined;
   let videoConv: Conversion | undefined;
   try {
-    source = await openVideoSourceOrThrow(`/api/files/${videoKey}`, opts.signal, { videoMuxOnly: true });
+    source = await openVideoSourceOrThrow(videoKey, opts.signal, { videoMuxOnly: true });
     const { input, audioTrack } = source;
 
     if (!audioTrack) throw new ClientUnsupportedError("源视频没有音轨");
@@ -606,7 +624,7 @@ export async function tryApplyAudioSpeedOnClient(
   // 不 cancel 会让底层 AudioEncoder 资源滞留到页面导航
   let output: Output<Mp4OutputFormat, BufferTarget> | undefined;
   try {
-    const audio = await openAudioSourceOrThrow(`/api/files/${audioKey}`, opts.signal);
+    const audio = await openAudioSourceOrThrow(audioKey, opts.signal);
     input = audio.input;
     const { audioTrack } = audio;
     ensureNotAborted(opts.signal);
@@ -786,7 +804,7 @@ export async function tryExtractAudioClipOnClient(
   let input: Input | undefined;
   let conversion: Conversion | undefined;
   try {
-    const audio = await openAudioSourceOrThrow(`/api/files/${audioKey}`, opts.signal);
+    const audio = await openAudioSourceOrThrow(audioKey, opts.signal);
     input = audio.input;
     const { audioTrack } = audio;
     ensureNotAborted(opts.signal);

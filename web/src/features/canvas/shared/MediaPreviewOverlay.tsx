@@ -11,7 +11,7 @@ import { useCallback, useEffect } from "react";
 import { CloseOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { fileRefUrl, managedFileUrl } from "@/lib/file-url";
+import { accessFailedFallback, ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 import { downloadManagedFile } from "@/lib/utils/download";
 
 import VideoPlayer from "./VideoPlayer";
@@ -20,6 +20,38 @@ export interface PreviewItem {
   /** 引用值：存储 key 或外部 URL；展示/下载时派生为可访问 URL */
   ref: string;
   mediaType: "image" | "video";
+}
+
+/** 缩略图选择条：每个条目独立解析访问地址（单条目组件，避免在 map 中调用 Hook） */
+function PreviewThumb({ item, active, onSelect }: { item: PreviewItem; active: boolean; onSelect: () => void }) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-lg"
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      className={`size-14 shrink-0 overflow-hidden rounded-md p-0 transition ${
+        active ? "ring-2 ring-foreground" : "opacity-60 hover:opacity-100"
+      }`}
+    >
+      {item.mediaType === "video" ? (
+        <ResolvedVideo
+          value={item.ref}
+          crossOrigin="anonymous"
+          muted
+          preload="metadata"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <ResolvedImage
+          value={item.ref}
+          alt=""
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
+      )}
+    </Button>
+  );
 }
 
 interface Props {
@@ -54,7 +86,7 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
   }, [count, go, open]);
 
   const handleDownload = () => {
-    downloadManagedFile(current?.ref);
+    void downloadManagedFile(current?.ref);
   };
 
   return (
@@ -111,16 +143,18 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
           current.mediaType === "video" ? (
             <VideoPlayer
               key={current.ref}
-              src={fileRefUrl(current.ref)}
+              src={current.ref}
               className="shadow-[0_8px_40px_rgb(0_0_0_/_50%)]"
             />
           ) : (
-            <img
-              src={managedFileUrl(current.ref)}
+            <ResolvedImage
+              value={current.ref}
               alt=""
               draggable={false}
               onClick={(event) => event.stopPropagation()}
               className="block max-h-[88vh] max-w-[90vw] rounded-lg object-contain shadow-[0_8px_40px_rgb(0_0_0_/_50%)]"
+              // 预览里图片就是内容：描述失败不能退化成空白，给出就地重试（规则 3.6）
+              fallback={accessFailedFallback}
             />
           )
         )}
@@ -155,22 +189,12 @@ export default function MediaPreviewOverlay({ open, items, index, onIndexChange,
             onClick={(event) => event.stopPropagation()}
           >
             {items.map((item, itemIndex) => (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
+              <PreviewThumb
                 key={`${item.ref}-${itemIndex}`}
-                onClick={(event) => { event.stopPropagation(); onIndexChange?.(itemIndex); }}
-                className={`size-14 shrink-0 overflow-hidden rounded-md p-0 transition ${
-                    itemIndex === safeIndex ? "ring-2 ring-foreground" : "opacity-60 hover:opacity-100"
-                }`}
-              >
-                {item.mediaType === "video" ? (
-                  <video src={managedFileUrl(item.ref)} crossOrigin="anonymous" muted preload="metadata" className="h-full w-full object-cover" />
-                ) : (
-                  <img src={managedFileUrl(item.ref)} alt="" className="h-full w-full object-cover" draggable={false} />
-                )}
-              </Button>
+                item={item}
+                active={itemIndex === safeIndex}
+                onSelect={() => onIndexChange?.(itemIndex)}
+              />
             ))}
           </div>
         )}

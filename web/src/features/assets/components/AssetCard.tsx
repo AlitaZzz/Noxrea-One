@@ -17,9 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
 import type { AssetItem } from "@/features/assets/types";
-import { withManagedFileWidth } from "@/lib/file-url";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
+import { resolveMediaUrlString } from "@/lib/file-access";
 
 import { AssetHoverPreview } from "./AssetHoverPreview";
 
@@ -56,14 +58,21 @@ export default function AssetCard({
   onInsertCanvas,
 }: Props) {
   const { t } = useTranslation();
+  const { message } = useAppFeedback();
   const [playing, setPlaying] = useState(false);
   const [dragging, setDragging] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // 在途试听：播放要的地址是异步解析的，停止 / 重新点击 / 卸载都必须作废它，
+  // 否则迟到的解析结果会在无人能停的地方建元素并出声（翻页后退返回仍响）。
+  // 中止即作废：signal 解析后仍可读，续接处据此判定本次尝试是否已失效。
+  const playbackRef = useRef<AbortController | null>(null);
   // 音频无封面图：离屏 ghost 作拖拽图像（setDragImage 不接受 display:none 元素，须真实渲染在视口外）
   const audioGhostRef = useRef<HTMLDivElement | null>(null);
 
-  // 卡片卸载（分页回收 / 删除）时释放音频元素，避免长列表试听泄漏。
+  // 卡片卸载（分页回收 / 删除）时作废在途试听并释放音频元素，避免长列表试听泄漏。
   useEffect(() => () => {
+    playbackRef.current?.abort();
+    playbackRef.current = null;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
@@ -72,6 +81,8 @@ export default function AssetCard({
   }, []);
 
   const stopAudio = () => {
+    playbackRef.current?.abort();
+    playbackRef.current = null;
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -80,23 +91,49 @@ export default function AssetCard({
   };
 
   const togglePlay = () => {
-    const url = asset.url;
-    if (!url) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(url);
-      audioRef.current.addEventListener("ended", () => setPlaying(false));
-    }
+    const ref = asset.fileKey;
+    if (!ref) return;
     if (playing) {
       stopAudio();
-    } else {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(() => {});
-      setPlaying(true);
+      return;
     }
+    // 引用值先解析最终访问地址（S3 为签名直连），每次播放写入最新地址。
+    // 描述失败给出通知（试听是用户主动动作，静默失败看起来像按钮失灵）；
+    // 已取消与自动播放被浏览器策略拒绝都不是失败，不通知。
+    playbackRef.current?.abort();
+    const playback = new AbortController();
+    playbackRef.current = playback;
+    void resolveMediaUrlString(ref, { signal: playback.signal })
+      .then((url) => {
+        if (playback.signal.aborted) return false;
+        if (!audioRef.current) {
+          audioRef.current = new Audio();
+          audioRef.current.addEventListener("ended", () => setPlaying(false));
+        }
+        audioRef.current.src = url;
+        audioRef.current.currentTime = 0;
+        return audioRef.current.play().then(() => true);
+      })
+      .then((started) => {
+        if (started && !playback.signal.aborted) setPlaying(true);
+      })
+      .catch((err: unknown) => {
+        // 本次尝试已被取代（再次点击）或已停止（离场 / 停止按钮）：收尾会 abort
+        // `playbackRef.current`，若此时它已指向新尝试，收尾会把新尝试一起中止。
+        // 以「是否仍是当前尝试」判定，而不是只看自己的 signal。
+        if (playbackRef.current !== playback) return;
+        stopAudio();
+        if (err instanceof DOMException && err.name === "NotAllowedError") return;
+        // 试听是点击的即时反馈，按 web/AGENTS.md 七.1 用轻量消息而不是通知
+        message.error(t("media.previewPlayFailed"));
+      });
   };
 
+  // 离场即作废本次试听尝试：`playing` 只在解析成功后才为真，只判它会漏掉
+  // 「已点击、地址还在解析」的窗口——那笔迟到的解析会在卡片已不可见时建元素出声。
+  // `playbackRef` 是「有一次尝试在途或正在播放」的唯一判据。
   const handleCardLeave = () => {
-    if (playing) stopAudio();
+    if (playbackRef.current) stopAudio();
   };
 
   /** Enter / 空格：弹窗内单选，抽屉内插入画布（键盘用户的插入路径）。 */
@@ -113,8 +150,6 @@ export default function AssetCard({
 
   const isVideo = asset.mediaType === "video";
   const isAudio = asset.mediaType === "audio";
-  // 缩略宽高比参数属渲染期派生：直接对存储 key 派生缩略 URL
-  const thumbUrl = withManagedFileWidth(asset.fileKey, 300);
 
   return (
     <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>
@@ -161,15 +196,13 @@ export default function AssetCard({
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1]">
           {isVideo ? (
             <span className="relative block size-full bg-black/40">
-              {thumbUrl && (
-                <img
-                  src={thumbUrl}
-                  alt=""
-                  loading="lazy"
-                  className="size-full object-cover"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                />
-              )}
+              <ResolvedImage
+                value={asset.fileKey}
+                width={300}
+                alt=""
+                loading="lazy"
+                className="size-full object-cover"
+              />
               <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded bg-black/50">
                 <VideoCameraOutlined className="size-3 text-white/80" />
               </span>
@@ -178,12 +211,19 @@ export default function AssetCard({
             <span className="flex size-full items-center justify-center">
               <WaveIcon className="size-8 text-muted-foreground/40" />
             </span>
-          ) : thumbUrl ? (
-            <img src={thumbUrl} alt="" loading="lazy" className="size-full object-cover" />
           ) : (
-            <span className="flex size-full items-center justify-center">
-              <PictureOutlined className="size-8 text-muted-foreground/40" />
-            </span>
+            <ResolvedImage
+              value={asset.fileKey}
+              width={300}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+              fallback={(
+                <span className="flex size-full items-center justify-center">
+                  <PictureOutlined className="size-8 text-muted-foreground/40" />
+                </span>
+              )}
+            />
           )}
         </div>
 

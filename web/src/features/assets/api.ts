@@ -27,8 +27,6 @@ export interface AssetItemDto {
   scope: string;
   /** 来源引用：存储 key 或外部 URL；收藏等入口写入的是节点 src 原值 */
   fileKey?: string | null;
-  /** 服务端派生的访问 URL（托管 key → /api/files/{key}，外部 URL 原样） */
-  url?: string | null;
   sourceType?: string;
   name: string;
   type: string;

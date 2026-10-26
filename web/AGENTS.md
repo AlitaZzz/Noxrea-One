@@ -60,10 +60,14 @@ store、工具函数等非 React 上下文使用统一封装方法：
         ↓
 项目 UI 基础层（components/ui）
         ↓
+共享基础设施与纯逻辑（lib）
+        ↓
 Radix UI primitives、样式与图标实现
 ```
 
 依赖只能向下。
+
+`lib` 是最底层：只承载不依赖领域状态的通用能力（协议客户端、工具函数、无业务语义的通用 Hook，如 `lib/use-file-access-url.ts`）。Hook 本身不构成一个跨目录的层级——带业务语义的 Hook 属于所属领域（`features/*/hooks`），通用 Hook 放 `lib`，因此 `src/hooks` 不再是分层结构中的一层，也不再作为新文件的位置。
 
 禁止：
 
@@ -156,7 +160,7 @@ UI 基础层：
 
 业务特有的组合组件必须放在对应的 `features/*` 中。例如 `DeleteProjectDialog`、`ModelSelector` 和 `AssetPicker` 可以组合多个 UI 基础组件，但不能反向成为 `components/ui` 的业务依赖。
 
-图标也属于 UI 实现的一部分。`features/*`、`app/*`、`hooks/*`、`lib/*`、`providers/*` 禁止直接导入任何图标库（包括 `@ant-design/icons`、`lucide-react`）或 SVG 图标文件；业务层只能使用 `components/ui` 提供的图标组件、带图标能力的通用控件或其他项目级 UI 出口。图标库与 SVG 资源的选择、映射和替换全部留在 `components/ui` 内部。
+图标也属于 UI 实现的一部分。`features/*`、`app/*`、`lib/*`、`providers/*` 禁止直接导入任何图标库（包括 `@ant-design/icons`、`lucide-react`）或 SVG 图标文件；业务层只能使用 `components/ui` 提供的图标组件、带图标能力的通用控件或其他项目级 UI 出口。图标库与 SVG 资源的选择、映射和替换全部留在 `components/ui` 内部。
 
 `components/ui/icons` 是运行时图标的唯一实现层，图标以 React 组件形式提供，并遵循项目图标契约：使用 `currentColor`，支持 `className`、`style` 和尺寸控制；新增或替换图标时应支持标准 SVG 属性。原始 `.svg` 文件可以作为设计源或组件生成输入，但不得由业务层直接导入；不得通过 `public` 路径或资源 URL 绕过 UI 出口使用图标。图标的具体存储方式可以调整，但对业务层暴露的始终是项目定义的 UI 组件契约。
 
@@ -180,7 +184,7 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 
 - 项目采用 Radix UI primitives 作为需要成熟无障碍行为、焦点管理和浮层管理的控件基础实现。
 - 组件代码由项目维护，并遵循 shadcn/ui 的组织方式、主题变量和样式组合方式。
-- `components/ui` 可以导入 `@radix-ui/*`；`features/*`、`app/*`、`hooks/*`、`lib/*`、`providers/*` 不得直接导入 Radix。
+- `components/ui` 可以导入 `@radix-ui/*`；`features/*`、`app/*`、`lib/*`、`providers/*` 不得直接导入 Radix。
 - 业务组件使用 `components/ui` 的标准组件 API，不直接使用 primitive 的底层类型和事件对象。
 - 简单控件可以继续使用原生元素和项目主题；只有存在真实的交互、无障碍或浮层管理价值时才引入对应 Radix primitive。
 - `SheetContent` 统一采用容器优先的初始焦点策略，打开侧栏时不会把焦点自动落到新建、历史或关闭等导航动作上；关闭时由 Radix 恢复到打开前的触发元素。
@@ -194,7 +198,7 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 
 **强制约束**（由 `eslint.config.mjs` 保证，违反无法合入）：
 
-- `src/features/**`、`src/app/**`、`src/hooks/**`、`src/lib/**`、`src/providers/**` 禁止导入、重新导出或动态加载具体 UI 库及其子路径，包括类型与通知入口。
+- `src/features/**`、`src/app/**`、`src/lib/**`、`src/providers/**` 禁止导入、重新导出或动态加载具体 UI 库及其子路径，包括类型与通知入口。
 - 当前运行时不再依赖 antd；未来引入或替换第三方 UI 实现时，只允许在 `components/ui` 内部接入。所有图标库和 SVG 图标资源也只允许由 `components/ui` 导入，业务层不得直接依赖 `@ant-design/icons`、`lucide-react` 或具体 SVG 文件。
 - 业务组件直接使用 `components/ui` 中的 shadcn 组件；通用 UI 不再通过 `App*` 转发层访问。
 - 具体实现与主题样式集中在 `components/ui` 和全局设计令牌中；业务流程和领域组件集中在 `features/*`。

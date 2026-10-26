@@ -180,6 +180,10 @@ export const ERROR_CODES = [
   "files.access_denied",
   /** 文件不存在 */
   "files.file_not_found",
+  /** 预签名失败：存储凭据/配置异常，无法生成直连 URL */
+  "files.signing_failed",
+  /** 读取失败：该条描述在存储读数/派生阶段遇到意外故障（批量中只影响这一条） */
+  "files.read_failed",
 
   // ── 媒体编辑路由共享错误码（抽帧/裁剪/截取/分离/变速/代理/雪碧图）──
   /** 源文件不存在 */

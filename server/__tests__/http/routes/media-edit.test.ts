@@ -146,7 +146,7 @@ describe("createMediaEditRoute 前置链路", () => {
   });
 
   it("本人派生 key（内嵌自身属主）放行", async () => {
-    const derivedKey = `_cache/100/${contentKey(USER_ID).replace(/\.png$/, "")}.webp`;
+    const derivedKey = `_cache/v2/100/${contentKey(USER_ID).replace(/\.png$/, "")}.webp`;
     await fs.mkdir(path.dirname(path.join(root, derivedKey)), { recursive: true });
     await fs.writeFile(path.join(root, derivedKey), "x");
 

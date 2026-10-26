@@ -19,8 +19,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
+import { MediaAccessImage } from "@/features/media/components/MediaAccessImage";
+import { MediaAccessOverlay } from "@/features/media/components/MediaAccessOverlay";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
-
 
 interface Props {
   src: string;
@@ -51,6 +53,10 @@ const MIN_SIZE = 20;
 export default function CropPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
+  // 逻辑 URL → 最终访问地址；解析完成前不加载画布。
+  // `failed` 是描述本身失败（无地址可加载），面板给出可重试的失败态而不是一片空白；
+  // 元素加载失败（地址过期等）由 img.onError 走 `retrySigned`（规则 3.6）
+  const { url: accessUrl, failed: accessFailed, refresh: refreshAccess, retrySigned, reloadToken } = useFileAccessUrl(src);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const [loading, setLoading] = useState(false);
@@ -65,12 +71,14 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
   useEffect(() => {
     setModalOpen(true);
     let cancelled = false;
-    loadMediaDimensions(src, false).then(({ w, h }) => {
-      if (cancelled || w === 0) return;
-      setNaturalSize({ w, h });
-    });
+    if (accessUrl) {
+      loadMediaDimensions(accessUrl, false).then(({ w, h }) => {
+        if (cancelled || w === 0) return;
+        setNaturalSize({ w, h });
+      });
+    }
     return () => { cancelled = true; setModalOpen(false); };
-  }, [src, setModalOpen]);
+  }, [accessUrl, setModalOpen]);
 
   const handleImgLoad = useCallback(() => {
     const img = imgRef.current;
@@ -307,16 +315,20 @@ export default function CropPanel({ src, sourceId, onClose }: Props) {
         onPointerCancel={handlePointerUp}
         style={{ cursor: "crosshair", touchAction: "none" }}
       >
-        <img
+        {/* 重新签出的地址可能与旧地址相同：以 reloadToken 重挂元素强制重新加载（规则 3.6） */}
+        <MediaAccessImage
+          url={accessUrl}
+          reloadToken={reloadToken}
+          onRetryAccess={() => { void retrySigned(); }}
           ref={imgRef}
-          src={src}
           alt=""
-          crossOrigin="anonymous"
-          draggable={false}
           onLoad={handleImgLoad}
           className="absolute inset-0 w-full h-full"
           style={{ pointerEvents: "none", userSelect: "none" }}
         />
+
+        {/* 描述失败：没有地址就无从裁剪，给出重试入口（元素过期重试由 onError 处理） */}
+        {accessFailed && <MediaAccessOverlay onRetry={() => { void refreshAccess(); }} />}
 
         {/* 裁剪框的 9999px 投影负责压暗框外区域，框内保持原始亮度（裁剪结果预览）；
             不另铺全幅遮罩，否则框内会被二次压暗 */}

@@ -3,6 +3,8 @@
 状态：已实现（2026-10-18，用户走查验收通过；实现提交 01b160f6）
 当前状态：实现完成并验收通过。经五轮 code-review 双轴审查闭环（第二轮修复：derived-keys 构造/解析同址单点、isKeyOwner 三调用点统一判定、shared 注释锚点归位、审计日志测试断言；第三至五轮双轴均零硬性违规、零 Spec 缺失——规则 1–7 与验收 1–10 逐条核验通过，审查循环收敛）——typecheck / lint / server 826 用例 / web 928 用例串行全过，dev 环境实测归属拒绝（404 与不存在响应不可区分，审计日志含 user+key），用户走查「播放/预览回归」通过；实现提交 01b160f6。
 
+2026-10-23 随画布 LOD 实现更新：`_cache` key 增加版本段（当前 `_cache/v2/{tier}/{源键}.webp`），解析/归属/删除联动只识别当前版本；无版本旧形态不匹配、按畸形 fail-closed（由一次性迁移清理，见 [canvas-media-resolution-lod.md](canvas-media-resolution-lod.md) 规则 8.3）。归属解析器、往返测试与 files 路由归属三态均已按新形态更新并通过。
+
 ## 目标
 
 关闭文件读取的跨用户越权（IDOR）：`/api/files/*` 的会话凭据当前只做认证（任意已登录用户可读任意对象），补充对象归属校验，使「登录」与「有权读该对象」同时成立。顺带闭合引用接受边界的幽灵聚合行问题（avatarKey 指向不存在对象时 `adjustFileRefCount` upsert 出的 GC 不可见惰性行），并把归属解析收敛为全仓单点实现。
@@ -15,14 +17,14 @@
 - key 全集四类命名空间：
   - 内容对象 `{userId}/{hash[:2]}/{hash}{ext}`（buildStorageKey，含 AI 生成结果）
   - 直传暂存 `staging/{userId}/{uuid}`（归属编码在 key；直传 ticket 已有归属形态检查）
-  - 派生（内嵌源键，归属可解析）：`_cache/{tier}/{源键去扩展名}.webp`、`_posters/v{N}/{源键去扩展名}.webp`
+  - 派生（内嵌源键，归属可解析）：`_cache/v{N}/{tier}/{源键去扩展名}.webp`（`N` 当前为 2，见 [canvas-media-resolution-lod.md](canvas-media-resolution-lod.md) 规则 8.3）、`_posters/v{N}/{源键去扩展名}.webp`
   - 派生（单向哈希，归属不可解析）：`_sprite/{sha1(源键|格宽|帧数|版本).slice(0,32)}.webp`、`_proxy/{sha1(源键|宽|版本).slice(0,32)}.mp4`
 - 防线现状：路径穿越守卫（403）、后端逃逸守卫（StorageTraversalError）、对象不存在 404。files 路由唯缺归属。
 - 威胁面：hash 是 256 位不可猜，但同一 hash 双重充当「标识符」（API 响应、URL、DB 合法流转）与「唯一门禁」；userId 为顺序小整数，一次泄漏即按用户枚举放大。行业对 per-user 命名空间文件服务的标准做法是认证 + 归属强制（见下方业务规则依据）。
 
 ## 范围
 
-1. `/api/files/*` 读路径（302 redirect / relay 流式 / Range / `w=` 缩放缓存全部分支，守卫置于分支汇合点前单点覆盖）。
+1. `/api/files/*` 读路径（2026-10-24 前含 302 redirect 分支；现为描述签发 / relay 流式 / Range / `w=` 缩放缓存全部分支，守卫置于分支汇合点前单点覆盖，见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 5.1）。
 2. media-edit 路由工厂的私有 `keyBelongsTo` 撤销，与读路由共用同一归属解析器（AGENTS 三.3 同一规则单一实现）。
 3. 引用接受边界中的 avatarKey（updateUser）：补归属 + 存在性校验。
 4. `_sprite`/`_proxy` key 形态改造为内嵌源键 + 参数段（与 `_cache`/`_posters` 统一），使派生 key 全集归属可解析。
@@ -50,7 +52,7 @@
 3. **归属解析单点**：新增单一实现 `server/services/storage/ownership.ts`（`resolveKeyOwner(key): number | null`，依赖 backend.ts 前缀常量与 shared/url 的 key 形态知识），按命名空间返回归属 userId：
    - 内容对象 → 首段（严格形态校验后）；
    - `staging/{userId}/{uuid}` → 第二段；
-   - `_cache/{tier}/{源键}`、`_posters/v{N}/{源键}` → 内嵌源键首段（内嵌源键可为内容键去扩展名，或 staging key——`w=` 对 staging 源的会话内缓存形态）；
+   - `_cache/v{N}/{tier}/{源键}`、`_posters/v{N}/{源键}` → 内嵌源键首段（内嵌源键可为内容键去扩展名，或 staging key——`w=` 对 staging 源的会话内缓存形态）；`_cache` 只识别当前版本段（`v2`），无版本旧形态不匹配 → 按畸形 fail-closed；
    - 改造后 `_sprite/{源键}`、`_proxy/{源键}` → 内嵌源键首段；
    - 无一匹配（畸形 key、旧单向哈希形态）→ 返回 null → 调用方一律按无归属拒绝（fail-closed）。
    media-edit 工厂的私有 `keyBelongsTo` 撤销、改调本解析器。**行为变化（有意）**：本人派生/暂存源键由「一律 403」变为放行（内嵌自身属主，操作的是本人数据；旧规则只是首段匹配无法理解命名空间的副作用）；他人键仍 403；畸形键仍 403。
@@ -89,7 +91,8 @@
 ## 验收标准
 
 1. 用户 A 会话请求用户 B 的内容对象/staging/派生 key → 404，与不存在对象响应逐字节一致。
-2. A 请求自己的对象 → 200（redirect 302 / relay / Range 行为不变）；自己的 staging / `_cache` / `_posters` / 新形态 `_sprite` / `_proxy` key 同样放行。
+2. A 请求自己的对象 → 200（描述签发 / relay / Range 行为不变；302 分支已于 2026-10-24 删除）；自己的 `_cache` / `_posters` / 新形态 `_sprite` / `_proxy` key 同样放行。
+   - 修订（2026-10-24，[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 2.1）：读路径新增**可读键域**——`staging/` 是未提交的直传缓冲（TTL 清扫、不对外交付），本人 staging key 读请求与「对象不存在」同响应 404。归属解析仍接受 staging（直传 complete、清扫、删除联动需要），被拒的只是**读取**。
 3. 有效签名 URL 拉取 → 行为与现状一致（含过期/篡改拒绝），不叠加归属比对。
 4. 畸形 key（无归属段、旧单向哈希形态）→ 404（files 会话路径）；media-edit → 403。
 5. `w=` 缩放缓存行为不变（本人源命中缓存正常）；无权请求不触发缩放生成。

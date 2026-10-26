@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ProjectListPage from "@/features/project/components/ProjectListPage";
+vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 
 const mocks = vi.hoisted(() => ({
   projects: [
@@ -32,7 +33,7 @@ vi.mock("@/components/layout/AppShell", () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/features/auth/UserContext", () => ({
-  useCurrentUser: () => ({ username: "tester", avatarKey: null, avatarUrl: null }),
+  useCurrentUser: () => ({ username: "tester", avatarKey: null }),
 }));
 vi.mock("@/features/auth/store", () => ({
   useAuthStore: {

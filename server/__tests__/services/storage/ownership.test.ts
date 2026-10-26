@@ -22,12 +22,17 @@ describe("resolveKeyOwner", () => {
 
   it("_cache/_posters：内嵌源键首段（内容键去扩展名形态）", () => {
     const stem = `1/${HASH.slice(0, 2)}/${HASH}`;
-    expect(resolveKeyOwner(`_cache/320/${stem}.webp`)).toBe(1);
+    expect(resolveKeyOwner(`_cache/v2/320/${stem}.webp`)).toBe(1);
     expect(resolveKeyOwner(`_posters/v2/${stem}.webp`)).toBe(1);
   });
 
   it("_cache：staging 源的会话内缓存形态，归属取 staging 第二段", () => {
-    expect(resolveKeyOwner(`_cache/64/staging/7/${UUID}.webp`)).toBe(7);
+    expect(resolveKeyOwner(`_cache/v2/64/staging/7/${UUID}.webp`)).toBe(7);
+  });
+
+  it("旧版无版本 _cache 键不再解析归属（fail-closed，由一次性迁移清理）", () => {
+    const stem = `1/${HASH.slice(0, 2)}/${HASH}`;
+    expect(resolveKeyOwner(`_cache/320/${stem}.webp`)).toBeNull();
   });
 
   it("改造后 _sprite/_proxy：参数段后缀形态，归属取内嵌源键首段", () => {
@@ -52,8 +57,8 @@ describe("resolveKeyOwner", () => {
   });
 
   it("派生 key 内嵌段非法（非内容键非 staging）→ null", () => {
-    expect(resolveKeyOwner(`_cache/320/u1/ab/ok.webp`)).toBeNull();
-    expect(resolveKeyOwner(`_cache/320/1/../../etc.webp`)).toBeNull();
+    expect(resolveKeyOwner(`_cache/v2/320/u1/ab/ok.webp`)).toBeNull();
+    expect(resolveKeyOwner(`_cache/v2/320/1/../../etc.webp`)).toBeNull();
     // 参数段缺失：内嵌段会带上尾部垃圾，不是合法源键
     expect(resolveKeyOwner(`_sprite/1/${HASH.slice(0, 2)}/${HASH}.webp`)).toBeNull();
     expect(resolveKeyOwner(`_proxy/1/${HASH.slice(0, 2)}/${HASH}.mp4`)).toBeNull();

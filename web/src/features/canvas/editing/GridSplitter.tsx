@@ -10,24 +10,23 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
+import { loadMediaImage } from "@/lib/load-media-image";
 import { canvasToBlob, computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
 
 export function useGridSplit(sourceId: string, src: string | undefined) {
   const { t } = useTranslation();
+  const { notification } = useAppFeedback();
   return useCallback(
     async (rows: number, cols: number) => {
       if (!src) return;
       try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const img = new window.Image();
-          img.crossOrigin = "anonymous";
-          img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error("Failed to load image"));
-          img.src = src;
-        });
+        // 切图要的是「执行这一刻」的像素：地址在动作时解析，元素失败按规则 3.6 刷新一次。
+        // 不复用挂载时的结果——长驻节点的签名可能早已过期
+        const img = await loadMediaImage(src);
 
         const pieceW = img.naturalWidth / cols;
         const pieceH = img.naturalHeight / rows;
@@ -66,13 +65,15 @@ export function useGridSplit(sourceId: string, src: string | undefined) {
           sink: { kind: "derived-node", sourceId },
         });
       } catch (e) {
+        // 用户发起的动作失败必须有可见反馈：静默返回看起来就是按钮坏了（规则 3.7）
         console.error("grid-split failed:", e);
+        notification.error({ title: t("node.gridSplitFailed"), key: `grid-split-${sourceId}` });
       } finally {
         useCanvasStore
           .getState()
           .updateNodeData(sourceId, { taskBinding: undefined }, undefined, { skipHistory: true });
       }
     },
-    [sourceId, src, t],
+    [sourceId, src, t, notification],
   );
 }

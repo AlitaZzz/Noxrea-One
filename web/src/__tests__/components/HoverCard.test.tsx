@@ -148,6 +148,37 @@ describe("HoverCardMediaContent", () => {
     expect(content).not.toBeVisible();
   });
 
+  it("reports media failures and retries to the caller for signed-URL re-resolution", () => {
+    const onMediaError = vi.fn();
+    const { rerender } = render(
+      <HoverCard open>
+        <HoverCardTrigger asChild><button type="button">Media</button></HoverCardTrigger>
+        <HoverCardMediaContent src="/signed.mp4" mediaType="video" onMediaError={onMediaError} />
+      </HoverCard>,
+    );
+    fireEvent.error(document.querySelector("video")!);
+    expect(onMediaError).toHaveBeenCalledTimes(1);
+
+    // 手动重试同样需要重新解析：地址可能已过期，重挂同一个地址不会成功
+    fireEvent.click(screen.getByRole("button", { name: "media.retry" }));
+    expect(onMediaError).toHaveBeenCalledTimes(2);
+
+    // 令牌变化时即使 src 字节未变也重挂元素（同窗口签名地址不变）
+    const failedElement = document.querySelector("video")!;
+    rerender(
+      <HoverCard open>
+        <HoverCardTrigger asChild><button type="button">Media</button></HoverCardTrigger>
+        <HoverCardMediaContent
+          src="/signed.mp4"
+          mediaType="video"
+          onMediaError={onMediaError}
+          mediaRevision={1}
+        />
+      </HoverCard>,
+    );
+    expect(document.querySelector("video")).not.toBe(failedElement);
+  });
+
   it("invalidates a pending decode when the media emits an error", async () => {
     render(preview("/failed.png"));
     const image = document.querySelector("img")!;

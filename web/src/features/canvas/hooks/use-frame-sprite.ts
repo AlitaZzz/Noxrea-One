@@ -15,7 +15,7 @@ import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError } from "@/features/canvas/api/file-api";
-import { fileRefUrl } from "@/lib/file-url";
+import { resolveMediaUrlString } from "@/lib/file-access";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
     轨道容器宽度必须是它 + 24px（用 px 而非 rem，避免两边坐标系漂移） */
@@ -124,6 +124,11 @@ function loadSpriteSize(url: string): Promise<{ width: number; height: number } 
   });
 }
 
+/** 与「时长不可用」共用同一失败态：面板据 error 展示原因与手动重试入口 */
+function networkError(): MediaRequestError {
+  return { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() };
+}
+
 /**
  * 按给定视频地址加载帧序列雪碧图。
  * 组件卸载或地址变化时会中止未完成的加载；失败时轨道退化为「无缩略图但可定位」，
@@ -168,19 +173,25 @@ export function useFrameSprite(videoRef: string | null): FrameSpriteState & { re
           .catch(() => {
             // 请求失败只有两种：本组件中止（忽略），或真实网络失败（带原因走兜底与重试）
             if (controller.signal.aborted) return null;
-            fetchError = { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() };
+            fetchError = networkError();
             return null;
           });
         if (cancelled) return;
 
         if (info?.url) {
-          const size = await loadSpriteSize(info.url);
+          // 雪碧图同样按托管媒体解析：S3 后端换签名直连，local 后端为流式 URL。
+          // 解析失败（瞬时故障已含一次强制重描述）时放弃缩略图、退化为只读时长的轨道：
+          // 面板仍可定位与截取，原因随状态带出，由用户手动重试
+          const spriteUrl = await resolveMediaUrlString(info.url).catch(() => null);
+          if (cancelled) return;
+          if (!spriteUrl) fetchError = networkError();
+          const size = spriteUrl ? await loadSpriteSize(spriteUrl) : null;
           if (cancelled) return;
           if (size) {
             // 格数以图片实际宽度为准，避免前后端各算一遍而不同步
             const count = Math.max(1, Math.round(size.width / info.cell_width));
             apply({
-              url: info.url,
+              url: spriteUrl,
               spriteWidth: size.width,
               cellWidth: info.cell_width,
               cellHeight: size.height,
@@ -196,14 +207,20 @@ export function useFrameSprite(videoRef: string | null): FrameSpriteState & { re
             });
             return;
           }
+          // 地址解析成功但图片本身加载失败（网络 / 解码 / 签名过期）同样要带出原因，
+          // 否则缩略图永久缺失且面板没有重试入口
+          if (spriteUrl) fetchError = networkError();
         }
       }
 
       // 兜底：拿不到雪碧图也要拿到时长，否则播放头无从定位、面板等同于不可用。
       // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
       // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴；
-      // 服务端失败原因（fetchError）随状态带出，面板据此提示并重试
-      const duration = await probeDuration(fileRefUrl(videoRef));
+      // 失败原因（服务端响应、雪碧图地址/加载或原视频地址解析）随状态带出，面板据此提示并重试
+      const videoUrl = await resolveMediaUrlString(videoRef).catch(() => null);
+      if (cancelled) return;
+      // 原视频地址解析失败（瞬时故障含一次强制重描述）时 duration 保持 null，面板按「时长不可用」提示
+      const duration = videoUrl ? await probeDuration(videoUrl) : null;
       apply(
         duration
           ? { ...INITIAL, duration, durationSource: "fallback", status: "ready", error: fetchError }

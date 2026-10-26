@@ -61,12 +61,25 @@ type HoverCardMediaContentProps = Omit<
   src: string
   alt?: string
   mediaClassName?: string
+  /** 媒体元素加载失败时回调；调用方借此刷新地址，组件不感知来源与业务规则 */
+  onMediaError?: () => void
+  /**
+   * 用户点「重试」时回调。与 `onMediaError` 分开：元素失败是自动触发的，调用方通常
+   * 会限制自动重试次数；手动重试是用户明确要求的，调用方应重新解析当前地址并通过
+   * `mediaRevision` 重挂。缺省时退回 `onMediaError`，没有解析层的纯展示用法不受影响。
+   */
+  onRetry?: () => void
+  /** 调用方重解析后的重挂令牌：地址字节未变时也强制重新加载元素 */
+  mediaRevision?: number
 }
 
 function HoverCardMediaContent(props: HoverCardMediaContentProps) {
   return (
     <HoverCardPrimitive.Portal>
-      <ReadyMediaContent key={`${props.mediaType}:${props.src}`} {...props} />
+      <ReadyMediaContent
+        key={`${props.mediaType}:${props.src}:${props.mediaRevision ?? 0}`}
+        {...props}
+      />
     </HoverCardPrimitive.Portal>
   )
 }
@@ -76,6 +89,9 @@ function ReadyMediaContent({
   src,
   alt = "",
   mediaClassName,
+  onMediaError,
+  onRetry,
+  mediaRevision: _mediaRevision,
   style,
   ...props
 }: HoverCardMediaContentProps) {
@@ -134,12 +150,16 @@ function ReadyMediaContent({
     if (mediaRef.current !== element) return
     ++decodeAttempt.current
     setPhase("error")
+    // 签名地址失效时由调用方重新描述；组件只上报失败，不感知访问解析
+    onMediaError?.()
   }
 
   const retry = () => {
     ++decodeAttempt.current
     setPhase("loading")
     setRetryCount((current) => current + 1)
+    // 手动重试优先走调用方的「重新解析」入口；自动失败回调带闩锁，用尽后点了也不会换址
+    ;(onRetry ?? onMediaError)?.()
   }
 
   return (

@@ -20,6 +20,9 @@ import WheelGuard from "@/components/ui/WheelGuard";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
+import { MediaAccessOverlay } from "@/features/media/components/MediaAccessOverlay";
+import { loadMediaImage } from "@/lib/load-media-image";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -42,6 +45,9 @@ type ViewCount = 4 | 8 | 12;
 
 export default function PanoramaPanel({ src, sourceId, selected, onClose }: Props) {
   const { t } = useTranslation();
+  // 逻辑 URL → 最终访问地址；解析完成后再创建 viewer，避免请求未授权路径
+  // 描述失败时 viewer 永远不会创建，面板会停在空挂载点：给出可重试的失败态
+  const { url: accessUrl, failed: accessFailed, refresh: refreshAccess } = useFileAccessUrl(src);
 
   const mountRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -85,6 +91,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
   }, [aspect, containerSize]);
 
   useEffect(() => {
+    if (!accessUrl) return;
     let disposed = false;
     // StrictMode 双挂载会在同一同步批次内执行 create → destroy → create：
     // 若首个 viewer 在挂载 tick 内就发起全景图 fetch，cleanup 的 destroy 会 abort 它，
@@ -96,7 +103,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       if (disposed || !mountRef.current || viewerRef.current) return;
       viewerRef.current = new Viewer({
         container: mountRef.current,
-        panorama: src,
+        panorama: accessUrl,
         defaultZoomLvl: 30,
         navbar: [],
         // 彻底隐藏空 navbar 容器，避免底部残留灰色底栏
@@ -113,9 +120,9 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       viewerRef.current?.destroy();
       viewerRef.current = null;
     };
-    // 仅依赖 src：viewer 随组件挂载创建、随卸载销毁（退出全景即卸载）
+    // 仅依赖 accessUrl：viewer 随解析完成创建、随卸载或会话切换销毁
 
-  }, [src]);
+  }, [accessUrl]);
 
   // 截图目标尺寸上限：按原始分辨率输出，但避免超大全景图导致内存峰值过高
   const MAX_SCREENSHOT_SIZE = 4096;
@@ -125,6 +132,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
 
   // 截取当前全景视角，新建图片节点（逻辑与裁剪确认一致）
   const handleScreenshot = useCallback(async () => {
+    // viewer 只在访问地址解析完成后创建，地址缺失时它必然不存在
     if (loading || !viewerRef.current) return;
     setLoading(true);
     try {
@@ -133,12 +141,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       if (!canvas) throw new Error("Panorama canvas not found");
 
       // 加载原始全景图，获取其自然分辨率
-      const img = new Image();
-      img.src = src;
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Failed to load panorama"));
-      });
+      const img = await loadMediaImage(src);
 
       // 确定输出尺寸：默认按原始 2:1 全幅；选择比例时保持垂直视场不变，
       // 高度取原始高度，宽度按比例换算。均带上限避免超大图内存峰值过高。
@@ -213,12 +216,7 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
       if (!canvas) throw new Error("Panorama canvas not found");
 
       // 加载原始全景图，获取其自然分辨率
-      const img = new Image();
-      img.src = src;
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Failed to load panorama"));
-      });
+      const img = await loadMediaImage(src);
 
       // 单帧尺寸：默认 2:1 全幅；选择比例时高取原始高、宽按比例换算。均带上限。
       let frameW: number;
@@ -428,6 +426,8 @@ export default function PanoramaPanel({ src, sourceId, selected, onClose }: Prop
         className={`panorama-mount nodrag absolute inset-0 z-30 rounded-lg overflow-hidden ${selected ? "pointer-events-auto" : "pointer-events-none"}`}
         style={{ touchAction: "none" }}
       >
+        {/* 描述失败：viewer 不会创建，面板空转；给出重试入口 */}
+        {accessFailed && <MediaAccessOverlay onRetry={() => { void refreshAccess(); }} />}
         {/* 取景框：按所选比例显示截图范围，非原始比例时叠加 */}
         {frame && (
           <div

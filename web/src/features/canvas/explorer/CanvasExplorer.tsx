@@ -50,6 +50,7 @@ import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { ASSET_CATEGORIES, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { withManagedFileWidth } from "@/lib/file-url";
 import { formatBytes, formatDateTime, formatTime } from "@/lib/utils/format";
@@ -411,10 +412,10 @@ function ElementItemImpl(props: ElementItemProps) {
         style={hasPreview ? undefined : { background: `${getNodeTypeColor(nodeType)}18` }}
       >
         {nodeType === NODE_TYPE.IMAGE && src ? (
-          <img src={withManagedFileWidth(src, 64)} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
+          <ResolvedImage value={src} width={64} alt={label} className="w-full h-full object-cover" />
         ) : nodeType === NODE_TYPE.VIDEO && thumb ? (
           <>
-            <img src={thumb} alt={label} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = "none"; }} />
+            <ResolvedImage value={thumb} alt={label} className="w-full h-full object-cover" />
             {/* 视频类型角标：复用全局视频图标，避免把类型识别和播放操作混为一谈 */}
             <span className="pointer-events-none absolute left-1 top-1 flex size-4 items-center justify-center rounded-sm border border-border/60 bg-background/85 text-foreground shadow-sm">
               <VideoCameraOutlined

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { runSingleFlight } from "@server/services/storage/media-singleflight";
+import { runSingleFlight } from "@server/core/single-flight";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 function deferred<T>() {

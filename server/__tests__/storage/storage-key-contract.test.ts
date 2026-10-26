@@ -6,8 +6,8 @@
  * 1. Prisma schema 中不存在承载 URL 的列（source_url / cover_url 已改名，无 *Url 字段）；
  * 2. server / shared / web 源码中旧 URL 契约字段名（sourceUrl / coverUrl）已消灭；
  * 3. crud 层（唯一 DB 写入层）不出现托管 URL 字面量——URL 形态进不了 DB 写路径。
- * web 端 `isManagedFileUrl`（托管 URL 形态识别，用于下载参数判定与缩略参数派生）
- * 是渲染期读取侧逻辑，不属于写入路径。
+ * web 端 `isManagedMediaValue`（托管 URL / 存储 key 的形态识别，用于下载参数判定
+ * 与缩略参数派生）是渲染期读取侧逻辑，不属于写入路径。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

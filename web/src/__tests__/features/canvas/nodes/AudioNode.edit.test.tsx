@@ -19,6 +19,7 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AudioNodeData } from "@/features/canvas/types";
 import { saveManager } from "@/features/project/save-manager";
 import { EventNames } from "@/lib/constants";
+vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 
 const {
   createAudioNodeFromRef, extractAudioClip, serverExtractAudioClip,

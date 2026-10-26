@@ -36,7 +36,7 @@ import { DIRECTOR_CHARACTER_COLOR, DIRECTOR_CHARACTER_HEX } from "@/features/dir
 import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";
-import { managedFileUrl, withManagedFileWidth } from "@/lib/file-url";
+import { accessFailedFallback, ResolvedImage } from "@/features/media/components/ResolvedMedia";
 
 import PoseSliders from "./PoseSliders";
 
@@ -229,7 +229,7 @@ function CameraShots({ cameraId }: { cameraId: string }) {
                     data-selected={shot.selected || undefined}
                     onClick={() => toggleShotSelected(shot.id)}
                   >
-                    <img src={withManagedFileWidth(shot.ref, 320)} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
+                    <ResolvedImage value={shot.ref} width={320} alt={shot.name} loading="lazy" className="absolute inset-0 size-full object-cover" />
                     <span className="absolute inset-x-0 bottom-0 z-[1] truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-xs tabular-nums text-white">{shot.name}</span>
                   </Button>
                   <div className="pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-1.5 bg-black/55 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
@@ -257,8 +257,14 @@ function CameraShots({ cameraId }: { cameraId: string }) {
       <Dialog open={Boolean(previewRef)} onOpenChange={(open) => { if (!open) setPreviewRef(""); }}>
         <DialogContent className="w-auto max-w-[90vw] p-3 sm:max-w-[90vw]">
           <DialogTitle className="sr-only">{t("director.preview")}</DialogTitle>
-          {/* previewRef 存引用原值（key / 外部 URL）；img 消费派生 URL */}
-          <img src={managedFileUrl(previewRef)} className="block max-h-[78vh] max-w-[86vw] rounded-lg" alt={t("director.preview")} />
+          {/* previewRef 存引用原值（key / 外部 URL）；元素内部换取访问地址 */}
+          <ResolvedImage
+            value={previewRef || undefined}
+            className="block max-h-[78vh] max-w-[86vw] rounded-lg"
+            alt={t("director.preview")}
+            // 预览里图片就是内容：描述失败不能退化成空白，给出就地重试（规则 3.6）
+            fallback={accessFailedFallback}
+          />
         </DialogContent>
       </Dialog>
     </div>

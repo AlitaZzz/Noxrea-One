@@ -7,17 +7,21 @@ export type ImageLoadResult =
 /** 预热完成、可上屏的图片资源：url 即待渲染的 src（HTTP URL / blob: 预览透传），字节由浏览器 HTTP 缓存或上传管道持有 */
 export type PreparedImage = { url: string; width: number; height: number };
 type ImageLoader = (src: string, signal: AbortSignal) => Promise<PreparedImage>;
-type Consumer = { priority: MediaLoadPriority; notify: (result: ImageLoadResult) => void };
+type Consumer = { priority: MediaLoadPriority; weight: number; notify: (result: ImageLoadResult) => void };
+/** 一次已启动的加载：重量随 consumer 变重只升不降，结算时按该次运行自身的重量释放 */
+type RunningLoad = { controller: AbortController; weight: number };
 type Job = {
   src: string;
   consumers: Map<symbol, Consumer>;
   status: "idle" | "queued" | "loading" | "settled";
   result?: ImageLoadResult;
-  controller?: AbortController;
+  running?: RunningLoad;
 };
 
 export type ImageLoadLease = {
   setPriority: (priority: MediaLoadPriority) => void;
+  /** 认领/更新该 URL 的任务重量（同一 job 取 consumer 最大值） */
+  setWeight: (weight: number) => void;
   release: () => void;
   retry: () => void;
 };
@@ -68,9 +72,18 @@ export function prepareImage(src: string, signal: AbortSignal): Promise<Prepared
   });
 }
 
-/** One canvas owns its queue. URL sharing lasts only as long as its consumers. */
+/**
+ * One canvas owns its queue. URL sharing lasts only as long as its consumers.
+ *
+ * 并发按「重量单位」计费（specs/canvas-media-resolution-lod.md 规则 7）：
+ * 低档位/外链 1、大档位 2（下界见 `HEAVY_RESIZE_WIDTH`）、原图 3，容量 4。调度循环只启动「优先级最高且
+ * 装得下」的 job，因此活跃 3 时重量 1 的 job 仍能启动，不会被重量 2 的排队
+ * job 阻塞；运行中 job 因新 consumer 变重时只更新计费重量、不重启解码，
+ * 活跃重量允许暂时超过容量但不再启动新 job。
+ */
 export class ImageLoadScheduler {
   private readonly jobs = new Map<string, Job>();
+  /** 活跃重量（不是任务数） */
   private active = 0;
   private scheduled = false;
 
@@ -86,7 +99,7 @@ export class ImageLoadScheduler {
     }
     const target = job;
     const id = Symbol(src);
-    const consumer: Consumer = { priority: null, notify };
+    const consumer: Consumer = { priority: null, weight: 1, notify };
     target.consumers.set(id, consumer);
     if (target.result) {
       const result = target.result;
@@ -96,6 +109,13 @@ export class ImageLoadScheduler {
       setPriority: (priority) => {
         if (!target.consumers.has(id)) return;
         consumer.priority = priority;
+        this.update(target);
+      },
+      setWeight: (weight) => {
+        if (!target.consumers.has(id)) return;
+        const next = Number.isFinite(weight) && weight > 0 ? Math.ceil(weight) : 1;
+        if (consumer.weight === next) return;
+        consumer.weight = next;
         this.update(target);
       },
       release: () => {
@@ -121,7 +141,7 @@ export class ImageLoadScheduler {
   clear() {
     for (const job of this.jobs.values()) {
       job.consumers.clear();
-      job.controller?.abort();
+      job.running?.controller.abort();
     }
     this.jobs.clear();
   }
@@ -134,11 +154,30 @@ export class ImageLoadScheduler {
     return best;
   }
 
+  /** 共享 job 的重量 = 全部 consumer 的最大值（原图 consumer 会把整次解码按重量 3 计费） */
+  private weight(job: Job): number {
+    let best = 1;
+    for (const consumer of job.consumers.values()) {
+      if (consumer.weight > best) best = consumer.weight;
+    }
+    return best;
+  }
+
   private update(job: Job) {
     if (job.status === "settled") return;
+    // 运行中的 job 重量只升不降：已开始的解码不能因 consumer 变化重启。
+    // 升重立即计入活跃重量（允许暂时超容量，但 schedule 会因此停止启动新 job）；
+    // 降重不回吐——该次运行在结算时按它自己的重量释放，计费口径不会前后漂移。
+    if (job.running) {
+      const next = this.weight(job);
+      if (next > job.running.weight) {
+        this.active += next - job.running.weight;
+        job.running.weight = next;
+      }
+    }
     if (this.priority(job) === null) {
-      job.controller?.abort();
-      job.controller = undefined;
+      job.running?.controller.abort();
+      job.running = undefined;
       job.status = "idle";
     } else if (job.status === "idle") {
       job.status = "queued";
@@ -152,10 +191,12 @@ export class ImageLoadScheduler {
     // Batch demand changes before choosing visible work over prefetch work.
     queueMicrotask(() => {
       this.scheduled = false;
-      while (this.active < this.limit) {
+      for (;;) {
         let next: Job | undefined;
         for (const job of this.jobs.values()) {
           if (job.status !== "queued" || this.priority(job) === null) continue;
+          // 装不下就跳过，继续找更轻的 job：活跃 3 时重量 1 仍可启动
+          if (this.active + this.weight(job) > this.limit) continue;
           if (!next || this.priority(job)! < this.priority(next)!) next = job;
         }
         if (!next) break;
@@ -165,24 +206,25 @@ export class ImageLoadScheduler {
   }
 
   private start(job: Job) {
-    const controller = new AbortController();
-    job.controller = controller;
+    const running: RunningLoad = { controller: new AbortController(), weight: this.weight(job) };
+    job.running = running;
     job.status = "loading";
-    this.active += 1;
-    void Promise.resolve().then(() => this.load(job.src, controller.signal)).then(
-      (image) => this.complete(job, controller, { status: "ready", ...image }),
-      () => this.complete(job, controller, { status: "failed" }),
+    this.active += running.weight;
+    void Promise.resolve().then(() => this.load(job.src, running.controller.signal)).then(
+      (image) => this.complete(job, running, { status: "ready", ...image }),
+      () => this.complete(job, running, { status: "failed" }),
     ).finally(() => {
-      this.active -= 1;
+      // 按该次运行自身的重量释放（运行中升重的增量已在 update 计入）
+      this.active -= running.weight;
       this.schedule();
     });
   }
 
-  private complete(job: Job, controller: AbortController, result: ImageLoadResult) {
-    if (controller.signal.aborted || job.controller !== controller || this.jobs.get(job.src) !== job) {
+  private complete(job: Job, running: RunningLoad, result: ImageLoadResult) {
+    if (running.controller.signal.aborted || job.running !== running || this.jobs.get(job.src) !== job) {
       return;
     }
-    job.controller = undefined;
+    job.running = undefined;
     job.status = "settled";
     job.result = result;
     for (const consumer of job.consumers.values()) consumer.notify(result);

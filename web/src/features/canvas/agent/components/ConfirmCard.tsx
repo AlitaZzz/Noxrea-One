@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ConfirmDecision, PendingConfirmation } from "@/features/canvas/agent/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
-import { managedFileUrl } from "@/lib/file-url";
 
 /** 节点类型 → i18n key（类型名与画布元素面板共用 node.* 文案） */
 const NODE_TYPE_KEYS: Record<string, string> = {
@@ -141,7 +141,7 @@ export function ConfirmCard({ pending, onResolve }: Props) {
                         className="h-auto min-w-0 flex-1 justify-start gap-1.5 rounded-md px-1 py-1 text-left text-xs font-normal hover:bg-destructive/10"
                         onClick={() => toggle(c.id, id)}
                       >
-                        {thumb && <img className="size-7 shrink-0 rounded-md border border-border object-cover" src={managedFileUrl(thumb)} alt="" />}
+                        {thumb && <ResolvedImage className="size-7 shrink-0 rounded-md border border-border object-cover" value={thumb} alt="" />}
                         <span className="min-w-0 truncate font-medium text-foreground">{nodeLabel(id)}</span>
                         <span className="shrink-0 text-[11px] text-muted-foreground">{n?.type && NODE_TYPE_KEYS[n.type] ? t(NODE_TYPE_KEYS[n.type]) : t("agent.nodeTypeFallback")}</span>
                       </Button>

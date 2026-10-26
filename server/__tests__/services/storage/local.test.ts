@@ -72,6 +72,16 @@ describe("LocalStorageBackend.put", () => {
       name: "StorageTraversalError",
     });
   });
+
+  it("接口层形态守卫与 S3 / 读管线同判据：含 .. 的段一律不可寻址", async () => {
+    await expect(storage.put("a..b.png", Buffer.from("x"))).rejects.toMatchObject({
+      name: "StorageTraversalError",
+    });
+    await expect(storage.stat("a/../b.png")).rejects.toMatchObject({
+      name: "StorageTraversalError",
+    });
+    await expect(fs.access(abs("a..b.png"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
 });
 
 describe("LocalStorageBackend.get / stat / list", () => {
@@ -89,7 +99,7 @@ describe("LocalStorageBackend.get / stat / list", () => {
 
   it("list 按前缀枚举 posix key（含大小与修改时间），_tmp 工作区不在对象命名空间", async () => {
     await storage.put("u4/ab/a.png", Buffer.from("a"));
-    await storage.put("_cache/64/u4/ab/a.webp", Buffer.from("cached"));
+    await storage.put("_cache/v2/64/u4/ab/a.webp", Buffer.from("cached"));
     await fs.mkdir(path.join(root, "_tmp"), { recursive: true });
     await fs.writeFile(path.join(root, "_tmp", "scratch.bin"), "tmp");
 
@@ -97,7 +107,7 @@ describe("LocalStorageBackend.get / stat / list", () => {
 
     const cache = await storage.list("_cache/");
     expect(cache).toHaveLength(1);
-    expect(cache[0].key).toBe("_cache/64/u4/ab/a.webp");
+    expect(cache[0].key).toBe("_cache/v2/64/u4/ab/a.webp");
     expect(cache[0].size).toBe(6);
     expect(cache[0].lastModifiedMs).toBeGreaterThan(0);
 
@@ -159,11 +169,11 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await fs.mkdir(path.join(root, "9/ef"), { recursive: true });
     await fs.writeFile(path.join(root, `9/ef/${hash}.mp4`), "video");
     for (const p of [
-      `_cache/64/9/ef/${hash}.webp`,
-      `_cache/480/9/ef/${hash}.webp`,
+      `_cache/v2/64/9/ef/${hash}.webp`,
+      `_cache/v2/480/9/ef/${hash}.webp`,
       `_posters/v1/9/ef/${hash}.webp`,
       // 其他源的派生文件不受影响
-      `_cache/64/9/ef/${otherHash}.webp`,
+      `_cache/v2/64/9/ef/${otherHash}.webp`,
     ]) {
       await fs.mkdir(path.dirname(abs(p)), { recursive: true });
       await fs.writeFile(abs(p), "derived");
@@ -172,10 +182,10 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await storage.delete(`9/ef/${hash}.mp4`);
 
     await expect(fs.access(abs(`9/ef/${hash}.mp4`))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs(`_cache/64/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs(`_cache/480/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/v2/64/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.access(abs(`_cache/v2/480/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(fs.access(abs(`_posters/v1/9/ef/${hash}.webp`))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs(`_cache/64/9/ef/${otherHash}.webp`))).resolves.toBeUndefined();
+    await expect(fs.access(abs(`_cache/v2/64/9/ef/${otherHash}.webp`))).resolves.toBeUndefined();
     // 清空的分组目录被回收
     await expect(fs.access(abs("_posters/v1"))).rejects.toMatchObject({ code: "ENOENT" });
   });
@@ -189,13 +199,20 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await expect(fs.access(abs(`9/ef/${hash}.bin`))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("删除失败不是 ENOENT 时上抛（接口契约只把不存在视为成功）", async () => {
+    const hash = "e".repeat(64);
+    // 目录占位让 unlink 失败（Linux EISDIR / Windows EPERM）：失败必须上抛，不能被当作已删除
+    await fs.mkdir(abs(`9/ef/${hash}.bin`), { recursive: true });
+    await expect(storage.delete(`9/ef/${hash}.bin`)).rejects.toBeTruthy();
+  });
+
   it("删除源文件联动清理新形态 _sprite/_proxy 派生（specs/derived-deletion-linkage.md 规则 1）", async () => {
     const hash = "c".repeat(64);
     const otherHash = "d".repeat(64);
     await fs.mkdir(path.join(root, "7/cc"), { recursive: true });
     await fs.writeFile(path.join(root, `7/cc/${hash}.mp4`), "video");
     for (const p of [
-      `_cache/64/7/cc/${hash}.webp`,
+      `_cache/v2/64/7/cc/${hash}.webp`,
       `_posters/v1/7/cc/${hash}.webp`,
       `_sprite/7/cc/${hash}_c20v2.webp`,
       `_proxy/7/cc/${hash}_w480v3.mp4`,
@@ -210,7 +227,7 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await storage.delete(`7/cc/${hash}.mp4`);
 
     for (const p of [
-      `_cache/64/7/cc/${hash}.webp`,
+      `_cache/v2/64/7/cc/${hash}.webp`,
       `_posters/v1/7/cc/${hash}.webp`,
       `_sprite/7/cc/${hash}_c20v2.webp`,
       `_proxy/7/cc/${hash}_w480v3.mp4`,
@@ -225,12 +242,12 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     const uuid = "123e4567-e89b-12d3-a456-426614174000";
     await fs.mkdir(path.dirname(abs(`staging/9/${uuid}`)), { recursive: true });
     await fs.writeFile(abs(`staging/9/${uuid}`), "partial");
-    await fs.mkdir(path.dirname(abs(`_cache/64/staging/9/${uuid}.webp`)), { recursive: true });
-    await fs.writeFile(abs(`_cache/64/staging/9/${uuid}.webp`), "cached");
+    await fs.mkdir(path.dirname(abs(`_cache/v2/64/staging/9/${uuid}.webp`)), { recursive: true });
+    await fs.writeFile(abs(`_cache/v2/64/staging/9/${uuid}.webp`), "cached");
 
     await storage.delete(`staging/9/${uuid}`);
 
     await expect(fs.access(abs(`staging/9/${uuid}`))).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(fs.access(abs(`_cache/64/staging/9/${uuid}.webp`))).resolves.toBeUndefined();
+    await expect(fs.access(abs(`_cache/v2/64/staging/9/${uuid}.webp`))).resolves.toBeUndefined();
   });
 });

@@ -229,14 +229,16 @@ export const SETTING_DEFS = {
   /** 凭据与 model_providers.api_key 同级明文存库（项目已确认的密钥处理基准） */
   "storage.s3.access_key_id": text(),
   "storage.s3.secret_access_key": text(),
-  /** path-style 寻址（MinIO 等自建默认 true） */
-  "storage.s3.path_style": bool(true),
+  /**
+   * 提供方 profile（specs/storage-provider-portability.md 规则 1）：决定寻址风格
+   * 候选与能力基线，`generic` 由启动探测决定寻址。业务代码只读能力位，不读本键。
+   */
+  "storage.s3.provider": enumText(
+    ["minio", "aws", "r2", "oss", "cos", "generic"] as const,
+    "generic",
+  ),
   /** 对象 key 统一前缀（bucket 复用）；存储层内部映射，接口层 key 不含前缀 */
   "storage.s3.prefix": text(),
-  /** 预签名有效期（秒）：读取重定向、媒体工具输入、上游拉取共用 */
-  "storage.s3.signed_url_ttl_seconds": timerSeconds(3600),
-  /** files 路由分发：redirect（302 预签名，默认）| proxy（服务器流式转发） */
-  "storage.s3.delivery": enumText(["redirect", "proxy"] as const, "redirect"),
   /** 上游 AI 引用下发形态（唯一开关）：signed-url（默认，签发不能成立时明确失败）| base64 */
   "storage.upstream_ref_delivery": enumText(["signed-url", "base64"] as const, "signed-url"),
   // 存储配额（specs/storage-user-quota.md）：MB 与同族 upload.max_file_mb 同口径，读取时换算字节

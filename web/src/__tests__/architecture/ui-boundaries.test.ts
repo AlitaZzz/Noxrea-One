@@ -57,7 +57,7 @@ describe("UI architecture constraints", () => {
     expect(await violations(code, "src/components/ui/AppIcon.tsx")).toHaveLength(0);
   });
 
-  it.each(["src/features/settings/ApiSettingsModels.tsx", "src/features/auth/store.ts", "src/app/page.tsx", "src/hooks/use-feedback.ts", "src/lib/feedback.ts", "src/providers/AppProviders.tsx"])("protects all business directories: %s", async (filePath) => {
+  it.each(["src/features/settings/ApiSettingsModels.tsx", "src/features/auth/store.ts", "src/app/page.tsx", "src/lib/feedback.ts", "src/providers/AppProviders.tsx"])("protects all business directories: %s", async (filePath) => {
     expect(await violations('import { App } from "antd"; export default App;', filePath)).not.toHaveLength(0);
   });
 

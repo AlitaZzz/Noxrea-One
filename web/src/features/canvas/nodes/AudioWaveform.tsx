@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { clamp01 } from "@/features/canvas/editing/clip-range";
 import { registerAudioPlayer } from "@/features/canvas/shared/audio-playback-registry";
 import { DEFAULT_NODE_COLOR } from "@/lib/constants";
+import { credentialsForDelivery } from "@/lib/file-access";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { formatTime } from "@/lib/utils/format";
 
 /** 波形绘制高度（wavesurfer canvas），固定上限，不随容器拉伸 */
@@ -52,8 +54,18 @@ export default function AudioWaveform({
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
   const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [current, setCurrent] = useState(0);
+  // 逻辑 URL → 最终访问地址；加载失败时重新描述一次（签名 URL 过期等）
+  const { url: accessUrl, delivery, failed: accessFailed, refresh, retrySigned, reloadToken } = useFileAccessUrl(url);
+  const credentials = credentialsForDelivery(delivery);
+  const failed = loadFailed || accessFailed;
+  // 只有 wavesurfer 的元素加载失败才值得重描述（过期 / 跨窗口）；描述本身失败时
+  // retrySigned 必然返回 null，手动重试入口由失败覆盖层提供（refresh）。
+  useEffect(() => {
+    if (!loadFailed) return;
+    void retrySigned();
+  }, [loadFailed, retrySigned]);
   // wavesurfer 的真实播放态：按钮图标必须镜像实例的真实状态
   const [wsPlaying, setWsPlaying] = useState(false);
 
@@ -66,9 +78,9 @@ export default function AudioWaveform({
   // 初始化 / 切换音源
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !accessUrl) return;
     setReady(false);
-    setFailed(false);
+    setLoadFailed(false);
     setCurrent(0);
     setWsPlaying(false);
 
@@ -85,8 +97,10 @@ export default function AudioWaveform({
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
-      url,
+      url: accessUrl,
       interact: false,
+      // 字节凭据由解析层的分发形态单点给出（specs/storage-signed-direct-delivery.md 规则 3.1）
+      ...(credentials ? { fetchParams: { credentials } } : {}),
     });
     wsRef.current = ws;
     // Canvas 不会随 CSS 主题自动重绘；只更新颜色，保留音源与播放位置。
@@ -105,7 +119,7 @@ export default function AudioWaveform({
       setReady(true);
       onReadyRef.current?.(ws.getDuration());
     });
-    ws.on("error", () => setFailed(true));
+    ws.on("error", () => setLoadFailed(true));
     ws.on("play", () => setWsPlaying(true));
     ws.on("pause", () => setWsPlaying(false));
     ws.on("finish", () => setWsPlaying(false));
@@ -119,7 +133,7 @@ export default function AudioWaveform({
       ws.destroy();
       wsRef.current = null;
     };
-  }, [url, nodeId]);
+  }, [accessUrl, credentials, reloadToken, nodeId]);
 
   const toggle = useCallback(() => {
     const ws = wsRef.current;
@@ -226,8 +240,18 @@ export default function AudioWaveform({
             )}
           </div>
           {failed && (
-            <div className="absolute inset-0 flex items-center justify-center text-xs text-red-400">
-              音频加载失败
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-red-400">
+              <span>音频加载失败</span>
+              {accessFailed && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { void refresh(); }}
+                >
+                  重试
+                </Button>
+              )}
             </div>
           )}
         </div>

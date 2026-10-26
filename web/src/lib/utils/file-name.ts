@@ -2,6 +2,8 @@
  * 文件名清理工具：把任意用户文案（节点标题等）转成可安全用于下载 / 落盘的文件名。
  */
 
+import { truncateUtf16, wellFormedUtf16 } from "@noxrea/shared/text";
+
 /** Windows / macOS 通用非法字符 */
 const ILLEGAL_CHARS = /[\\/:*?"<>|]/g;
 /** 控制字符（含换行、制表符）：会截断 HTTP 头，必须去掉 */
@@ -21,7 +23,8 @@ const MAX_LENGTH = 120;
 export function sanitizeFileName(name: string): string {
   if (!name) return "";
 
-  const cleaned = name
+  // 孤立代理先归一：标题里的半截 emoji 不能顺着文件名流到 URL / HTTP 头
+  const cleaned = wellFormedUtf16(name)
     .replace(CONTROL_CHARS, "")
     .replace(ILLEGAL_CHARS, "_")
     .replace(/\s+/g, " ")
@@ -39,7 +42,8 @@ export function sanitizeFileName(name: string): string {
   if (RESERVED_NAMES.test(base)) base = `${base}_`;
 
   if (`${base}${ext}`.length > MAX_LENGTH) {
-    base = base.slice(0, Math.max(1, MAX_LENGTH - ext.length)).replace(/[.\s]+$/, "");
+    // 截断不劈开代理对：否则产出的孤立代理会在 encodeURIComponent 处抛错
+    base = truncateUtf16(base, Math.max(1, MAX_LENGTH - ext.length)).replace(/[.\s]+$/, "");
   }
 
   return `${base}${ext}`;

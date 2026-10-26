@@ -19,6 +19,7 @@ import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchVideoProxy, type MediaRequestError, readMediaError } from "@/features/canvas/api/file-api";
+import { resolveMediaUrlString } from "@/lib/file-access";
 
 export type VideoProxyStatus = "pending" | "ready" | "failed";
 
@@ -75,9 +76,21 @@ export function useVideoProxy(videoRef: string): VideoProxyState & {
             if (!json.data?.url) {
               return { status: "failed", url: null, duration: null, error: null };
             }
+            // 响应里的 url 是逻辑托管 URL（`/api/files/_proxy/...`），必须经访问解析层
+            // 换成最终地址（S3 为签名直连，字节不回流应用）；解析失败含一次重新描述，
+            // 仍失败按代理失败处理——面板回退原视频 scrub，不把必然 401/403 的地址交给元素
+            const proxyUrl = await resolveMediaUrlString(json.data.url).catch(() => null);
+            if (!proxyUrl) {
+              return {
+                status: "failed",
+                url: null,
+                duration: null,
+                error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() },
+              };
+            }
             return {
               status: "ready",
-              url: json.data.url,
+              url: proxyUrl,
               duration: json.data.duration ?? null,
               error: null,
             };

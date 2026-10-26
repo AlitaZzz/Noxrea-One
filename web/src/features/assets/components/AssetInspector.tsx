@@ -35,8 +35,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import VideoPlayer from "@/features/canvas/shared/VideoPlayer";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { ASSET_CATEGORIES } from "@/lib/constants";
-import { withManagedFileWidth } from "@/lib/file-url";
 import { MOD_KEY } from "@/lib/platform";
 import { formatBytes, formatTime } from "@/lib/utils/format";
 import { copyText } from "@/lib/utils/text-export";
@@ -86,31 +86,35 @@ function typeLabelKey(type: string): string | undefined {
 function Preview({ asset }: { asset: AssetItem }) {
   const [audioDuration, setAudioDuration] = useState(0);
 
-  const thumbUrl = withManagedFileWidth(asset.fileKey, 400);
-
   return (
     <div
       className="relative aspect-square max-h-[280px] w-full overflow-hidden rounded-lg bg-black text-white flex items-center justify-center"
     >
-      {asset.mediaType === "audio" && asset.url ? (
+      {asset.mediaType === "audio" && asset.fileKey ? (
         <AudioWaveform
-          url={asset.url}
+          url={asset.fileKey}
           duration={audioDuration}
           onReady={setAudioDuration}
         />
-      ) : asset.mediaType === "video" && asset.url ? (
+      ) : asset.mediaType === "video" && asset.fileKey ? (
         // 复用画布节点同款播放器；检查器内不自动播放，用户主动点播放时默认有声
-        <VideoPlayer src={asset.url} fill autoPlay={false} loop defaultVolume={1} />
-      ) : thumbUrl ? (
-        // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={thumbUrl} alt={asset.name} draggable={false} className="w-full h-full object-contain" />
+        <VideoPlayer src={asset.fileKey} fill autoPlay={false} loop defaultVolume={1} />
       ) : (
-        asset.mediaType === "video"
-          ? <VideoCameraOutlined className="size-10 text-white/25" />
-          : asset.mediaType === "audio"
-            ? <WaveIcon className="size-10 text-white/25" />
-            : <PictureOutlined className="size-10 text-white/25" />
+        // 素材地址是动态/外部 URL，缩放由文件服务的 ?w= 参数负责，不走 next/image
+        <ResolvedImage
+          value={asset.fileKey}
+          width={400}
+          alt={asset.name}
+          draggable={false}
+          className="w-full h-full object-contain"
+          fallback={
+            asset.mediaType === "video"
+              ? <VideoCameraOutlined className="size-10 text-white/25" />
+              : asset.mediaType === "audio"
+                ? <WaveIcon className="size-10 text-white/25" />
+                : <PictureOutlined className="size-10 text-white/25" />
+          }
+        />
       )}
     </div>
   );

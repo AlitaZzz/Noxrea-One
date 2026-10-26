@@ -40,6 +40,26 @@ describe("sanitizeFileName", () => {
     expect(out.length).toBeLessThanOrEqual(120);
   });
 
+  // 回归：按码元截断会把代理对劈成孤立代理，后续 encodeURIComponent 抛 URIError
+  it("超长截断不劈开代理对，结果可安全编码", () => {
+    const cases = [
+      `${"a".repeat(114)}😀.png`,
+      `${"😀".repeat(70)}.png`,
+      `${"a".repeat(119)}\uD83D`,
+    ];
+    for (const name of cases) {
+      const out = sanitizeFileName(name);
+      expect(out.length).toBeLessThanOrEqual(120);
+      expect(out).toBe(out.toWellFormed());
+      expect(() => encodeURIComponent(out)).not.toThrow();
+    }
+  });
+
+  it("孤立代理归一为 U+FFFD，不随文件名外流", () => {
+    expect(sanitizeFileName("a\uD83Db.png")).toBe("a�b.png");
+    expect(sanitizeFileName("\uDE00.png")).toBe("�.png");
+  });
+
   it("空入参与全是控制字符时返回空串", () => {
     expect(sanitizeFileName("")).toBe("");
     expect(sanitizeFileName(String.fromCharCode(0, 31, 127))).toBe("");

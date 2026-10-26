@@ -1,6 +1,9 @@
 # Storage S3 生产部署演练（Storage S3 Production Cutover）
 
 状态：已确认（2026-10-19，用户「全按推荐（必须符合行业内成熟方案）」确认全部待确认事项；「已实现」待生产验收清单走查通过后设置）
+
+> **2026-10-24 读路径修订（生产执行前必读）**：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）取代浏览器读路径——S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket，**不再有 302，也不再保留应用代理（`delivery=proxy`）备选**；`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.s3.signed_url_window_seconds`、`storage.edge.origin_secret` 只存在于规划稿，从未落库）。本 Spec 中凡出现这些键、「302 → 预签名」验收项或「proxy 兜底」表述的**可执行条目**，均以该条目的 2026-10-24 补记或本注记为准；仅作历史留痕的实测证据段（如 2026-10-20 各条）保持原文；「公网可达性」的处置收敛为：bucket 必须能被浏览器 https 访问，不可达时只能改用 `storage.backend=local`，没有代理回流的备选。
+
 上游 Spec：[storage-s3-backend.md](storage-s3-backend.md)（已实现）——机制正确性已经 MinIO 切换演练实证（2738 对象迁移 + ETag==MD5 全过 + 切换回归 + 回滚补迁闭环）；本 Spec 治理**生产环境的部署正确性**，不复验机制。
 
 ## 目标
@@ -11,13 +14,13 @@
 
 1. **生产对象存储形态**：自建 MinIO 容器与应用同机部署（与演练形态同构、流程复用度最高）；TLS 由应用侧反向代理统一终止。
 2. **数据起点**：生产空桶冷启动——开发/演练数据不进生产，迁移脚本仅保留为回滚路径（规则 5 降为备选流程）。
-3. **TLS 方案**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，消除 mixed-content；SigV4 Host 透传为核对单项；`delivery=proxy` 保留为读链路的显式备选模式（须显式设置，无自动兜底）。
+3. **TLS 方案**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，消除 mixed-content；SigV4 Host 透传为核对单项；`delivery=proxy` 保留为读链路的显式备选模式（须显式设置，无自动兜底）。**2026-10-24 补记：`delivery` 键已删除，应用代理备选不复存在**；TLS 决策本体不变，但 bucket 地址不满足 https 时的唯一处置是改用 `storage.backend=local`。
 4. **上游引用下发**：`storage.upstream_ref_delivery=signed-url`（默认；签发不能成立明确失败并指明配置动作，届时由运维显式改配 `base64`，无自动兜底）。
 5. **观察期**：72 小时（覆盖 GC 每日周期至少三轮）后判定切换完成。
 
 ## 背景与现状（已验证事实）
 
-- 机制侧已闭环：直传双模式、redirect/proxy 分发、双凭据、GC 三阶段、删除联动、派生 TTL 清扫、迁移脚本（双向 + ETag==MD5 主校验 + 断点续跑）、`storage:audit` 对账，均在 NAS MinIO 演练桶实弹通过（含 2026-10-19 跨页分页与联动端到端专项演练）。
+- 机制侧已闭环：直传双模式、redirect/proxy 分发、双凭据、GC 三阶段（2026-10-26 起为四阶段，新增探测残留清扫，见 [storage-provider-portability.md](storage-provider-portability.md) 规则 3.2）、删除联动、派生 TTL 清扫、迁移脚本（双向 + ETag==MD5 主校验 + 断点续跑）、`storage:audit` 对账，均在 NAS MinIO 演练桶实弹通过（含 2026-10-19 跨页分页与联动端到端专项演练）。
 - 演练环境事实：dev DB 当前 `storage.backend=s3` 指向演练桶（10.10.10.2:9833 / noxrea），凭据为演练值 `noxrea-app`（记忆与上游 Spec 明确：**演练值生产必须更换**）；桶内已有开发期数据。
 - 生产形态未定：产品方向为多用户公网部署（云服务器），生产对象存储选型（自建 MinIO 容器 / 云 S3 / R2）、域名与 TLS 终止方式均未确认。
 - README 已载明部署形态（单容器 + 外置 PostgreSQL + `/data` 持久化）与 Bucket 初始化清单；`storage.*` 配置按 [env-config-layout.md](env-config-layout.md) 落 `system_settings`（重启生效，不参与热刷新）。
@@ -40,21 +43,21 @@
 
 1. **环境隔离铁律**：演练凭据、演练桶、dev 数据库永不进入生产——生产凭据全新签发、生产桶独立、生产 DB 独立实例；任何配置项在「生产」语境下出现演练值（`noxrea-app` / `10.10.10.2` / `noxrea-app-drill-2026`）即演练失败项。
 2. **生产前置硬门槛**（backend=s3 起动前逐项核验，全部源自上游 Bucket 初始化清单 + 生产特有项）：
-   - **TLS（生产新增硬门槛，已确认决策 3）**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，浏览器 mixed-content 从根上消除；`storage.s3.endpoint` 填代理后公网地址，SigV4 签名含 Host 头、代理必须原样透传 Host（核对单项）；`storage.s3.delivery=proxy` 仅作无桶域名/证书条件时的显式备选模式（须显式设置，无自动兜底）。
+   - **TLS（生产新增硬门槛，已确认决策 3）**：反向代理统一终止 https——应用与 bucket 两个地址经同一代理出 https，浏览器 mixed-content 从根上消除；`storage.s3.endpoint` 填代理后公网地址，SigV4 签名含 Host 头、代理必须原样透传 Host（核对单项）。**2026-10-24**：`storage.s3.delivery=proxy` 已随键删除；TLS 不成立的处置只能是改用 `storage.backend=local`，不得以代理回流绕过（读路径已无该模式）。
    - **CORS**：`AllowedOrigins` 为生产域名（含应用实际 scheme），方法/头/暴露头按上游清单；演练桶 CORS 不得复用照抄。
    - **服务端加密**：bucket 不启用 SSE-KMS / SSE-C（否则迁移校验与 ETag 前提降级，需走降级路径并告警）。
    - **lifecycle**：仅派生命名空间可配过期；主对象前缀禁止任何 lifecycle。
-   - **公网可达性**：bucket endpoint 须自浏览器与上游 AI 网络可达（redirect 读 + 直传写 + 上游签名 URL 拉取三链路）；无法可达的链路须**显式改配**对应模式（读链路 proxy / 上游引用 `storage.upstream_ref_delivery=base64`）并记录决策——均为显式设置，无自动兜底。
+   - **公网可达性**：bucket endpoint 须自浏览器与上游 AI 网络可达（浏览器直连读 + 直传写 + 上游签名 URL 拉取三链路）。**2026-10-24**：读链路的 app 代理模式已删除，浏览器不可达即 S3 后端不成立——处置只有改用 `storage.backend=local`（部署方显式决策并记录）；上游链路仍可显式改配 `storage.upstream_ref_delivery=base64`。均为显式设置，无自动兜底。
 3. **凭据与配置**：生产 access key 为专用最小权限用户（仅本 bucket 读写）；凭据按 `model_providers.api_key` 同级明文落 `system_settings`（既有基准）；`storage.s3.*` 逐项填写生产值，`storage.backend` 切换重启生效；启动探测（HeadBucket）失败即启动失败，运维语义 =「检查端点/凭据/CORS 前置或临时改回 local 恢复服务」。
 4. **冷启动主流程（已确认决策 2）**：生产空桶直接以 `backend=s3` 起服务——无存量数据则迁移脚本不进主流程；顺序为「建桶清单核验 → 生产凭据与连接配置入库 → 起服务（探测通过）→ 生产验收清单 → 72 小时观察期」。dev/演练数据不进生产。
 5. **带数据迁移主流程（备选）**：若决定携带存量数据上线，沿用上游 Spec「切换与回滚流程」原文——停写 → `storage:migrate local-to-s3`（dry-run 盘点 → 实跑 + ETag==MD5 主校验）→ 改设置 → 起服务；本地存储目录（缺省 `data/uploads/`）原样保留作回滚根基。
 6. **生产验收清单（演练执行体）**：在生产环境逐项核验并留痕——
    - 启动探测通过（backend=s3，真实生产凭据）；
    - 直传全流程 ticket → 预签名 PUT → complete 提升（https 端点下真实浏览器行为）；
-   - redirect 读：302 → https 预签名 URL 取回字节一致；Range/206；`?download`；`?w=` 档位派生与命中；
+   - 浏览器直连读（2026-10-24 前记为「redirect 读：302 → 预签名」）：`POST /api/files/access` 描述 → 浏览器持预签名 GET 直连 bucket，取回字节一致；Range/206；`?download`；`?w=` 档位派生与命中；
    - 视频抓帧 / 封面（crossOrigin + 生产 CORS 联合回归点）；
    - 上游 AI 签名 URL 拉取成功（`storage.upstream_ref_delivery=signed-url`，已确认决策 4）；
-   - 删除联动四根 + GC 三阶段实跑（gc_dry_run=false）+ `storage:audit` 对账一致；
+   - 删除联动四根 + GC 四阶段实跑（gc_dry_run=false）+ `storage:audit` 对账一致；
    - 签名 URL 过期后失效；
    - **回滚演练**：验证回滚路径可用（冷启动：改回 local + 重启即可；带数据：`storage:migrate s3-to-local` dry-run 盘点通过）。
 7. **回滚路径**：S3 侧异常 → 停应用 →（带数据时先 s3-to-local 补迁）→ `storage.backend` 改回 `local` → 起服务；local 模式下 s3 时代诞生对象经补迁回来，本地数据全程不删是可行性根基（冷启动场景本地无历史包袱，直接回退）。
@@ -64,7 +67,7 @@
 
 - 业务代码：**预期零改动**——本 Spec 为部署运维流程；若验收暴露缺陷，按缺陷单独走修复流程（不并入演练 Spec 范围）。
 - 文档：README 部署章节增补「生产切换核对单」（引用本 Spec）；演练留痕归档 `data/storage-migration/`（已 gitignore）。
-- 配置：生产 `system_settings` 的 `storage.backend` / `storage.s3.*` / `storage.upstream_ref_delivery` / `storage.s3.delivery` 按决策填列。
+- 配置：生产 `system_settings` 的 `storage.backend` / `storage.s3.*`（不含已删除的 `delivery`、`signed_url_ttl_seconds`、`signed_url_window_seconds`）/ `storage.upstream_ref_delivery` 按决策填列。
 - 关联 Spec：上游 [storage-s3-backend.md](storage-s3-backend.md)（机制与 Bucket 清单来源）；[derived-deletion-linkage.md](derived-deletion-linkage.md)、[file-access-ownership.md](file-access-ownership.md)（验收清单覆盖其生产行为，Spec 本体不变）。
 
 ## 异常与边界
@@ -90,7 +93,7 @@
 
 1. **生产对象存储形态**：推荐自建 MinIO 容器随应用同机部署（与演练形态同构、流程复用度最高、成本可控；TLS 由应用侧反向代理统一终止）；备选云厂商 S3/R2（endpoint 原生 https、免自运维，凭据/容量成本换管理成本）。影响前置清单细节与 backup 措辞。
 2. **数据起点**：推荐**生产空桶冷启动**（多用户公网产品，开发/演练数据不带上生产；迁移脚本仅保留为回滚路径）——主流程最短、无迁移风险敞口；备选携带存量数据上线（走规则 5 迁移主流程， NAS 2C2G 实证 2738 对象可行）。
-3. **TLS 方案**：推荐反向代理统一终止 TLS（应用与 bucket endpoint 均经代理出 https，浏览器 mixed-content 消除，proxy 分发作为显式备选保留）；备选仅应用 https + bucket 保持 http + `delivery=proxy`（字节回经应用，公网带宽成为必经瓶颈，与部署中立目标相悖，仅在不具备桶域名/证书条件时选用）。
+3. **TLS 方案**：推荐反向代理统一终止 TLS（应用与 bucket endpoint 均经代理出 https，浏览器 mixed-content 消除，proxy 分发作为显式备选保留）；备选仅应用 https + bucket 保持 http + `delivery=proxy`（字节回经应用，公网带宽成为必经瓶颈，与部署中立目标相悖，仅在不具备桶域名/证书条件时选用）。**2026-10-24 补记：备选已失效**——`delivery=proxy` 随读路径改版删除，bucket 必须 https 可达，否则改用 `storage.backend=local`。
 4. **`storage.upstream_ref_delivery`**：推荐 `signed-url`（bucket 公网可达时上游直连，字节不经应用）；备选 `base64`（仅当上游网络无法达桶时显式改配；signed-url 签发不能成立明确失败，无自动兜底）。
 5. **观察期时长**：推荐 72 小时（覆盖 GC 每日周期至少三轮）后判定切换完成；备选一周（覆盖一个完整上传-引用-GC 生命周期样本）。
 
@@ -98,6 +101,6 @@
 
 已确认（2026-10-19）。全部待确认事项按推荐项确认；方案均为行业成熟形态（反代 TLS 终止 + SigV4 Host 透传、空桶冷启动、最小权限专用凭据、audit 基线留档）。下一步：按规则 2 前置清单与规则 4 冷启动主流程执行生产切换演练——实际生产部署操作须用户单独授权（AGENTS 六.3）。已验证事实与历史演练证据均引自上游 Spec 当前状态与记忆（minio-drill-env）；本 Spec 未修改任何业务代码。
 
-2026-10-20 验收清单规则 6.5（上游 AI 签名 URL 拉取）演练侧证据：演练库 `storage.upstream_ref_delivery` 显式切换 `signed-url` 后，经生产代码路径（`resolveRefImages` 单一开关判定 → S3 `presignGet`）对演练库真实受管图片（1,071,102 字节）完成三环节验证——① 签发成立：SigV4 URL（`X-Amz-Expires=4500` = TTL 3600 + TTL/4 900 的窗口对齐设计，窗口内剩余有效期 ≥ TTL）；② 模拟上游裸 HTTP GET 200，字节与后端直读逐字节一致；③ 负例：篡改签名末位被 MinIO 拒绝（403，证明签名实际被强制；含「篡改必须真实改变 URL」断言，防负例静默失效）。**可达性边界**：endpoint 对真实上游 AI 的公网可达无法在演练内网地址（10.10.10.2）覆盖，留待生产切换按规则 2「公网可达性」核对（不可达则届时显式改配 `base64` 并记录决策）；本项生产执行时仍须在**生产凭据 + 公网 https 端点**下复验，本证据不替代。验证后演练设置已恢复 `base64`（演练真实生成任务可用性，README 演练指引口径）；一次性验证脚本不留档，证据即本记录。状态维持「已确认」不变。
+2026-10-20 验收清单规则 6.5（上游 AI 签名 URL 拉取）演练侧证据：演练库 `storage.upstream_ref_delivery` 显式切换 `signed-url` 后，经生产代码路径（`resolveRefImages` 单一开关判定 → S3 `presignGet`）对演练库真实受管图片（1,071,102 字节）完成三环节验证——① 签发成立：SigV4 URL（当时 `X-Amz-Expires=4500` = TTL 3600 + TTL/4 900 的窗口对齐设计；该窗口设置项已于 2026-10-24 随读路径改版删除，但能力凭据仍沿用后端缺省的 `ceil(ttl/4)` 对齐窗口，`expiresIn = ttl + ceil(ttl/4)` = 4500 s（与当时一致）；本条为当时证据原文）；② 模拟上游裸 HTTP GET 200，字节与后端直读逐字节一致；③ 负例：篡改签名末位被 MinIO 拒绝（403，证明签名实际被强制；含「篡改必须真实改变 URL」断言，防负例静默失效）。**可达性边界**：endpoint 对真实上游 AI 的公网可达无法在演练内网地址（10.10.10.2）覆盖，留待生产切换按规则 2「公网可达性」核对（不可达则届时显式改配 `base64` 并记录决策）；本项生产执行时仍须在**生产凭据 + 公网 https 端点**下复验，本证据不替代。验证后演练设置已恢复 `base64`（演练真实生成任务可用性，README 演练指引口径）；一次性验证脚本不留档，证据即本记录。状态维持「已确认」不变。
 
 2026-10-20 规则 6 演练可达项全项实测（预览真实浏览器行为 + CLI 留痕；第 5 项证据见上段，第 8 项回滚属生产语境不在本证据覆盖内）：第 1 项启动探测——backend=s3 两次重启均通过（bootstrap 日志 `storage_backend_ready`）；第 2 项直传全流程——真实浏览器 drop 注入 67,055 字节合成 PNG，upload-ticket 200 → MinIO 预检 204 → 预签名 PUT（staging/）200 → upload-complete 200 → 新 key 即时 302→MinIO 200 渲染；第 3 项 redirect 读——画布全量媒体 302→MinIO 活行为，SHA-256(拉取字节)===key 哈希（内容寻址端到端闭环），Range bytes=0-99 → 206 + Content-Range 且字节与完整读前缀一致，`?download` disposition（响应头 + 预签名参数双证据），`?w=` 档位派生与命中（图片 w=256→向上取档 300→`_cache/300` 派生，二次 16ms 命中；视频 w=320→ffmpeg 抽帧→`_cache/320`，二次 17ms 命中）；第 4 项视频抓帧/封面 + crossOrigin/CORS 联合回归——console 零 CORS 错，5 视频节点海报全渲染；第 6 项删除联动 + GC + audit——画布删测试节点入引用计数账本（四根联动端到端 2026-10-19 已专项实弹），`storage:audit` 779 对象/354 行全一致（0 孤儿/缺失/超龄 staging/未知），GC 三阶段实跑（应用内 + CLI 双留痕，dryRun=false，grace 内候选 0 语义正确）；第 7 项签名 URL 过期——机制层（ttl=5s → 200 → 10s 后 403）+ 应用配置路径（TTL=16 入库→重启→302 带 `X-Amz-Expires=20` + `max-age=16` → 200 → 26s 后同 URL 403）。**CORS 发现**：演练桶未显式配置 CORS（`NoSuchCORSConfiguration`），直传可用依赖 MinIO 默认放行全源——规则 2 生产前置的「CORS AllowedOrigins 显式配置」由此获得实证必要性；SSE 未启用、lifecycle 未配置（主前缀禁区合规）。演练终态：TTL 恢复 3600（复验通过）、`upstream_ref_delivery` 保持 `base64`、测试残留由账本语义 48h 后 GC 回收、audit 保持一致。生产项（TLS/Host 透传、mixed-content、公网可达性、生产凭据、生产 CORS 显式配置、回滚生产语境、72h 观察期）不在本证据覆盖内，生产执行时须复验。状态维持「已确认」不变。

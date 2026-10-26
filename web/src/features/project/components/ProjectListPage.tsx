@@ -24,9 +24,9 @@ import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import { flushAndWait } from "@/features/canvas/stores/canvas-store";
+import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { useProjectStore } from "@/features/project/store";
 import type { ProjectSummary } from "@/features/project/types";
-import { withManagedFileWidth } from "@/lib/file-url";
 import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
 
 // 固定信息区高度，让空列表首帧与项目数据加载后的网格行保持同一尺寸。
@@ -157,12 +157,17 @@ export default function ProjectListPage() {
               aria-label={t("auth.accountSettings")}
               className="h-auto gap-2 rounded-lg bg-popover px-2 py-1 text-foreground hover:bg-muted"
             >
-              <div className={`flex size-8 items-center justify-center overflow-hidden rounded-full text-xs font-bold ${user?.avatarUrl ? "bg-transparent" : "bg-primary text-primary-foreground"}`}>
-                {user?.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  (user?.username || "U")[0].toUpperCase()
-                )}
+              <div className="flex size-8 items-center justify-center overflow-hidden rounded-full text-xs font-bold">
+                <ResolvedImage
+                  value={user?.avatarKey}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  fallback={(
+                    <span className="flex size-full items-center justify-center bg-primary text-primary-foreground">
+                      {(user?.username || "U")[0].toUpperCase()}
+                    </span>
+                  )}
+                />
               </div>
               <span className="text-sm font-medium text-foreground">{user?.username || t("auth.defaultUser")}</span>
               <ChevronDownIcon className="size-3 text-muted-foreground" />
@@ -203,7 +208,14 @@ export default function ProjectListPage() {
               {/* Preview area（服务端投影：自定义封面优先，否则画布首图）；跳转由整卡 stretched-link 承担 */}
               <div className="flex aspect-video h-auto w-full shrink-0 items-center justify-center overflow-hidden rounded-none bg-popover p-0 text-foreground">
                 {p.thumbnail ? (
-                  <img src={withManagedFileWidth(p.thumbnail, 480)} alt="" className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]" loading="lazy" decoding="async" />
+                  <ResolvedImage
+                    value={p.thumbnail}
+                    width={480}
+                    alt=""
+                    className="block h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.03]"
+                    loading="lazy"
+                    decoding="async"
+                  />
                 ) : (
                   <FolderOpenOutlined className="text-3xl text-muted-foreground" />
                 )}

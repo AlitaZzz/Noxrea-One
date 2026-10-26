@@ -176,6 +176,118 @@ describe("ImageLoadScheduler", () => {
     scheduler.clear();
   });
 
+  it("counts an original image as three weight units and runs one at a time", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    for (const src of ["original-a", "original-b"]) {
+      const lease = scheduler.acquire(src, vi.fn());
+      lease.setPriority(0);
+      lease.setWeight(3);
+    }
+    await flush();
+    expect(calls.map((call) => call.src)).toEqual(["original-a"]);
+    calls[0].resolve(image);
+    await flush();
+    expect(calls[1].src).toBe("original-b");
+    scheduler.clear();
+  });
+
+  it("runs two large tiers at once and queues the third", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    for (const src of ["tier-a", "tier-b", "tier-c"]) {
+      const lease = scheduler.acquire(src, vi.fn());
+      lease.setPriority(0);
+      lease.setWeight(2);
+    }
+    await flush();
+    expect(calls.map((call) => call.src)).toEqual(["tier-a", "tier-b"]);
+    scheduler.clear();
+  });
+
+  it("starts a light job next to three active units instead of blocking on a heavy queued job", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    const original = scheduler.acquire("original", vi.fn());
+    original.setPriority(0);
+    original.setWeight(3);
+    const heavy = scheduler.acquire("heavy", vi.fn());
+    heavy.setPriority(0);
+    heavy.setWeight(2);
+    const light = scheduler.acquire("light", vi.fn());
+    light.setPriority(1);
+    light.setWeight(1);
+    await flush();
+    // 重量 2 的排队任务装不下，但重量 1 的仍要启动，不能被它堵住
+    expect(calls.map((call) => call.src)).toEqual(["original", "light"]);
+    scheduler.clear();
+  });
+
+  it("bills a shared job by its heaviest consumer", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    const light = scheduler.acquire("shared", vi.fn());
+    light.setPriority(0);
+    light.setWeight(1);
+    const heavy = scheduler.acquire("shared", vi.fn());
+    heavy.setPriority(0);
+    heavy.setWeight(3);
+    const other = scheduler.acquire("other", vi.fn());
+    other.setPriority(0);
+    other.setWeight(2);
+    await flush();
+    // 共享 job 按重量 3 计费：3 + 2 > 4，另一张大档位必须等待
+    expect(calls.map((call) => call.src)).toEqual(["shared"]);
+    calls[0].resolve(image);
+    await flush();
+    expect(calls[1].src).toBe("other");
+    scheduler.clear();
+  });
+
+  it("upgrades a running job's weight without restarting and releases the raised weight", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    const upgraded = scheduler.acquire("upgraded", vi.fn());
+    upgraded.setPriority(0);
+    upgraded.setWeight(1);
+    await flush();
+    expect(calls).toHaveLength(1);
+    upgraded.setWeight(3);
+    const heavy = scheduler.acquire("heavy", vi.fn());
+    heavy.setPriority(0);
+    heavy.setWeight(2);
+    await flush();
+    // 升重立即计入活跃重量（3 + 2 > 4），已开始的解码不重启
+    expect(calls).toHaveLength(1);
+    calls[0].resolve(image);
+    await flush();
+    expect(calls[1].src).toBe("heavy");
+    scheduler.clear();
+  });
+
+  it("keeps a running job's raised weight charged after the heavy consumer leaves", async () => {
+    const { calls, load } = controlledLoader();
+    const scheduler = new ImageLoadScheduler(load);
+    const heavy = scheduler.acquire("shared", vi.fn());
+    heavy.setPriority(0);
+    heavy.setWeight(3);
+    const remaining = scheduler.acquire("shared", vi.fn());
+    remaining.setPriority(0);
+    remaining.setWeight(1);
+    await flush();
+    heavy.release();
+    const other = scheduler.acquire("other", vi.fn());
+    other.setPriority(0);
+    other.setWeight(2);
+    await flush();
+    // 该次运行按启动时的重量 3 计费，消费者离开不会提前释放
+    expect(calls).toHaveLength(1);
+    calls[0].resolve(image);
+    await flush();
+    expect(calls[1].src).toBe("other");
+    scheduler.clear();
+  });
+
   it("removes a released queued consumer without affecting another URL", async () => {
     const { calls, load } = controlledLoader();
     const scheduler = new ImageLoadScheduler(load);

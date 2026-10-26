@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import { flushMicrotasks, nodeViewProps } from "@/__tests__/test-utils/canvas-node";
+import { resetFileAccessPending, setFileAccessPending } from "@/__tests__/test-utils/file-access-mock";
 import {
   detachedMedia,
   editResultResponse,
@@ -17,11 +18,13 @@ import { playVideo, swapVideoSource } from "@/features/canvas/shared/video-playb
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { VideoNodeData } from "@/features/canvas/types";
 import { EventNames } from "@/lib/constants";
+vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 
 const {
   captureFrameApi, createImageNodeFromRef, createVideoNodeFromRef, createAudioNodeFromRef,
   serverExtractClip, tryClipOnClient, serverCropVideo, tryCropOnClient,
   serverDetachAudio, tryDetachAudioOnClient, playbackError, imageResult, posterRequests,
+  readyResults,
 } = vi.hoisted(() => ({
   captureFrameApi: vi.fn(),
   createImageNodeFromRef: vi.fn(),
@@ -35,6 +38,9 @@ const {
   tryDetachAudioOnClient: vi.fn(),
   playbackError: vi.fn(),
   imageResult: { current: { status: "ready", url: "/api/files/poster.webp" } as { status: string; url?: string } },
+  // ready 结果按 src 缓存：与生产一致，同一 URL 的 result 引用稳定（否则每次渲染都换引用，
+  // CanvasImage 的 stale 同步 effect 会被无限触发）
+  readyResults: new Map<string, { status: "ready"; url: string }>(),
   posterRequests: [] as string[],
 }));
 vi.mock("react-i18next", async (original) => ({ ...await original<typeof import("react-i18next")>(), useTranslation: () => ({ t: (key: string) => key }) }));
@@ -66,7 +72,15 @@ vi.mock("@/features/canvas/editing/client-media/client-video", async (original) 
 vi.mock("@/features/canvas/hooks/use-canvas-image", () => ({
   useCanvasImage: (_nodeId: string, src: string) => {
     posterRequests.push(src);
-    return { result: imageResult.current as { status: "ready" | "failed" | "pending" }, retry: vi.fn() };
+    // 与生产契约一致：ready 结果的 url 就是被请求的显示 URL（探测与 <img src> 同一字符串）
+    const current = imageResult.current as { status: "ready" | "failed" | "pending"; url?: string };
+    if (current.status !== "ready") return { result: current, retry: vi.fn() };
+    let ready = readyResults.get(src);
+    if (!ready) {
+      ready = { status: "ready", url: src };
+      readyResults.set(src, ready);
+    }
+    return { result: ready, retry: vi.fn() };
   },
 }));
 vi.mock("@/features/canvas/nodes/NodeTitle", () => ({ default: () => null }));
@@ -151,6 +165,7 @@ function setNodeData(overrides: Partial<VideoNodeData>) {
 beforeEach(() => {
   useCanvasStore.setState({ ...useCanvasStore.getInitialState(), nodes: [{ id: "video", type: "video-node", position: { x: 5000, y: 0 }, data: { ...data } }] });
   imageResult.current = { status: "ready", url: "/api/files/poster.webp" };
+  readyResults.clear();
   posterRequests.length = 0;
   window.matchMedia = window.matchMedia ?? (() => ({ matches: false, media: "", addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(), onchange: null }));
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
@@ -159,7 +174,7 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue("data:image/jpeg;base64,frame");
   captureFrameApi.mockResolvedValue(jsonResponse({ data: { frame_key: FRAME_KEY, url: "/frame.jpg", time: 32.9, width: 1280, height: 720 } }));
 });
-afterEach(() => { cleanup(); useCanvasStore.setState(useCanvasStore.getInitialState(), true); vi.restoreAllMocks(); vi.resetAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); resetFileAccessPending(); useCanvasStore.setState(useCanvasStore.getInitialState(), true); vi.restoreAllMocks(); vi.resetAllMocks(); vi.useRealTimers(); });
 
 describe("VideoNode poster-first", () => {
   function hoverBody(view: ReturnType<typeof render>) {
@@ -179,9 +194,21 @@ describe("VideoNode poster-first", () => {
     await flushMicrotasks();
     expect(view.container.querySelector("video")).toBeNull();
     const poster = view.container.querySelector("img")!;
-    expect(poster).toHaveAttribute("src", "/api/files/poster.webp");
+    expect(poster).toHaveAttribute("src", `${SOURCE_URL}?w=1280`);
     expect(posterRequests).toContain(`${SOURCE_URL}?w=1280`);
     expect(screen.queryByRole("button", { name: "play" })).toBeNull();
+  });
+
+  it("访问地址未就绪时视频元素不渲染空 src（不拿页面自身当媒体请求）", async () => {
+    setFileAccessPending(SOURCE_URL);
+    render(<Scene />);
+    await flushMicrotasks();
+    // 裁剪面板让会话元素挂载，此时访问地址尚未解析
+    act(() => useCanvasStore.setState({ croppingNodeId: "video" }));
+    await flushMicrotasks();
+    const video = document.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video).not.toHaveAttribute("src");
   });
 
   it("悬停 300ms 起播（带声尝试），离开节点即卸载回海报", async () => {
@@ -199,7 +226,7 @@ describe("VideoNode poster-first", () => {
     leaveBody(view);
     await flushMicrotasks();
     expect(view.container.querySelector("video")).toBeNull();
-    expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
+    expect(view.container.querySelector("img")).toHaveAttribute("src", `${SOURCE_URL}?w=1280`);
     expect(posterRequests).toContain(`${SOURCE_URL}?w=1280`);
     vi.useRealTimers();
   });
@@ -225,7 +252,7 @@ describe("VideoNode poster-first", () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(new DOMException("Unsupported", "NotSupportedError"));
     await startHoverPlay(view);
     expect(view.container.querySelector("video")).toBeNull();
-    expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
+    expect(view.container.querySelector("img")).toHaveAttribute("src", `${SOURCE_URL}?w=1280`);
     expect(posterRequests).toContain(`${SOURCE_URL}?w=1280`);
     expect(playbackError).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -354,7 +381,7 @@ describe("VideoNode poster-first", () => {
     act(() => useCanvasStore.setState({ clipCaptureNodeId: null }));
     await flushMicrotasks();
     expect(view.container.querySelector("video")).toBeNull();
-    expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
+    expect(view.container.querySelector("img")).toHaveAttribute("src", `${SOURCE_URL}?w=1280`);
     expect(posterRequests).toContain(`${SOURCE_URL}?w=1280`);
     await startHoverPlay(view);
     expect(view.container.querySelector("video")).not.toBeNull();
@@ -405,7 +432,7 @@ describe("VideoNode poster-first", () => {
     setNodeData({});
     await flushMicrotasks();
     expect(view.container.querySelector("video")).toBeNull();
-    expect(view.container.querySelector("img")).toHaveAttribute("src", "/api/files/poster.webp");
+    expect(view.container.querySelector("img")).toHaveAttribute("src", `${SOURCE_URL}?w=1280`);
     expect(posterRequests).toContain(`${SOURCE_URL}?w=1280`);
   });
 });

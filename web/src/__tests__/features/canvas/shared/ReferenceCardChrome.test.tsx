@@ -18,7 +18,7 @@ describe("ReferenceCardChrome", () => {
     const onRemove = vi.fn();
 
     render(
-      <ReferenceHoverPreview src="/preview.png" mediaType="image">
+      <ReferenceHoverPreview value="/preview.png" mediaType="image">
         <button type="button">Reference</button>
       </ReferenceHoverPreview>,
     );
@@ -39,7 +39,7 @@ describe("ReferenceCardChrome", () => {
 
   it("does not open a preview while disabled", async () => {
     render(
-      <ReferenceHoverPreview disabled src="/preview.png" mediaType="image">
+      <ReferenceHoverPreview disabled value="/preview.png" mediaType="image">
         <button type="button">Reference</button>
       </ReferenceHoverPreview>,
     );

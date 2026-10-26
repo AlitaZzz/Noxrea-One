@@ -10,8 +10,8 @@ import { useTranslation } from "react-i18next";
 
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
-import { fileRefUrl } from "@/lib/file-url";
 
 import { refThumbnailUrl } from "./reference";
 import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
@@ -44,12 +44,10 @@ function VideoRefCard({
   const reveal = useRevealCanvasNode();
   const [dragOver, setDragOver] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const videoUrl = fileRefUrl(src);
-
   return (
     <ReferenceHoverPreview
       disabled={dragging || Boolean(dragActive) || dragOver}
-      src={videoUrl}
+      value={src}
       mediaType="video"
     >
       <Card
@@ -96,7 +94,15 @@ function VideoRefCard({
           onReorder(dragged, src);
         }}
       >
-        <video src={refThumbnailUrl(src, "video")} crossOrigin="anonymous" className="pointer-events-none size-full rounded-md object-cover" muted preload="metadata" playsInline draggable={false} />
+        <ResolvedVideo
+          value={refThumbnailUrl(src, "video")}
+          crossOrigin="anonymous"
+          className="pointer-events-none size-full rounded-md object-cover"
+          muted
+          preload="metadata"
+          playsInline
+          draggable={false}
+        />
         <ReferenceIndexBadge>{t("common.refVideoLabel", { index: index + 1 })}</ReferenceIndexBadge>
         <ReferenceRemoveButton
           ariaLabel={t("common.delete")}

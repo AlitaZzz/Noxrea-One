@@ -4,16 +4,26 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { HoverCard, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
+import { ResolvedHoverMedia } from "@/features/media/components/ResolvedHoverMedia";
 
 interface ReferenceHoverPreviewProps {
   children: ReactNode;
-  src: string;
+  /** 逻辑引用值（存储 key 或外部 URL）：只在浮层打开时才换取访问地址 */
+  value: string;
+  /** 派生缩略宽度（`?w=`），仅对托管值生效；缺省用原图 */
+  width?: number;
   mediaType: "image" | "video";
   disabled?: boolean;
 }
 
-export function ReferenceHoverPreview({ children, src, mediaType, disabled = false }: ReferenceHoverPreviewProps) {
+export function ReferenceHoverPreview({
+  children,
+  value,
+  width,
+  mediaType,
+  disabled = false,
+}: ReferenceHoverPreviewProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -37,8 +47,10 @@ export function ReferenceHoverPreview({ children, src, mediaType, disabled = fal
       <HoverCardTrigger asChild>
         <div className="inline-flex">{children}</div>
       </HoverCardTrigger>
-      <HoverCardMediaContent
-        src={src}
+      <ResolvedHoverMedia
+        value={value}
+        width={width}
+        open={open && !disabled}
         mediaType={mediaType}
         side="top"
         align="center"

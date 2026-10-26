@@ -43,7 +43,6 @@ export function uploadConcurrencyLease(): MiddlewareHandler<UploadEnv> {
       if (err instanceof GateRejectedError) {
         return failCode(429, "upload.too_many_pending", undefined, {
           "Retry-After": "1",
-          "Cache-Control": "no-store",
         });
       }
       if (!c.req.raw.signal.aborted) throw err;

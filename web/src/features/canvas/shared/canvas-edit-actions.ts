@@ -28,6 +28,7 @@ import { createNodesFromFiles } from "@/features/canvas/upload";
 import type { HistorySnapshot } from "@/features/project/types";
 import { canConnect, isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
+import { loadMediaImage } from "@/lib/load-media-image";
 
 /** 当前选中的节点 id */
 export function getSelectedNodeIds(): string[] {
@@ -151,13 +152,9 @@ export function duplicateSelection(): boolean {
  */
 export async function copyImageSrcToClipboard(src: string): Promise<boolean> {
   try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("image load failed"));
-      img.src = src;
-    });
+    // 画布数据里是存储 key；位图经访问解析直连（S3 签名 URL / local 应用流式）。
+    // 动作时现取地址，元素失败按规则 3.6 刷新一次
+    const img = await loadMediaImage(src);
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;

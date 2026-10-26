@@ -8,9 +8,12 @@ import { buildManagedFileUrl } from "@noxrea/shared/url";
 import { getSetting } from "@server/core/settings";
 import { LocalStorageBackend } from "./backends/local";
 import { S3Backend, type S3BackendOptions } from "./backends/s3";
-import type { StorageBackend } from "./backend";
+import type { StorageBackend, StorageProbeReport } from "./backend";
+import { CAPABILITY_URL_TTL_SECONDS } from "./signing";
 
 let backend: StorageBackend | null = null;
+/** 启动探测摘要（规则 3.7）：健康检查与启动日志共用的只读口径 */
+let probeReport: StorageProbeReport | null = null;
 
 /**
  * 引导期构建存储单例（specs/storage-s3-backend.md 规则 1/2）。
@@ -26,6 +29,21 @@ export function initStorageBackend(selected?: StorageBackend): void {
   backend = selected ?? buildBackendFromSettings();
 }
 
+/**
+ * 站点来源（scheme + host）：CORS 探测要拿它当 `Origin`，与浏览器实际发出的值一致。
+ * 空串（未配置公开地址）返回 undefined，由后端退回通配判定并在探测结论里说明。
+ */
+function publicOrigin(): string | undefined {
+  const raw = getSetting("network.public_base_url");
+  if (!raw) return undefined;
+  try {
+    return new URL(raw).origin;
+  } catch {
+    // 设置项已按 httpUrlOrEmpty 校验过；这里只防御历史脏值，退回未配置口径
+    return undefined;
+  }
+}
+
 /** S3 连接参数组装（规则 2 设置键 → S3BackendOptions）；后端构建与迁移脚本共用单一来源 */
 export function s3OptionsFromSettings(): S3BackendOptions {
   return {
@@ -34,9 +52,13 @@ export function s3OptionsFromSettings(): S3BackendOptions {
     region: getSetting("storage.s3.region"),
     accessKeyId: getSetting("storage.s3.access_key_id"),
     secretAccessKey: getSetting("storage.s3.secret_access_key"),
-    pathStyle: getSetting("storage.s3.path_style"),
+    // 寻址风格与能力基线由 provider profile 决定，不再有独立的寻址开关
+    provider: getSetting("storage.s3.provider"),
     prefix: getSetting("storage.s3.prefix"),
-    signedUrlTtlSeconds: getSetting("storage.s3.signed_url_ttl_seconds"),
+    // 后端缺省预签名 TTL 服务能力凭据（上游引用 / 媒体输入 / 直传票据）：
+    // 浏览器描述路由显式传自己的 TTL 与窗口，不依赖该缺省
+    signedUrlTtlSeconds: CAPABILITY_URL_TTL_SECONDS,
+    browserOrigin: publicOrigin(),
   };
 }
 
@@ -69,6 +91,29 @@ export function missingS3Settings(): string[] {
   )
     .filter(([, value]) => value.trim() === "")
     .map(([key]) => `storage.s3.${key}`);
+}
+
+/**
+ * 启动探测（bootstrap 调用，specs/storage-provider-portability.md 规则 3.7）：
+ * 结果留存供健康检查摘要使用。不支持探测的后端（local）返回 null。
+ * 探测失败直接抛错终止启动——禁止带着不可用的签名路径进入服务态。
+ */
+export async function probeStorageBackend(): Promise<StorageProbeReport | null> {
+  const current = getStorageBackend();
+  if (!current.probe) return null;
+  probeReport = await current.probe();
+  return probeReport;
+}
+
+/**
+ * 就绪口径的存储状态（specs/observability-baseline.md 规则 1.2）：
+ * local 后端无探测项，恒为就绪；s3 后端要求启动探测已产出能力摘要。
+ * 未初始化（引导未到存储步骤）按不就绪——此时服务确实不能提供文件能力。
+ */
+export function storageReady(): boolean {
+  if (!backend) return false;
+  if (!backend.probe) return true;
+  return probeReport !== null;
 }
 
 /** 进程级存储后端单例；未引导（bootstrap 之前）访问即抛错 */

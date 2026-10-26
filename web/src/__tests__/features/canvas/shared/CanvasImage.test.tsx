@@ -4,10 +4,28 @@ import { type InternalNode, type Node, ReactFlowProvider, useStoreApi } from "@x
 import { type ReactNode, StrictMode, useLayoutEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ImageLoadScheduler } from "@/features/canvas/services/image-load-scheduler";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
-import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
+import CanvasMediaLoadingProvider, {
+  CanvasImageLoadingContext,
+  type CanvasMediaViewport,
+  CanvasMediaViewportContext,
+} from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import type { ImagePlacement } from "@/features/canvas/shared/image-visibility";
+vi.mock("@/lib/use-file-access-url", async (importOriginal) => {
+  const mock = await import("@/__tests__/test-utils/file-access-mock");
+  const actual = await importOriginal<typeof import("@/lib/use-file-access-url")>();
+  // scriptedSigned=true 时按 signed 语义返回：访问地址带签名，与逻辑 URL 不同
+  return {
+    ...actual,
+    useFileAccessUrl: (value: string | null | undefined) =>
+      (globalThis as { __scriptedSigned?: boolean }).__scriptedSigned
+        ? { url: value ? `${value}?X-Amz-Signature=abc` : undefined, failed: false, refresh: async () => undefined, retrySigned: async () => null, reloadToken: 0 }
+        : mock.useFileAccessUrl(value),
+  };
+});
 
 vi.mock("react-i18next", async (original) => ({ ...await original<typeof import("react-i18next")>(), useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -25,22 +43,22 @@ class BrowserImage {
 }
 
 let flowStore: ReturnType<typeof useStoreApi>;
-function node(id: string, x: number, y = 0): InternalNode {
-  const userNode: Node = { id, position: { x, y }, data: {}, measured: { width: 400, height: 328 } };
-  return { ...userNode, measured: { width: 400, height: 328 }, internals: { positionAbsolute: { x, y }, z: 0, userNode } };
+function node(id: string, x: number, y = 0, size = { width: 400, height: 328 }): InternalNode {
+  const userNode: Node = { id, position: { x, y }, data: {}, measured: size };
+  return { ...userNode, measured: size, internals: { positionAbsolute: { x, y }, z: 0, userNode } };
 }
 const initialNodes = new Map([["near", node("near", 0)], ["far", node("far", 5000)], ["second", node("second", 900)]]);
 
-function StoreBridge({ children }: { children: ReactNode }) {
+function StoreBridge({ children, nodes = initialNodes }: { children: ReactNode; nodes?: Map<string, InternalNode> }) {
   const api = useStoreApi();
   useLayoutEffect(() => {
     flowStore = api;
-    api.setState({ width: 800, height: 600, transform: [0, 0, 1], nodeLookup: new Map(initialNodes) });
-  }, [api]);
+    api.setState({ width: 800, height: 600, transform: [0, 0, 1], nodeLookup: new Map(nodes) });
+  }, [api, nodes]);
   return children;
 }
 
-type Item = { nodeId: string; src: string; alt: string; placement?: ImagePlacement; onLoad?: () => void; className?: string; style?: React.CSSProperties; aspect?: number };
+type Item = { nodeId: string; src: string; alt: string; placement?: ImagePlacement; onLoad?: () => void; className?: string; style?: React.CSSProperties; aspect?: number; naturalWidth?: number };
 function Scene({ items, project = "first" }: { items: Item[]; project?: string }) {
   return (
     <ReactFlowProvider>
@@ -53,7 +71,61 @@ function Scene({ items, project = "first" }: { items: Item[]; project?: string }
   );
 }
 
+/** LOD 场景：视口上下文直接注入（不经过 200 ms 缩放结算），调度器用可控 loader */
+const LOD_KEY = makeStorageKey("lod-image", ".png");
+const LOD_URL = `/api/files/${LOD_KEY}`;
+const LOD_VIEWPORT: CanvasMediaViewport = { settledZoom: 0.1, dpr: 1, zoomingOut: false };
+type LoadCall = { src: string; resolve: () => void; reject: () => void };
+function controlledScheduler() {
+  const calls: LoadCall[] = [];
+  const scheduler = new ImageLoadScheduler((src) => new Promise((resolve, reject) => {
+    calls.push({
+      src,
+      resolve: () => resolve({ url: src, width: 600, height: 400 }),
+      reject: () => reject(new Error("tier failed")),
+    });
+  }));
+  return { calls, scheduler };
+}
+function LodScene({ items, nodes, viewport = LOD_VIEWPORT, scheduler }: { items: Item[]; nodes?: Map<string, InternalNode>; viewport?: CanvasMediaViewport; scheduler: ImageLoadScheduler }) {
+  return (
+    <ReactFlowProvider>
+      <StoreBridge nodes={nodes}>
+        <CanvasImageLoadingContext.Provider value={scheduler}>
+          <CanvasMediaViewportContext.Provider value={viewport}>
+            <TooltipProvider>{items.map((item) => <CanvasImage key={item.nodeId} lod {...item} />)}</TooltipProvider>
+          </CanvasMediaViewportContext.Provider>
+        </CanvasImageLoadingContext.Provider>
+      </StoreBridge>
+    </ReactFlowProvider>
+  );
+}
+const WIDE_NODES = new Map([["near", node("near", 0, 0, { width: 600, height: 400 })]]);
+
 async function flush() { await act(async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); }); }
+
+/**
+ * 假调度器：只实现 CanvasImage 消费的租约契约，用于驱动真实调度器不会产生的
+ * 结算序列（同一 src 先 ready 再 failed）。
+ */
+class ScriptedScheduler {
+  private notify: ((result: unknown) => void) | null = null;
+  private lease = {
+    setPriority: () => {},
+    setWeight: () => {},
+    retry: () => {},
+    release: () => {},
+  };
+  acquire(_src: string, notify: (result: unknown) => void) {
+    this.notify = notify;
+    return this.lease;
+  }
+  emit(result: unknown) {
+    this.notify?.(result);
+  }
+  clear() {}
+}
+
 async function loaded(image: BrowserImage) {
   await act(async () => { image.onload?.(); for (let i = 0; i < 12; i++) await Promise.resolve(); });
 }
@@ -171,6 +243,35 @@ describe("CanvasImage", () => {
     expect(screen.getByRole("img", { name: "near" }).getAttribute("src")).toBe("/new.png");
   });
 
+  // 回归：stale 守卫曾拿访问地址与逻辑 URL 比较（signed 下永不相等），
+  // 「同一地址 ready → failed 必须显示失败态」的分支因此永不生效。
+  it("same address goes ready → failed：显示失败态，不用旧图顶住", async () => {
+    (globalThis as { __scriptedSigned?: boolean }).__scriptedSigned = true;
+    const scheduler = new ScriptedScheduler();
+    render(
+      <ReactFlowProvider>
+        <StoreBridge>
+          <CanvasImageLoadingContext.Provider value={scheduler as never}>
+            <TooltipProvider>
+              <CanvasImage nodeId="near" src="/same.png" alt="same" />
+            </TooltipProvider>
+          </CanvasImageLoadingContext.Provider>
+        </StoreBridge>
+      </ReactFlowProvider>,
+    );
+    await flush();
+    // signed 形态：访问地址 = 逻辑 URL + 签名参数，与 displayUrl 不同
+    const accessUrl = "/same.png?X-Amz-Signature=abc";
+    await act(async () => scheduler.emit({ status: "ready", url: accessUrl, width: 10, height: 10 }));
+    expect(screen.getByRole("img", { name: "same" }).tagName).toBe("IMG");
+
+    // 同一地址转为 failed：stale 记录的正是这个地址，不得再拿它顶住失败态
+    await act(async () => scheduler.emit({ status: "failed" }));
+    expect(screen.getByRole("group", { name: "same" })).toHaveAttribute("data-image-status", "failed");
+    expect(screen.getByRole("button", { name: "media.retry" })).toBeInTheDocument();
+    (globalThis as { __scriptedSigned?: boolean }).__scriptedSigned = false;
+  });
+
   it("clears pending work when the project changes and releases it on unmount", async () => {
     const items: Item[] = [{ nodeId: "near", src: "/image.png", alt: "near" }];
     const view = render(<Scene items={items} />);
@@ -211,10 +312,10 @@ describe("CanvasImage", () => {
     await flush();
     const placeholder = screen.getByRole("img", { name: "slow" });
     expect(placeholder).toHaveAttribute("data-image-status", "pending");
-    // 骨架（官方动画工具类延迟淡入 + animate-pulse 块）与内容类型图标在 pending 期存在
+    // 骨架（延迟淡入 + 静态块）与内容类型图标在 pending 期存在
     const reveal = placeholder.querySelector(".animate-in")!;
-    expect(reveal).toHaveClass("fade-in", "delay-150", "fill-mode-both");
-    expect(reveal.querySelector(".animate-pulse")).not.toBeNull();
+    expect(reveal).toHaveClass("fade-in", "delay-150", "fill-mode-backwards");
+    expect(reveal.querySelector('[data-slot="skeleton"]')).toHaveClass("animate-none");
     expect(reveal.querySelector("svg")).not.toBeNull();
     await loaded(BrowserImage.instances[0]);
     // ready 后骨架整体卸载，由 img 接管
@@ -229,12 +330,113 @@ describe("CanvasImage", () => {
     ]} />);
     await flush();
     // 已知宽高比：骨架为按比例定形的居中块（容器查询单位做完美 contain），图标居中叠加
-    const shaped = screen.getByRole("img", { name: "shaped" }).querySelector(".animate-pulse") as HTMLElement;
+    const shaped = screen.getByRole("img", { name: "shaped" }).querySelector('[data-slot="skeleton"]') as HTMLElement;
     expect(shaped).toHaveStyle({ aspectRatio: "1.6" });
     expect(shaped.style.width).toBe("min(100cqw, 160cqh)");
     expect(shaped).toHaveClass("rounded-md");
     // 未知宽高比：满铺
-    const plain = screen.getByRole("img", { name: "plain" }).querySelector(".animate-pulse") as HTMLElement;
+    const plain = screen.getByRole("img", { name: "plain" }).querySelector('[data-slot="skeleton"]') as HTMLElement;
     expect(plain).toHaveClass("absolute", "inset-0");
+  });
+});
+
+describe("CanvasImage LOD（specs/canvas-media-resolution-lod.md 规则 6）", () => {
+  async function settled() {
+    await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); });
+  }
+
+  it("0.1 缩放下首次请求低档位，不请求原图", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={[{ nodeId: "near", src: LOD_KEY, alt: "lod" }]} />);
+    await settled();
+    expect(calls.map((call) => call.src)).toEqual([`${LOD_URL}?w=64`]);
+    expect(calls.some((call) => call.src === LOD_URL)).toBe(false);
+    scheduler.clear();
+  });
+
+  it("档位切换保留旧图直到新档位就绪", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    const items: Item[] = [{ nodeId: "near", src: LOD_KEY, alt: "lod" }];
+    const view = render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} />);
+    await settled();
+    await act(async () => calls[0].resolve());
+    const low = `${LOD_URL}?w=64`;
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+
+    // 缩放到 1.0：新档位 640 在途期间仍显示旧图，不闪骨架
+    view.rerender(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} viewport={{ settledZoom: 1, dpr: 1, zoomingOut: false }} />);
+    await settled();
+    expect(calls.map((call) => call.src)).toEqual([low, `${LOD_URL}?w=640`]);
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+
+    await act(async () => calls[1].resolve());
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(`${LOD_URL}?w=640`);
+    scheduler.clear();
+  });
+
+  it("逻辑源变化回到骨架，不复用旧图片", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    const view = render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={[{ nodeId: "near", src: LOD_KEY, alt: "lod" }]} />);
+    await settled();
+    await act(async () => calls[0].resolve());
+    expect(screen.getByRole("img", { name: "lod" }).tagName).toBe("IMG");
+
+    const nextKey = makeStorageKey("lod-image-next", ".png");
+    view.rerender(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={[{ nodeId: "near", src: nextKey, alt: "lod" }]} />);
+    await settled();
+    expect(screen.getByRole("img", { name: "lod" }).tagName).toBe("SPAN");
+    expect(calls.at(-1)!.src).toBe(`/api/files/${nextKey}?w=64`);
+    scheduler.clear();
+  });
+
+  it("新档位失败时保留旧图，不显示失败态", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    const items: Item[] = [{ nodeId: "near", src: LOD_KEY, alt: "lod" }];
+    const view = render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} />);
+    await settled();
+    await act(async () => calls[0].resolve());
+    const low = `${LOD_URL}?w=64`;
+
+    view.rerender(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} viewport={{ settledZoom: 1, dpr: 1, zoomingOut: false }} />);
+    await settled();
+    await act(async () => calls[1].reject());
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+    expect(screen.queryByRole("button", { name: "media.retry" })).toBeNull();
+    scheduler.clear();
+  });
+
+  it("首次档位失败（无旧图）显示失败态与手动重试", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={[{ nodeId: "near", src: LOD_KEY, alt: "lod" }]} />);
+    await settled();
+    await act(async () => calls[0].reject());
+    expect(screen.getByRole("group", { name: "lod" })).toHaveAttribute("data-image-status", "failed");
+    expect(screen.getByRole("button", { name: "media.retry" })).toBeInTheDocument();
+    scheduler.clear();
+  });
+
+  it("缩小手势中中止在途高档位，已就绪旧图继续显示且不闪骨架", async () => {
+    const { calls, scheduler } = controlledScheduler();
+    const items: Item[] = [{ nodeId: "near", src: LOD_KEY, alt: "lod" }];
+    const view = render(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} />);
+    await settled();
+    const low = `${LOD_URL}?w=64`;
+    await act(async () => calls[0].resolve());
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+
+    // 放大到 1.0：640 档位在途（旧图占位）
+    view.rerender(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} viewport={{ settledZoom: 1, dpr: 1, zoomingOut: false }} />);
+    await settled();
+    expect(calls[1].src).toBe(`${LOD_URL}?w=640`);
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+
+    // 立即缩回（实时 zoom 0.5）：在途 640 被中止，旧图不消失
+    view.rerender(<LodScene scheduler={scheduler} nodes={WIDE_NODES} items={items} viewport={{ settledZoom: 1, dpr: 1, zoomingOut: true }} />);
+    act(() => flowStore.setState({ transform: [0, 0, 0.5] }));
+    await settled();
+    await act(async () => calls[1].resolve());
+    // 被中止 job 的结果不通知，仍显示旧图而不是新档位
+    expect(screen.getByRole("img", { name: "lod" }).getAttribute("src")).toBe(low);
+    scheduler.clear();
   });
 });

@@ -11,9 +11,7 @@ const { reveal, removeEdges, sourceNode } = vi.hoisted(() => ({
   sourceNode: { id: "source" },
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock("react-i18next", () => import("@/__tests__/test-utils/react-i18next-mock"));
 vi.mock("@/features/canvas/shared/reveal-node", () => ({
   useRevealCanvasNode: () => reveal,
 }));

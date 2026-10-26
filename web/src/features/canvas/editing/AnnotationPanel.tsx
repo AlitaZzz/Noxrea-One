@@ -25,8 +25,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
+import { MediaAccessImage } from "@/features/media/components/MediaAccessImage";
+import { MediaAccessOverlay } from "@/features/media/components/MediaAccessOverlay";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
-
 
 interface Props {
   src: string;
@@ -51,6 +53,9 @@ interface TextAnnotation {
 export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
+  // 逻辑 URL → 最终访问地址；解析完成前不加载画布（避免请求未授权路径）。
+  // 描述失败给面板级重试入口；元素加载失败由 img.onError 走 `retrySigned`（规则 3.6）
+  const { url: accessUrl, failed: accessFailed, refresh: refreshAccess, retrySigned, reloadToken } = useFileAccessUrl(src);
 
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,13 +110,14 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
 
   // Load image natural dimensions
   useEffect(() => {
+    if (!accessUrl) return;
     let cancelled = false;
-    loadMediaDimensions(src, false).then(({ w, h }) => {
+    loadMediaDimensions(accessUrl, false).then(({ w, h }) => {
       if (cancelled || w === 0) return;
       setNaturalSize({ w, h });
     });
     return () => { cancelled = true; };
-  }, [src]);
+  }, [accessUrl]);
 
   // Initialize canvas when image loads
   const handleImgLoad = useCallback(() => {
@@ -552,16 +558,20 @@ export default function AnnotationPanel({ src, sourceId, onClose }: Props) {
         className="nodrag absolute inset-0 z-30 pointer-events-auto rounded-lg overflow-hidden"
         style={{ cursor: mode === "text" ? "cell" : "crosshair" }}
       >
-        <img
+        {/* 重新签出的地址可能与旧地址相同：以 reloadToken 重挂元素强制重新加载（规则 3.6） */}
+        <MediaAccessImage
+          url={accessUrl}
+          reloadToken={reloadToken}
+          onRetryAccess={() => { void retrySigned(); }}
           ref={imgRef}
-          src={src}
           alt=""
-          crossOrigin="anonymous"
-          draggable={false}
           onLoad={handleImgLoad}
           className="absolute inset-0 w-full h-full"
           style={{ pointerEvents: "none", userSelect: "none" }}
         />
+
+        {/* 描述失败：没有底图就无从标注，给出重试入口（元素过期重试由 onError 处理） */}
+        {accessFailed && <MediaAccessOverlay onRetry={() => { void refreshAccess(); }} />}
         <canvas
           ref={canvasRef}
           onPointerDown={handlePointerDown}

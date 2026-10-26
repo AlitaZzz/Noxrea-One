@@ -26,7 +26,8 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
-import { fileRefUrl } from "@/lib/file-url";
+import { MediaAccessError } from "@/features/media/components/MediaAccessError";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import useEscapeToClose from "./use-escape-to-close";
@@ -87,6 +88,9 @@ interface Props {
 export default function LightingPanel({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
   const { notification } = useAppFeedback();
+  // 逻辑 URL → 最终访问地址；解析完成前 3D 预览保持占位
+  // 描述失败时 3D 预览拿不到贴图，只会在灰色底上永远空转：给出可重试的失败态
+  const { url: accessUrl, failed: accessFailed, refresh: refreshAccess } = useFileAccessUrl(src);
 
   const [state, setState] = useState<LightingState>(DEFAULT_STATE);
   const [viewMode, setViewMode] = useState<OrbitViewMode>("perspective");
@@ -203,16 +207,20 @@ export default function LightingPanel({ src, nodeId, onClose }: Props) {
             </ToggleGroupItem>
           </ToggleGroup>
           <div className="min-h-0 flex-1">
-            <OrbitScene3D
-              variant="light"
-              src={fileRefUrl(src)}
-              color={state.color}
-              intensity={state.intensity}
-              azimuth={state.azimuth}
-              elevation={state.elevation}
-              mode={viewMode}
-              onDrag={handleSceneDrag}
-            />
+            {accessFailed ? (
+              <MediaAccessError onRetry={() => { void refreshAccess(); }} />
+            ) : (
+              <OrbitScene3D
+                variant="light"
+                src={accessUrl}
+                color={state.color}
+                intensity={state.intensity}
+                azimuth={state.azimuth}
+                elevation={state.elevation}
+                mode={viewMode}
+                onDrag={handleSceneDrag}
+              />
+            )}
           </div>
         </div>
 

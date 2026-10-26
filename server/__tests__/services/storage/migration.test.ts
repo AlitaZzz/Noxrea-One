@@ -131,7 +131,7 @@ describe("migration 核心（规则 11）", () => {
     const c2 = Buffer.from("second object");
     const k1 = contentKey(3, c1);
     const k2 = contentKey(3, c2);
-    const dk = "_cache/320/" + sha256hex(Buffer.from("x")) + ".webp";
+    const dk = "_cache/v2/320/" + sha256hex(Buffer.from("x")) + ".webp";
     const dc = Buffer.from("derived");
     await putFile(k1, c1);
     await putFile(k2, c2);
@@ -207,7 +207,7 @@ describe("migration 核心（规则 11）", () => {
   it("dry-run：不写远端不写日志，仅盘点计划搬迁数", async () => {
     const c1 = Buffer.from("hello world");
     const k1 = contentKey(3, c1);
-    const dk = "_cache/320/x.webp";
+    const dk = "_cache/v2/320/x.webp";
     await putFile(k1, c1);
     await putFile(dk, Buffer.from("derived"));
     const remote = fakeLocalToS3();
@@ -225,7 +225,7 @@ describe("migration 核心（规则 11）", () => {
     const c1 = Buffer.from("hello world");
     const k1 = contentKey(3, c1);
     const k2 = contentKey(3, Buffer.from("second"));
-    const dk = "_cache/320/y.webp";
+    const dk = "_cache/v2/320/y.webp";
     await putFile(dk, Buffer.from("derived"));
     const remote = fakeLocalToS3();
     const result = await runLocalToS3(
@@ -244,7 +244,7 @@ describe("migration 核心（规则 11）", () => {
   it("断点续跑：日志命中全部跳过，重跑零上传（幂等）", async () => {
     const c1 = Buffer.from("hello world");
     const k1 = contentKey(3, c1);
-    const dk = "_cache/320/x.webp";
+    const dk = "_cache/v2/320/x.webp";
     await putFile(k1, c1);
     await putFile(dk, Buffer.from("derived"));
     const first = fakeLocalToS3();
@@ -285,7 +285,7 @@ describe("migration 核心（规则 11）", () => {
   it("local→s3 派生 ETag 不符：记清单跳过，不中止不失败", async () => {
     const c1 = Buffer.from("hello world");
     const k1 = contentKey(3, c1);
-    const dk = "_cache/320/x.webp";
+    const dk = "_cache/v2/320/x.webp";
     await putFile(k1, c1);
     await putFile(dk, Buffer.from("derived"));
     const remote = fakeLocalToS3({ [dk]: md5hex(Buffer.from("mismatch")) });
@@ -302,7 +302,7 @@ describe("migration 核心（规则 11）", () => {
   it("s3→local 全量拉回：SHA256 与 key 校验、派生按体积、staging/未知列入 skipped", async () => {
     const c1 = Buffer.from("pulled back");
     const k1 = contentKey(5, c1);
-    const dk = "_cache/64/x.webp";
+    const dk = "_cache/v2/64/x.webp";
     const dc = Buffer.from("dstat");
     const blobs = new Map([[k1, c1], [dk, dc]]);
     const { transport, download } = fakeS3ToLocal(
@@ -384,7 +384,7 @@ describe("migration 核心（规则 11）", () => {
   it("s3→local 派生下载失败：记清单跳过，不中止", async () => {
     const c1 = Buffer.from("content");
     const k1 = contentKey(5, c1);
-    const dk = "_cache/64/x.webp";
+    const dk = "_cache/v2/64/x.webp";
     const blobs = new Map([[k1, c1]]);
     const { transport } = fakeS3ToLocal([{ key: k1, size: c1.length }], [{ key: dk, size: 6 }], blobs);
     const result = await runS3ToLocal(transport, localFs, opts({ direction: "s3-to-local" }));
@@ -396,7 +396,7 @@ describe("migration 核心（规则 11）", () => {
   it("local→s3 派生降级且远端体积不可查：记失败跳过，不误判为通过", async () => {
     const c1 = Buffer.from("content");
     const k1 = contentKey(6, c1);
-    const dk = "_cache/320/x.webp";
+    const dk = "_cache/v2/320/x.webp";
     await putFile(k1, c1);
     await putFile(dk, Buffer.from("derived"));
     const remote = fakeLocalToS3({ [dk]: "d41d8cd98f00b204e9800998ecf8427e-1" });
@@ -443,7 +443,7 @@ describe("migration 核心（规则 11）", () => {
   it("classifyObjectKey：内容/派生/staging/未知四类命名空间", () => {
     const hash = sha256hex(Buffer.from("k"));
     expect(classifyObjectKey(`3/${hash.slice(0, 2)}/${hash}.png`)).toBe("content");
-    expect(classifyObjectKey("_cache/320/abc.webp")).toBe("derived");
+    expect(classifyObjectKey("_cache/v2/320/abc.webp")).toBe("derived");
     expect(classifyObjectKey("_posters/v1/abc.webp")).toBe("derived");
     expect(classifyObjectKey("_sprite/abc.jpg")).toBe("derived");
     expect(classifyObjectKey("_proxy/abc.mp4")).toBe("derived");

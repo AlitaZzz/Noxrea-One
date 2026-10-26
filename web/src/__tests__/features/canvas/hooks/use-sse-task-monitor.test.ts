@@ -37,10 +37,10 @@ vi.mock("@/features/project/save-manager", () => ({
 }));
 
 import type { TaskStatusEvent } from "@/features/canvas/api/generation-api";
+import { useSseTaskMonitor } from "@/features/canvas/hooks/use-sse-task-monitor";
 import { registerPreGenSnapshot } from "@/features/canvas/panels/use-generation-submit";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useSseTaskMonitor } from "@/hooks/use-sse-task-monitor";
 
 const encoder = new TextEncoder();
 

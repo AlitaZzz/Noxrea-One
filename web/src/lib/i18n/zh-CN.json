@@ -18,6 +18,7 @@
     "layout": "布局",
     "replace": "替换",
     "download": "下载",
+    "downloadFailed": "下载失败，请稍后重试",
     "upload": "上传",
     "expand": "展开",
     "collapse": "收起",
@@ -61,6 +62,7 @@
   "media": {
     "loadFailed": "视频加载失败",
     "previewLoadFailed": "预览加载失败",
+    "previewPlayFailed": "试听失败，请稍后重试",
     "playFailed": "视频无法播放",
     "retry": "重试",
     "retryIn": "约 {{seconds}} 秒后可重试"
@@ -164,6 +166,7 @@
     "flipHSuffix": " (水平翻转)",
     "flipVSuffix": " (垂直翻转)",
     "gridSplit": "宫格切分",
+    "gridSplitFailed": "宫格切分失败，请重试",
     "gridSplitSuffix": " (宫格切分 {{index}})",
     "gridCustom": "自定义",
     "gridSelect": "选择行列数",
@@ -975,7 +978,9 @@
     "files": {
       "invalid_path": "文件路径非法",
       "access_denied": "无权访问该文件",
-      "file_not_found": "文件不存在"
+      "file_not_found": "文件不存在",
+      "signing_failed": "文件访问地址签发失败",
+      "read_failed": "文件读取失败，请稍后重试"
     },
     "media": {
       "source_not_found": "源文件不存在或已被删除",

@@ -120,7 +120,7 @@ code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟�
 第五轮审查与修复（2026-10-17，ref* 值域收口 + 审查处置）：
 - 值域追查收口（第二轮/第四轮挂起项终结）：生成面板 ref*（task.ts）全部派生自上游媒体节点 data.src——上传成功写 key、外部 URL 为合法值域、blob: 预览存于节点 upload.previewUrl 不进 src、上传失败态 src 为空被 filter(Boolean) 丢弃、data: 无任何写入 src 的路径；agent streamAgent 唯一调用方不传 refImages。值域 = 存储 key 或外部 http(s) URL，与资产 fileKey 完全一致。
 - 值域校验单点抽取：新增 `server/schemas/file-ref.ts`（fileRefSchema），asset.ts 本地定义移入；taskCreateSchema refImages/refAudios/refVideos 与 agent streamSchema.refImages 同步收紧为 `z.array(fileRefSchema)`（拒绝 data:/blob:/裸路径）；新增 `server/__tests__/schemas/task.test.ts`。
-- download 参数拼接复用 `withQueryParams`（导出单点）：消灭手拼 `?/&` 逻辑（该形态遇 hash 片段会把参数落进 fragment）。
+- download 参数拼接复用查询串构造单点（现存导出为 `buildManagedFileQueryUrl`，`shared/url.ts`）：消灭手拼 `?/&` 逻辑（该形态遇 hash 片段会把参数落进 fragment）。
 - 注释补漏：prisma schema refAudios/refVideos 注释「URL 数组」→「key 数组」（第四轮仅订正了 refImages）。
 - 审查记录：迁移脚本 director 改名段备份时序核实（改名前有专项备份，key 重写段原始值在首次备份中，两级备份链完整）；crud deleteFolder 未复用 deleteAssetItemsTx 属可接受语义差异（目录删除按 readCounters 重算，无逐目录递减需求）；watcher resultUrls 字段名沿用为已定决策（result_urls 列名不动）。
 - 第五轮验证：typecheck（server+web）、lint:server、lint:web、test:server（672 过/15 skip）、web test 串行通过。

@@ -42,10 +42,8 @@ export interface AssetItem {
   prompt: string;
   folderId?: string;
   scope: AssetScope;
-  /** 来源引用：存储 key 或外部 URL（与画布节点 src 同值域） */
+  /** 来源引用：存储 key 或外部 URL（与画布节点 src 同值域）；读地址由解析层按需换取 */
   fileKey?: string;
-  /** 服务端派生的访问 URL（托管 key → /api/files/{key}，外部 URL 原样）；展示用 */
-  url?: string | null;
   sourceType?: string;
 }
 

@@ -36,6 +36,7 @@ import { runMediaUpload, spawnPromptDerivedNode, useNodeUpload } from "@/feature
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
 import { EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
 import { fileRefUrl } from "@/lib/file-url";
+import { loadMediaImage } from "@/lib/load-media-image";
 import { downloadManagedFile } from "@/lib/utils/download";
 import { formatBytes } from "@/lib/utils/format";
 import { canvasToBlob, computeNodeSize } from "@/lib/utils/image-utils";
@@ -114,9 +115,15 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   // 多图模式约定（写侧保证）：src 必为 multiResultKeys 的成员；
   // 撤销会把整个 data 快照替换，故无需额外同步。
   const src = data.src || "";
-  // 浏览器消费（编辑面板加载图片）用的访问 URL；key 派生，外部 URL 原样
+  // 浏览器消费（canvas 烘焙 / 编辑面板）用的逻辑 URL；key 派生，外部 URL 原样。
+  // 需要读取像素的命令式链路（旋转/翻转/切图）再经访问解析换成最终地址。
   const mediaUrl = fileRefUrl(src);
   const mainAspect = mediaAspect(data.naturalWidth, data.naturalHeight);
+  // 分辨率 LOD（specs/canvas-media-resolution-lod.md）：历史坏记录修复路径依赖
+  // img.naturalWidth 回写节点尺寸，必须加载原图，因此该标记存在时关闭 LOD
+  const lodEnabled = !data.pendingNaturalSize;
+  // 自然宽度上限：已知时避免请求比源图更大的派生档位
+  const naturalWidth = data.naturalWidth > 0 ? data.naturalWidth : undefined;
 
   // 多图结果模式：存在 multiResultKeys 且 >=2 张时，节点以堆叠卡片/展开网格展示
   const isMulti = Array.isArray(data.multiResultKeys) && data.multiResultKeys.length >= 2;
@@ -134,12 +141,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   });
 
   const handleDownload = useCallback(() => {
-    downloadManagedFile(src, data.label);
+    void downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
   /** 多图模式：下载指定结果图（引用值为 key，派生下载 URL） */
   const handleDownloadUrl = useCallback((ref: string) => {
-    downloadManagedFile(ref, data.label);
+    void downloadManagedFile(ref, data.label);
   }, [data.label]);
 
   // 预览浮层：图片列表优先用多图结果，单图时退化为 [src]
@@ -207,14 +214,8 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     try {
-      // 1. 加载原图（key → 派生 URL，供 canvas 跨域烘焙）
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const i = new window.Image();
-        i.crossOrigin = "anonymous";
-        i.onload = () => resolve(i);
-        i.onerror = reject;
-        i.src = mediaUrl;
-      });
+      // 1. 加载原图：动作发生时解析地址（长驻节点签名可能已过期），元素失败再刷新一次
+      const img = await loadMediaImage(src);
 
       // 2. Canvas 烘焙
       const isRot90 = op === "rot90";
@@ -239,7 +240,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
       // 本链路不占用 taskBinding，无需回滚生成态；仅记录日志
       console.error("transform failed:", e);
     }
-  }, [id, src, mediaUrl, t]);
+  }, [id, src, t]);
 
   const handleSaveToAssets = useCallback(async () => {
     if (!src) return;
@@ -409,7 +410,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <CanvasImage nodeId={id} src={ref} placement={placement} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} onLoad={isMain ? handleMainImgLoad : undefined} />
+                        <CanvasImage nodeId={id} src={ref} placement={placement} alt={`${i + 1}`} className="absolute inset-0 w-full h-full" draggable={false} lod={lodEnabled} naturalWidth={isMain ? naturalWidth : undefined} onLoad={isMain ? handleMainImgLoad : undefined} />
                         {/* 操作按钮：与单图素材/多图未展开的右上角徽章统一 top-2（距顶 8px） */}
                         <div className="absolute top-2 right-2 flex gap-1 z-10 nodrag">
                           <Tooltip><TooltipTrigger asChild>
@@ -473,7 +474,7 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                           outline: "1px solid color-mix(in srgb, var(--foreground) 15%, transparent)",
                         }}
                       >
-                        <CanvasImage nodeId={id} src={ref} placement={placement} alt="" className="absolute inset-0 w-full h-full" draggable={false} />
+                        <CanvasImage nodeId={id} src={ref} placement={placement} alt="" className="absolute inset-0 w-full h-full" draggable={false} lod={lodEnabled} />
                       </div>
                     );
                   })}
@@ -489,13 +490,13 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
                       zIndex: 0,
                     }}
                   >
-                    <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+                    <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} lod={lodEnabled} naturalWidth={naturalWidth} onLoad={handleMainImgLoad} />
                   </div>
                 </div>
               )
             )
           : hasImage ? (
-            <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} onLoad={handleMainImgLoad} />
+            <CanvasImage nodeId={id} src={src} alt={data.label || ""} aspect={mainAspect} className="absolute inset-0 w-full h-full object-contain" draggable={false} lod={lodEnabled} naturalWidth={naturalWidth} onLoad={handleMainImgLoad} />
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
               <PictureOutlined className="text-5xl" />

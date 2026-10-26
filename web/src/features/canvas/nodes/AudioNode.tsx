@@ -88,7 +88,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const handleUpload = useNodeUpload(id, { accept: "audio/*" });
 
   const handleDownload = useCallback(() => {
-    downloadManagedFile(src, data.label);
+    void downloadManagedFile(src, data.label);
   }, [src, data.label]);
 
   /** 片段截取：优先走客户端管线（纯重封装，零解码，specs/client-video-editing.md），

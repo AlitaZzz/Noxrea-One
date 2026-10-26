@@ -27,8 +27,10 @@ import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { MediaAccessError } from "@/features/media/components/MediaAccessError";
 import { DEFAULT_NODE_COLOR, SEEK_MARGIN_S } from "@/lib/constants";
-import { fileRefUrl } from "@/lib/file-url";
+import { credentialsForDelivery } from "@/lib/file-access";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
@@ -54,8 +56,25 @@ interface AudioClipStripPanelProps {
 
 export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: AudioClipStripPanelProps) {
   const { t } = useTranslation();
-  // 持久化值域是存储 key，wavesurfer 不做 key 识别：交给它之前必须派生为访问 URL
-  const audioUrl = fileRefUrl(audioRef);
+  // 持久化值域是存储 key：wavesurfer 只接受最终访问地址，交给它之前先解析。
+  // 字节凭据同样由解析层的分发形态单点给出（signed 跨域 → omit，stream 同源 → include），
+  // 与节点内波形同一规则，不依赖浏览器 fetch 默认值
+  const {
+    url: resolvedAudioUrl,
+    delivery,
+    failed: accessFailed,
+    refresh: refreshAccess,
+    retrySigned,
+    reloadToken,
+  } = useFileAccessUrl(audioRef);
+  const credentials = credentialsForDelivery(delivery);
+  // retrySigned 的身份随解析状态变化；wavesurfer 实例只在地址/令牌变化时重建，
+  // 用 ref 取最新值，避免把实例生命周期绑到回调身份上
+  const retrySignedRef = useRef(retrySigned);
+  useEffect(() => {
+    retrySignedRef.current = retrySigned;
+  }, [retrySigned]);
+  const audioUrl = resolvedAudioUrl ?? "";
   // 截取接口只接受存储 key；外部 URL 可试听但不提供编辑
   const audioKey = storageKeyOf(audioRef);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -114,7 +133,11 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
 
   // 初始化面板自己的 wavesurfer（样式选项与节点内波形一致）
   useEffect(() => {
-    if (!containerRef.current) return;
+    // 访问地址未解析完成前不创建实例（url 为空会请求页面自身）
+    if (!containerRef.current || !audioUrl) return;
+    // 换地址 / 规则 3.6 重试重建实例：旧实例的失败与就绪状态都属于旧地址
+    setFailed(false);
+    setReady(false);
 
     const ws = WaveSurfer.create({
       container: containerRef.current,
@@ -130,6 +153,7 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
       barRadius: 2,
       url: audioUrl,
       interact: false,
+      ...(credentials ? { fetchParams: { credentials } } : {}),
     });
     wsRef.current = ws;
     ws.on("ready", () => {
@@ -149,7 +173,12 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
         resume();
       }
     });
-    ws.on("error", () => setFailed(true));
+    ws.on("error", () => {
+      setFailed(true);
+      // 规则 3.6：地址类失败（过期 / 403）换一次签名再加载；闩锁保证同一源只重试一次，
+      // 解码等与地址无关的失败在重试后仍会落回 unavailable
+      void retrySignedRef.current();
+    });
     // 选区出点在文件末尾时的循环兜底：媒体自然结束（ended 置位）先于 rAF
     // 观察到 cur >= oT——isPlaying() 在 ended 瞬间已为 false，循环 tick 永远
     // 看不到越界。必须监听 finish 把播放头拉回入点续播，否则试听播到文件尾
@@ -176,8 +205,8 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
       wsRef.current = null;
     };
     // resume / enforceLoop 引用稳定（play thunk 为 useCallback []），
-    // 进 deps 不引发重建
-  }, [audioUrl, resume, enforceLoop]);
+    // 进 deps 不引发重建；reloadToken 用于「重新签出的地址与旧地址相同」时也重建实例
+  }, [audioUrl, credentials, reloadToken, resume, enforceLoop]);
 
   const operable = ready && !failed && duration > 0;
   const inTime = clipRange ? clipRange.inR * duration : 0;
@@ -489,7 +518,12 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
             blocked 而面板又变为不可操作时（如加载失败）按不可用文案显示 */}
         {(!operable || playbackBlocked) && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center text-xs text-white/60">
-            {operable && playbackBlocked
+            {accessFailed ? (
+              // 描述失败：音频地址永远拿不到，停在「加载中」会看起来像卡死
+              <div className="pointer-events-auto">
+                <MediaAccessError compact onRetry={() => { void refreshAccess(); }} />
+              </div>
+            ) : operable && playbackBlocked
               ? t("clip.autoplayBlocked")
               : failed || (ready && duration <= 0)
                 ? t("clip.unavailable")

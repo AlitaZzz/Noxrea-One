@@ -9,12 +9,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { jsonResponse, makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 
-const { fetchVideoProxy, readMediaError } = vi.hoisted(() => ({
+const { fetchVideoProxy, readMediaError, resolveMediaUrlString } = vi.hoisted(() => ({
   fetchVideoProxy: vi.fn(),
   readMediaError: vi.fn(),
+  // 默认恒等：未显式设定时解析层把逻辑 URL 原样返回（stream 语义）
+  resolveMediaUrlString: vi.fn((url: string) => Promise.resolve(url)),
 }));
 
 vi.mock("@/features/canvas/api/file-api", () => ({ fetchVideoProxy, readMediaError }));
+vi.mock("@/lib/file-access", () => ({ resolveMediaUrlString }));
 
 import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
 
@@ -26,6 +29,8 @@ describe("useVideoProxy", () => {
     // reset 而非 clear：清掉 Once 队列，避免未消费的替身跨用例泄漏
     fetchVideoProxy.mockReset();
     readMediaError.mockReset();
+    resolveMediaUrlString.mockReset();
+    resolveMediaUrlString.mockImplementation((url: string) => Promise.resolve(url));
   });
   afterEach(cleanup);
 
@@ -73,6 +78,30 @@ describe("useVideoProxy", () => {
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.url).toBe("http://test/proxy-2.mp4");
     expect(fetchVideoProxy).toHaveBeenCalledTimes(2);
+  });
+
+  it("代理地址经访问解析层换成最终地址后才暴露（S3 签名直连不在元素上使用逻辑 URL）", async () => {
+    fetchVideoProxy.mockResolvedValue(
+      jsonResponse({ data: { url: "/api/files/_proxy/1/ab/x_w480v3.mp4", duration: 8 } }),
+    );
+    resolveMediaUrlString.mockResolvedValue("https://bucket.example/x_w480v3.mp4?X-Amz-Signature=abc");
+
+    const { result } = renderHook(() => useVideoProxy(KEY));
+
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(resolveMediaUrlString).toHaveBeenCalledWith("/api/files/_proxy/1/ab/x_w480v3.mp4");
+    expect(result.current.url).toBe("https://bucket.example/x_w480v3.mp4?X-Amz-Signature=abc");
+  });
+
+  it("代理地址解析失败（含一次重新描述）→ failed 可重试，不把逻辑 URL 交给元素", async () => {
+    fetchVideoProxy.mockResolvedValue(jsonResponse({ data: { url: "/api/files/_proxy/1/ab/x_w480v3.mp4" } }));
+    resolveMediaUrlString.mockRejectedValue(new Error("signing unavailable"));
+
+    const { result } = renderHook(() => useVideoProxy(KEY));
+
+    await waitFor(() => expect(result.current.status).toBe("failed"));
+    expect(result.current.url).toBeNull();
+    expect(result.current.error?.code).toBe("network_error");
   });
 
   it("换源后旧结果立即失效；markFailed 把已就绪代理标为失败", async () => {

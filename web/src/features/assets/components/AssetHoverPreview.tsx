@@ -6,11 +6,11 @@
  */
 "use client";
 
-import type { ReactElement } from "react";
+import { type ReactElement, useState } from "react";
 
-import { HoverCard, HoverCardContent, HoverCardMediaContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { AssetItem } from "@/features/assets/types";
-import { managedFileUrl, withManagedFileWidth } from "@/lib/file-url";
+import { ResolvedHoverMedia } from "@/features/media/components/ResolvedHoverMedia";
 
 const PREVIEW_MAX_WIDTH = 400;
 const HOVER_OPEN_DELAY = 600;
@@ -37,14 +37,26 @@ export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
   const isVideo = asset.mediaType === "video";
   const isImage = asset.mediaType === "image";
   const isText = asset.mediaType === "text";
-  const bigUrl = withManagedFileWidth(fileKey, PREVIEW_MAX_WIDTH);
   const hasText = typeof asset.plainText === "string" && asset.plainText.trim().length > 0;
   const hasPreviewContent = isText ? hasText : (isImage || isVideo) && Boolean(fileKey);
+  // 受控 open：访问地址的解析推迟到浮层真正打开（ResolvedHoverMedia），
+  // 网格里每个未被悬停的卡片都不发描述请求
+  const [open, setOpen] = useState(false);
 
-  if (!enabled || !hasPreviewContent) return children;
+  if (!enabled || !hasPreviewContent) {
+    // 停用 / 无预览内容期间不渲染浮层；重新启用时必须从关闭态开始，
+    // 否则会直接弹出上一次悬停留下的打开态
+    if (open) setOpen(false);
+    return children;
+  }
 
   return (
-    <HoverCard openDelay={HOVER_OPEN_DELAY} closeDelay={HOVER_CLOSE_DELAY}>
+    <HoverCard
+      open={open}
+      onOpenChange={setOpen}
+      openDelay={HOVER_OPEN_DELAY}
+      closeDelay={HOVER_CLOSE_DELAY}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       {isText ? (
         <HoverCardContent
@@ -59,9 +71,12 @@ export function AssetHoverPreview({ asset, enabled = true, children }: Props) {
           </div>
         </HoverCardContent>
       ) : (
-        <HoverCardMediaContent
+        <ResolvedHoverMedia
+          value={fileKey!}
+          // 视频用原图（首帧由浏览器解码）、图片用缩放档位
+          width={isVideo ? undefined : PREVIEW_MAX_WIDTH}
+          open={open}
           mediaType={isVideo ? "video" : "image"}
-          src={(isVideo ? managedFileUrl(fileKey) : bigUrl)!}
           alt={asset.name}
           side="right"
           align="start"

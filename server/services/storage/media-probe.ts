@@ -8,7 +8,7 @@ import { mediaSourceInput, resolveMediaSource, type MediaSource } from "./media-
 import { isVideoExt } from "./formats";
 import { extOfName } from "./mime";
 import { probeFfmpeg, probeFfmpegDecode } from "./ffmpeg";
-import { runSingleFlight } from "./media-singleflight";
+import { runSingleFlight } from "@server/core/single-flight";
 import { MediaPoolBusyError } from "./media-pool";
 import { logEvent } from "@server/core/logger/utils";
 import { logger } from "@server/core/logger";

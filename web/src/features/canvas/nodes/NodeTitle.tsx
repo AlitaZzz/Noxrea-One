@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EditOutlined } from "@/components/ui/AppIcon";
@@ -28,6 +28,57 @@ let measureCtx: CanvasRenderingContext2D | null = null;
  * CSS 的 direction:rtl 技巧会把中文按 bidi 规则反向重排，不可用，
  * 故用 canvas 量宽 + 交替回收找可行的头/尾保留长度。
  */
+function clipText(el: HTMLElement, text: string, avail: number): string {
+  measureCtx ??= document.createElement("canvas").getContext("2d");
+  if (!measureCtx || avail <= 0) return text;
+  const cs = getComputedStyle(el);
+  measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const ellipsis = "…";
+  if (measureCtx.measureText(text).width <= avail) return text;
+  // 极窄：连省略号都放不下，只显示省略号
+  if (measureCtx.measureText(ellipsis).width > avail) return ellipsis;
+  const widthOf = (s: string) => measureCtx!.measureText(s).width;
+  const availText = avail - widthOf(ellipsis);
+  // 头尾按 2:1 字符预算起步（头部是身份，优先多留），超宽时交替回收保持比例
+  let headLen = Math.min(Math.floor((text.length * 2) / 3), text.length - 1);
+  let tailLen = Math.min(text.length - headLen, text.length - 1);
+  const fits = () =>
+    widthOf(text.slice(0, headLen)) + widthOf(text.slice(text.length - tailLen)) <= availText;
+  while (!fits() && (headLen > 0 || tailLen > 0)) {
+    if (headLen >= tailLen && headLen > 0) headLen--;
+    else if (tailLen > 0) tailLen--;
+  }
+  return text.slice(0, headLen) + ellipsis + (tailLen > 0 ? text.slice(text.length - tailLen) : "");
+}
+
+/**
+ * 共享尺寸观察者：每个标题各建一个 ResizeObserver 会在 90 节点画布挂载时
+ * 制造 90 个观察者，并在 layout effect 里同步量宽 —— 后者发生在 React 提交期，
+ * 每读一次 clientWidth 都把刚提交的 DOM 重新布局一遍。
+ * 改为单观察者分发：首个回调即初始测量，此时布局已完成，读尺寸不再触发提交期重排。
+ */
+const clipCallbacks = new Map<Element, (avail: number) => void>();
+let clipObserver: ResizeObserver | null = null;
+
+function observeClip(el: Element, cb: (avail: number) => void): () => void {
+  clipObserver ??= new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      // contentRect 即文本可用宽度（不含 padding），无需再读计算样式
+      clipCallbacks.get(entry.target)?.(entry.contentRect.width);
+    }
+  });
+  clipCallbacks.set(el, cb);
+  clipObserver.observe(el);
+  return () => {
+    clipCallbacks.delete(el);
+    clipObserver?.unobserve(el);
+    if (clipCallbacks.size === 0) {
+      clipObserver?.disconnect();
+      clipObserver = null;
+    }
+  };
+}
+
 function MidTruncate({
   children,
   className,
@@ -39,43 +90,24 @@ function MidTruncate({
 }) {
   const text = children;
   const ref = useRef<HTMLSpanElement>(null);
-  const [display, setDisplay] = useState(text);
+  // 记录截断结果及其对应的原文；原文变化时先显示原文（overflow 会裁切），
+  // 等尺寸回调写入新结果，避免在渲染期读旧文案的截断结果。
+  const [clipped, setClipped] = useState<{ text: string; display: string } | null>(null);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    /** 量宽 + 中间截断：返回应显示的文案（不超宽时原样返回） */
-    const clipText = (avail: number): string => {
-      const cs = getComputedStyle(el);
-      measureCtx ??= document.createElement("canvas").getContext("2d");
-      if (!measureCtx || avail <= 0) return text;
-      measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
-      const ellipsis = "…";
-      if (measureCtx.measureText(text).width <= avail) return text;
-      // 极窄：连省略号都放不下，只显示省略号
-      if (measureCtx.measureText(ellipsis).width > avail) return ellipsis;
-      const widthOf = (s: string) => measureCtx!.measureText(s).width;
-      const availText = avail - widthOf(ellipsis);
-      // 头尾按 2:1 字符预算起步（头部是身份，优先多留），超宽时交替回收保持比例
-      let headLen = Math.min(Math.floor((text.length * 2) / 3), text.length - 1);
-      let tailLen = Math.min(text.length - headLen, text.length - 1);
-      const fits = () =>
-        widthOf(text.slice(0, headLen)) + widthOf(text.slice(text.length - tailLen)) <= availText;
-      while (!fits() && (headLen > 0 || tailLen > 0)) {
-        if (headLen >= tailLen && headLen > 0) headLen--;
-        else if (tailLen > 0) tailLen--;
-      }
-      return text.slice(0, headLen) + ellipsis + (tailLen > 0 ? text.slice(text.length - tailLen) : "");
-    };
-    // clientWidth 含左右内边距，量的是可用文本宽度
-    const pad = parseFloat(getComputedStyle(el).paddingLeft) + parseFloat(getComputedStyle(el).paddingRight);
-    const apply = () => setDisplay(clipText(el.clientWidth - pad));
-    apply();
-    // 节点宽度可手动拖拽调整，容器尺寸变化时重算
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => ro.disconnect();
+    return observeClip(el, (avail) => {
+      const next = clipText(el, text, avail);
+      setClipped((prev) => {
+        // 不超宽：显示原文即是目标状态，无需额外渲染
+        if (next === text) return prev?.text === text ? null : prev;
+        return prev?.text === text && prev.display === next ? prev : { text, display: next };
+      });
+    });
   }, [text]);
+
+  const display = clipped?.text === text ? clipped.display : text;
 
   return (
     <span ref={ref} className={className} style={{ ...style, overflow: "hidden", whiteSpace: "nowrap" }}>

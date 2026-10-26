@@ -457,7 +457,9 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   border: 1.5px solid var(--handle-color);
   background: var(--card);
   transition: transform 80ms ease-out, filter 0.15s ease;
-  will-change: transform;
+  /* 不加 will-change: transform——它会常驻给每个轨道圆点（连同父 Handle）开独立合成层，
+     低缩放全节点可见时每帧平移都要重算全部轨道层；hover 跟随期间 transform 过渡
+     浏览器会自动提升合成层，无需常驻（同 .node-tilt 的约定） */
 }
 /* 悬停轨道时圆点提亮（与参考实现的 brightness 反馈一致） */
 .connection-rail:hover .connection-rail-dot { filter: brightness(1.25); }

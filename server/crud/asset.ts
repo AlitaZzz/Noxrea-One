@@ -7,7 +7,7 @@ import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/
 import { prisma } from "@server/core/database/client";
 import { ASSET_FOLDERS_UNCATEGORIZED_KEY } from "@server/core/database/constraint-names";
 import { isUniqueConstraintViolation } from "@server/core/database/errors";
-import { hashFromStorageKey, isFileRefValue, resolveFileUrl } from "@noxrea/shared/url";
+import { hashFromStorageKey, isFileRefValue } from "@noxrea/shared/url";
 import {
   replaceSourceFileRef,
   removeSourceFileRefsBatch,
@@ -167,19 +167,20 @@ async function mediaMetaMapFor(
 }
 
 /**
- * 附加媒体元数据（源文件字节数与宽高时长；无 hash 或无对应文件记录时为 0）
- * 与访问 URL：引用值经 shared 的 resolveFileUrl 统一派生（key → 托管文件访问 URL，外部 URL 透传；
- * DTO 同时携带 key 与 url）。
+ * 附加媒体元数据（源文件字节数与宽高时长；无 hash 或无对应文件记录时为 0）。
+ *
+ * 不预派生访问 URL：读路径由浏览器向描述接口换取签名直连地址（
+ * specs/storage-signed-direct-delivery.md），DTO 只携带持久化值域的 `fileKey`
+ * （与 `toPublicUser` 不再下发 `avatarUrl` 同一规则）。
  */
 function withMediaMeta<T extends { fileKey?: string | null }>(
   item: T,
   metas: Map<string, AssetMediaMeta>,
-): T & AssetMediaMeta & { url: string | null } {
+): T & AssetMediaMeta {
   const hash = item.fileKey ? hashFromStorageKey(item.fileKey) : null;
   const meta = hash ? metas.get(hash) : undefined;
   return {
     ...item,
-    url: resolveFileUrl(item.fileKey),
     size: meta?.size ?? 0,
     width: meta?.width ?? 0,
     height: meta?.height ?? 0,

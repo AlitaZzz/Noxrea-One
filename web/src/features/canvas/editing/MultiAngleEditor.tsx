@@ -22,7 +22,8 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
-import { fileRefUrl } from "@/lib/file-url";
+import { MediaAccessError } from "@/features/media/components/MediaAccessError";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";
 import useEscapeToClose from "./use-escape-to-close";
@@ -64,6 +65,9 @@ const DEFAULT_ZOOM = 1;
 export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
   const { t } = useTranslation();
   const { notification } = useAppFeedback();
+  // 逻辑 URL → 最终访问地址；解析完成前 3D 预览保持占位
+  // 描述失败时 3D 预览拿不到贴图，只会在灰色底上永远空转：给出可重试的失败态
+  const { url: accessUrl, failed: accessFailed, refresh: refreshAccess } = useFileAccessUrl(src);
 
   const [azimuth, setAzimuth] = useState(DEFAULT_AZIMUTH);
   const [elevation, setElevation] = useState(DEFAULT_ELEVATION);
@@ -171,15 +175,19 @@ export default function MultiAngleEditor({ src, nodeId, onClose }: Props) {
             ))}
           </ToggleGroup>
           <div className="min-h-0 flex-1">
-            <OrbitScene3D
-              variant="camera"
-              src={fileRefUrl(src)}
-              azimuth={azimuth}
-              elevation={elevation}
-              mode={viewMode}
-              onDrag={handleSceneDrag}
-              zoomScale={zoomScale}
-            />
+            {accessFailed ? (
+              <MediaAccessError onRetry={() => { void refreshAccess(); }} />
+            ) : (
+              <OrbitScene3D
+                variant="camera"
+                src={accessUrl}
+                azimuth={azimuth}
+                elevation={elevation}
+                mode={viewMode}
+                onDrag={handleSceneDrag}
+                zoomScale={zoomScale}
+              />
+            )}
           </div>
         </div>
 

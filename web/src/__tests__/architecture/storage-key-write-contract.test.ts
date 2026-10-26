@@ -32,7 +32,6 @@ const NODE_CREATION_CALLS = 23;
 const URL_HELPERS = new Set([
   "buildManagedFileUrl",
   "fileRefUrl",
-  "getManagedFilePathname",
   "managedFileUrl",
   "resolveFileUrl",
   "withManagedFileWidth",

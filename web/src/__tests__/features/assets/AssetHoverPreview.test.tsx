@@ -112,4 +112,31 @@ describe("AssetHoverPreview", () => {
     expect(document.querySelector("img")).toBeNull();
     expect(document.querySelector("video")).toBeNull();
   });
+
+  it("重新启用后从关闭态开始，不恢复上一次悬停留下的打开态", async () => {
+    vi.useFakeTimers();
+    const asset = { name: "portrait", mediaType: "image" as const, fileKey: "/portrait.png" };
+    const { rerender } = render(
+      <AssetHoverPreview asset={asset}>
+        <button type="button">Asset</button>
+      </AssetHoverPreview>,
+    );
+
+    fireEvent.focus(screen.getByRole("button", { name: "Asset" }));
+    await act(() => vi.advanceTimersByTimeAsync(600));
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeTruthy();
+
+    // 停用期间浮层卸载；重新启用必须是关闭态，而不是直接把上次的 open=true 带回来
+    rerender(
+      <AssetHoverPreview asset={asset} enabled={false}>
+        <button type="button">Asset</button>
+      </AssetHoverPreview>,
+    );
+    rerender(
+      <AssetHoverPreview asset={asset} enabled={true}>
+        <button type="button">Asset</button>
+      </AssetHoverPreview>,
+    );
+    expect(document.querySelector('[data-slot="hover-card-content"]')).toBeNull();
+  });
 });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AudioWaveform from "@/features/canvas/nodes/AudioWaveform";
 
@@ -13,7 +13,21 @@ const { create, player } = vi.hoisted(() => {
   return { create: vi.fn(() => player), player };
 });
 
+const { hook } = vi.hoisted(() => ({ hook: vi.fn() }));
+
 vi.mock("wavesurfer.js", () => ({ default: { create } }));
+vi.mock("@/lib/use-file-access-url", () => ({ useFileAccessUrl: hook }));
+
+beforeEach(() => {
+  hook.mockReturnValue({
+    url: "/audio.mp3",
+    delivery: undefined,
+    failed: false,
+    refresh: vi.fn(),
+    retrySigned: vi.fn(),
+    reloadToken: 0,
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -67,5 +81,45 @@ describe("AudioWaveform theme rendering", () => {
     });
     expect(player.setOptions).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AudioWaveform 访问地址失败态", () => {
+  it("元素加载失败时重新描述一次签名地址", async () => {
+    const retrySigned = vi.fn().mockResolvedValue(null);
+    hook.mockReturnValue({
+      url: "/audio.mp3",
+      delivery: "signed",
+      failed: false,
+      refresh: vi.fn(),
+      retrySigned,
+      reloadToken: 0,
+    });
+    render(<AudioWaveform url="/audio.mp3" />);
+
+    const onError = player.on.mock.calls.find((call) => call[0] === "error")?.[1] as
+      | (() => void)
+      | undefined;
+    await act(async () => { onError?.(); });
+    expect(retrySigned).toHaveBeenCalledTimes(1);
+  });
+
+  it("描述本身失败时提供手动重试入口，不再空转 retrySigned", () => {
+    const refresh = vi.fn();
+    const retrySigned = vi.fn();
+    hook.mockReturnValue({
+      url: undefined,
+      delivery: undefined,
+      failed: true,
+      refresh,
+      retrySigned,
+      reloadToken: 0,
+    });
+    render(<AudioWaveform url="/audio.mp3" />);
+
+    expect(screen.getByText("音频加载失败")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(retrySigned).not.toHaveBeenCalled();
   });
 });

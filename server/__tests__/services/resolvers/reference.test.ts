@@ -90,6 +90,17 @@ describe("resolveRefImages（规则 12）", () => {
     expect(mocks.acquire).not.toHaveBeenCalled();
   });
 
+  it("能力凭据不传签名窗口：有效期不因浏览器缓存方案放大（signed-direct-delivery 规则 4.6）", async () => {
+    const presignGet = vi.fn(async (key: string, opts?: unknown) => {
+      void opts;
+      return `https://s3.example/${key}?sig=1`;
+    });
+    mocks.backend = { presignGet };
+    await resolveRefImages([KEY]);
+    const opts = presignGet.mock.calls[0]![1] as { windowSeconds?: number } | undefined;
+    expect(opts?.windowSeconds).toBeUndefined();
+  });
+
   it("base64 分发：读本机文件转 data URL", async () => {
     resetTestSettings({ "storage.upstream_ref_delivery": "base64" });
     mocks.backend = {};

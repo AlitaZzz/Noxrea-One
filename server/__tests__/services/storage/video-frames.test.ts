@@ -154,8 +154,8 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     expect(masterRuns).toBe(1);
     // 母版 min(源宽, 3840) = 320；两个档位各自落盘（480 档不放大，实际 320 宽）
     await expect(fs.stat(path.join(temp, "_posters/v1/u1/ab/poster.webp"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(temp, "_cache/64/u1/ab/poster.webp"))).resolves.toBeTruthy();
-    await expect(fs.stat(path.join(temp, "_cache/480/u1/ab/poster.webp"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(temp, "_cache/v2/64/u1/ab/poster.webp"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(temp, "_cache/v2/480/u1/ab/poster.webp"))).resolves.toBeTruthy();
   });
 
   it("并发请求全部档位只解码一次，再次请求全部命中缓存", async () => {
@@ -173,7 +173,7 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     }).length;
     expect(masterRuns()).toBe(1);
     for (const width of widths) {
-      await expect(fs.stat(path.join(temp, `_cache/${width}/u1/ab/tiers.webp`))).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(temp, `_cache/v2/${width}/u1/ab/tiers.webp`))).resolves.toBeTruthy();
     }
 
     // 再次并发请求全部命中缓存：母版不重新解码

@@ -32,6 +32,7 @@ import { findQuotaGateViolation } from "@server/services/storage/quota";
 import { isKeyOwner } from "@server/services/storage/ownership";
 import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
+import { metrics } from "@server/core/metrics";
 import { failClientDisconnected, failCode } from "@server/core/response";
 import { failRateLimited } from "@server/http/rate-limited";
 import { checkMediaEditRateLimit } from "@server/core/ratelimit";
@@ -101,6 +102,8 @@ export function mapMediaError(
 
   // 全局媒体池过载：全局阶段 503 media.busy，个人阶段 429 media.user_busy，与处理失败严格区分
   if (err instanceof MediaPoolBusyError) {
+    // 与读管线同一个口径：过载拒绝在捕获点计数（响应只负责状态码与 Retry-After）
+    metrics.mediaBusyRejected();
     return failMediaBusy(err.pool, err.scope);
   }
 

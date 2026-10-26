@@ -33,7 +33,6 @@ function dtoToAsset(dto: AssetItemDto): AssetItem {
     folderId: String(dto.folderId),
     scope: (dto.scope as AssetScope) || "personal",
     fileKey: dto.fileKey || undefined,
-    url: dto.url ?? undefined,
     sourceType: dto.sourceType || undefined,
   };
 }

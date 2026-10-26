@@ -136,6 +136,7 @@ const eslintConfig = defineConfig([
       "src/features/auth/store.ts",
       "src/features/project/store.ts",
       "src/lib/model-store.ts",
+      "src/lib/utils/download.ts",
       "src/features/canvas/upload/upload-pipeline.ts",
     ],
     rules: {
@@ -158,7 +159,7 @@ const eslintConfig = defineConfig([
   },
   // 具体第三方 UI 实现及类型只允许在 UI 基础层出现，通知入口也属于 UI 适配。
   {
-    files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/hooks/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
+    files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",

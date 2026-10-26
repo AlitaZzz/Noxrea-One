@@ -30,7 +30,7 @@
   - `web/src/features/canvas/controls/CanvasContextMenu.tsx`（置灰与 Tooltip 提示）
   - `web/src/features/canvas/agent/hooks/use-canvas-agent-stream.ts`（回合快照即时压栈）
   - `web/src/features/canvas/panels/use-generation-submit.ts` + Image/Video/Text 三面板（预生成快照注册表收口，面板直调注册表函数）
-  - `web/src/hooks/use-sse-task-monitor.ts`（失败/取消终态弹快照）
+  - `web/src/features/canvas/hooks/use-sse-task-monitor.ts`（失败/取消终态弹快照）
   - `web/src/features/canvas/hooks/use-editable-title.ts`、`nodes/NodeToolbar.tsx`（GroupColorPicker）——离散压栈；`upload/upload-pipeline.ts`（replace 压栈时机前移 + 占位创建批量）、`upload/derived-node.ts`（派生批量 + `CanvasStoreApi` 复用 `HistoryPushOptions`）
   - 规则 4 向全部调用点的落地（同一原子操作合并/离散必入栈）：`InfiniteCanvas.tsx`（建节点+归组+接线、batchConnect、资产拖放）、`nodes/VideoNode.tsx`（分离音频/片段截取/画面裁剪）、`controls/DeletableEdge.tsx`、`shared/AudioRefCard|ImageRefCard|VideoRefCard|TextRefChip`（断开参考）、`explorer/CanvasExplorer.tsx` 与 `features/assets/components/AssetsDialog.tsx`（资产插入）、`hooks/use-add-node.ts`
   - `agent/components/AgentDrawer.tsx`（回合撤销入口走统一守卫）

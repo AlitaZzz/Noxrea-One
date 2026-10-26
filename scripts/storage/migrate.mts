@@ -24,12 +24,12 @@ import { createReadStream } from "fs";
 import fs from "fs/promises";
 import path from "path";
 import { Readable } from "stream";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@server/core/database/client";
 import { bootstrapCliCore } from "./cli-bootstrap.mts";
 import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/backend";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
-import { S3Backend, applyS3Prefix } from "@server/services/storage/backends/s3";
+import { S3Backend, applyS3Prefix, createS3Client } from "@server/services/storage/backends/s3";
 import { buildStorageKey, missingS3Settings, s3OptionsFromSettings } from "@server/services/storage/service";
 import { extOfName, mimeByExt } from "@server/services/storage/mime";
 import { writeAtomic } from "@server/services/storage/workspace";
@@ -100,11 +100,14 @@ async function main(): Promise<void> {
 
   const localBackend = new LocalStorageBackend();
   const s3 = new S3Backend(s3opts);
-  await s3.probe();
+  // 探测同时确认寻址风格（provider=generic 时由它决定），脚本的裸客户端必须跟随同一结论
+  const probe = await s3.probe();
+  const addressing = probe.capabilities.addressing;
   const root = localBackend.baseDir;
   const log = (line: string): void => console.log(line);
   log(`local root=${root}`);
-  log(`endpoint=${s3opts.endpoint} bucket=${s3opts.bucket} prefix=${s3opts.prefix || "(无)"}`);
+  log(`endpoint=${s3opts.endpoint} bucket=${s3opts.bucket} prefix=${s3opts.prefix || "(无)"} `
+    + `provider=${probe.provider} addressing=${addressing}`);
 
   // 本地侧端口：穿越守卫与原子落盘复用 local 后端 / 工作区实现
   const localFs: LocalFsPort = {
@@ -114,12 +117,8 @@ async function main(): Promise<void> {
   };
 
   // ETag 需直读 PutObject 响应：StorageBackend.put 无返回值，脚本持独立 S3Client
-  const sdkClient = new S3Client({
-    endpoint: s3opts.endpoint,
-    region: s3opts.region,
-    credentials: { accessKeyId: s3opts.accessKeyId, secretAccessKey: s3opts.secretAccessKey },
-    forcePathStyle: s3opts.pathStyle,
-  });
+  // （与后端共用 createS3Client：寻址风格跟随探测结论，校验和策略同源）
+  const sdkClient = createS3Client(s3opts, addressing);
 
   /** GetObject → Node Readable 归一化（readBack 与 download 共用同一对象读取入口） */
   const openObject = async (key: string): Promise<Readable> => {

@@ -10,6 +10,7 @@ import { createElement } from "react";
 import { useTranslation } from "react-i18next";
 
 import { WaveIcon } from "@/components/ui/AppIcon";
+import { ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
 import { type ReferenceItemAttrs, refLabelKey, refThumbnailUrl } from "./reference";
@@ -42,16 +43,23 @@ export default function MentionChip({ node }: NodeViewProps) {
           <WaveIcon style={{ width: 20, height: 20 }} />
         </span>
       ) : item.kind === "video" ? (
-        <video
-          src={refThumbnailUrl(item.src, "video")}
+        <ResolvedVideo
+          value={refThumbnailUrl(item.src, item.kind)}
           crossOrigin="anonymous"
           muted
           preload="metadata"
           playsInline
           className="mention-thumb"
+          // 地址未就绪 / 失败时保留缩略位，chip 宽度不跳变
+          fallback={<span className="mention-thumb" aria-hidden="true" />}
         />
       ) : (
-        <img src={refThumbnailUrl(item.src, "image")} alt={label} className="mention-thumb" />
+        <ResolvedImage
+          value={refThumbnailUrl(item.src, item.kind)}
+          alt={label}
+          className="mention-thumb"
+          fallback={<span className="mention-thumb" aria-hidden="true" />}
+        />
       )}
       <span>{label}</span>
     </NodeViewWrapper>

@@ -7,7 +7,7 @@
 
 import { useTranslation } from "react-i18next";
 
-import { useOnlineStatus } from "@/hooks/use-online-status";
+import { useOnlineStatus } from "@/lib/use-online-status";
 
 export default function OfflineIndicator() {
   const { t } = useTranslation();

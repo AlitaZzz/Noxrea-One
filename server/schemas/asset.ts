@@ -80,33 +80,6 @@ export const assetDeleteByFileKeysSchema = z.object({
   fileKeys: z.array(fileRefSchema).min(1).max(50),
 });
 
-export const assetOutSchema = z.object({
-  id: z.number(),
-  userId: z.number(),
-  folderId: z.number(),
-  scope: z.string(),
-  /** 来源引用：存储 key 或外部 URL */
-  fileKey: z.string().nullable(),
-  /** 访问 URL：托管 key 派生（/api/files/{key}），外部 URL 原样透传 */
-  url: z.string().nullable(),
-  sourceType: z.string(),
-  name: z.string(),
-  type: z.string(),
-  mediaType: z.string(),
-  width: z.number(),
-  height: z.number(),
-  /** 源文件大小（字节），按 fileKey 的内容 hash 关联 file_objects 得出；缺失为 0 */
-  size: z.number(),
-  /** 媒体元数据（宽高 / 时长）同出自 file_objects 的落盘探测；缺失为 0 */
-  duration: z.number(),
-  description: z.string(),
-  tags: z.array(z.string()),
-  prompt: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
 export type AssetCreate = z.infer<typeof assetCreateSchema>;
 export type AssetUpdate = z.infer<typeof assetUpdateSchema>;
 export type AssetBatchUpdate = z.infer<typeof assetBatchUpdateSchema>;
-export type AssetOut = z.infer<typeof assetOutSchema>;

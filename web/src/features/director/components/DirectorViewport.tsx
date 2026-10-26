@@ -31,7 +31,7 @@ import { Prop } from "@/features/director/entities/prop";
 import { DIRECTOR_CAMERA_HEX, DIRECTOR_PRIMARY } from "@/features/director/theme";
 import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
-import { fileRefUrl } from "@/lib/file-url";
+import { loadMediaImage } from "@/lib/load-media-image";
 
 const XBOT = "/assets/Xbot.glb";
 const BODY_TYPES: Record<string, { url: string; height: number; girth: number }> = {
@@ -588,13 +588,9 @@ export default function DirectorViewport() {
         if (!nodeId || !cs.nodes.find((n) => n.id === nodeId)) return;
 
         try {
-          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const i = new window.Image();
-            i.crossOrigin = "anonymous";
-            i.onload = () => resolve(i);
-            i.onerror = () => reject(new Error("Failed to load shot image"));
-            i.src = fileRefUrl(shot.ref);
-          });
+          // 动作时现取最终地址并加载（S3 签名直连，跨域读像素需 bucket CORS）；
+          // 元素失败按规则 3.6 刷新一次
+          const img = await loadMediaImage(shot.ref);
           // 节点 src 落快照引用原值（key）；展示由 CanvasImage 派生
           await createImageNodeFromRef(nodeId, shot.ref, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
           feedback.success({ title: translate("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });

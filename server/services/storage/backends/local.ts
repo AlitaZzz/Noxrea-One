@@ -12,7 +12,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { isPathWithinBase } from "@server/core/paths";
 import { isTransientFileError, RENAME_RETRIES, withRetry } from "@server/services/storage/fs-utils";
-import { listDerivedArtifactKeys, StorageTraversalError, type StorageBackend } from "@server/services/storage/backend";
+import { isKeyWithinNamespace, listDerivedArtifactKeys, StorageTraversalError, type StorageBackend } from "@server/services/storage/backend";
 import { uploadRoot, tmpDir, writeAtomic } from "@server/services/storage/workspace";
 
 export class LocalStorageBackend implements StorageBackend {
@@ -25,7 +25,12 @@ export class LocalStorageBackend implements StorageBackend {
 
   /** 本地路径能力（接口可选方法 resolveLocalPath 的实现）：存储 key → 绝对路径（穿越守卫） */
   resolveLocalPath(key: string): string {
-    // path.resolve 语义：key 以 / 或盘符开头时整体替换 base，视为逃出（与旧路由守卫一致）
+    // 接口层形态守卫：与 S3 后端、读管线共用同一判据，绝对 key 与含 `..` 的段一律不可寻址
+    if (!isKeyWithinNamespace(key)) {
+      throw new StorageTraversalError(key);
+    }
+    // path.resolve 语义：key 以 / 或盘符开头时整体替换 base；形态守卫已拦截绝对形态，
+    // 这里只负责平台解析后的包含关系（盘符、反斜杠等只有解析后的路径能看到）
     const resolved = path.resolve(this.baseDir, key);
     if (!isPathWithinBase(this.baseDir, resolved)) {
       throw new StorageTraversalError(key);
@@ -103,7 +108,7 @@ export class LocalStorageBackend implements StorageBackend {
    * 读取文件流。
    * 传入 signal 后，客户端断开 / 视频 seek 取消会立即销毁流并释放句柄，
    * 这是 Windows 上避免文件被残留句柄占用的关键。
-   * range 供 proxy 分发模式透传（files 路由已按 stat 校验边界后传入）。
+   * range 供字节路径的 Range 请求透传（files 路由已按 stat 校验边界后传入）。
    */
   async get(
     key: string,
@@ -156,8 +161,11 @@ export class LocalStorageBackend implements StorageBackend {
     const filePath = this.resolveLocalPath(key);
     try {
       await withRetry(() => fs.unlink(filePath), { retries: 3 });
-    } catch {
-      // 不存在或被占用：忽略
+    } catch (err: unknown) {
+      // 接口契约只把「不存在」视为成功（backend.ts StorageBackend.delete）；
+      // 占用 / 权限 / IO 失败必须上抛，否则缓存迁移与 TTL 清理会把未删掉的对象当成功记账
+      if ((err as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return;
+      throw err;
     }
   }
 

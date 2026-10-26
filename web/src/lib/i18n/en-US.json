@@ -18,6 +18,7 @@
     "layout": "Layout",
     "replace": "Replace",
     "download": "Download",
+    "downloadFailed": "Download failed. Please try again.",
     "upload": "Upload",
     "expand": "Expand",
     "collapse": "Collapse",
@@ -61,6 +62,7 @@
   "media": {
     "loadFailed": "Video failed to load",
     "previewLoadFailed": "Preview failed to load",
+    "previewPlayFailed": "Preview playback failed. Please try again.",
     "playFailed": "Video could not be played",
     "retry": "Retry",
     "retryIn": "Retry in ~{{seconds}}s"
@@ -164,6 +166,7 @@
     "flipHSuffix": " (Flip H)",
     "flipVSuffix": " (Flip V)",
     "gridSplit": "Grid Split",
+    "gridSplitFailed": "Grid split failed, please try again",
     "gridSplitSuffix": " (Grid Split {{index}})",
     "gridCustom": "Custom",
     "gridSelect": "Select rows & cols",
@@ -975,7 +978,9 @@
     "files": {
       "invalid_path": "Invalid file path",
       "access_denied": "Access to this file is denied",
-      "file_not_found": "File not found"
+      "file_not_found": "File not found",
+      "signing_failed": "Failed to sign the file access URL",
+      "read_failed": "Failed to read the file. Please try again"
     },
     "media": {
       "source_not_found": "Source file not found or deleted",

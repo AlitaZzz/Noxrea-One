@@ -1,0 +1,41 @@
+# 集成测试依赖的一次性服务（specs/storage-provider-portability.md 规则 6.1）。
+#
+# 与 docker-compose.nas.yml 分开：那份是部署物，这份只给本地/CI 起测试依赖，
+# 数据不落宿主卷、端口只在回环上、凭据是固定测试值。
+#
+# 用法（MinIO 契约测试）：
+#   docker compose -f docker-compose.test.yml up -d minio
+#   npm run test:storage:minio
+#   docker compose -f docker-compose.test.yml down -v
+#
+# 测试只读写 `it-probe` 前缀下的唯一 key，结束即删；桶在启动时由 minio-init 建好。
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: noxrea-test-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: noxrea-test
+      MINIO_ROOT_PASSWORD: noxrea-test-secret
+    ports:
+      # 只绑回环：测试进程在本机，不对外暴露
+      - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: noxrea-test-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 noxrea-test noxrea-test-secret &&
+      mc mb --ignore-existing local/noxrea-test &&
+      echo 'bucket ready'
+      "

@@ -5,6 +5,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 
+// 解析失败可注入：失败态是面板的一等状态，不能只测成功路径
+const access = vi.hoisted(() => ({ failed: false }));
+vi.mock("@/lib/use-file-access-url", async () => {
+  const { useFileAccessUrl } = await import("@/__tests__/test-utils/file-access-mock");
+  return {
+    useFileAccessUrl: (value: string | null | undefined) => ({
+      ...useFileAccessUrl(value),
+      failed: access.failed,
+    }),
+  };
+});
+
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
 }));
@@ -23,9 +35,7 @@ vi.mock("wavesurfer.js", () => ({
     })),
   },
 }));
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k, i18n: { language: "zh" } }),
-}));
+vi.mock("react-i18next", () => import("@/__tests__/test-utils/react-i18next-mock"));
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
   useCanvasStore: { getState: () => ({}) },
 }));
@@ -46,6 +56,7 @@ vi.mock("@/features/canvas/editing/use-playback-blocked", () => ({
 afterEach(() => {
   cleanup();
   mocks.create.mockClear();
+  access.failed = false;
 });
 
 const STORAGE_KEY = makeStorageKey("a", ".mp3");
@@ -79,6 +90,15 @@ describe("音频截取条带层级契约", () => {
     expect(getByText("clip.loading")).toBeTruthy();
     const wrapper = container.querySelector('[class*="overflow-hidden"]');
     expect(wrapper!.className).toContain("pointer-events-none");
+  });
+
+  it("访问地址描述失败时给出失败态与重试入口，而不是永远停在加载中", () => {
+    access.failed = true;
+    const { getByText, getByRole, queryByText } = renderPanel();
+
+    expect(getByText("media.previewLoadFailed")).toBeTruthy();
+    expect(getByRole("button", { name: "media.retry" })).toBeTruthy();
+    expect(queryByText("clip.loading")).toBeNull();
   });
 });
 

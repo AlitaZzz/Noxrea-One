@@ -2,9 +2,11 @@
 
 状态：已实现（2026-10-18 用户确认切换；实施顺序六项全部完成，切换演练证据见当前状态。2026-10-19 修订：上游引用交付收敛为 `storage.upstream_ref_delivery` 单一开关，见实施修订。建议在 [storage-reference-key-unification.md](storage-reference-key-unification.md) 之后实施——该 Spec 亦已实现）
 
+> 2026-10-24 读路径修订：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）取代浏览器读路径的全部分发规则——`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.edge.origin_secret`、`storage.s3.signed_url_window_seconds` 只存在于规划稿、从未落库），TTL/窗口改为 [server/services/storage/signing.ts](../server/services/storage/signing.ts) 常量；S3 下浏览器一律经 `POST /api/files/access` 拿预签名 GET 直连 bucket，`/api/files/*` 不再 302。本 Spec 中「读取默认 302」「`delivery=proxy` 备选」等表述均由该 Spec 取代；S3 后端实现、上传直传、迁移与 GC 规则不变。
+
 ## 目标
 
-在现有 `StorageBackend` 抽象上补齐 S3 兼容对象存储实现（MinIO / Cloudflare R2 / 各云 S3 网关），运行时按 `system_settings` 设置二选一（重启生效）；**读取默认 302 重定向到预签名 URL、上传预签名直传**——文件字节不经过应用服务器，部署中立（局域网 NAS 与云服务器同等成立，公网带宽不成为必经瓶颈）。
+在现有 `StorageBackend` 抽象上补齐 S3 兼容对象存储实现（MinIO / Cloudflare R2 / 各云 S3 网关），运行时按 `system_settings` 设置二选一（重启生效）；**浏览器读路径经访问描述接口取预签名 GET 直连 bucket、上传预签名直传**——文件字节不经过应用服务器，部署中立（局域网 NAS 与云服务器同等成立，公网带宽不成为必经瓶颈）。读路径形态见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)。
 
 同时修正抽象边界债：把「对象存储」与「本地工作区（临时文件、原子写）」两个职责拆开；接口命名对齐对象存储主流动词（put/get/stat/delete/list）。
 
@@ -16,7 +18,7 @@
 - 新增 S3 后端实现（`@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`）。
 - 本地工作区模块抽取：`tmpDir` / `writeAtomic` / `clearTmpDir` 从 `LocalStorageBackend` 拆出（任何后端下临时区都在本地盘）。
 - 媒体源解析层：sharp / ffmpeg / ffprobe 等路径型消费方统一经「源解析」取输入（本地给文件路径、S3 给预签名 URL）。
-- files 路由按后端能力分发：S3 默认 302 重定向，代理模式保留为配置备选。
+- files 路由按后端能力分发：S3 经访问描述接口返回预签名 GET，local 返回应用流式 URL（见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)）。
 - **files 路由双凭据**：浏览器会话鉴权 + 签名 URL 校验（`expires` + HMAC 签名）两条凭据路径；worker 提交生成任务时为引用文件即时签发短期签名 URL；`reference.ts` 的 base64 塞请求改为按 `storage.upstream_ref_delivery` 单一开关交付（signed-url 默认；签发不能成立明确失败，不静默回退）。
 - 上传链路双模式：S3 直传（ticket → PUT 到 staging → complete 服务端 CopyObject 提升到内容寻址 key 并复验），本地沿用服务器中转。
 - GC 派生产物清理接入 `list` + `delete`；直传孤儿收敛在 staging 前缀按龄清扫（另设低频全 bucket 审计命令兜底）。
@@ -29,14 +31,14 @@
 
 - 不做 per-file 混合存储（无存储位置列，不长期共存）。
 - 不做 S3 multipart（上传上限内单次 PUTObject 足够）。
-- 不做 CDN 层、内外网双端点（proxy 分发为浏览器侧读取的显式备选模式，须显式设置；上游引用交付按规则 12 单一开关处理，不走代理）。
+- 不做 CDN 层、内外网双端点，不提供 S3 应用代理模式（bucket 必须浏览器可达；上游引用交付按规则 12 单一开关处理，不走代理）。
 - 不做 per-user 存储配额与计费（多用户化的后续 Spec）。
 - 不做存储设置的管理端 UI / 写接口（沿用 [system-settings-db.md](system-settings-db.md) 既有节奏：本期改库 + 重启生效，管理端为后续阶段）；`storage.backend` / `storage.s3.*` **永不参与未来的快照热刷新**，始终重启生效。
 - 不改上传限额与批次语义（`UPLOAD_BATCH_MAX_MB` 等沿用）。
 
 ## 已确认决策（2026-10-16，逐条确认）
 
-1. **分发模式**：S3 下 files 路由默认 302 重定向到预签名 GET；代理模式保留为配置备选。
+1. **分发模式**：（2026-10-24 由 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 修订）S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket；不提供应用代理或 302 备选。
 2. **派生产物**（`_cache/_posters/_sprite/_proxy`）与主对象同存 S3。
 3. **切换模型**：单一后端 + 一次性迁移脚本，任一时刻只有一个后端生效。
 4. **数据合同**：DB 引用统一存 key（见 [storage-reference-key-unification.md](storage-reference-key-unification.md)，建议先行）。
@@ -55,11 +57,13 @@
    | `storage.s3.bucket` | 空 | bucket 名；`backend=s3` 时必填 |
    | `storage.s3.region` | 空 | region（MinIO/R2 有约定值即可）；`backend=s3` 时必填 |
    | `storage.s3.access_key_id` / `storage.s3.secret_access_key` | 空 | 凭据；`backend=s3` 时必填 |
-   | `storage.s3.path_style` | `true` | path-style 寻址（MinIO 等自建默认 true） |
+   | `storage.s3.provider` | `generic` | 提供方 profile：`minio \| aws \| r2 \| oss \| cos \| generic`；决定寻址风格与已知能力基线，`generic` 由启动探测决定寻址 |
    | `storage.s3.prefix` | 空 | 对象 key 统一前缀（bucket 复用） |
-   | `storage.s3.signed_url_ttl_seconds` | `3600` | 预签名有效期 |
-   | `storage.s3.delivery` | `redirect` | `redirect`（302 预签名）/ `proxy`（服务器流式转发，显式备选模式，须显式设置） |
    | `storage.upstream_ref_delivery` | `signed-url` | 上游引用交付唯一开关：`signed-url`（签名 URL，签发不能成立明确失败）/ `base64`（读盘转 data URL，仅显式设置） |
+
+   > 2026-10-24：`storage.s3.signed_url_ttl_seconds`、`storage.s3.delivery` 两个曾落库的键已随 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 删除（`storage.s3.signed_url_window_seconds`、`storage.edge.origin_secret` 从未落库）；TTL 与窗口改为代码常量（浏览器读路径 TTL 14400 s / 窗口 3600 s，能力凭据 TTL 3600 s），不再可配。
+
+   > 2026-10-26：`storage.s3.path_style` 已删除，由 `storage.s3.provider` 取代（寻址风格由 profile 决定，`generic` 启动探测），见 [storage-provider-portability.md](storage-provider-portability.md) 规则 1.1 / 1.5。
 
    `backend=s3` 而必填键缺失/非法时，存储层初始化即启动失败并指明键名（跨项联合校验放在存储初始化点，注册表维持各项独立校验的现状）。
 
@@ -73,7 +77,7 @@
       * 现有调用方（ensureArtifact / media-ops）实际都先经 tmp 文件。
       */
      put(key: string, source: string | Buffer | ReadableStream): Promise<void>;
-     /** 读取流；range 供 proxy 分发模式透传 Range */
+     /** 读取流；range 供应用流式路径透传 Range */
      get(key: string, opts?: {
        range?: { start: number; end?: number };
        signal?: AbortSignal;
@@ -87,20 +91,26 @@
      /** 预签名 GET（重定向分发、媒体工具输入）；不支持的后端不实现 */
      presignGet?(key: string, opts?: {
        ttlSeconds?: number;
-       dispositionFilename?: string;
+       /** 签名时间窗（正整数秒，缺省 `ceil(ttl / 4)`）：窗口内 URL 字节一致，长度即缓存寿命上限 */
+       windowSeconds?: number;
+       /** 响应应携带的 Content-Disposition（调用方组装，单一来源 file-response.ts） */
+       responseContentDisposition?: string;
        cacheControl?: string;
      }): Promise<string>;
      /** 预签名 PUT（直传）；不支持的后端不实现 */
-     presignPut?(key: string, opts?: { ttlSeconds?: number; contentType?: string }): Promise<string>;
+     presignPut?(key: string, opts?: { contentType?: string }): Promise<string>;
    }
    ```
 
-4. **读取分发**（`storage.s3.delivery=redirect`，默认）：
-   - 预签名 GET 的**签名时间对齐到 TTL/4 固定窗口，窗口基于 Unix epoch 绝对对齐**（`floor(now / window) * window`，锚定 epoch 而非进程启动时间）：多实例部署时所有实例对同一窗口签出字节一致的 URL，配合 `response-cache-control`（含 immutable 语义）保证浏览器缓存命中（open-ai-canvas 验证过的方案）。
+4. **浏览器读路径（预签名直连，规则由 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 定义）**：
+   - 预签名 GET 的**签名时间对齐到窗口，窗口基于 Unix epoch 绝对对齐**（`floor(now / window) * window`，锚定 epoch 而非进程启动时间）：多实例部署时所有实例对同一窗口签出字节一致的 URL，配合 `response-cache-control`（含 immutable 语义）保证浏览器缓存命中（open-ai-canvas 验证过的方案）。`expiresIn = ttl`（签名时刻对齐到窗口起点，实际剩余寿命落在 `[ttl - window, ttl]`，即 3h–4h；旧协议 `ttl + window` 会把寿命抬到 `ttl` 之上，已废止——按 3600/86400 的草案常量是 25 小时，按改动前实际发布的 3600/900 是 1.25 小时），`ttl` 不得超过 SigV4 的 7 天上限（超限启动失败）。
+   - 窗口按调用方语义区分（`windowSeconds` 参数）：**浏览器读路径**（`POST /api/files/access` 描述接口）用常量 `PRESIGNED_READ_WINDOW_SECONDS`（3600，= TTL/4）；**能力型凭据**（上游引用、媒体工具输入）不传，沿用 `ceil(ttl / 4)`——URL 在进程内可作探测缓存键，有效期保持短。
+   - **窗口长度决定 URL 复用率，不是缓存寿命**：缓存键是完整 URL（含 `X-Amz-Date`/`X-Amz-Signature`），窗口滚动即换 URL，因此窗口越短，「同一对象的新请求能否命中同一 URL」的比例越低——它约束的是跨请求/跨实例的 URL 稳定性与去重率，而不是 `max-age`。`max-age` 取的是 TTL（见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 4.3），浏览器持有同一 URL 到 `refreshAt`（寿命 80%，约 3.2 个窗口）才重新描述；两者互不推导，调窗口不会改缓存寿命，调 `max-age` 也不会改 URL 稳定期。
+   - 能力型凭据（上游引用、媒体工具输入）**不传窗口**，沿用后端缺省的 `ceil(ttl/4)` 对齐窗口，`expiresIn = ttl`、缺省窗口 900 s（ttl 取 `CAPABILITY_URL_TTL_SECONDS` = 1h），不继承浏览器读路径的长窗口（[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 4.6）。
    - `?download` 经 `response-content-disposition` 透传；Content-Type 由 key 扩展名推导（put 时写入 + presign 时覆盖）。
    - Range 请求由浏览器直接向 S3 发起（原生 206）；服务器不搬字节。
-   - bucket CORS 是**硬前置**：未配置时 redirect 上线首日派生图与前端 JS 消费（mediabunny 解码、canvas 抓帧、带 Range 的 fetch）即全部失效——初始化要求见「Bucket 初始化清单」专节。
-5. **代理分发**（`storage.s3.delivery=proxy`）：`get(key, { range })` 透传，206/416 语义与现 files 路由一致；显式备选模式，覆盖「预签名 URL 对浏览器不可达」场景（如内网 MinIO + 外网浏览器），须显式设置。
+   - bucket CORS 是**硬前置**：未配置时派生图与前端 JS 消费（mediabunny 解码、canvas 抓帧、带 Range 的 fetch）即全部失效——初始化要求见「Bucket 初始化清单」专节。
+5. **应用流式路径**：`get(key, { range })` 透传，206/416 语义与 files 路由一致；`local` 后端与直接访问 `/api/files/*` 的非描述请求走这里，缓存头按凭据类型输出（规则由 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 6.2 定义）。S3 后端不提供应用代理模式：bucket 必须浏览器可达。
 6. **上传**：
    - **s3 模式（直传，staging → promote，行业主流形态）**：
      1. `POST /api/files/upload-ticket`（校验 auth / 白名单 / 限额；ticket 签发接入既有按用户并发租约限流，防 presign 滥用；`(userId, hash)` 已存在则直接返回命中结果——**秒传**，无需上传）→ 返回 `presignPut(stagingKey)`，stagingKey 形如 `staging/{userId}/{uuid}`（客户端不接触内容寻址命名空间）；
@@ -118,7 +128,7 @@
 11. **对象迁移脚本**（`scripts/storage/`，一次性）：遍历 `file_objects` 全部行 + 本地派生目录（排除 `_tmp`），逐对象上传并以本地 MD5 与 S3 ETag 校验；支持 dry-run 与断点续跑；**不删除本地任何数据**（原本地存储目录缺省为 `data/uploads/`，留作备份，用户手工处置）。校验失败即中止；ETag==MD5 的前提为单次 PUTObject 且 bucket 未启用 SSE-KMS/SSE-C（见「Bucket 初始化清单」），不满足时降级为 size 比对 + 重读哈希。**支持双向**（`--direction local-to-s3 | s3-to-local`），回滚前先反向补迁。完整流程见「切换与回滚流程」专节。
 12. **上游 AI 媒体引用（M2M，双凭据）**：生成任务提交时，服务端把引用 key **即时签发为短期签名 URL** 发给上游，上游拿 URL 自行下载——s3 模式 `presignGet` 直连 bucket（前提 bucket 端点公网可达）；local 模式应用层 HMAC 签名 URL（`?expires=…&signature=…`，files 路由校验后放流）。规则：
     - 签名 URL **不入库不持久化**（`generation_tasks` 存 key），每次提交/重试即时重签；
-    - TTL 覆盖上游拉取窗口（默认沿用设置 `storage.s3.signed_url_ttl_seconds` = 1h）；
+    - TTL 覆盖上游拉取窗口（`CAPABILITY_URL_TTL_SECONDS` = 1h，代码常量；浏览器读路径的 `PRESIGNED_READ_TTL_SECONDS` = 4h 不适用）；
     - 交付形态仅由 `storage.upstream_ref_delivery` **单一开关**决定（默认 `signed-url`），base64 仅经显式设置选择；signed-url 模式下签发不能成立（S3 签名故障 / local 未配 `network.public_base_url` / 签名操作故障）一律明确失败并指明配置动作——不因环境探测或临时故障静默回退另一形态（URL 与 base64 的体积 / 限额 / 计费行为不同，载荷契约不得漂移）；
     - 浏览器会话鉴权与签名 URL 两类凭据互不影响。
 
@@ -126,9 +136,9 @@
 
 切换到 `storage.backend=s3` 前必须完成，写入 README 部署文档：
 
-1. **CORS 规则（必配，redirect 读与直传写共同依赖）**：
+1. **CORS 规则（必配，浏览器直连读与直传写共同依赖）**：
    - `AllowedOrigins`：生产域名 + 本地开发来源（如 `http://localhost:9898`）——多用户公网部署以生产域名为准；
-   - `AllowedMethods`：`GET`（redirect 读、前端 fetch / mediabunny 解码 / canvas 抓帧 / 带 Range 请求）与 `PUT`（预签名直传）；
+   - `AllowedMethods`：`GET`（浏览器直连读、前端 fetch / mediabunny 解码 / canvas 抓帧 / 带 Range 请求）与 `PUT`（预签名直传）；
    - `AllowedHeaders`：`Range`、`Content-Type`（PUT 只签/只发 Content-Type；Range 不参与签名，但浏览器跨源发送需在 CORS 放行）；
    - `ExposeHeaders`：`Content-Length`、`Content-Range`、`Content-Type`（浏览器侧不消费 ETag：客户端哈希本地计算，复验以服务端重算为准，ETag 仅迁移脚本经 SDK 读取）；
    - `MaxAgeSeconds`：86400。
@@ -155,26 +165,26 @@
 - 修改：`service.ts`（按 `storage.backend` 设置构造单例）、`backend.ts`、`backends/local.ts`（剥离工作区职责、方法更名）、`files.ts`（能力分派）、上传链路（`upload.ts` + 新 ticket / complete 路由 + 前端 `uploadWithRetry` 双模式）、受管 `<video>` 元素补 `crossOrigin="anonymous"`（抓帧/封面链路）、`artifact.ts`、`resize-cache.ts`、`media-probe.ts`、`media-ops.ts`、`media-edit.ts`、`frame-sprite.ts`、`video-proxy.ts`、`reference.ts`、`gc.ts`、`download.ts`、`generate.ts`、`bootstrap.ts`（存储层初始化移至 `initSettings()` 之后）、`core/settings/`（注册表新增 `storage.*` 键）、README。`core/config/index.ts` 与 `.env.example` 无新增（`UPLOAD_DIR` 等 B 类 env 维持现状）。
 - 依赖：`@aws-sdk/client-s3`、`@aws-sdk/s3-request-presigner`。
 - 关联 Spec：[media-processing-concurrency.md](media-processing-concurrency.md) 中 `localStorage.writeAtomic` / 派生清理表述同步更新；[storage-reference-key-unification.md](storage-reference-key-unification.md) 先行实施；设置注册表机制与键命名遵循 [system-settings-db.md](system-settings-db.md)。
-- 测试：backend 层用 MinIO 容器（或内存 S3 桩）覆盖 put/get/stat/delete/list/presign；files 路由 redirect 与 proxy 两模式、直传复验（含秒传、复验失败清理）、迁移脚本校验逻辑补测试；存储层按设置快照初始化、「backend=s3 且必填键缺失 → 启动失败指明键名」补测试（设置 fixture）。
+- 测试：backend 层用 MinIO 容器（或内存 S3 桩）覆盖 put/get/stat/delete/list/presign；访问描述接口的 signed/stream 分发、直传复验（含秒传、复验失败清理）、迁移脚本校验逻辑补测试；存储层按设置快照初始化、「backend=s3 且必填键缺失 → 启动失败指明键名」补测试（设置 fixture）。
 
 ## 异常与边界
 
 - **S3 写失败明确报错**：上传 complete 返回错误、AI 结果下载按既有重试重试；不回退本地（避免数据落在错误后端导致引用悬空）。
 - **直传孤儿对象**：PUT 成功但未 complete（客户端中断 / 复验失败）的对象收敛在 staging 前缀，由按龄清扫回收，不污染内容寻址命名空间。
-- **预签名 URL 不可达**：浏览器侧切 `storage.s3.delivery=proxy`（**显式设置**，改库重启生效；无自动兜底）；本期不做内外网双端点重签名。上游引用链路的同类边界：`signed-url` 模式下**签发成功但端点对上游不可达**不在「签发不能成立明确失败」覆盖内（presign 为纯本地签名，不可达只会在上游拉取时暴露）——部署期按 README 开发/演练指引与生产切换核对单处置（公网可达性核对或显式改配 base64）。
+- **预签名 URL 不可达**：bucket 端点必须对浏览器可达（[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 1.3）；不可达时部署方改用 `storage.backend=local`，S3 后端不再提供应用代理备选，也不做自动探测或静默降级。本期不做内外网双端点重签名。上游引用链路的同类边界：`signed-url` 模式下**签发成功但端点对上游不可达**不在「签发不能成立明确失败」覆盖内（presign 为纯本地签名，不可达只会在上游拉取时暴露）——部署期按 README 开发/演练指引与生产切换核对单处置（公网可达性核对或显式改配 base64）。
 - **客户端哈希错误 / 伪造**：complete 全量复验拦截，错误对象即删；key 与内容不符的记录不可能入库。
 - **迁移与切换的间隙**：脚本输出缺失对象清单供二次补迁（标准流程停服务执行，间隙为零）。
 - **派生产物随迁移一并拷贝**：避免切换后全量缩略图/海报重建形成 CPU 风暴；拷贝失败对象记入清单并允许跳过（可再生）。
 - **Windows 语义**（fs-utils 瞬时占用重试）仅 local 后端相关。
-- **大文件内存**：local 中转 Buffer 模型不变；直传不经服务器内存；proxy 分发为流式转发。
-- **受管媒体元素统一 CORS 加载（redirect 硬前置）**：302 后资源最终 origin 变为 bucket 域，未带 `crossOrigin="anonymous"` 的 `<img>`/`<video>` 会污染画布——`drawImage` + `toBlob`/`toDataURL` 抛 SecurityError。前端图片编辑链路已普遍设置 `crossOrigin="anonymous"`（ImageNode / crop / annotation / grid 等，已核实）；**video 抓帧链路（video-playback-registry 的 `captureCurrentFrame`、VideoRefCard 等播放元素）当前未设置，必须随本 Spec 补齐**——该链路 catch 吞错，污染后表现为抓帧/封面静默失效。bucket CORS 与元素属性二者缺一即坏。
+- **大文件内存**：local 中转 Buffer 模型不变；直传不经服务器内存；应用流式路径为流式转发。
+- **受管媒体元素统一 CORS 加载（浏览器直连硬前置）**：最终资源在 bucket 域，未带 `crossOrigin="anonymous"` 的 `<img>`/`<video>` 会污染画布——`drawImage` + `toBlob`/`toDataURL` 抛 SecurityError。前端图片编辑链路已普遍设置 `crossOrigin="anonymous"`（ImageNode / crop / annotation / grid 等，已核实）；**video 抓帧链路（video-playback-registry 的 `captureCurrentFrame`、VideoRefCard 等播放元素）当前未设置，必须随本 Spec 补齐**——该链路 catch 吞错，污染后表现为抓帧/封面静默失效。bucket CORS 与元素属性二者缺一即坏。
 - **签名 URL 的能力暴露**：预签名 URL 在 TTL 内凭 URL 即可访问，会出现在应用日志、反向代理 access log 与浏览器历史中——按「与稳定代理 URL 同级的能力暴露」接受；日志脱敏列为后续加固项，不阻塞本期。
 - **多用户公网部署基准**（2026-10-16 用户明确产品方向）：CORS 来源按生产域名配置；files 路由双凭据（会话 + 签名 URL）；per-user 存储配额为后续独立 Spec。
 
 ## 验收标准
 
 - `STORAGE_BACKEND=local`（默认）：现有测试全绿，行为一致（回归底线）。
-- `STORAGE_BACKEND=s3`（MinIO 集成测试）：直传（staging → promote → 复验）→ 秒传命中 → redirect 读（302、Range/206、`?download`、`?w=` 档位派生与命中）→ proxy 模式 Range/416 → 上游签名 URL 拉取成功、过期后失效 → 删除 + GC 回收主对象与派生对象 → GC 手动触发命令与定时任务同口径（runGcCycle 单一实现、gc_dry_run 护栏、任一阶段失败退出码非 0）→ staging 按龄清扫孤儿、审计命令对账通过 → redirect 模式下视频抓帧/封面正常（crossOrigin 回归点）。
+- `STORAGE_BACKEND=s3`（MinIO 集成测试）：直传（staging → promote → 复验）→ 秒传命中 → 浏览器读路径经 `POST /api/files/access` 拿 `signed` 描述（预签名 URL、`?download`、`?w=` 档位派生与命中，Range 由 bucket 原生 206）→ 直接访问 `/api/files/*` 流式返回（Range/416）→ 上游签名 URL 拉取成功、过期后失效 → 删除 + GC 回收主对象与派生对象 → GC 手动触发命令与定时任务同口径（runGcCycle 单一实现、gc_dry_run 护栏、任一阶段失败退出码非 0）→ staging 按龄清扫孤儿、审计命令对账通过 → 浏览器直连下视频抓帧/封面正常（crossOrigin 回归点）。
 - files 路由双凭据：无会话且无签名的请求被拒；有效签名 URL 可拉取、过期/篡改签名失效；会话请求不受签名逻辑影响。
 - 设置承载：全新库播种 `storage.*` 键为默认值；`backend=s3` 且必填键缺失时启动失败并指明键名；手工改库重启后新后端与参数生效。
 - 生成链路：worker 提交时引用 key 按 `storage.upstream_ref_delivery` 单一开关交付（signed-url 即时签发、重试重签、DB 不落签名 URL；base64 读盘转 data URL）；signed-url 模式下签发不能成立（S3 签名故障 / local 未配 `network.public_base_url` / local 签名操作故障）抛 `GenerationFailureError` 并指明配置动作，不静默回退 base64。
@@ -215,4 +225,7 @@
 
 - [已完成] 迁移脚本三轮复审修复（2026-10-18）：前缀归一化抽 `normalizeS3Prefix` 单一实现，`applyS3Prefix`/`stripS3Prefix`/后端构造共用（修复脚本以原始设置值拼前缀、带首尾斜杠配置下对象落入错位命名空间且 ETag 主校验无法发现的缺陷）；dry-run 改为盘点收集全部缺口不中止（中止限定实跑语义，两方向一致）；s3→local 新增 DB 孤儿对账（远端孤儿列入清单不回迁）；哈希+计数抽 `createCountingHash` 单一累加器（hashStream 与 streamToFileWithHash 共用）；新增 dry-run 收集全部缺口（两方向）、前缀归一化等测试。
 
+- 实施修订（2026-10-26，结构审查）：两处「同一规则两套实现」收敛为单点。
+  - key 形态守卫：原读管线 `seg.includes("..")`（子串）与 S3 后端 `split("/").includes("..")`（整段）对 `a..b.png` 一类 key 给出不同答案，且绝对形态只在后端被拒。新增 `backend.ts` 的 `isKeyWithinNamespace`（非绝对形态且无含 `..` 的段）作为全仓唯一判据：读管线据此回 403 `invalid_path`（能力凭据路径下绝对形态 key 由 404 改为 403，与会话路径的归属 404 吸收并存），S3 后端 `objectKey` 据此抛 `StorageTraversalError`；`local` 后端仍以 `isPathWithinBase` 做落盘路径包含判定（解析后路径的平台差异只有它能覆盖，两者层次不同）。
+  - 预签名参数：`assertPresignedParameters` 为唯一守卫，`alignedSigningTimeMs` 退为 `presignedWindow` 内部算术；`presignGet` 的签名时刻取 `presignedWindow(ttl, window).issuedAt`（秒 × 1000，与对齐毫秒等值），窗口参数不再被连续校验两遍，签名与描述窗口也不可能用上不同参数。测试：server 1143 通过（99 文件）/ web 1123 通过（146 文件），typecheck / lint 串行通过。
 - 实施修订（上游引用交付单一开关，2026-10-19，用户授权）：根因——规则 12 原文「S3 模式 presignGet 直连 bucket（前提 bucket 端点公网可达）」仅为注释级隐含假设，S3 分支无任何可达性闸门，MinIO 演练环境（内网端点 + 默认 signed-url）签出上游不可拉取的 URL 且无提示；且「local 未配 public_base_url 结构性回退 base64」与「presign 临时故障明确失败」（第八轮修订）构成倒挂——持续性错配反而静默降级。修订为行业成熟语义（显式配置胜出、错配大声失败、载荷契约不因环境探测漂移，对齐 AWS 预签名 URL / Replicate 类平台实践）：交付形态仅由 `storage.upstream_ref_delivery` 单一开关决定，signed-url 模式下签发不能成立（S3 签名故障 / local 未配 public_base_url）一律 `GenerationFailureError` 明确失败并指明配置动作（配置 public_base_url 或改用 base64），删除 null 回退分支；`network.public_base_url` 定位收敛为 local 分支拼接原料（不再是回退触发器）；默认值保留 signed-url（loud failure 优于 silent degradation，与引导探测失败即启动失败同哲学；dev/演练环境按 README 清单显式设 base64）。规则 12 第三条、设置表、目标节措辞同步修订；reference.test.ts「local 未配 public_base_url」用例翻转为断言明确失败（错误信息含 public_base_url 行动指引）。（复审二轮补：local 分支签名操作失败同样纳入统一转换与错误码，契约「一律」完整，测试以签名函数注入故障锁定；spec/README/cutover 残留「兜底」措辞归一为显式设置语义。复审三四五轮补：`signedUrlFailure` 统一失败出口——三类签发失败共用、结构性分支补日志、参数 `reason`；llm 链路四处注释归一单一开关口径；S3 presign 失败提示校正为「storage.s3 凭据与签名配置」——getSignedUrl 纯本地签名、端点可达性非抛错成因；executor 补「重试重签、解析结果不回写任务行」测试锁（spec:180 重试重签验收项落地）；README 补开发/演练环境指引（signed-url 对上游可拉取前提，按后端分述失败暴露点：local 未配 `public_base_url` 签发即失败；s3 内网 endpoint 签发成功、上游拉取时才暴露——部署期可达性核对或显式设 base64）；设置表 `storage.s3.delivery` 行补「显式备选模式，须显式设置」限定；异常边界「预签名 URL 不可达」补显式设置限定与「签发成功但端点对上游不可达」覆盖边界明示；README 设置表失败枚举补「签名操作故障」；executor 重试重签用例改为按调用序持久实现（消除 Once 队列跨用例泄漏面）；统一出口折叠共享尾串（三条最终消息与折叠前逐字节一致）。验证：server 876 通过（83 文件）/ typecheck / lint 串行通过。）

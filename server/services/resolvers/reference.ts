@@ -11,6 +11,7 @@ import path from "path";
 import { StorageTraversalError } from "@server/services/storage/backend";
 import { acquireMediaFile } from "@server/services/storage/media-source";
 import { getStorageBackend } from "@server/services/storage/service";
+import { CAPABILITY_URL_TTL_SECONDS } from "@server/services/storage/signing";
 import { signFileUrlParams } from "@server/services/storage/file-url-signature";
 import { mimeByExt } from "@server/services/storage/mime";
 import { GenerationFailureError } from "@server/services/tasks/failure";
@@ -90,7 +91,12 @@ function signedUrlFailure(key: string, reason: unknown, hint: string): never {
  * 交付形态仅由 storage.upstream_ref_delivery 单一开关决定；signed-url 模式下
  * 签发不能成立（S3 签名故障 / local 未配 public_base_url / 签名操作故障）
  * 一律明确失败——与读取失败同一哲学：不静默改变载荷契约，错误信息指明配置动作。
- * TTL 沿用 `storage.s3.signed_url_ttl_seconds`（规则 12：默认 1h，覆盖上游拉取窗口）。
+ * TTL 使用 `CAPABILITY_URL_TTL_SECONDS`（常量 1h，覆盖上游拉取窗口；
+ * 浏览器读路径的 4h 寿命不适用于上游能力凭据）。
+ * 这是**能力型凭据**：签发即用，不传签名窗口（`windowSeconds`）——浏览器读路径的长窗口
+ * 只服务于 URL 缓存稳定性，能力凭据没有复用诉求，不应继承缓存寿命方案；后端缺省的
+ * TTL/4 对齐窗口保持原语义，`expiresIn` 恒为 TTL、窗口不延长有效期
+ * （specs/storage-signed-direct-delivery.md 规则 4.6）。
  */
 async function upstreamSignedUrl(key: string): Promise<string> {
   const backend = getStorageBackend();
@@ -105,9 +111,8 @@ async function upstreamSignedUrl(key: string): Promise<string> {
   if (!base) {
     signedUrlFailure(key, "network.public_base_url 未配置", "请配置 network.public_base_url");
   }
-  const ttl = getSetting("storage.s3.signed_url_ttl_seconds");
   try {
-    const { expires, signature } = signFileUrlParams(key, ttl);
+    const { expires, signature } = signFileUrlParams(key, CAPABILITY_URL_TTL_SECONDS);
     const query = new URLSearchParams({ expires: String(expires), signature });
     return `${base}${buildManagedFileUrl(key)}?${query.toString()}`;
   } catch (err) {

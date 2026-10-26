@@ -14,7 +14,8 @@ import * as THREE from "three";
 export type OrbitViewMode = "perspective" | "front";
 
 interface Props {
-  src: string;
+  /** 已解析的最终访问地址；undefined = 尚未解析完成，保留灰色占位面 */
+  src: string | undefined;
   azimuth: number; // 0-359
   elevation: number; // -90~90
   mode: OrbitViewMode;
@@ -311,7 +312,8 @@ export default function OrbitScene3D({ src, color, intensity, azimuth, elevation
   // ── 贴图 ──
   useEffect(() => {
     const r = refs.current;
-    if (!r) return;
+    // 访问地址未解析完成时不发起请求，保留灰色占位面
+    if (!r || !src) return;
     let cancelled = false;
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin("anonymous");

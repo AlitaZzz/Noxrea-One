@@ -41,9 +41,11 @@ vi.mock("@/lib/upload-formats", () => ({
   loadUploadLimits: mocks.loadUploadLimits,
 }));
 
-vi.mock("@/lib/session-lifecycle", () => ({
+// 只替换会话捕获（上传流程不需要真实会话中止语义），其余导出保持真实实现，
+// 避免解析层等下游新增依赖时整模块替身缺项
+vi.mock("@/lib/session-lifecycle", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/session-lifecycle")>()),
   captureSession: () => ({ signal: new AbortController().signal }),
-  onSessionChange: vi.fn(),
 }));
 
 vi.mock("@/lib/global-message", () => ({

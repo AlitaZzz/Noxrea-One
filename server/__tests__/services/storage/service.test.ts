@@ -81,6 +81,36 @@ describe("initStorageBackend", () => {
     expect((backend as unknown as { endpoint: string }).endpoint).toBe("http://minio.local:9000");
   });
 
+  it("S3 连接参数由 provider profile 决定（不再有独立寻址开关）", async () => {
+    await configureSettings({ "storage.s3.provider": "minio" });
+    const service = await import("@server/services/storage/service");
+    expect(service.s3OptionsFromSettings().provider).toBe("minio");
+
+    await configureSettings();
+    const defaults = await import("@server/services/storage/service");
+    expect(defaults.s3OptionsFromSettings().provider).toBe("generic");
+    expect("pathStyle" in defaults.s3OptionsFromSettings()).toBe(false);
+  });
+
+  it("CORS 探测来源取自 network.public_base_url 的 scheme+host；未配置则不传", async () => {
+    await configureSettings({ "network.public_base_url": "https://noxrea.example/some/path?x=1" });
+    const service = await import("@server/services/storage/service");
+    // CORS 按来源白名单放行：探测必须拿站点来源（scheme+host），路径与查询不参与
+    expect(service.s3OptionsFromSettings().browserOrigin).toBe("https://noxrea.example");
+
+    await configureSettings();
+    expect((await import("@server/services/storage/service")).s3OptionsFromSettings().browserOrigin)
+      .toBeUndefined();
+  });
+
+  it("probeStorageBackend：local 后端不支持探测，返回 null 且就绪恒为真", async () => {
+    await configureSettings();
+    const service = await import("@server/services/storage/service");
+    service.initStorageBackend();
+    await expect(service.probeStorageBackend()).resolves.toBeNull();
+    expect(service.storageReady()).toBe(true);
+  });
+
   it("重复初始化 fail-fast", async () => {
     const service = await import("@server/services/storage/service");
     const { LocalStorageBackend } = await import("@server/services/storage/backends/local");

@@ -12,6 +12,7 @@ vi.mock("@xyflow/react", () => ({
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: "zh" } }),
 }));
+vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
   useCanvasStore: Object.assign((selector: (s: unknown) => unknown) => selector({ setModalOpen: vi.fn() }), {
     getState: () => ({}),

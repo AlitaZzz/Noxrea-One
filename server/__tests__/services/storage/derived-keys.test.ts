@@ -4,15 +4,16 @@
  * 构造端格式漂移在此即刻失配，不会被读路由的 fail-closed 静默化为缓存未命中。
  */
 import { describe, expect, it } from "vitest";
+import { RESIZE_WIDTH_TIERS } from "@noxrea/shared/media-tiers";
 import { listDerivedArtifactKeys } from "@server/services/storage/backend";
 import { resolveKeyOwner } from "@server/services/storage/ownership";
 import {
   cacheKeyOf,
   derivedCandidatesOf,
   derivedSourceStemOf,
+  derivedTierOf,
   posterMasterKey,
   proxyKeyOf,
-  RESIZE_WIDTH_TIERS,
   spriteKeyOf,
 } from "@server/services/storage/derived-keys";
 
@@ -41,6 +42,31 @@ describe("派生 key 构造 ↔ 解析往返", () => {
     expect(derivedSourceStemOf(`_sprite/${"c".repeat(32)}.webp`)).toBeNull();
     expect(derivedSourceStemOf(`_proxy/${"c".repeat(32)}.mp4`)).toBeNull();
     expect(derivedSourceStemOf("staging/7/123e4567-e89b-12d3-a456-426614174000")).toBeNull();
+  });
+
+  it("旧版无版本 _cache 键不再被解析（v2 单形态，旧键由一次性迁移清理）", () => {
+    expect(derivedSourceStemOf(`_cache/320/${STEM}.webp`)).toBeNull();
+  });
+});
+
+describe("派生档位（指标 tier 标签，specs/observability-baseline.md 规则 3.4）", () => {
+  it("档位与命名空间同源：四个构造端各归其位", () => {
+    expect(derivedTierOf(cacheKeyOf(SOURCE, 320))).toBe("cache");
+    expect(derivedTierOf(posterMasterKey(SOURCE, 1))).toBe("poster");
+    expect(derivedTierOf(spriteKeyOf(SOURCE, 20, 2))).toBe("sprite");
+    expect(derivedTierOf(proxyKeyOf(SOURCE, 480, 3))).toBe("proxy");
+  });
+
+  it("视频的 `_cache` 档位是 cache（不得记成 poster：那是 `_posters` 母版的命名空间）", () => {
+    const videoSource = `3/ab/${HASH}.mp4`;
+    expect(derivedTierOf(cacheKeyOf(videoSource, 480))).toBe("cache");
+    expect(derivedTierOf(posterMasterKey(videoSource, 1))).toBe("poster");
+  });
+
+  it("非派生 key 返回 null（档位不可推导时调用方必须拒绝，而不是猜一个）", () => {
+    expect(derivedTierOf(SOURCE)).toBeNull();
+    expect(derivedTierOf(`staging/7/${UUID}`)).toBeNull();
+    expect(derivedTierOf(`_cache/320/${STEM}.webp`)).toBeNull();
   });
 });
 
@@ -79,7 +105,7 @@ describe("派生删除联动枚举面（specs/derived-deletion-linkage.md 规则
   it("精准 shard 前缀：tier 静态展开、版本段来自发现结果、sprite/proxy 单前缀", () => {
     const prefixes = derivedCandidatesOf(SOURCE, ["_posters/v1/", "_posters/v2/"]).map((c) => c.prefix);
     expect(prefixes).toEqual([
-      ...RESIZE_WIDTH_TIERS.map((tier) => `_cache/${tier}/3/ab/`),
+      ...RESIZE_WIDTH_TIERS.map((tier) => `_cache/v2/${tier}/3/ab/`),
       "_posters/v1/3/ab/",
       "_posters/v2/3/ab/",
       "_sprite/3/ab/",
@@ -92,7 +118,8 @@ describe("派生删除联动枚举面（specs/derived-deletion-linkage.md 规则
       [
         spriteKeyOf(`4/ab/${HASH}.mp4`, 20, 2),
         `_sprite/${"c".repeat(32)}.webp`,
-        `_cache/100/3/ab/${HASH}.webp`,
+        `_cache/v2/100/3/ab/${HASH}.webp`, // 档位域外
+        `_cache/320/3/ab/${HASH}.webp`, // 旧版无版本键
         `_posters/v2/${STEM}.webp`, // 版本段未发现（只发现到 v1）
       ],
       ["_posters/v1/"],

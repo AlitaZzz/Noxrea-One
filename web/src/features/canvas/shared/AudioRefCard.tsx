@@ -14,7 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { managedFileUrl } from "@/lib/file-url";
+import { useElementMirror } from "@/lib/use-element-mirror";
+import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
+import { IDLE_PLAYBACK, type PlaybackMirror } from "./media-playback";
 import { ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { useRevealCanvasNode } from "./reveal-node";
 
@@ -41,9 +44,19 @@ function AudioRefCard({
   const { t } = useTranslation();
   const reveal = useRevealCanvasNode();
   const [hovered, setHovered] = useState(false);
-  const [playing, setPlaying] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // signed 地址过期时重新描述一次并让元素重挂（规则 3.6）；stream/外部地址无重试意义
+  const { url: audioUrl, retrySigned, reloadToken } = useFileAccessUrl(managedFileUrl(audio.src));
+  // 播放态与元素身份绑定：重挂后新元素暂停在 0，不会触发 pause 事件把旧镜像清掉，
+  // 不复位就会出现「图标是停止、实际没在播」的假播放态（见 useElementMirror）
+  const elementIdentity = `${reloadToken}:${audioUrl ?? ""}`;
+  const [playback, patchPlayback] = useElementMirror<PlaybackMirror>(elementIdentity, IDLE_PLAYBACK);
+  const { playing } = playback;
+  const setPlaying = useCallback(
+    (value: boolean) => patchPlayback({ playing: value }),
+    [patchPlayback],
+  );
 
   const stop = useCallback(() => {
     const el = audioRef.current;
@@ -52,7 +65,7 @@ function AudioRefCard({
       el.currentTime = 0; // 下次从头播放
     }
     setPlaying(false);
-  }, []);
+  }, [setPlaying]);
 
   const toggle = useCallback(() => {
     const el = audioRef.current;
@@ -63,7 +76,7 @@ function AudioRefCard({
       el.currentTime = 0;
       void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     }
-  }, [playing, stop]);
+  }, [playing, setPlaying, stop]);
 
   return (
     <Card
@@ -161,9 +174,11 @@ function AudioRefCard({
         }}
       />
       <audio
+        key={reloadToken}
         ref={audioRef}
-        src={managedFileUrl(audio.src)}
+        src={audioUrl}
         preload="none"
+        onError={() => { void retrySigned(); }}
         onEnded={() => setPlaying(false)}
         onPause={() => {
           if (audioRef.current && audioRef.current.currentTime === 0) setPlaying(false);
