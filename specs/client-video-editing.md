@@ -280,13 +280,15 @@
 - 服务端兜底可用：`POST /api/files/crop-video`（`stage=crop_video`）与 `POST /api/files/apply-audio-speed`（`stage=audio_speed`）各成功一次并产出节点。对无音轨的静音视频发起分离音轨时，客户端探测失败自动回退，服务端回 422，未创建任何派生节点（双产物无半写入）。
 - 客户端管线读取源为签名直连地址上的 `fetch`：同一源 mp4 在一次动作内出现 2 次 `fetch`（另有 1 次来自会话 `<video>`），与 UrlSource 按需分次读取的特征一致。
 - 发现并修复一处既有 i18n 缺陷：`node.speedSuffix` 在 zh-CN / en-US 使用单花括号 `{speed}`，节点标题显示字面量「变速 {speed}」；改为 `{{speed}}` 后新节点显示「变速 1.2x」。
+- 取消路径（busy 浮层「取消」按钮）：提交后 ~57 ms 出现「取消」；在 64 ms（尚未发起上传）点击取消 → 节点数不变（19→19）、零上传请求、无提示；在 1283 ms（已有 2 个 `POST /api/files/upload?source=derived` 在途）点击取消 → 节点回到 19、无残留派生节点、busy 浮层消失、无错误提示。换源 / 节点卸载两类触发本次未单独构造。
+- 矩阵外容器回退：用 ffmpeg 现造 mpeg4 + mp3 的 `.avi`（397,116 B、320×240、100 帧）拖入画布建节点后发起分离音轨 → 客户端读取源 2 次后未产出派生上传（`derivedUploads: 0`），改由服务端 `POST /api/files/detach-audio`（200，711 ms）完成，节点 21→23，符合「矩阵外容器回退服务端」。
+- 客户端音频变速在本机不可实测（平台限制，非代码缺陷）：编码能力探测通过后，Mediabunny 报 `This specific encoder configuration (mp4a.40.2, 128000 bps, 2 channels, 32000 Hz) is not supported in this environment`，管线自动回退服务端 `POST /api/files/apply-audio-speed`（200，599 ms）并正常产出节点——回退链路已验证，客户端变速路径需在支持该 AAC 输出配置的浏览器重测。
 
 **仍然验不了（本次）**
 
 - 客户端裁剪 / 片段截取的帧精确性（需逐帧比对播放器所选帧与产物首帧）。
-- 客户端音频变速（soundtouch 路径）与音频片段截取：本次变速走的是服务端兜底。
-- 取消路径（busy 浮层「取消」/ 换源 / 节点卸载）与重复触发守卫。
-- 矩阵外容器（avi 等）回退、探测负缓存的跨会话行为。
+- 客户端音频变速（soundtouch 路径）与音频片段截取：本机 Chrome 的 AAC 编码器不支持该输出配置（见上），本环境无法执行客户端路径。
+- 探测负缓存的跨会话行为（同一源在后续会话是否重复探测失败）。
 - `Range` 请求头本身：跨域资源计时不含请求头，只能证明分次 `fetch`，不能逐条确认 `Range`。
 
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。

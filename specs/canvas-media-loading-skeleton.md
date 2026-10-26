@@ -94,11 +94,12 @@
 
 - 将调度器探测 `<img>` 的 load 延后 60s 后触发的图片加载：进入 pending 后出现按容器查询（`cqw/cqh`）定形的骨架块，底色为静态 `bg-muted`（无 pulse 动画）；ready 后骨架移除，图片与骨架边界吻合、无形状跳变。
 - 骨架样式的取值来自主题 token（读取 pending 期间的计算样式确认是 `bg-muted` 静态底，非固定色值）。
+- 明 / 暗双主题对照：替换 `window.Image` 让新图片持续 pending 后，dark → light → dark 三态均渲染静态骨架（`animation-name: none`、`animation-duration: 0s`）、图标叠加存在、骨架比例与节点比例一致（1.775～1.778），底色随主题 token 变化（dark `lab(15.204 0 0)`、light `lab(96.52 0 0)`）；恢复 `Image` 后骨架按加载完成移除。
 - 缓存命中侧：同一海报 URL（描述已在 IndexedDB、字节已在 HTTP 缓存）在 `clearResourceTimings()` 后每个 URL 只产生 1 条 resource 计时（initiator=`img`），未观察到同一 URL 的第二个请求。
+- 量级与换档：90 个图片节点（10×9 网格、视口缩放 0.22 整屏可见）全部加载完成后无残留 pulse 骨架、无失败态；把视口 0.6417 → 4.724 → 0.6417 连续缩放（跨多档）期间 120 帧内骨架数始终为 0（规则 10 换档保留旧图），帧间隔 p50 16.7 ms / p95 26.5 ms / max 32.4 ms、无 >50 ms 长帧（详见 canvas-media-resolution-lod 的同日补测）。
 
 **仍然验不了（本次）**
 
-- 明 / 暗双主题对照：本轮只读取了 dark 主题下的骨架样式，明色主题未留可归档证据。
 - 「传输 0 字节」的缓存命中证明：MinIO 跨域响应无 `Timing-Allow-Origin`，resource timing 的 `transferSize` / `decodedBodySize` 恒为 0，且 `preview_network` 为累计视图，本环境无法给出逐 URL 的字节级证据；现有证据是「每 URL 仅 1 条计时记录」。
 - 媒体加载失败态 UI（视觉与 DOM 不变）与海报 404 失败态契约未回归。
 

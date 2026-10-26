@@ -97,12 +97,12 @@
 - 撤销 / 重做前后 React Flow 视口 transform 全程不变（`translate(259.448px, 328.956px) scale(0.329877)`），符合「视口不随历史恢复」。
 - 撤销后继续编辑并保存，落库 `canvasData.viewport` 与屏幕上的 transform 一致（只读 DB 探针读取 `canvasProject.canvasData` 核对，非推测）。
 - 删除节点、粘贴（`Ctrl+C` 复制后以原生 `paste` 事件回落到内部剪贴板）各自一次 `Ctrl+Z` 精确回退。
+- 连线（connect）撤销：纯 PointerEvent 序列不产生新边（11→11），改用 PointerEvent + MouseEvent 组合序列后成功建立 2 条边（video→audio 11→12、audio→video 12→13；另一条 video→video 因已连/规则判定被静默跳过，与 `pairsWouldCreate` 去重口径一致）。一次 `Ctrl+Z` 只回退最近一条（13→12），再按一次回到基线 11；`Ctrl+Shift+Z` 恢复为 13。每条连线各占一个独立撤销步，无节点/边残留，视口 transform 全程不变。
+- 媒体编辑面板守卫：视频节点打开画面裁剪面板后按 `Ctrl+Z`，节点 id 集合与数量均不变、面板保持打开（`undoBlocked: true`、`panelOpened: true`），符合「面板打开时画布级撤销统一拦截」；关闭面板后撤销入口恢复。
 
 **仍然验不了（本次）**
 
-- 连线（connect）：模拟指针拖拽 handle 未产生新边（操作前后均 7 条），「连线一次撤销」未取得证据。
 - 生成中撤销/重做置灰、悬停原因提示与禁止光标（需实际生成任务）。
-- 媒体编辑面板打开时画布撤销不可用：本次经事件通道未打开媒体面板（面板需由工具栏交互驱动），该守卫未实测。
 - Agent 回合压栈与「撤销此轮」、生成失败/取消后第一次撤销、节点上传/更换的撤销链（验收 2 / 5 / 7）本次未走查。
 
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。

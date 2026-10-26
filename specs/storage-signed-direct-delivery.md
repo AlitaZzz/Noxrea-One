@@ -544,12 +544,12 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 - 描述契约：50 条 → 200 且 50 条逐条结果；51 条 → 400 `common.invalid_request`；不存在的 key → 该条 `files.file_not_found`，整批仍 200 且同序同长；`download: true` 的 signed 描述 query 含 `response-content-disposition=attachment; filename*=UTF-8''…` 与 `response-content-type`；响应头 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer`；`X-Amz-Date=20261026T160000Z`（1h 边界对齐）、`X-Amz-Expires=14400`、`expiresAt − refreshAt = 2880s`（寿命 80%）。
 - 下载端到端：点击节点下载按钮生成的 `<a href>` 直指 bucket，跨域 signed 不带 `download` 属性；对同一 URL 发 Range 请求返回 206，`Content-Disposition: attachment; filename*=UTF-8''缓存验证图.png`，字节不经过应用。
 - 视频：`<video>` 直连 signed 地址播放（readyState 4），seek 到 8.97s 后继续播放；Network 中该 mp4 出现多条 206 Partial Content（含 Range 读取中途 abort 的请求）。
+- 90 图量级：另建测试项目（90 个图片节点、90 个不同存储 key、10×9 网格、视口缩放 0.22 整屏可见）冷加载，整页只发 **2 次 `POST /api/files/access`**（均 200，50 + 40 条；50 条上限直接生效，两批在 882 ms 同时发出、耗时 2.0 / 2.3 s，对应服务端 6 并发描述）；90 个媒体请求全部直连 `10.10.10.2:9833`（Network 记录 89 条均 200 OK，resource timing 计 90 条，属采集时尾部差 1），`GET /api/files/<key>` 代理请求 0 条、3xx 0 条；91 个 `<img>`（90 节点 + 1 界面图）全部 `complete && naturalWidth > 0`。该测试项目用后即删。
 
 **仍然验不了（本次）**
 
-- 「90 图项目」量级未复现（测试画布 14～18 节点，2 次批量描述对应整屏媒体），批量上限的行为已由 50 / 51 条请求直接验证。
-- bucket 命中浏览器缓存时「传输 0 字节」无法从页面上下文证明（跨域无 `Timing-Allow-Origin`，resource timing 的 `transferSize` / `decodedBodySize` 恒为 0）。
 - 跨签名窗口（1h 窗口到期后同一对象 URL 变化一次）未实测——需等到窗口边界或临时调小常量重编译。
+- bucket 命中浏览器缓存时「传输 0 字节」无法从页面上下文证明（跨域无 `Timing-Allow-Origin`，resource timing 的 `transferSize` / `decodedBodySize` 恒为 0）。
 - 规则 3.8 主动刷新的会话内定时行为（到点后台重描述、会话抖动、退避）未在浏览器触发：寿命 4h、`refreshAt` 在 80% 处（约 1.8h 后），本次只验证了「载入时丢弃过期条目并重描述」这一半，其余由单测覆盖。
 - `local` 后端（`stream` 描述）未验证——当前运行时 `backend=s3`，切换后端属于运行时设置变更，本次未做。
 
