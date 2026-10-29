@@ -6,7 +6,6 @@
 "use client";
 
 import { type NodeProps } from "@xyflow/react";
-import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PartitionOutlined } from "@/components/ui/AppIcon";
@@ -66,4 +65,4 @@ function DirectorNode({ id, data, selected }: NodeProps<DirectorNodeType>) {
   );
 }
 
-export default memo(DirectorNode);
+export default DirectorNode;

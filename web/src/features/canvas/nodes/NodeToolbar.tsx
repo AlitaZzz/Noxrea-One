@@ -8,6 +8,7 @@
 import { storageKeyOf } from "@noxrea/shared/url";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 
 import {
   CheckOutlined,
@@ -265,15 +266,26 @@ function NodeToolbar({
   dismissSignal,
 }: NodeToolbarProps) {
   const { t } = useTranslation();
-  const nodes = useCanvasStore((s) => s.nodes);
-  const assetSrc = (nodes.find(n => n.id === nodeId)?.data as { src?: string })?.src;
+  // 只订阅工具条真正消费的节点字段（四个原语），一次查找；useShallow 保证
+  // 值不变时不随 nodes 数组更新重渲染（拖动位置帧每秒数十次替换 nodes）。
+  const { assetSrc, videoHasAudio, textContent, groupColor } = useCanvasStore(
+    useShallow((s) => {
+      const data = s.nodes.find((n) => n.id === nodeId)?.data as {
+        src?: string;
+        hasAudio?: boolean;
+        plainText?: string;
+        color?: string;
+      } | undefined;
+      return {
+        assetSrc: data?.src,
+        videoHasAudio: data?.hasAudio,
+        textContent: data?.plainText,
+        groupColor: data?.color,
+      };
+    }),
+  );
   // 媒体编辑接口只接受存储 key；外部 URL 节点保留下载/预览，但禁用编辑入口
   const editableKey = storageKeyOf(assetSrc);
-  // 音轨探测结论：undefined = 尚未确定（按「可能有音轨」处理，真无音轨时由后端兜底）；
-  // false = 确定无音轨，禁用分离入口
-  const videoHasAudio = (nodes.find(n => n.id === nodeId)?.data as { hasAudio?: boolean })?.hasAudio;
-  const textContent = (nodes.find(n => n.id === nodeId)?.data as { plainText?: string })?.plainText;
-  const groupColor = (nodes.find(n => n.id === nodeId)?.data as { color?: string })?.color;
   // 变速调节模式：点变速按钮进入，滑杆调出目标倍率，✓ 交由服务端生成变速产物
   const [speedMode, setSpeedMode] = useState(false);
   const [speedDraft, setSpeedDraft] = useState(1);

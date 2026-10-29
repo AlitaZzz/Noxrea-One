@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { PictureOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
@@ -41,7 +41,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Props) {
+function ConnectionCreateMenu({ pending, onSelect, onClose }: Props) {
   const { t } = useTranslation();
 
   useEffect(() => {
@@ -102,3 +102,5 @@ export default function ConnectionCreateMenu({ pending, onSelect, onClose }: Pro
     </>
   );
 }
+
+export default memo(ConnectionCreateMenu);

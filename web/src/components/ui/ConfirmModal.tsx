@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ interface Props {
   global?: boolean;
 }
 
-export default function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, confirmVariant = "default", hideCancel, onOk, onCancel, global: isGlobal = false }: Props) {
+function ConfirmModal({ open, title, content, okText, cancelText, confirmLoading, confirmVariant = "default", hideCancel, onOk, onCancel, global: isGlobal = false }: Props) {
   const { t } = useTranslation();
 
   return (
@@ -49,3 +50,5 @@ export default function ConfirmModal({ open, title, content, okText, cancelText,
     </Dialog>
   );
 }
+
+export default memo(ConfirmModal);

@@ -9,7 +9,7 @@
 import { storageKeyOf } from "@noxrea/shared/url";
 import { type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { UploadOutlined } from "@/components/ui/AppIcon";
@@ -288,4 +288,4 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   );
 }
 
-export default memo(AudioNode);
+export default AudioNode;

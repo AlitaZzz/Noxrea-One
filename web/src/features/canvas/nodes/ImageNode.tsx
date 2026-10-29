@@ -7,7 +7,7 @@
 
 import { type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -25,6 +25,7 @@ import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
+import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import { imagePlacementStyle, layoutMultiImages } from "@/features/canvas/shared/image-visibility";
@@ -58,16 +59,12 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const uploadHashBytes = uploadProgress?.phase === "hashing" && uploadProgress.loadedBytes > 0
     ? formatBytes(uploadProgress.loadedBytes)
     : null;
-  // 多选时隐藏全景工具栏：订阅选中节点数 > 1 判定多选。
-  // 返回布尔原语，Zustand 默认 Object.is 比较，仅在选择数跨过阈值时才重渲染；
-  // 用循环累加避免每次 nodes 变更都分配 filter 临时数组。
-  const multiSelect = useCanvasStore((s) => {
-    let count = 0;
-    for (const n of s.nodes) {
-      if (n.selected && ++count > 1) return true;
-    }
-    return false;
-  });
+  // 多选时隐藏全景工具栏：订阅画布共享投影的选中集合（布尔原语，仅跨阈值重渲染）。
+  // 选中集合按 (nodes, edges) 引用缓存，画布内所有消费者共享同一次线性派生，
+  // 避免每个图片节点各自扫描全表的 O(图片数 × N)。
+  const multiSelect = useCanvasStore(
+    (s) => getCanvasDerived(s.nodes, s.edges).selectedNodeIds.size > 1
+  );
   // cropOpen / annotateOpen 完全由 store 的 croppingNodeId / annotatingNodeId 驱动，
   // 直接派生即可，避免「setState-in-effect」导致的级联渲染。
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
@@ -549,4 +546,4 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   );
 }
 
-export default memo(ImageNode);
+export default ImageNode;

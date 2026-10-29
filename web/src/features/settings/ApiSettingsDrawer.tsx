@@ -7,7 +7,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -124,7 +124,7 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
   );
 }
 
-export default function ApiSettingsDrawer({ open, onClose }: Props) {
+function ApiSettingsDrawer({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const setModalOpen = useCanvasStore((s) => s.setModalOpen);
@@ -374,3 +374,5 @@ export default function ApiSettingsDrawer({ open, onClose }: Props) {
     </>
   );
 }
+
+export default memo(ApiSettingsDrawer);

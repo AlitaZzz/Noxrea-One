@@ -48,7 +48,7 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsDialog from "@/features/assets/components/AssetsDialog";
 import type { AssetItem } from "@/features/assets/types";
-import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
+import { type UserMenuItem,UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
@@ -73,13 +73,8 @@ import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations
 import { useSseTaskMonitor } from "@/features/canvas/hooks/use-sse-task-monitor";
 import { applyTidyLayout, isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
-import AudioNode from "@/features/canvas/nodes/AudioNode";
-import DirectorNode from "@/features/canvas/nodes/DirectorNode";
-import GroupNode from "@/features/canvas/nodes/GroupNode";
-import ImageNode from "@/features/canvas/nodes/ImageNode";
+import { CANVAS_NODE_TYPES } from "@/features/canvas/nodes/canvas-node-types";
 import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
-import TextNode from "@/features/canvas/nodes/TextNode";
-import VideoNode from "@/features/canvas/nodes/VideoNode";
 import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
 import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
 import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
@@ -115,20 +110,25 @@ const FrameStripPanel = dynamic(() => import("@/features/canvas/editing/FrameStr
 const LightingPanel = dynamic(() => import("@/features/canvas/editing/LightingPanel"), { ssr: false });
 const MultiAngleEditor = dynamic(() => import("@/features/canvas/editing/MultiAngleEditor"), { ssr: false });
 
-// nodeTypes / edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
+// edgeTypes 必须是稳定引用。定义在组件外可彻底避免 React Flow #002 警告：
 // 组件内的 useMemo 在热更新等「重挂载」场景下仍会重新求值，产生新对象。
-const RF_NODE_TYPES = {
-  [NODE_TYPE.TEXT]: TextNode,
-  [NODE_TYPE.IMAGE]: ImageNode,
-  [NODE_TYPE.VIDEO]: VideoNode,
-  [NODE_TYPE.AUDIO]: AudioNode,
-  [NODE_TYPE.GROUP]: GroupNode,
-  [NODE_TYPE.DIRECTOR]: DirectorNode,
-};
-
+// （nodeTypes 的稳定引用与节点渲染边界见 nodes/canvas-node-types.ts。）
 const RF_EDGE_TYPES = {
   deletable: DeletableEdge,
 };
+
+// 传给 <ReactFlow> 的静态对象同样定义在组件外：位置帧每帧重渲染时，
+// 内联对象字面量会让 React Flow 的 props 比较全部失效。
+const RF_PRO_OPTIONS = { hideAttribution: true };
+const RF_DEFAULT_EDGE_OPTIONS = { type: "deletable", animated: false };
+const RF_STYLE = { "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties;
+
+// 节点工具条动作 → store 派发。定义在组件外保证引用稳定，使 NodeToolbarUI
+// （memo）在画布位置帧重渲染时直接 bail，不随每帧重新绑定。
+const openFrameStrip = (id: string) => useCanvasStore.getState().setFrameCaptureNodeId(id);
+const openClipStrip = (id: string) => useCanvasStore.getState().setClipCaptureNodeId(id);
+const openAudioClip = (id: string) => useCanvasStore.getState().setAudioClipNodeId(id);
+const openLighting = (id: string) => useCanvasStore.getState().setLightingNodeId(id);
 
 export default function InfiniteCanvas() {
   const router = useRouter();
@@ -523,7 +523,11 @@ export default function InfiniteCanvas() {
       }
 
       setNodes(appliedNodes);
-      setAlignmentGuides(newGuides);
+      // 空→空不产生新状态：拖动位置帧大多没有对齐参考，避免每帧强制一次
+      // 外壳状态更新与 AlignmentGuides 重渲染。
+      setAlignmentGuides((prev) =>
+        prev.length === 0 && newGuides.length === 0 ? prev : newGuides
+      );
       if (stateChanges.some((change) => change.type === "position")) {
         markDirty();
       }
@@ -987,6 +991,79 @@ export default function InfiniteCanvas() {
     applyTidyLayout({ fitView });
   }, [fitView]);
 
+  // ---- 外壳渲染边界 ----
+  // 位置帧每帧重渲染 InfiniteCanvas；外壳组件由 memo 收口，传参引用必须稳定，
+  // 否则 memo 恒失效。以下回调只依赖 setter / router / 模块函数（语义与原内联一致）。
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const openAssets = useCallback(() => setAssetsOpen(true), []);
+  const closeAssets = useCallback(() => setAssetsOpen(false), []);
+  const toggleCanvasExplorer = useCallback(() => setCanvasExplorerOpen((v) => !v), []);
+  const closeCanvasExplorer = useCallback(() => setCanvasExplorerOpen(false), []);
+  const openAgentDrawer = useCallback(() => setChatOpen(true), []);
+  const closeAgentDrawer = useCallback(() => setChatOpen(false), []);
+  const closeInspector = useCallback(() => setInspectedNodeId(null), []);
+  const closeConnectionCreate = useCallback(() => setPendingConnectionCreate(null), []);
+  const closeDeleteConfirm = useCallback(() => setDeleteConfirmOpen(false), []);
+  const openLogoutConfirm = useCallback(() => setLogoutConfirmOpen(true), []);
+  const closeLogoutConfirm = useCallback(() => setLogoutConfirmOpen(false), []);
+
+  // 项目菜单：条目随语言变化，其余为静态数组；触发元素随菜单开合变化。
+  const projectMenuItems = useMemo<UserMenuItem[]>(
+    () => [
+      { key: "home", label: t("project.home") },
+      { type: "divider" },
+      { key: "new", label: t("project.new") },
+      { key: "delete", label: t("project.delete") },
+    ],
+    [t],
+  );
+  const projectMenuTrigger = useMemo(
+    () => (
+      <Button type="button" variant="ghost" size="sm" aria-label={t("auth.accountSettings")} className="h-7 shrink-0 gap-1 rounded px-1">
+        <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
+        <ChevronDownIcon
+          className="shrink-0 transition-transform duration-200"
+          style={{ width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
+        />
+      </Button>
+    ),
+    [t, toolbarMenuOpen],
+  );
+  const handleUserMenuSelect = useCallback((key: string) => {
+    if (key === "home") {
+      void (async () => {
+        await flushAndWait();
+        router.push("/project");
+      })();
+    } else if (key === "new") {
+      void (async () => {
+        await flushAndWait();
+        await useProjectStore.getState().createProject();
+        // 画布身份以 URL 为准：router.replace 触发页面层拉取并恢复，
+        // loader 门随后放行新画布（恢复入口收口在 page.tsx）
+        router.replace(`/canvas/${useProjectStore.getState().activeProjectId}`);
+      })();
+    } else if (key === "delete") {
+      setDeleteConfirmOpen(true);
+    }
+  }, [router]);
+
+  const handleDeleteProject = useCallback(async () => {
+    await flushAndWait();
+    const activeId = useProjectStore.getState().activeProjectId;
+    if (!activeId) return false;
+    const deleted = await useProjectStore.getState().deleteProject(activeId);
+    if (deleted) router.push("/project");
+    return deleted;
+  }, [router]);
+
+  const handleLogout = useCallback(() => {
+    setLogoutConfirmOpen(false);
+    // 等 cookie 清除完成再导航，否则 proxy.ts 仍凭 cookie 放行并弹回应用
+    void useAuthStore.getState().logout().finally(() => router.push("/"));
+  }, [router]);
+
   // ---- File drop on canvas → create image node ----
 
   const shouldIgnoreFileDrop = useCallback((target: HTMLElement) => {
@@ -1053,10 +1130,10 @@ export default function InfiniteCanvas() {
       <ReactFlow
         data-interaction={canvasInteraction.mode}
         data-multiselect={selectionFrame ? "true" : undefined}
-        style={{ "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties}
+        style={RF_STYLE}
         nodes={nodes}
         edges={edges}
-        nodeTypes={RF_NODE_TYPES}
+        nodeTypes={CANVAS_NODE_TYPES}
         edgeTypes={RF_EDGE_TYPES}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
@@ -1100,7 +1177,7 @@ export default function InfiniteCanvas() {
         // React Flow owns selected-node stacking so NodeToolbar can derive its
         // layer from the selected node instead of relying on a global override.
         elevateNodesOnSelect
-        proOptions={{ hideAttribution: true }}
+        proOptions={RF_PRO_OPTIONS}
         colorMode={user?.theme === "light" ? "light" : "dark"}
         // 连线吸附半径：xyflow 的吸附判定取「指针到 Handle 中心」的距离，Handle 中心
         // 在轨道正中（离节点边缘 RAIL_WIDTH/2）。半径盖住可见圆点加余量即可，不能取
@@ -1108,10 +1185,7 @@ export default function InfiniteCanvas() {
         // GROUP_NODE_PADDING）吸附圈重叠、恒抢错目标；半径内取「最近」的 Handle
         connectionRadius={RAIL_CONNECT_RADIUS}
         connectionLineComponent={ConnectionFlowLine}
-        defaultEdgeOptions={{
-          type: "deletable",
-          animated: false,
-        }}
+        defaultEdgeOptions={RF_DEFAULT_EDGE_OPTIONS}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />
 
@@ -1124,40 +1198,10 @@ export default function InfiniteCanvas() {
                 open={toolbarMenuOpen}
                 onOpenChange={setToolbarMenuOpen}
                 placement="bottomLeft"
-                items={[
-                  { key: "home", label: t("project.home") },
-                  { type: "divider" },
-                  { key: "new", label: t("project.new") },
-                  { key: "delete", label: t("project.delete") },
-                ]}
-                onItemClick={(key) => {
-                  if (key === "home") {
-                    void (async () => {
-                      await flushAndWait();
-                      router.push("/project");
-                    })();
-                  } else if (key === "new") {
-                    void (async () => {
-                      await flushAndWait();
-                      await useProjectStore.getState().createProject();
-                      // 画布身份以 URL 为准：router.replace 触发页面层拉取并恢复，
-                      // loader 门随后放行新画布（恢复入口收口在 page.tsx）
-                      router.replace(`/canvas/${useProjectStore.getState().activeProjectId}`);
-                    })();
-                  } else if (key === "delete") {
-                    setDeleteConfirmOpen(true);
-                  }
-                }}
-                onLogout={() => setLogoutConfirmOpen(true)}
-                trigger={
-                  <Button type="button" variant="ghost" size="sm" aria-label={t("auth.accountSettings")} className="h-7 shrink-0 gap-1 rounded px-1">
-                    <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
-                    <ChevronDownIcon
-                      className="shrink-0 transition-transform duration-200"
-                      style={{ width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
-                    />
-                  </Button>
-                }
+                items={projectMenuItems}
+                onItemClick={handleUserMenuSelect}
+                onLogout={openLogoutConfirm}
+                trigger={projectMenuTrigger}
               />
               <Separator orientation="vertical" className="mx-0.5 h-5" />
               {isEditingName ? (
@@ -1234,9 +1278,9 @@ export default function InfiniteCanvas() {
               />
             )}
             <CanvasControls
-              onOpenSettings={() => setSettingsOpen(true)}
-              onOpenAssets={() => setAssetsOpen(true)}
-              onOpenCanvasExplorer={() => setCanvasExplorerOpen((v) => !v)}
+              onOpenSettings={openSettings}
+              onOpenAssets={openAssets}
+              onOpenCanvasExplorer={toggleCanvasExplorer}
               canvasExplorerOpen={canvasExplorerOpen}
             />
           </div>
@@ -1251,7 +1295,7 @@ export default function InfiniteCanvas() {
               variant="outline"
               size="lg"
               className="agent-flow-button bg-background dark:bg-background"
-              onClick={() => setChatOpen(true)}
+              onClick={openAgentDrawer}
             >
               <AgentIcon style={{ width: 22, height: 22 }} />
               <span className="text-base font-medium">{t("agent.title")}</span>
@@ -1352,11 +1396,11 @@ export default function InfiniteCanvas() {
               <NodeToolbarUI
                 nodeId={nid}
                 nodeType={n?.type}
-                onShowInspector={(id) => setInspectedNodeId(id)}
-                onOpenFrameStrip={(id) => useCanvasStore.getState().setFrameCaptureNodeId(id)}
-                onOpenClipStrip={(id) => useCanvasStore.getState().setClipCaptureNodeId(id)}
-                onOpenAudioClip={(id) => useCanvasStore.getState().setAudioClipNodeId(id)}
-                onOpenLighting={(id) => useCanvasStore.getState().setLightingNodeId(id)}
+                onShowInspector={setInspectedNodeId}
+                onOpenFrameStrip={openFrameStrip}
+                onOpenClipStrip={openClipStrip}
+                onOpenAudioClip={openAudioClip}
+                onOpenLighting={openLighting}
                 gridOpen={gridMenuNodeId === nid}
                 onGridOpenChange={handleGridMenuOpenChange}
                 dismissSignal={toolbarDismissSignal}
@@ -1416,19 +1460,19 @@ export default function InfiniteCanvas() {
         <ConnectionCreateMenu
           pending={pendingConnectionCreate}
           onSelect={handleCreateConnectedNode}
-          onClose={() => setPendingConnectionCreate(null)}
+          onClose={closeConnectionCreate}
         />
       )}
 
       <NodeInspector
         open={inspectedNodeId !== null}
         node={inspectedNode}
-        onClose={() => setInspectedNodeId(null)}
+        onClose={closeInspector}
       />
 
       <ApiSettingsDrawer
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={closeSettings}
       />
 
       <DestructiveConfirmModal
@@ -1437,15 +1481,8 @@ export default function InfiniteCanvas() {
         description={t("project.deleteConfirm", { name: projectName })}
         confirmText={t("common.delete")}
         cancelText={t("common.cancel")}
-        onConfirm={async () => {
-          await flushAndWait();
-          const activeId = useProjectStore.getState().activeProjectId;
-          if (!activeId) return false;
-          const deleted = await useProjectStore.getState().deleteProject(activeId);
-          if (deleted) router.push("/project");
-          return deleted;
-        }}
-        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteProject}
+        onCancel={closeDeleteConfirm}
       />
 
       <ConfirmModal
@@ -1454,22 +1491,18 @@ export default function InfiniteCanvas() {
         content={t("auth.logoutConfirm")}
         okText={t("auth.logout")}
         cancelText={t("common.cancel")}
-        onOk={() => {
-          setLogoutConfirmOpen(false);
-          // 等 cookie 清除完成再导航，否则 proxy.ts 仍凭 cookie 放行并弹回应用
-          void useAuthStore.getState().logout().finally(() => router.push("/"));
-        }}
-        onCancel={() => setLogoutConfirmOpen(false)}
+        onOk={handleLogout}
+        onCancel={closeLogoutConfirm}
       />
 
       <AssetsDialog
         open={assetsOpen}
-        onClose={() => setAssetsOpen(false)}
+        onClose={closeAssets}
       />
 
       <CanvasExplorer
         open={canvasExplorerOpen}
-        onClose={() => setCanvasExplorerOpen(false)}
+        onClose={closeCanvasExplorer}
       />
 
       {/* Agent 运行时桥：把 React Flow 实例能力注册给工具执行器 */}
@@ -1477,7 +1510,7 @@ export default function InfiniteCanvas() {
 
       <CanvasAgentDrawer
         open={chatOpen}
-        onClose={() => setChatOpen(false)}
+        onClose={closeAgentDrawer}
         projectId={activeProjectId ?? undefined}
       />
 

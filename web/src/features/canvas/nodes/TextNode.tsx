@@ -13,7 +13,7 @@ import { Markdown } from "@tiptap/markdown";
 import { type Editor,EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { type NodeProps } from "@xyflow/react";
-import { type FocusEvent, memo, useCallback, useEffect, useRef } from "react";
+import { type FocusEvent, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TextIcon } from "@/components/ui/AppIcon";
@@ -239,4 +239,4 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
   );
 }
 
-export default memo(TextNode);
+export default TextNode;

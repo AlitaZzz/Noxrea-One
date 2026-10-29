@@ -1112,4 +1112,4 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
   );
 }
 
-export default memo(VideoNode);
+export default VideoNode;

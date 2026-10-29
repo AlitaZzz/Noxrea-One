@@ -21,11 +21,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
+import { getNodeUpstreamRefs } from "@/features/canvas/shared/canvas-derived";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
-import { isGenerating as isGeneratingBinding, NODE_TYPE } from "@/lib/constants";
+import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
@@ -87,75 +88,21 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "text", allModels) });
   }, [allModels, genSettings?.modelKey, nodeId]);
 
-  // Upstream reference images - derived live from current edges
-  const canvasNodes = useCanvasStore((s) => s.nodes);
-  const canvasEdges = useCanvasStore((s) => s.edges);
+  // 上游引用（图片 / 文本 / 音频 / 视频）：共享结构缓存（canvas-derived），
+  // 位置帧复用同一引用，拖动当前节点时面板不随每帧重渲染。
+  const {
+    images: refImages,
+    texts: upstreamTexts,
+    audios: upstreamAudio,
+    videos: upstreamVideos,
+  } = useCanvasStore((s) => getNodeUpstreamRefs(s.nodes, s.edges, nodeId));
 
-  const isGenerating = useMemo(() => {
-    const node = canvasNodes.find((n) => n.id === nodeId);
+  // Button disabled state derived from persistent node.data.task_status
+  // （布尔原语订阅：只有生成状态变化才重渲染面板）
+  const isGenerating = useCanvasStore((s) => {
+    const node = s.nodes.find((n) => n.id === nodeId);
     return isGeneratingBinding((node?.data as TextNodeData)?.taskBinding);
-  }, [canvasNodes, nodeId]);
-  const refImages = useMemo(() => {
-    const upstreamIds = new Set(canvasEdges.filter((e) => e.target === nodeId).map((e) => e.source));
-    return canvasNodes
-      .filter((n) => upstreamIds.has(n.id) && n.type === NODE_TYPE.IMAGE)
-      .map((n) => (n.data as { src?: string }).src)
-      .filter(Boolean) as string[];
-  }, [nodeId, canvasNodes, canvasEdges]);
-
-  // 上游 Text 节点（按连接顺序），仅保留 content 非空的
-  const upstreamTexts = useMemo(() => {
-    return canvasEdges
-      .filter((e) => e.target === nodeId)
-      .map((e) => canvasNodes.find((n) => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.TEXT)
-      .map((n) => ({ id: n.id, content: ((n.data as { plainText?: string }).plainText || "").trim() }))
-      .filter((t) => t.content !== "");
-  }, [nodeId, canvasNodes, canvasEdges]);
-
-  // 上游 AUDIO 节点（参考音频，按连接顺序，按节点 id 与 src 双重去重）
-  const upstreamAudio = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenSrcs = new Set<string>();
-    return canvasEdges
-      .filter((e) => e.target === nodeId)
-      .map((e) => canvasNodes.find((n) => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.AUDIO)
-      .map((n) => ({
-        id: n.id,
-        src: ((n.data as { src?: string }).src || "").trim(),
-        label: ((n.data as { label?: string }).label || "").trim(),
-      }))
-      .filter(
-        (a) =>
-          a.src !== "" &&
-          !seenIds.has(a.id) &&
-          !seenSrcs.has(a.src) &&
-          (seenIds.add(a.id), seenSrcs.add(a.src), true),
-      );
-  }, [nodeId, canvasNodes, canvasEdges]);
-
-  // 上游 VIDEO 节点（参考视频，按连接顺序，按节点 id 与 src 双重去重）
-  const upstreamVideos = useMemo(() => {
-    const seenIds = new Set<string>();
-    const seenSrcs = new Set<string>();
-    return canvasEdges
-      .filter((e) => e.target === nodeId)
-      .map((e) => canvasNodes.find((n) => n.id === e.source))
-      .filter((n): n is NonNullable<typeof n> => !!n && n.type === NODE_TYPE.VIDEO)
-      .map((n) => ({
-        id: n.id,
-        src: ((n.data as { src?: string }).src || "").trim(),
-        label: ((n.data as { label?: string }).label || "").trim(),
-      }))
-      .filter(
-        (v) =>
-          v.src !== "" &&
-          !seenIds.has(v.id) &&
-          !seenSrcs.has(v.src) &&
-          (seenIds.add(v.id), seenSrcs.add(v.src), true),
-      );
-  }, [nodeId, canvasNodes, canvasEdges]);
+  });
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。

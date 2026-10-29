@@ -26,9 +26,16 @@ export interface OutlineGroup {
 
 export interface CanvasOutline {
   groupNodes: AnyNode[];
-  membersByGroup: Map<string, AnyNode[]>;
+  membersByGroup: ReadonlyMap<string, AnyNode[]>;
   ungroupedGroups: OutlineGroup[];
   nodeCount: number;
+}
+
+/** 组成员归属投影：组节点、按组归集的成员（类型顺序）、非组成员。 */
+export interface GroupMembership {
+  groupNodes: AnyNode[];
+  membersByGroup: ReadonlyMap<string, AnyNode[]>;
+  ungrouped: AnyNode[];
 }
 
 export interface CanvasDerived {
@@ -36,12 +43,37 @@ export interface CanvasDerived {
   selectedNodeIds: ReadonlySet<string>;
   highlightedEdgeIds: ReadonlySet<string>;
   railWidths: ReadonlyMap<string, number>;
-  outline: CanvasOutline;
+}
+
+/** 上游文本引用（生成面板）：内容已 trim，空内容不进入结果。 */
+export interface UpstreamTextRef {
+  id: string;
+  content: string;
+}
+
+/** 上游媒体引用（生成面板）：src / label 已 trim，空 src 不进入结果。 */
+export interface UpstreamMediaRef {
+  id: string;
+  src: string;
+  label: string;
+}
+
+export interface NodeUpstreamRefs {
+  /** 上游图片 src，按节点数组顺序（与生成面板既有顺序一致）。 */
+  images: string[];
+  /** 上游文本，按连线顺序，按节点 id 去重。 */
+  texts: UpstreamTextRef[];
+  /** 上游音频，按连线顺序，按节点 id 与 src 双重去重。 */
+  audios: UpstreamMediaRef[];
+  /** 上游视频，按连线顺序，按节点 id 与 src 双重去重。 */
+  videos: UpstreamMediaRef[];
 }
 
 const derivedCache = new WeakMap<AnyNode[], WeakMap<Edge[], CanvasDerived>>();
 const selectedSetCache = new Map<string, ReadonlySet<string>>();
 const outlineCache = new Map<string, CanvasOutline>();
+const membershipCache = new WeakMap<AnyNode[], GroupMembership>();
+const upstreamCache = new Map<string, NodeUpstreamRefs>();
 const edgeSetCache = new WeakMap<Edge[], Map<string, ReadonlySet<string>>>();
 const objectIdentity = new WeakMap<object, number>();
 let nextObjectIdentity = 1;
@@ -72,12 +104,16 @@ function stableSelectedIds(nodes: AnyNode[]): ReadonlySet<string> {
   return cacheValue(selectedSetCache, key, new Set(ids), 128);
 }
 
+function nodeDataIdentity(node: AnyNode): number {
+  return typeof node.data === "object" && node.data !== null ? identityOf(node.data) : 0;
+}
+
 function outlineKey(nodes: AnyNode[]): string {
   return nodes.map((node) => [
     node.id,
     node.type ?? "",
     node.parentId ?? "",
-    typeof node.data === "object" && node.data !== null ? identityOf(node.data) : 0,
+    nodeDataIdentity(node),
   ].join("\u0000")).join("\u0001");
 }
 
@@ -101,17 +137,18 @@ function groupNodesByType(nodes: AnyNode[]): OutlineGroup[] {
   return groups;
 }
 
-function buildOutline(nodes: AnyNode[]): CanvasOutline {
+const NODE_TYPE_ORDER_INDEX = new Map(NODE_TYPE_ORDER.map((type, index) => [type, index] as const));
+
+function buildGroupMembership(nodes: AnyNode[]): GroupMembership {
   const groupNodes: AnyNode[] = [];
   const groupIds = new Set<string>();
   const membersByGroup = new Map<string, AnyNode[]>();
   const ungrouped: AnyNode[] = [];
 
   for (const node of nodes) {
-    if (node.type === NODE_TYPE.GROUP) {
-      groupNodes.push(node);
-      groupIds.add(node.id);
-    }
+    if (node.type !== NODE_TYPE.GROUP) continue;
+    groupNodes.push(node);
+    groupIds.add(node.id);
   }
   for (const node of nodes) {
     if (node.type === NODE_TYPE.GROUP) continue;
@@ -124,11 +161,29 @@ function buildOutline(nodes: AnyNode[]): CanvasOutline {
     }
   }
 
-  const order = new Map(NODE_TYPE_ORDER.map((type, index) => [type, index]));
   for (const members of membersByGroup.values()) {
-    members.sort((a, b) => (order.get(a.type || "") ?? NODE_TYPE_ORDER.length) - (order.get(b.type || "") ?? NODE_TYPE_ORDER.length));
+    members.sort((a, b) =>
+      (NODE_TYPE_ORDER_INDEX.get(a.type || "") ?? NODE_TYPE_ORDER.length) -
+      (NODE_TYPE_ORDER_INDEX.get(b.type || "") ?? NODE_TYPE_ORDER.length));
   }
 
+  return { groupNodes, membersByGroup, ungrouped };
+}
+
+/**
+ * 组成员归属（按 nodes 引用缓存）。
+ * 组框尺寸与元素树都消费同一份归属；按引用缓存避免位置帧重复扫描全表。
+ */
+export function getGroupMembership(nodes: AnyNode[]): GroupMembership {
+  const cached = membershipCache.get(nodes);
+  if (cached) return cached;
+  const value = buildGroupMembership(nodes);
+  membershipCache.set(nodes, value);
+  return value;
+}
+
+function buildOutline(nodes: AnyNode[]): CanvasOutline {
+  const { groupNodes, membersByGroup, ungrouped } = getGroupMembership(nodes);
   return {
     groupNodes,
     membersByGroup,
@@ -137,7 +192,11 @@ function buildOutline(nodes: AnyNode[]): CanvasOutline {
   };
 }
 
-function getStableOutline(nodes: AnyNode[]): CanvasOutline {
+/**
+ * 元素树专用的画布大纲。包含全量字符串键与分组排序，只在资源浏览器订阅时
+ * 计算；位置帧的共享投影（getCanvasDerived）不再承担这部分成本。
+ */
+export function getCanvasOutline(nodes: AnyNode[]): CanvasOutline {
   const key = outlineKey(nodes);
   const cached = outlineCache.get(key);
   if (cached) return cached;
@@ -239,7 +298,6 @@ function derive(nodes: AnyNode[], edges: Edge[]): CanvasDerived {
     selectedNodeIds,
     highlightedEdgeIds: stableHighlightedEdges(edges, selectedNodeIds),
     railWidths: buildRailWidths(nodes, nodeById, selectionFrame),
-    outline: getStableOutline(nodes),
   };
 }
 
@@ -255,6 +313,104 @@ export function getCanvasDerived(nodes: AnyNode[], edges: Edge[]): CanvasDerived
   const value = derive(nodes, edges);
   byEdges.set(edges, value);
   return value;
+}
+
+// ============================================================
+// 上游引用（生成面板）
+// ============================================================
+
+/**
+ * 结构键：只包含决定上游引用结果的输入——入边序列与上游节点的身份/数据。
+ * 拖动只替换位置（node.data 引用不变），因此位置帧命中同一键并复用同一份引用，
+ * 面板订阅不会随每帧重渲染。
+ */
+function upstreamKey(nodes: AnyNode[], edges: Edge[], nodeId: string): string {
+  const upstreamIds = new Set<string>();
+  let key = nodeId;
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    upstreamIds.add(edge.source);
+    key += `\u0001${edge.id}\u0000${edge.source}`;
+  }
+  for (const node of nodes) {
+    if (!upstreamIds.has(node.id)) continue;
+    key += `\u0001${node.id}\u0000${node.type ?? ""}\u0000${nodeDataIdentity(node)}`;
+  }
+  return key;
+}
+
+/** 媒体引用统一规则：src / label trim，空 src 丢弃，按节点 id 与 src 双重去重。 */
+function pushMediaRef(
+  refs: UpstreamMediaRef[],
+  seenIds: Set<string>,
+  seenSrcs: Set<string>,
+  node: AnyNode,
+): void {
+  const src = ((node.data as { src?: string }).src || "").trim();
+  const label = ((node.data as { label?: string }).label || "").trim();
+  if (src === "" || seenIds.has(node.id) || seenSrcs.has(src)) return;
+  seenIds.add(node.id);
+  seenSrcs.add(src);
+  refs.push({ id: node.id, src, label });
+}
+
+function buildUpstreamRefs(nodes: AnyNode[], edges: Edge[], nodeId: string): NodeUpstreamRefs {
+  const incoming: Edge[] = [];
+  const upstreamIds = new Set<string>();
+  for (const edge of edges) {
+    if (edge.target !== nodeId) continue;
+    incoming.push(edge);
+    upstreamIds.add(edge.source);
+  }
+
+  // 图片按节点数组顺序（生成面板既有顺序），其余按连线顺序
+  const byId = new Map<string, AnyNode>();
+  const images: string[] = [];
+  for (const node of nodes) {
+    if (!upstreamIds.has(node.id)) continue;
+    byId.set(node.id, node);
+    if (node.type !== NODE_TYPE.IMAGE) continue;
+    const src = (node.data as { src?: string }).src;
+    if (src) images.push(src);
+  }
+
+  const texts: UpstreamTextRef[] = [];
+  const audios: UpstreamMediaRef[] = [];
+  const videos: UpstreamMediaRef[] = [];
+  const seenTextIds = new Set<string>();
+  const seenAudioIds = new Set<string>();
+  const seenAudioSrcs = new Set<string>();
+  const seenVideoIds = new Set<string>();
+  const seenVideoSrcs = new Set<string>();
+
+  for (const edge of incoming) {
+    const node = byId.get(edge.source);
+    if (!node) continue;
+    if (node.type === NODE_TYPE.TEXT) {
+      const content = ((node.data as { plainText?: string }).plainText || "").trim();
+      if (content === "" || seenTextIds.has(node.id)) continue;
+      seenTextIds.add(node.id);
+      texts.push({ id: node.id, content });
+    } else if (node.type === NODE_TYPE.AUDIO) {
+      pushMediaRef(audios, seenAudioIds, seenAudioSrcs, node);
+    } else if (node.type === NODE_TYPE.VIDEO) {
+      pushMediaRef(videos, seenVideoIds, seenVideoSrcs, node);
+    }
+  }
+
+  return { images, texts, audios, videos };
+}
+
+/** 生成面板共用的上游引用投影：同一结构键返回同一引用。 */
+export function getNodeUpstreamRefs(
+  nodes: AnyNode[],
+  edges: Edge[],
+  nodeId: string,
+): NodeUpstreamRefs {
+  const key = upstreamKey(nodes, edges, nodeId);
+  const cached = upstreamCache.get(key);
+  if (cached) return cached;
+  return cacheValue(upstreamCache, key, buildUpstreamRefs(nodes, edges, nodeId), 128);
 }
 
 export function canvasRailKey(nodeId: string | null, side: "left" | "right"): string | null {

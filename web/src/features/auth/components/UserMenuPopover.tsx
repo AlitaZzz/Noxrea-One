@@ -12,7 +12,7 @@
 
 "use client";
 
-import type { ReactElement, ReactNode } from "react";
+import { memo, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -26,11 +26,11 @@ import {
 import { useCurrentUser } from "@/features/auth/UserContext";
 import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 
-type UserMenuItem =
+export type UserMenuItem =
   | { type: "divider"; key?: string }
   | { type?: never; key: string; label?: ReactNode; extra?: ReactNode };
 
-export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: {
+function UserMenuPopoverImpl({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   trigger: ReactElement;
@@ -89,3 +89,6 @@ export function UserMenuPopover({ open, onOpenChange, trigger, placement = "bott
     </DropdownMenu>
   );
 }
+
+// 外壳在位置帧每帧重渲染：触发元素、items 与回调由调用方稳定化后，本组件直接 bail。
+export const UserMenuPopover = memo(UserMenuPopoverImpl);

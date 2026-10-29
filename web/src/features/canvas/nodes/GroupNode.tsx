@@ -6,13 +6,12 @@
 "use client";
 
 import type { NodeProps } from "@xyflow/react";
-import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 
 import { GroupIcon } from "@/components/ui/AppIcon";
 import GroupConnectRail from "@/features/canvas/controls/GroupConnectRail";
-import { isGroupMember } from "@/features/canvas/shared/group-bounds";
+import { getGroupMembership } from "@/features/canvas/shared/canvas-derived";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
 import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING } from "@/lib/constants";
@@ -20,6 +19,15 @@ import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PAD
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
 import ResizeHandle from "./ResizeHandle";
+
+interface GroupMetrics {
+  childMaxX: number;
+  childMaxY: number;
+  memberCount: number;
+}
+
+/** 无成员组的稳定引用：空组成员几何恒为 0（useShallow 按字段比较）。 */
+const NO_MEMBERS: GroupMetrics = { childMaxX: 0, childMaxY: 0, memberCount: 0 };
 
 function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
@@ -31,24 +39,23 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   // 只派生 GroupNode 真正依赖的原始值（成员相对矩形、成员数），用 useShallow
   // 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
   // （如选中状态、无关节点位移）都重渲染整个组。
-  // 成员 position 是组内相对坐标，直接与组框尺寸比较即可。
+  // 成员归属来自画布共享投影（按 nodes 引用缓存），这里只遍历本组成员，
+  // 位置帧不再对全表做 O(N) 扫描。成员 position 是组内相对坐标，直接与
+  // 组框尺寸比较即可。
   const { childMaxX, childMaxY, memberCount } = useCanvasStore(
     useShallow((s) => {
-      const nodes = s.nodes;
+      const members = getGroupMembership(s.nodes).membersByGroup.get(id);
+      if (!members || members.length === 0) return NO_MEMBERS;
       let maxX = 0, maxY = 0;
-      let count = 0;
-      for (const n of nodes) {
-        if (isGroupMember(n, id)) {
-          const w = Number(n.style?.width) || 0;
-          const h = Number(n.style?.height) || 0;
-          const x = n.position.x + w;
-          const y = n.position.y + h;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
-          count++;
-        }
+      for (const n of members) {
+        const w = Number(n.style?.width) || 0;
+        const h = Number(n.style?.height) || 0;
+        const x = n.position.x + w;
+        const y = n.position.y + h;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
       }
-      return { childMaxX: maxX, childMaxY: maxY, memberCount: count };
+      return { childMaxX: maxX, childMaxY: maxY, memberCount: members.length };
     })
   );
   const dynMinWidth = Math.max(GROUP_NODE_MIN_WIDTH, childMaxX + GROUP_NODE_PADDING);
@@ -109,4 +116,4 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   );
 }
 
-export default memo(GroupNode);
+export default GroupNode;

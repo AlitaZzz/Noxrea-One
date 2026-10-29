@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ArrowUpOutlined, CloseOutlined, DeleteOutlined } from "@/components/ui/AppIcon";
@@ -38,7 +38,7 @@ interface Props {
 }
 
 /** 右侧 Agent 对话抽屉（项目 Drawer 外壳 + markdown 渲染 + 工具续轮） */
-export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
+function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const providers = useModelStore((s) => s.providers);
@@ -380,3 +380,5 @@ export default function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
     </Sheet>
   );
 }
+
+export default memo(CanvasAgentDrawer);

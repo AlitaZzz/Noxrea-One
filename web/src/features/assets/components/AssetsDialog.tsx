@@ -7,7 +7,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, PlusOutlined, SwapOutlined } from "@/components/ui/AppIcon";
@@ -45,7 +45,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function AssetsDialog({ open, onClose }: Props) {
+function AssetsDialog({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const folders = useAssetsStore((s) => s.folders);
@@ -774,3 +774,5 @@ export default function AssetsDialog({ open, onClose }: Props) {
     </>
   );
 }
+
+export default memo(AssetsDialog);

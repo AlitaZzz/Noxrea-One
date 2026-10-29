@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import {
@@ -27,7 +27,7 @@ interface Props {
   onCancel: () => void
 }
 
-export default function DestructiveConfirmModal({
+function DestructiveConfirmModal({
   open,
   title,
   description,
@@ -94,3 +94,5 @@ export default function DestructiveConfirmModal({
     </AlertDialog>
   )
 }
+
+export default memo(DestructiveConfirmModal);

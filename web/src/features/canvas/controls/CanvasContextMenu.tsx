@@ -12,7 +12,7 @@
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
@@ -110,7 +110,7 @@ function renderMenuItems(items: CanvasMenuItem[], onSelect: (key: string) => voi
   });
 }
 
-export default function CanvasContextMenu(props: Props) {
+function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const { x, y, visible, kind, hide } = useContextMenuStore();
@@ -250,3 +250,5 @@ export default function CanvasContextMenu(props: Props) {
     </DropdownMenu>
   );
 }
+
+export default memo(CanvasContextMenu);

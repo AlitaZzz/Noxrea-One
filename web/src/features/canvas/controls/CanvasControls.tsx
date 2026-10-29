@@ -6,7 +6,7 @@
 "use client";
 
 import { useReactFlow, useViewport } from "@xyflow/react";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -99,7 +99,7 @@ interface Props {
   canvasExplorerOpen?: boolean;
 }
 
-export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, canvasExplorerOpen }: Props) {
+function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, canvasExplorerOpen }: Props) {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const { t } = useTranslation();
 
@@ -274,3 +274,5 @@ export default function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCan
     </>
   );
 }
+
+export default memo(CanvasControls);

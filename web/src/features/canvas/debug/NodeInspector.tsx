@@ -5,6 +5,7 @@
 "use client";
 
 import type { Node } from "@xyflow/react";
+import { memo } from "react";
 
 import Descriptions from "@/components/ui/descriptions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,7 +18,7 @@ interface NodeInspectorProps {
   onClose: () => void;
 }
 
-export default function NodeInspector({ open, node, onClose }: NodeInspectorProps) {
+function NodeInspector({ open, node, onClose }: NodeInspectorProps) {
   if (!node) return null;
 
   const jsonStr = JSON.stringify(
@@ -50,3 +51,5 @@ export default function NodeInspector({ open, node, onClose }: NodeInspectorProp
     </Dialog>
   );
 }
+
+export default memo(NodeInspector);

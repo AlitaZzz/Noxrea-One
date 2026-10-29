@@ -46,7 +46,7 @@ import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
 import { computeRecursiveFolderCounts, selectChildFolders, useAssetsStore } from "@/features/assets/store";
 import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N } from "@/features/canvas/NodeTypeDisplayMeta";
-import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
+import { getCanvasDerived, getCanvasOutline } from "@/features/canvas/shared/canvas-derived";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
@@ -65,7 +65,7 @@ interface CanvasExplorerProps {
   onClose: () => void;
 }
 
-export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
+function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<string>("elements");
 
@@ -124,7 +124,7 @@ export default function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
 
 function CanvasElementsView() {
   const { t } = useTranslation();
-  const outline = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges).outline);
+  const outline = useCanvasStore((s) => getCanvasOutline(s.nodes));
   const selectedNodeIds = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges).selectedNodeIds);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -674,3 +674,5 @@ function AssetsView() {
     </div>
   );
 }
+
+export default memo(CanvasExplorer);
