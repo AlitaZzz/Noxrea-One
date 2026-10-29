@@ -22,11 +22,13 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
+import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { SEEK_MARGIN_S } from "@/lib/constants";
+import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, ratioFromClientX } from "./clip-range";
@@ -180,24 +182,12 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   // 暂停后播放头即停在当前帧，再用 ←/→ 微调
   // 跟随范围：节点的任何位置变化（播放推进 / 拖节点进度条 / 点击跳转）都实时
   // 反映到播放头与时间码；面板自身轨道拖动期间挂起——拖动中节点时间的轻微
-  // 滞后会把播放头往回拽，松手后恢复
-  const lastCurRef = useRef(0);
-  useEffect(() => {
-    if (!ready || duration <= 0) return;
-    let raf = 0;
-    const tick = () => {
-      if (!dragCleanupRef.current) {
-        const cur = getVideoPlaybackTime(nodeId);
-        if (Math.abs(cur - lastCurRef.current) > 0.003) {
-          lastCurRef.current = cur;
-          setRatio(clamp01(cur / duration));
-        }
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [ready, duration, nodeId]);
+  // 滞后会把播放头往回拽，松手后恢复。挂起只跳过写入：读取注册表无副作用。
+  const readNodeTime = useVideoTimeSource(nodeId);
+  useMediaProgress(readNodeTime, ready && duration > 0, (cur) => {
+    if (dragCleanupRef.current) return;
+    setRatio(clamp01(cur / duration));
+  });
 
   // 拖动播放头时同步 seek 节点播放器，形成 scrubbing 预览；
   // rAF 节流保证一帧最多 seek 一次，避免高频 seek 拖垮解码

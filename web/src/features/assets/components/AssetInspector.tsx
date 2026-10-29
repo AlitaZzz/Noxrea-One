@@ -92,7 +92,7 @@ function Preview({ asset }: { asset: AssetItem }) {
     >
       {asset.mediaType === "audio" && asset.fileKey ? (
         <AudioWaveform
-          url={asset.fileKey}
+          audioRef={asset.fileKey}
           duration={audioDuration}
           onReady={setAudioDuration}
         />

@@ -47,7 +47,8 @@ export type { FileDelivery, ResolvedMediaAccess, ResolvedMediaUrl };
  * - `signed`：对象存储跨域直连，不带应用 Cookie（`omit`）；
  * - `stream`：同源流式，依赖会话 Cookie（`include`）；
  * - 外部地址（无 delivery）：保持 fetch 默认凭据语义。
- * 单点于此：wavesurfer 的 fetchParams 与 Mediabunny 的 Request 都从这里取。
+ * 单点于此：音频峰值解码的字节请求（`audio-peaks/decode`）与 Mediabunny 的 Request
+ * 都从这里取。
  */
 export function credentialsForDelivery(delivery: FileDelivery | undefined): RequestCredentials | undefined {
   if (!delivery) return undefined;

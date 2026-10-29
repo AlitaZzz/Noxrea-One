@@ -6,17 +6,11 @@
  * 其余组件不会跟着变，而它们说的是同一条规则。
  */
 
+import type { MediaPlaybackMirror } from "@/lib/use-media-playback-mirror";
+
 /** 播放态镜像：只承载跨元素重挂需要保真的播放语义 */
 export interface PlaybackMirror {
   playing: boolean;
-}
-
-/** 带进度的播放镜像（需要显示进度条与总时长的播放器） */
-interface ProgressPlaybackMirror extends PlaybackMirror {
-  /** 当前播放位置（秒） */
-  progress: number;
-  /** 媒体总时长（秒）；元数据未就绪时为 0 */
-  duration: number;
 }
 
 /**
@@ -25,8 +19,11 @@ interface ProgressPlaybackMirror extends PlaybackMirror {
  */
 export const IDLE_PLAYBACK: PlaybackMirror = { playing: false };
 
-/** 空闲播放态（带进度）：在基本空闲态之上把进度与时长归零，派生而非另立一份 */
-export const IDLE_PROGRESS_PLAYBACK: ProgressPlaybackMirror = {
+/**
+ * 空闲播放态（带进度）：在基本空闲态之上把进度与时长归零，派生而非另立一份。
+ * 形状即 `useMediaPlaybackMirror` 的镜像契约，两者不会漂移
+ */
+export const IDLE_PROGRESS_PLAYBACK: MediaPlaybackMirror = {
   ...IDLE_PLAYBACK,
   progress: 0,
   duration: 0,

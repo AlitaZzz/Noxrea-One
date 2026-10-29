@@ -1,7 +1,7 @@
 /**
  * 音频片段截取面板。
  *
- * 与视频片段截取面板（ClipStripPanel）同构：轨道自带 wavesurfer 波形，
+ * 与视频片段截取面板（ClipStripPanel）同构：轨道自带波形，
  * [起点, 终点] 双手柄选区即「位置」本身——点击/拖动轨道移动就近的手柄并
  * 连续 scrub，按住选区中段可整段平移，播放被约束在选区内循环，进度以
  * 白色竖线呈现。确认后把区间交给 AudioNode 走既有的事件链路创建派生音频节点。
@@ -9,13 +9,16 @@
  * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放。面板持有独立的 wavesurfer 实例
  * （节点内的实例跨组件共享不可行），打开即用、关闭即销毁。
+ *
+ * 波形与播放解耦（specs/canvas-audio-peaks-cache.md 规则 5.2）：波形只由 peaks
+ * 渲染（wavesurfer 只当渲染器，不传 url），播放由面板自己的 `<audio>` 元素直连；
+ * peaks 不可用时面板不可操作——全部交互都建立在波形时长与选区之上（规则 5.4）。
  */
 "use client";
 
 import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import WaveSurfer from "wavesurfer.js";
 
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
@@ -24,13 +27,17 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { FRAME_TRACK_WIDTH } from "@/features/canvas/hooks/use-frame-sprite";
 import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
+import { useAudioWaveformInstance } from "@/features/canvas/shared/audio-waveform-instance";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
+import { IDLE_PROGRESS_PLAYBACK } from "@/features/canvas/shared/media-playback";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { MediaAccessError } from "@/features/media/components/MediaAccessError";
-import { DEFAULT_NODE_COLOR, SEEK_MARGIN_S } from "@/lib/constants";
-import { credentialsForDelivery } from "@/lib/file-access";
-import { useFileAccessUrl } from "@/lib/use-file-access-url";
+import { useAudioPeaks } from "@/lib/audio-peaks/use-audio-peaks";
+import { SEEK_MARGIN_S } from "@/lib/constants";
+import { useAudioElement } from "@/lib/use-audio-element";
+import { useMediaPlaybackMirror } from "@/lib/use-media-playback-mirror";
+import { useMediaProgress } from "@/lib/use-media-progress";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
@@ -39,6 +46,18 @@ import usePlaybackBlocked from "./use-playback-blocked";
 /** 面板波形绘制高度（wavesurfer canvas）：轨道总高 40+16=56px 与视频截取
     面板的轨道（h-14）对齐，两个面板上下相邻时高度一致 */
 const PANEL_WAVE_HEIGHT = 40;
+
+/**
+ * 实例视觉选项：模块常量，身份稳定（实例只随 peaks 身份重建）。面板轨道是黑底，
+ * 固定白色波形；波形形态与节点内一致（细条），仅加粗加大间距——轨道放大到
+ * 1000px 后 2px 条偏稀疏单薄，选区亮带对比不足。
+ */
+const PANEL_WAVEFORM_OPTIONS = {
+  height: PANEL_WAVE_HEIGHT,
+  waveColor: "#ffffff",
+  barWidth: 3,
+  barGap: 2,
+};
 
 /** 键盘微调步进（s）：对齐时间标签的显示精度（0.01s），Shift ×10 = 0.1s */
 const AUDIO_STEP_S = 0.01;
@@ -49,53 +68,46 @@ const BAND_MOVE_THRESHOLD = 0.005;
 
 interface AudioClipStripPanelProps {
   nodeId: string;
-  /** 引用值：存储 key 或外部 URL；访问 URL 在面板内派生（wavesurfer 只接受 URL） */
+  /** 逻辑引用值：存储 key 或外部 URL；访问地址与峰值都由它派生 */
   audioRef: string;
   onClose: () => void;
 }
 
 export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: AudioClipStripPanelProps) {
   const { t } = useTranslation();
-  // 持久化值域是存储 key：wavesurfer 只接受最终访问地址，交给它之前先解析。
-  // 字节凭据同样由解析层的分发形态单点给出（signed 跨域 → omit，stream 同源 → include），
-  // 与节点内波形同一规则，不依赖浏览器 fetch 默认值
-  const {
-    url: resolvedAudioUrl,
-    delivery,
-    failed: accessFailed,
-    refresh: refreshAccess,
-    retrySigned,
-    reloadToken,
-  } = useFileAccessUrl(audioRef);
-  const credentials = credentialsForDelivery(delivery);
-  // retrySigned 的身份随解析状态变化；wavesurfer 实例只在地址/令牌变化时重建，
-  // 用 ref 取最新值，避免把实例生命周期绑到回调身份上
-  const retrySignedRef = useRef(retrySigned);
-  useEffect(() => {
-    retrySignedRef.current = retrySigned;
-  }, [retrySigned]);
-  const audioUrl = resolvedAudioUrl ?? "";
+  // 播放元素与访问地址：与节点内波形走同一解析层（描述缓存共享，不重复请求）。
+  // 波形本身不消费地址——wavesurfer 只拿 peaks 渲染，不产生字节请求
+  const { mediaRef, src, mediaFailed, accessFailed, refresh: refreshAccess, readTime } = useAudioElement(audioRef);
+  const { peaks, duration: peaksDuration, status: peaksStatus } = useAudioPeaks(audioRef);
   // 截取接口只接受存储 key；外部 URL 可试听但不提供编辑
   const audioKey = storageKeyOf(audioRef);
   const trackRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WaveSurfer | null>(null);
-  const [ready, setReady] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [duration, setDuration] = useState(0);
-  // 播放位置（秒）：进度竖线与拖动气泡的实时来源
-  const [current, setCurrent] = useState(0);
-  // 自动播放被浏览器拦截时置位（init 的自动 play() 被策略拒绝等）：面板无播放
+
+  // 播放被浏览器拦截时置位（打开时的自动 play() 被策略拒绝等）：面板无播放
   // 控件，必须提示用户用下一次真实点击（面板内按下轨道）或方向键恢复试听
-  const play = useCallback(() => wsRef.current?.play(), []);
+  // 元素还没有地址时（解析未完成 / 换源中）不发起 play：那只会得到一次
+  // NotSupportedError，且钩子不会把它记成「被拦截」，初始化试听会静默丢失。
+  // 返回 undefined 让钩子保持拦截提示，下一次真实手势（此时地址已就绪）恢复试听。
+  // 地址以元素实际挂载的 src 为准：hook 暴露的是「应挂值」，提交前可能领先于元素，
+  // 而 play() 读的是元素
+  const play = useCallback(() => {
+    const element = mediaRef.current;
+    if (!element || !element.getAttribute("src")) return undefined;
+    return element.play();
+  }, [mediaRef]);
   const { playbackBlocked, resume, resumeIfBlocked } = usePlaybackBlocked(play);
+
   // 面板打开即暂停节点自身播放（避免双声叠加），并记录当时的播放位置作为
-  // 选区起点——与视频片段截取面板行为一致（ref 即可：无需触发重渲染）
+  // 选区起点——与视频片段截取面板行为一致（ref 即可：无需触发重渲染）。
+  // 声明在选区初始化 effect 之前：挂载时先取到起点，peaks 命中内存缓存（首帧即
+  // 就绪）时初始化仍拿得到它
   const initialPositionRef = useRef(0);
   useEffect(() => {
     pauseAudio(nodeId);
     initialPositionRef.current = getAudioPlaybackTime(nodeId);
   }, [nodeId]);
+
   // 拖动结束与组件卸载（Esc / 点空白）都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
   // 当前拖动占用的指针 id：并发第二根指针（双指误触）不得启动第二个拖动，
@@ -103,124 +115,127 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
   const dragPointerRef = useRef<number | null>(null);
   useEffect(() => () => dragCleanupRef.current?.(), []);
 
-  // 区间双手柄与键盘微调目标（默认调终点）。
-  // 声明在 wavesurfer 初始化 effect 之前：选区在 ready 回调里同步初始化，
-  // 回调需要写 setClipRange
+  // 失败归类：地址描述失败（有手动重试入口）优先，其次媒体加载失败与峰值不可用
+  // （三者各有独立提示文案）。可操作判断只看前两者——峰值不可用已由 peaksReady 排除
+  const failureKind = accessFailed
+    ? "access"
+    : mediaFailed
+      ? "media"
+      : peaksStatus === "unavailable"
+        ? "peaks"
+        : null;
+  /** 地址/媒体加载失败：两者各有失败态展示，且都让面板不可操作 */
+  const loadFailed = failureKind === "access" || failureKind === "media";
+  // 面板的全部交互都建立在波形时长与选区之上：peaks 不可用即不可操作（规则 5.4）
+  const duration = peaksDuration ?? 0;
+  const peaksReady = peaksStatus === "ready" && duration > 0;
+
+  // 区间双手柄与键盘微调目标（默认调终点）
   const [clipRange, setClipRange] = useState<{ inR: number; outR: number } | null>(null);
   const [clipHandle, setClipHandleActive] = useState<"in" | "out">("out");
   const [clipDragging, setClipDragging] = useState<null | "in" | "out" | "band">(null);
-  // 进度位置去重：tick 每帧读 currentTime，只有变化超过阈值才触发重渲染
-  // （与视频片段截取面板同款，替代 wavesurfer timeupdate 的每帧 setState）
-  const lastCurRef = useRef(0);
 
   // 区间最新值镜像：循环 tick 的 effect 依赖里没有区间值（避免拖动中重建
   // effect 的竞态），拖动/键盘在 setState 的同时更新这里，tick 每帧读到的
-  // 始终是最新区间；finish 兜底回调也读这里拿到当前入点。
+  // 始终是最新区间；媒体结束兜底回调也读这里拿到当前入点。
   const clipLoopRef = useRef({ inR: 0, outR: 1 });
 
   /** 循环约束的唯一实现：播放越出选区即折回入点。rAF tick（可见时）与
       timeupdate（隐藏标签页里 rAF 停转的后备）共用，规则只写一处防漂移 */
   const enforceLoop = useCallback((d: number) => {
-    const ws = wsRef.current;
-    if (!ws || !ws.isPlaying()) return;
+    const element = mediaRef.current;
+    if (!element || element.paused || element.ended) return;
     const { inR, outR } = clipLoopRef.current;
     const iT = inR * d;
     const oT = outR * d;
-    if (isRangeLongEnough(iT, oT) && isOutsideLoopRange(ws.getCurrentTime(), iT, oT)) {
-      ws.setTime(iT);
+    if (isRangeLongEnough(iT, oT) && isOutsideLoopRange(element.currentTime, iT, oT)) {
+      element.currentTime = iT;
     }
-  }, []);
+  }, [mediaRef]);
 
-  // 初始化面板自己的 wavesurfer（样式选项与节点内波形一致）
+  // 循环约束每帧执行（与进度跟随共用 rAF）：进度 Hook 只在时间变化时回调，
+  // 循环判定必须每帧都跑，否则出点附近的折回会延迟
+  const enforceLoopFrame = useCallback(() => {
+    enforceLoop(duration);
+  }, [enforceLoop, duration]);
+
+  // 播放镜像：事件 → 状态的映射与节点波形共用 `useMediaPlaybackMirror`；镜像
+  // 按逻辑源记账，换源后旧源的播放态与进度在渲染期作废。时长以 peaks 为准，
+  // 镜像里的媒体时长本面板不消费。附加回调在同一事件处理的 patch 之后执行，
+  // 承担循环约束的隐藏标签页后备与结束续播（规则 4.5 / 5.2）
+  const { mirror: playback, reportProgress } = useMediaPlaybackMirror(
+    mediaRef,
+    audioRef,
+    IDLE_PROGRESS_PLAYBACK,
+    {
+      // 循环约束的隐藏标签页后备：rAF 在后台标签页停转，timeupdate 仍会到达
+      timeupdate: () => {
+        if (duration > 0) enforceLoop(duration);
+      },
+      // 选区出点在文件末尾时的循环兜底：媒体自然结束（paused/ended 置位）先于 rAF
+      // 观察到 cur >= oT——enforceLoop 在 ended 瞬间已短路，循环 tick 永远看不到越界。
+      // 必须监听 ended 把播放头拉回入点续播，否则试听播到文件尾就永久停止
+      // （面板没有播放控件，节点按钮又被 clipActive 锁住）。
+      // 区间无效（短于最小区间的音频）时不续播：播完即停，否则 ended 无条件
+      // 续播会形成不受控的整文件循环，而面板没有停止控件
+      ended: () => {
+        const element = mediaRef.current;
+        if (!element) return;
+        const { inR, outR } = clipLoopRef.current;
+        if (duration > 0 && isRangeLongEnough(inR * duration, outR * duration)) {
+          element.currentTime = inR * duration;
+          resume();
+        }
+      },
+    },
+  );
+  // 播放位置（秒）：进度竖线与拖动气泡的实时来源
+  const { playing, progress: current } = playback;
+
+  // 实例只在 peaks 就绪后创建；生命周期由 peaks 身份决定（换源重建、地址轮换不触碰）
+  useAudioWaveformInstance(containerRef, mediaRef, peaks, PANEL_WAVEFORM_OPTIONS);
+
+  // 选区初始化：peaks 时长与地址都就绪后按打开时的播放位置落一次。
+  // 地址也必须就绪：元素还没有 src 时写 `currentTime` 只会落到「默认起播位置」，
+  // 随后的加载算法（赋 src 时触发）会把它清零——起点丢失；`play()` 同样会以
+  // NotSupportedError 失败。初始化必须等到真的能播（与 peaks 就绪同属前置条件）。
+  // 放在 effect 而非波形回调里，靠 operable 依赖 clipRange 非空来关闭
+  // 「已可操作但选区未初始化」的窗口（见 operable 定义）。
+  //
+  // 一次性的语义按「逻辑源 + 元素」记账：元素由 useAudioElement 在 effect 中创建，
+  // 开发态 StrictMode 的挂载—卸载—重挂会换成新元素，只按源记账会把重挂当成同一次
+  // 初始化，活着的新元素既没有起点也不会自动试听。同源换代沿用当前选区（用户可能
+  // 已调整），只有源变化才按打开位置重新计算。
+  const initializedRef = useRef<{ source: string; element: HTMLAudioElement } | null>(null);
   useEffect(() => {
-    // 访问地址未解析完成前不创建实例（url 为空会请求页面自身）
-    if (!containerRef.current || !audioUrl) return;
-    // 换地址 / 规则 3.6 重试重建实例：旧实例的失败与就绪状态都属于旧地址
-    setFailed(false);
-    setReady(false);
+    const element = mediaRef.current;
+    if (!element || !src || !peaksReady || loadFailed) return;
+    const initialized = initializedRef.current;
+    if (initialized?.source === audioRef && initialized.element === element) return;
+    const freshSource = initialized?.source !== audioRef;
+    initializedRef.current = { source: audioRef, element };
+    if (freshSource) {
+      const { inR, outR } = computeInitialRange(duration, initialPositionRef.current);
+      setClipRange({ inR, outR });
+      clipLoopRef.current = { inR, outR };
+    }
+    element.currentTime = clipLoopRef.current.inR * duration;
+    // 播放被浏览器拦截时 resume 会置 playbackBlocked 提示，
+    // 下一次按下轨道/方向键（真实手势）即恢复
+    resume();
+  }, [mediaRef, src, peaksReady, loadFailed, audioRef, duration, resume]);
 
-    const ws = WaveSurfer.create({
-      container: containerRef.current,
-      height: PANEL_WAVE_HEIGHT,
-      // 波形形态与节点内一致（细条），仅加粗加大间距、提高透明度：
-      // 面板轨道放大到 1000px 后 2px 条偏稀疏单薄，选区亮带对比不足
-      waveColor: "#ffffff",
-      progressColor: DEFAULT_NODE_COLOR,
-      cursorColor: DEFAULT_NODE_COLOR,
-      cursorWidth: 0,
-      barWidth: 3,
-      barGap: 2,
-      barRadius: 2,
-      url: audioUrl,
-      interact: false,
-      ...(credentials ? { fetchParams: { credentials } } : {}),
-    });
-    wsRef.current = ws;
-    ws.on("ready", () => {
-      const d = ws.getDuration();
-      setDuration(d);
-      setReady(true);
-      // 选区在 ready 回调里同步初始化：若留给 effect，operable 翻 true 的提交
-      // 与 effect 执行之间存在窗口，期间的轨道点击会把默认区间 {inR:0, outR:1}
-      // 当作已初始化写死（init 因 clipRange 非空被跳过），选区错且无自动循环
-      if (d > 0) {
-        const { inR, outR } = computeInitialRange(d, initialPositionRef.current);
-        setClipRange({ inR, outR });
-        clipLoopRef.current = { inR, outR };
-        ws.setTime(inR * d);
-        // 播放被浏览器拦截时 resume 会置 playbackBlocked 提示，
-        // 下一次按下轨道/方向键（真实手势）即恢复
-        resume();
-      }
-    });
-    ws.on("error", () => {
-      setFailed(true);
-      // 规则 3.6：地址类失败（过期 / 403）换一次签名再加载；闩锁保证同一源只重试一次，
-      // 解码等与地址无关的失败在重试后仍会落回 unavailable
-      void retrySignedRef.current();
-    });
-    // 选区出点在文件末尾时的循环兜底：媒体自然结束（ended 置位）先于 rAF
-    // 观察到 cur >= oT——isPlaying() 在 ended 瞬间已为 false，循环 tick 永远
-    // 看不到越界。必须监听 finish 把播放头拉回入点续播，否则试听播到文件尾
-    // 就永久停止（面板没有播放控件，节点按钮又被 clipActive 锁住）。
-    // 区间无效（短于最小区间的音频）时不续播：播完即停，否则 finish 无条件
-    // 续播会形成不受控的整文件循环，而面板没有停止控件
-    ws.on("finish", () => {
-      const d = ws.getDuration();
-      const { inR, outR } = clipLoopRef.current;
-      if (d > 0 && isRangeLongEnough(inR * d, outR * d)) {
-        ws.setTime(inR * d);
-        resume();
-      }
-    });
-    // 隐藏标签页里 rAF 停转、tick 失效，而音频会继续播出选区之外：
-    // timeupdate（后台仍以低频触发）作为循环约束的后备执行路径
-    ws.on("timeupdate", () => {
-      const d = ws.getDuration();
-      if (d > 0) enforceLoop(d);
-    });
-
-    return () => {
-      ws.destroy();
-      wsRef.current = null;
-    };
-    // resume / enforceLoop 引用稳定（play thunk 为 useCallback []），
-    // 进 deps 不引发重建；reloadToken 用于「重新签出的地址与旧地址相同」时也重建实例
-  }, [audioUrl, credentials, reloadToken, resume, enforceLoop]);
-
-  const operable = ready && !failed && duration > 0;
+  // 可操作 = 波形时长已知 + 没失败 + 元素真的拿到了地址：地址缺失时选区与试听
+  // 都无从谈起（seek 会被之后的加载清零，play 会失败），面板保持不可交互的提示态
+  const operable = peaksReady && !loadFailed && src !== null && clipRange !== null;
   const inTime = clipRange ? clipRange.inR * duration : 0;
   const outTime = clipRange ? clipRange.outR * duration : 0;
-  // 选区经 ready 回调同步批置（setReady/setDuration/setClipRange 同一回调）：
-  // operable 为真时 clipRange 必非空，inTime/outTime 即真实选区
+  // 选区经同一 effect 批置（setClipRange 与时长同源），operable 为真时 clipRange 必非空
   const rangeValid = operable && isRangeLongEnough(inTime, outTime);
   const progress = duration > 0 ? clamp01(current / duration) : 0;
 
   // Esc 关闭：与点击画布空白（取消选中后面板自动卸载）形成一致的退出路径
   useEscapeToClose(onClose);
-
-  // 卸载时停掉面板内的试听播放（wavesurfer 随 effect cleanup 销毁，双保险）
-  useEffect(() => () => { wsRef.current?.pause(); }, []);
 
   /** 设置某一只手柄的位置，并钳住最小区间（in 不越过 out，out 不落后于 in）。
       同步把最新区间写进 clipLoopRef：拖动中读取的是这里维护的最新值。
@@ -240,14 +255,14 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
     [duration],
   );
 
-  /** 截取预览定位：音频 seek 廉价，直接 setTime。上钳在文件末尾前 SEEK_MARGIN_S：
-      ratio 恰为 1.0 时 seek 到精确 duration 会立即触发 finish 折回入点 */
+  /** 截取预览定位：音频 seek 廉价，直接写媒体元素。上钳在文件末尾前 SEEK_MARGIN_S：
+      ratio 恰为 1.0 时 seek 到精确 duration 会立即触发 ended 折回入点 */
   const clipSeek = useCallback((time: number) => {
-    const ws = wsRef.current;
-    if (!ws) return;
+    const element = mediaRef.current;
+    if (!element) return;
     const max = duration > 0 ? Math.max(0, duration - SEEK_MARGIN_S) : time;
-    ws.setTime(Math.min(Math.max(0, time), max));
-  }, [duration]);
+    element.currentTime = Math.min(Math.max(0, time), max);
+  }, [duration, mediaRef]);
 
   // ← / → 按 0.01s 步进微调当前手柄（Shift ×10 = 0.1s）：对齐时间标签显示精度
   useEffect(() => {
@@ -269,37 +284,18 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
       const nextRange = setClipHandle(clipHandle, target);
       // 与拖动逻辑一致：只有入点变化时把播放头带到新起点，
       // 调出点不挪播放头，避免循环 tick 越界折回造成「从头播放」
-      if (clipHandle === "in") {
-        wsRef.current?.setTime(nextRange.inR * duration);
-      }
+      if (clipHandle === "in") clipSeek(nextRange.inR * duration);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [operable, clipHandle, duration, setClipHandle, resumeIfBlocked]);
+  }, [operable, clipHandle, duration, setClipHandle, resumeIfBlocked, clipSeek]);
 
-  // 播放被约束在选区内循环：到达终点跳回起点，起点被拖到播放位置之后也拉回，
-  // 保证试听始终落在所选片段里。区间最新值经 clipLoopRef 提供（依赖里没有区间
-  // 值，拖动不重建 effect——与视频片段截取面板同一款竞态规避）。
-  useEffect(() => {
-    if (!operable) return;
-    let raf = 0;
-    const tick = () => {
-      const ws = wsRef.current;
-      if (ws) {
-        const cur = ws.getCurrentTime();
-        // 进度线唯一驱动：播放推进 / seek / 点击定位都实时反映，静止时零渲染
-        if (Math.abs(cur - lastCurRef.current) > 0.003) {
-          lastCurRef.current = cur;
-          setCurrent(cur);
-        }
-        // 循环约束走 enforceLoop（与 timeupdate 共用唯一实现，见其注释）
-        enforceLoop(duration);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [operable, duration, enforceLoop]);
+  // 播放位置逐帧跟随 + 循环约束：进度 Hook 只在时间变化时触发渲染，循环约束走
+  // 每帧回调（规则 4.5 / 5.2）。循环只在播放中运行——暂停时没有推进可言，
+  // 播放头进度由 timeupdate 回填（暂停拖动只写 currentTime，seek 完成后的
+  // timeupdate 才更新进度）。区间最新值经 clipLoopRef 提供，
+  // 拖动期间不重建循环。时间源由 useAudioElement 提供（身份稳定），循环只在播放态切换时重启。
+  useMediaProgress(readTime, playing, reportProgress, enforceLoopFrame);
 
   // 截取模式下的拖动：which = "in"/"out" 精确抓取手柄；"track" 点击轨道——
   // 选区外挪动该侧边界（入点左侧 → 入点、出点右侧 → 出点，与「就近」等价）；
@@ -459,7 +455,7 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
           <div
             ref={containerRef}
             className="audio-waveform-panel absolute inset-x-0 top-2"
-            style={{ opacity: failed ? 0 : 1 }}
+            style={{ opacity: peaksReady ? 1 : 0 }}
           />
 
           {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
@@ -514,20 +510,22 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
         )}
 
         {/* 面板级提示（互斥场景共用样式，合并渲染）：
-            未就绪 → 加载中 / 失败或零时长的不可用；已就绪但自动播放被拦 → 恢复提示。
+            未就绪 → 加载中 / 失败或峰值不可用的不可用；已就绪但自动播放被拦 → 恢复提示。
             blocked 而面板又变为不可操作时（如加载失败）按不可用文案显示 */}
         {(!operable || playbackBlocked) && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center text-xs text-white/60">
-            {accessFailed ? (
+            {failureKind === "access" ? (
               // 描述失败：音频地址永远拿不到，停在「加载中」会看起来像卡死
               <div className="pointer-events-auto">
                 <MediaAccessError compact onRetry={() => { void refreshAccess(); }} />
               </div>
             ) : operable && playbackBlocked
               ? t("clip.autoplayBlocked")
-              : failed || (ready && duration <= 0)
-                ? t("clip.unavailable")
-                : t("clip.loading")}
+              : failureKind === "peaks"
+                ? t("clip.peaksUnavailable")
+                : failureKind
+                  ? t("clip.unavailable")
+                  : t("clip.loading")}
           </div>
         )}
       </div>

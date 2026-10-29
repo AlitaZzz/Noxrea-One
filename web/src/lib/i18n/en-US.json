@@ -585,6 +585,7 @@
     "autoplayBlocked": "Autoplay was blocked — click the track to start playback",
     "loading": "Loading audio...",
     "unavailable": "Audio preview unavailable",
+    "peaksUnavailable": "Waveform unavailable — clipping is disabled",
     "processing": "Extracting clip...",
     "proxyLoading": "Generating preview proxy...",
     "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",

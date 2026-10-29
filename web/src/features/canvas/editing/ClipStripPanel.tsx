@@ -23,10 +23,12 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
+import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, isVideoPlaying, onVideoEnded, pauseVideo, playVideo, seekVideo, setVideoTime, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
@@ -120,8 +122,6 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   // 区间最新值的 ref 镜像：tick 的 effect 依赖里没有区间值（见 tick 处说明），
   // 初始化/拖动在 setState 的同时更新这里，tick 每帧读到的始终是最新区间
   const loopStateRef = useRef({ inRatio: 0, outRatio: 1 });
-  // 节点位置的变更检测基准：tick 由此判断位置是否变化（变化才触发渲染）
-  const lastCurRef = useRef(0);
   // 初始化是否已写入真实区间：写入前选区/进度线不得渲染——operable 翻 true 的
   // 那次渲染里 inRatio/outRatio 还是 0→1 默认值，直接渲染会闪现「满轨道全选」
   const [rangeInitialized, setRangeInitialized] = useState(false);
@@ -454,35 +454,29 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   // 保证扫播始终落在所选片段里；播放中同步推进进度竖线。
   // 回跳必须用 setVideoTime：seekVideo 会 pause，一用循环就变成「只播一圈」。
   //
-  // effect 依赖只有 operable/duration/nodeId——若把区间放进依赖，拖动的每次
-  // pointermove 都会重建本 effect，其 cleanup 会把 seekPreview 刚调度、尚未
-  // 执行的 seek 一并 cancel（共用 rAF 句柄的时序竞态），表现为拖动时画面偶尔
-  // 完全不动、松手才跳一下，且是否复现取决于 effect flush 与 rAF 的先后，
-  // 纯随机。cleanup 只准取消自己的 rAF。
-  useEffect(() => {
-    if (!operable || duration <= 0) return;
-    let raf = 0;
-    const tick = () => {
-      const cur = getVideoPlaybackTime(nodeId);
+  // 跟随与回跳共用共享进度 Hook 的同一个 rAF 循环；循环只在时间源（nodeId）或
+  // operable/duration 变化时重启——区间不进依赖，拖动中的每次 pointermove 都不会
+  // 重建循环，其 cleanup 也就不会 cancel seekPreview 刚调度、尚未执行的 seek
+  // （共用 rAF 句柄的时序竞态：拖动时画面偶尔完全不动、松手才跳一下，且是否复现
+  // 取决于 effect flush 与 rAF 的先后，纯随机）。区间最新值每帧从 loopStateRef 读取。
+  const readNodeTime = useVideoTimeSource(nodeId);
+  useMediaProgress(
+    readNodeTime,
+    operable && duration > 0,
+    // 任何来源的位置变化（播放推进 / 拖节点进度条 / 点击跳转）都实时反映到进度线
+    (cur) => setPlayedRatio(clamp01(cur / duration)),
+    // 播放中的循环回跳：到选区终点跳回起点（起点被拖到播放位置之后也拉回）；
+    // 暂停时不回跳——用户可以把播放头停在选区外的位置查看画面
+    (cur) => {
       const { inRatio: iR, outRatio: oR } = loopStateRef.current;
       const iT = iR * duration;
       const oT = oR * duration;
-      // 播放中的循环回跳：到选区终点跳回起点（起点被拖到播放位置之后也拉回）；
-      // 暂停时不回跳——用户可以把播放头停在选区外的位置查看画面
       if (isVideoPlaying(nodeId) && isRangeLongEnough(iT, oT) && isOutsideLoopRange(cur, iT, oT)) {
         setVideoTime(nodeId, iT);
-        lastCurRef.current = iT;
         setPlayedRatio(iR);
-      } else if (Math.abs(cur - lastCurRef.current) > 0.003) {
-        // 任何来源的位置变化（播放推进 / 拖节点进度条 / 点击跳转）都实时反映到进度线
-        lastCurRef.current = cur;
-        setPlayedRatio(clamp01(cur / duration));
       }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [operable, duration, nodeId]);
+    },
+  );
 
   // 选区出点在文件末尾时的循环兜底：媒体自然结束（ended 置位）先于 rAF 观察到
   // cur >= oT——isVideoPlaying 在 ended 瞬间已为 false，上面的 tick 永远看不到

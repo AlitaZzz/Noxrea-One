@@ -8,7 +8,9 @@
  * 任何 IndexedDB 故障（隐私模式、配额、结构升级失败）都按「无缓存」处理：
  * 解析层退化为纯内存，正确性不受影响。
  */
-import { type DBSchema, type IDBPDatabase,openDB } from "idb";
+import { type DBSchema } from "idb";
+
+import { createCacheDatabase, putAndTrim } from "@/lib/idb-cache";
 
 /** 一条持久化的签名描述；`cacheKey` 与 `scope` 都参与命中判定 */
 export interface PersistedSignedDescriptor {
@@ -43,17 +45,9 @@ const STORE = "signed";
 /** 条目上限：描述是缓存而非数据源，超出按写入时间淘汰最旧的 */
 const PERSISTED_ENTRY_LIMIT = 500;
 
-let database: Promise<IDBPDatabase<FileAccessDB> | null> | null = null;
-
-function db(): Promise<IDBPDatabase<FileAccessDB> | null> {
-  if (typeof indexedDB === "undefined") return Promise.resolve(null);
-  database ??= openDB<FileAccessDB>(DB_NAME, DB_VERSION, {
-    upgrade(connection) {
-      connection.createObjectStore(STORE, { keyPath: "cacheKey" }).createIndex("by-saved", "savedAt");
-    },
-  }).catch(() => null);
-  return database;
-}
+const db = createCacheDatabase<FileAccessDB>(DB_NAME, DB_VERSION, (connection) => {
+  connection.createObjectStore(STORE, { keyPath: "cacheKey" }).createIndex("by-saved", "savedAt");
+});
 
 /** 读取全部持久化条目（会话开始时一次性加载，命中判定在解析层按作用域与寿命进行） */
 export async function readPersistedDescriptors(): Promise<PersistedSignedDescriptor[]> {
@@ -70,18 +64,12 @@ export async function readPersistedDescriptors(): Promise<PersistedSignedDescrip
 export async function writePersistedDescriptors(
   records: readonly PersistedSignedDescriptor[],
 ): Promise<void> {
+  // 空批不打开连接：惰性打开是本模块的约定，没有签名的用户不应因一次空写入创建库。
+  // 共用骨架里的同名判断发生在连接之后，覆盖不到这一点
   if (records.length === 0) return;
   const connection = await db();
   if (!connection) return;
-  try {
-    const transaction = connection.transaction(STORE, "readwrite");
-    for (const record of records) void transaction.store.put(record);
-    await transaction.done;
-  } catch {
-    // 落盘失败只损失跨会话命中，不影响本次解析
-    return;
-  }
-  await trim(connection);
+  await putAndTrim(connection, STORE, "by-saved", PERSISTED_ENTRY_LIMIT, records);
 }
 
 /** 删除指定条目（会话开始时清理已过期或属于其他账号的记录） */
@@ -106,24 +94,5 @@ export async function clearPersistedDescriptors(): Promise<void> {
     await connection.clear(STORE);
   } catch {
     // 同上：清空失败由作用域校验兜住
-  }
-}
-
-async function trim(connection: IDBPDatabase<FileAccessDB>): Promise<void> {
-  try {
-    const excess = (await connection.count(STORE)) - PERSISTED_ENTRY_LIMIT;
-    if (excess <= 0) return;
-    const transaction = connection.transaction(STORE, "readwrite");
-    let removed = 0;
-    // savedAt 索引升序：游标从最旧的一条开始
-    let cursor = await transaction.store.index("by-saved").openCursor();
-    while (cursor && removed < excess) {
-      await cursor.delete();
-      removed += 1;
-      cursor = await cursor.continue();
-    }
-    await transaction.done;
-  } catch {
-    // 淘汰失败只是条目多留几条
   }
 }

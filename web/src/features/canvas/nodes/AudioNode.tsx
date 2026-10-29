@@ -74,15 +74,19 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
     if (!selected) pauseAudio(id);
   }, [selected, id]);
 
-  // 波形就绪：回填 duration 到节点数据（唯一真相），供标题栏与进度显示
+  // 波形就绪：回填 duration 到节点数据（唯一真相），供标题栏与进度显示。
+  // 波形组件每次挂载都会按源回调一次；时长已一致时不写，避免无意义的数据更新
+  // 与画布重渲染（等值抑制属于消费方的写入决策，不是组件契约）
   const handleAudioReady = useCallback((d: number) => {
+    const value = d || 0;
+    if (value === duration) return;
     useCanvasStore.getState().updateNodeData(
       id,
-      { duration: d || 0 } as Partial<AudioNodeData>,
+      { duration: value } as Partial<AudioNodeData>,
       undefined,
       { skipHistory: true }
     );
-  }, [id]);
+  }, [id, duration]);
 
   /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
   const handleUpload = useNodeUpload(id, { accept: "audio/*" });
@@ -250,7 +254,7 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
           <GeneratingOverlay absolute={false} startedAt={data.taskBinding?.startedAt} />
         ) : hasAudio ? (
           <AudioWaveform
-            url={fileRefUrl(src)}
+            audioRef={fileRefUrl(src)}
             nodeId={id}
             clipActive={clipActive}
             duration={duration}

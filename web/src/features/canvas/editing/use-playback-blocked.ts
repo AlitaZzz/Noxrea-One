@@ -17,7 +17,7 @@ import { useCallback, useState } from "react";
 export default function usePlaybackBlocked(play: () => Promise<unknown> | undefined) {
   const [playbackBlocked, setPlaybackBlocked] = useState(false);
   /** 清除拦截标记并重试播放；再被策略拒绝则重新置位（ended/init 的无条件续播走这里）。
-      play() 没产生 promise（video 元素未注册 / wavesurfer 未就绪）时恢复无法发生：
+      play() 没产生 promise（video 元素未注册 / 音频元素还没有地址）时恢复无法发生：
       必须保持置位——清掉标记会让后续 resumeIfBlocked 全部短路，面板生命周期内
       再无恢复路径，播放静默丢失且无任何提示 */
   const resume = useCallback(() => {

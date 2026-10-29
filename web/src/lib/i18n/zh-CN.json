@@ -585,6 +585,7 @@
     "autoplayBlocked": "浏览器已拦截自动播放：点击轨道开始播放",
     "loading": "正在加载音频...",
     "unavailable": "音频加载失败",
+    "peaksUnavailable": "波形不可用，暂时无法截取片段",
     "processing": "正在截取片段...",
     "proxyLoading": "正在生成预览代理...",
     "proxyFailed": "预览代理生成失败，请关闭后重开面板重试",

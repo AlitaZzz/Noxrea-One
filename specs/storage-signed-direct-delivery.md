@@ -173,7 +173,7 @@
 - 值域分流：存储 key / 托管 URL → 解析；外部 `http(s)`、`data:`、`blob:` → 原样返回，不发请求。
 - 解析：`POST /api/files/access`，请求体由逻辑值（key/width/download/filename）构造，取 `url` / `delivery` / `expiresAt` / `refreshAt`。
 - 逻辑值上的 URL 片段（如视频缩略的 `#t=0.1`）只属于客户端：不进入描述请求与缓存键，解析结果保留该片段（签名 URL 本身不带片段）。
-- 调用方依据 `delivery` 决定 `fetch` 的 `credentials`：`signed` → `omit`；`stream` → `include`；外部地址保持 fetch 默认。该映射由 `credentialsForDelivery(delivery)` 单点提供，字节消费方（wavesurfer `fetchParams`、Mediabunny `Request`）不得各自再写一份三元式。
+- 调用方依据 `delivery` 决定 `fetch` 的 `credentials`：`signed` → `omit`；`stream` → `include`；外部地址保持 fetch 默认。该映射由 `credentialsForDelivery(delivery)` 单点提供，字节消费方（音频峰值解码的字节请求、Mediabunny `Request`）不得各自再写一份三元式。
 
 3.2 缓存（内存 + 客户端持久化，**2026-10-26 修订**）：
 
@@ -198,7 +198,7 @@
 
 3.5 组件迁移：所有托管媒体消费点改用 Hook/服务，不再直接把 `fileRefUrl()` 的结果作为 `<img>`/`<video>`/`<audio>`/`fetch` 的最终地址。清单见「技术影响 / 前端」。
 
-3.6 媒体元素失败重试：签名 URL 因过期、时钟或 bucket 策略返回 403/404 时，调用方以 `forceRefresh` 重新解析一次；仍失败才进入现有失败态。不得无限重试。重试预算按**失败地址**计：同一签名地址只重新解析一次（同一窗口重签得到同一地址，重复刷新无意义）；重新签发得到新地址后再次失败，重新获得一次预算（2026-10-26 用户确认）。规则 3.8 已在后台取得更晚失效的地址时，`retrySigned` 先使用该地址、不发描述请求；该判断先于失败地址预算。
+3.6 媒体元素失败重试：签名 URL 因过期、时钟或 bucket 策略返回 403/404 时，调用方以 `forceRefresh` 重新解析一次；仍失败才进入现有失败态。不得无限重试。重试预算按**失败地址**计：同一签名地址只重新解析一次（同一窗口重签得到同一地址，重复刷新无意义）；重新签发得到新地址后再次失败，重新获得一次预算（2026-10-26 用户确认）。规则 3.8 已在后台取得更晚失效的地址时，`retrySigned` 先使用该地址、不发描述请求；该判断先于失败地址预算。例外：音频播放元素（`useAudioElement`）的预算按**逻辑源的一个失败回合**计——重新签出的地址再次失败即进入失败态，不再按地址重新获得预算（`specs/canvas-audio-peaks-cache.md` 规则 4.7，2026-10-28 用户确认）；新鲜地址槽（规则 3.8）的优先级对这条路径同样成立。
 
 404 的边界（2026-10-26 补充）：预签名 GET 的 403 通常是签名过期、时钟偏移或 bucket 策略；404 通常是对象已删除（部分 S3 兼容实现与策略配置也会对无读权限返回 404）。元素失败路径不区分 403/404，都按本规则重描述一次——重新描述成功仍返回 404 说明对象确实不可读，属终态，Hook 不再重试；只有描述成功且地址变化（或重挂同一地址后恢复）才可能恢复加载。
 
@@ -416,6 +416,7 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 - 2026-10-26：**CDN 不纳入本版**，另立 Spec。
 - 2026-10-26：**规则 3.6 的重试预算按失败地址计**（不再按逻辑源生命周期）——同一地址只重描述一次；换到新地址后再次失败可再重试，避免长会话第二次过期直接进入失败态。
 - 2026-10-26：**新增规则 3.8 主动刷新**——寿命 80%（`refreshAt`）后台重描述，只更新缓存与 Hook 内新鲜地址槽、不替换已挂载元素地址；共享调度 + 会话级 ±10% 抖动 + 瞬时失败指数退避；元素失败优先消费新鲜地址。原「是否需要抖动待实测」事项由此关闭。
+- 2026-10-29：规则 3.6 补记音频播放元素的例外——重试预算按逻辑源失败回合计（`specs/canvas-audio-peaks-cache.md` 规则 4.7，2026-10-28 用户确认），不按失败地址重新获得；其余媒体元素形态与「重新签发的新地址再失败可再重试」的既有语义不变。
 
 ## 已确认事项（2026-10-26 用户确认）
 
@@ -497,7 +498,7 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 
 - **悬停大图改为打开时解析**：`AssetHoverPreview` / `ReferenceHoverPreview` 原先在卡片挂载时就调用 `useFileAccessUrl`，而消费地址的 `HoverCardMediaContent` 只随浮层打开才挂载——列表内每张卡片都会先发一次描述，且首次真实悬停时可能已过期再发一次。新增 `web/src/features/media/components/ResolvedHoverMedia.tsx`：`armed` 在首次 `open` 时置真且不复位（关闭动画期间内容仍在，重复悬停不重复描述），未武装时 Hook 收到 `undefined`、不发请求。`HoverCardMediaContent` 保持纯展示，不感知访问解析；`ReferenceHoverPreview` 的入参由 `src` / `onMediaError` / `mediaRevision` 改为 `value` / `width`。
 - **面板级失败态**：裁剪 / 标注 / 全景 / 打光 / 多角度 / 音频截取这些命令式消费方没有媒体元素可挂 `onError`，规则 3.6 的元素级接线覆盖不到；此前只取 `url`，描述失败表现为空白或永久「加载中」，没有任何重试入口。新增共享组件 `web/src/features/media/components/MediaAccessError.tsx` 统一渲染「说明 + 重试」，重试走 `refresh`（强制重新描述）——描述失败时 `retrySigned` 按设计返回 false（规则 3.6 的闩锁语义）。`CropPanel` / `AnnotationPanel` 的 `<img>` 仍接 `onError → retrySigned`，并以 `reloadToken` 重挂元素（重新签出的地址与旧地址相同时也强制重新加载）。
-- **音频截取面板**：wavesurfer `error` 触发一次 `retrySigned`；`reloadToken` 进入实例重建依赖，`ready` 回调清除失败态（此前一旦失败永不恢复）。描述失败显示面板级重试而不是「加载中」。
+- **音频截取面板**：波形取数与播放改用面板自己的媒体元素（wavesurfer 只做渲染，不再由它取数）；元素 `error` 由 `useAudioElement` 按逻辑源失败回合触发一次 `retrySigned`，加载成功（`loadedmetadata`）收敛失败态；`reloadToken` 只让元素重新 `load()`，不再重建波形实例。峰值不可用（`clip.peaksUnavailable`）与媒体加载失败（`clip.unavailable`）是两条独立提示；描述失败仍显示面板级重试而不是「加载中」。详见 `specs/canvas-audio-peaks-cache.md`。
 - **宫格切分**：改为在动作发生时取地址（规则 3.6 的非元素形态），不再复用挂载时的 Hook 结果——长驻节点的签名可能早已过期，且描述失败此前是静默 `return`。最终失败按规则 3.7 发全局通知（`node.gridSplitFailed`），不再只写 `console.error`。
 - **命令式位图加载统一**：新增 `web/src/lib/load-media-image.ts`（`loadMediaImage`），
   「动作时解析 → `new Image` → 跨域读像素 → 元素失败强制刷新一次」由一处实现，
