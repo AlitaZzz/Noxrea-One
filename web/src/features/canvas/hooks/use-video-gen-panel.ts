@@ -12,12 +12,12 @@
 
 import { useMemo } from "react";
 
-import { useNodeGenerating } from "@/features/canvas/panels/use-node-generating";
-import { useNodeUpstreamRefs } from "@/features/canvas/panels/use-node-upstream-refs";
 import type { VideoGenSettings } from "@/features/canvas/types";
 
 import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
+import { useNodeGenerating } from "./use-node-generating";
+import { useNodeUpstreamRefs } from "./use-node-upstream-refs";
 
 export interface VideoGenPanelInput {
   nodeId: string;

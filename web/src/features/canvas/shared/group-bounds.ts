@@ -41,7 +41,8 @@ export function nodeAbsolutePosition(
   node: AnyNode,
   nodeById: Map<string, AnyNode>,
 ): { x: number; y: number } {
-  const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+  const parentId = memberParentId(node);
+  const parent = parentId ? nodeById.get(parentId) : undefined;
   if (!parent) return node.position;
   return {
     x: parent.position.x + node.position.x,

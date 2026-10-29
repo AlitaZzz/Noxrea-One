@@ -22,9 +22,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
+import { useNodeGenerating } from "@/features/canvas/hooks/use-node-generating";
+import { useNodeUpstreamRefs } from "@/features/canvas/hooks/use-node-upstream-refs";
 import { createImageNode } from "@/features/canvas/node-defaults";
-import { useNodeGenerating } from "@/features/canvas/panels/use-node-generating";
-import { useNodeUpstreamRefs } from "@/features/canvas/panels/use-node-upstream-refs";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";

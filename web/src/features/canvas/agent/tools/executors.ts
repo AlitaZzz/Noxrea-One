@@ -27,7 +27,7 @@ import {
 } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
-import { isGroupNode } from "@/features/canvas/shared/group-membership";
+import { isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
@@ -710,7 +710,8 @@ function execMoveNode(args: ToolArgs): ExecOutcome {
   if (!target) return { content: "请提供 x/y 或 alignTo。", mutated: false, failed: true };
 
   // 目标是世界坐标：成员换算为组内相对坐标写回
-  const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
+  const parentId = memberParentId(node);
+  const parent = parentId ? nodeById.get(parentId) : undefined;
   const position = parent
     ? { x: target.x - parent.position.x, y: target.y - parent.position.y }
     : target;

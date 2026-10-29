@@ -9,7 +9,7 @@ import { create } from "zustand";
 
 import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
-import { isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
+import { isGroupNode, memberParentId, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
 import { assertUniqueNodeIds } from "@/features/canvas/shared/node-identity";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ViewportState } from "@/features/canvas/types";
@@ -453,7 +453,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // 容器型语义：删父连带子（组是唯一有子节点的容器——组不嵌套组，单遍即可；
       // 想保留内容只拆壳走「取消编组」，不在此处）
       for (const n of s.nodes) {
-        if (n.parentId && toDelete.has(n.parentId)) {
+        const parentId = memberParentId(n);
+        if (parentId && toDelete.has(parentId)) {
           toDelete.add(n.id);
         }
       }

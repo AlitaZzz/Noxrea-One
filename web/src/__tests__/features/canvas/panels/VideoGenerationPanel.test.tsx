@@ -44,7 +44,7 @@ vi.mock("@/features/canvas/shared/last-model", () => ({
   recordLastModel: vi.fn(),
 }));
 
-vi.mock("@/features/canvas/panels/use-video-gen-panel", () => ({
+vi.mock("@/features/canvas/hooks/use-video-gen-panel", () => ({
   useVideoGenPanel: () => ({
     refOrder: [],
     audioOrder: [],

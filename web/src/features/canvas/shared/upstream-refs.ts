@@ -34,18 +34,23 @@ export interface NodeUpstreamRefs {
   videos: UpstreamMediaRef[];
 }
 
+/** 媒体去重状态：节点 id 与 src 各一个集合，随引用收集一起传递。 */
+interface MediaSeen {
+  ids: Set<string>;
+  srcs: Set<string>;
+}
+
+function createMediaSeen(): MediaSeen {
+  return { ids: new Set(), srcs: new Set() };
+}
+
 /** 媒体引用统一规则：src / label trim，空 src 丢弃，按节点 id 与 src 双重去重。 */
-function pushMediaRef(
-  refs: UpstreamMediaRef[],
-  seenIds: Set<string>,
-  seenSrcs: Set<string>,
-  node: AnyNode,
-): void {
+function pushMediaRef(refs: UpstreamMediaRef[], seen: MediaSeen, node: AnyNode): void {
   const src = ((node.data as { src?: string }).src || "").trim();
   const label = ((node.data as { label?: string }).label || "").trim();
-  if (src === "" || seenIds.has(node.id) || seenSrcs.has(src)) return;
-  seenIds.add(node.id);
-  seenSrcs.add(src);
+  if (src === "" || seen.ids.has(node.id) || seen.srcs.has(src)) return;
+  seen.ids.add(node.id);
+  seen.srcs.add(src);
   refs.push({ id: node.id, src, label });
 }
 
@@ -73,10 +78,8 @@ export function buildUpstreamRefs(nodes: AnyNode[], edges: Edge[], nodeId: strin
   const audios: UpstreamMediaRef[] = [];
   const videos: UpstreamMediaRef[] = [];
   const seenTextIds = new Set<string>();
-  const seenAudioIds = new Set<string>();
-  const seenAudioSrcs = new Set<string>();
-  const seenVideoIds = new Set<string>();
-  const seenVideoSrcs = new Set<string>();
+  const seenAudios = createMediaSeen();
+  const seenVideos = createMediaSeen();
 
   for (const edge of incoming) {
     const node = byId.get(edge.source);
@@ -87,45 +90,35 @@ export function buildUpstreamRefs(nodes: AnyNode[], edges: Edge[], nodeId: strin
       seenTextIds.add(node.id);
       texts.push({ id: node.id, content });
     } else if (node.type === NODE_TYPE.AUDIO) {
-      pushMediaRef(audios, seenAudioIds, seenAudioSrcs, node);
+      pushMediaRef(audios, seenAudios, node);
     } else if (node.type === NODE_TYPE.VIDEO) {
-      pushMediaRef(videos, seenVideoIds, seenVideoSrcs, node);
+      pushMediaRef(videos, seenVideos, node);
     }
   }
 
   return { images, texts, audios, videos };
 }
 
-function sameTextRefs(a: UpstreamTextRef[], b: UpstreamTextRef[]): boolean {
-  if (a === b) return true;
+/** 逐项比较两个引用列表（长度优先，再按给定相等口径逐项比较）。 */
+function sameRefList<T>(a: T[], b: T[], same: (x: T, y: T) => boolean): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].id !== b[i].id || a[i].content !== b[i].content) return false;
+    if (!same(a[i], b[i])) return false;
   }
   return true;
 }
 
-function sameMediaRefs(a: UpstreamMediaRef[], b: UpstreamMediaRef[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i];
-    const y = b[i];
-    if (x.id !== y.id || x.src !== y.src || x.label !== y.label) return false;
-  }
-  return true;
+function sameMediaRef(x: UpstreamMediaRef, y: UpstreamMediaRef): boolean {
+  return x.id === y.id && x.src === y.src && x.label === y.label;
 }
 
 /** 上游引用按值相等：同一内容视为同一结果，供订阅选择器的 equalityFn 使用。 */
 export function sameUpstreamRefs(a: NodeUpstreamRefs, b: NodeUpstreamRefs): boolean {
   if (a === b) return true;
-  if (a.images.length !== b.images.length) return false;
-  for (let i = 0; i < a.images.length; i++) {
-    if (a.images[i] !== b.images[i]) return false;
-  }
   return (
-    sameTextRefs(a.texts, b.texts) &&
-    sameMediaRefs(a.audios, b.audios) &&
-    sameMediaRefs(a.videos, b.videos)
+    sameRefList(a.images, b.images, (x, y) => x === y) &&
+    sameRefList(a.texts, b.texts, (x, y) => x.id === y.id && x.content === y.content) &&
+    sameRefList(a.audios, b.audios, sameMediaRef) &&
+    sameRefList(a.videos, b.videos, sameMediaRef)
   );
 }

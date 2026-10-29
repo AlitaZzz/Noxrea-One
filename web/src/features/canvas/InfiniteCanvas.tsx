@@ -802,7 +802,7 @@ export default function InfiniteCanvas() {
     const index = dragGroupIndexRef.current;
     if (!index) return;
     const next = resolveDropGroupId(rawNode, index);
-    setDragOverGroup(next && next !== rawNode.parentId ? next : null);
+    setDragOverGroup(next && next !== memberParentId(rawNode) ? next : null);
   }, []);
 
   const handleNodeDragStop = useCallback(
@@ -828,7 +828,7 @@ export default function InfiniteCanvas() {
 
       // 统一判定归属（resolveDropGroupId，与拖入高亮共用同一口径；
       // 成员中心以绝对坐标判定）
-      const oldParentId = draggedNode.parentId;
+      const oldParentId = memberParentId(draggedNode);
       const dragIndex = dragGroupIndexRef.current ?? buildGroupHitIndex(allNodes);
       const nextParentId = resolveDropGroupId(draggedNode, dragIndex);
       dragGroupIndexRef.current = null;

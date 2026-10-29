@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
+import { useVideoGenPanel } from "@/features/canvas/hooks/use-video-gen-panel";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
@@ -45,7 +46,6 @@ import { swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
 import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
-import { useVideoGenPanel } from "./use-video-gen-panel";
 
 interface Props { nodeId: string; }
 

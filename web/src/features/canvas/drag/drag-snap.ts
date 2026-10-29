@@ -12,6 +12,7 @@ import {
   isAlignmentCandidate,
 } from "@/features/canvas/hooks/use-alignment-guides";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { memberParentId } from "@/features/canvas/shared/group-membership";
 import type { AnyNode } from "@/features/canvas/types";
 import { LAYOUT_GAP } from "@/lib/constants";
 
@@ -81,7 +82,8 @@ export function resolveDragPosition(
 
   let absX = result.snapX ?? Math.round(absPos.x / settings.snapGridSize) * settings.snapGridSize;
   let absY = result.snapY ?? Math.round(absPos.y / settings.snapGridSize) * settings.snapGridSize;
-  const parent = base.parentId ? nodeById.get(base.parentId) : undefined;
+  const parentId = memberParentId(base);
+  const parent = parentId ? nodeById.get(parentId) : undefined;
   if (parent) {
     absX -= parent.position.x;
     absY -= parent.position.y;
