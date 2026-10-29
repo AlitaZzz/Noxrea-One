@@ -5,11 +5,12 @@
  */
 "use client";
 
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useOnlineStatus } from "@/lib/use-online-status";
 
-export default function OfflineIndicator() {
+function OfflineIndicator() {
   const { t } = useTranslation();
   const online = useOnlineStatus();
 
@@ -28,3 +29,6 @@ export default function OfflineIndicator() {
     </div>
   );
 }
+
+// 与位置无关的常驻指示器：父级（画布外壳）在程序化位置帧逐帧重渲染时直接 bail。
+export default memo(OfflineIndicator);
