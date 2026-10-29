@@ -1,6 +1,6 @@
 # Canvas Shared Module Convergence
 
-状态：已确认
+状态：已实现
 
 背景：2026-10-30 审查指出两处缺口。其一，a0f5d055（组归属判定收敛）与 93df74b0（生成面板上游引用抽出共享模块并按值订阅）都重划了 canvas 共享模块边界，但 `specs/` 没有对应记录。其二，93df74b0 的订阅机制与已批准的《画布拖动性能根因修复》计划不同——计划写的是 `useShallow` 订阅派生切片，实际实现为 `useStoreWithEqualityFn` + `shared/upstream-refs` 按值比较。两笔改动的确认来源：组归属收敛由用户明确要求「从根因修复」；订阅收敛来自已批准计划中的「生成面板整数组订阅收敛」。实现均已合入 main 并推送，本 Spec 为事后补齐，记录实际口径；同时收口本次审查修复：业务 hook 位置迁移、媒体去重状态打包、比较循环收敛、`parentId` 直读收敛到 `memberParentId`。
 
@@ -53,8 +53,8 @@
 
 1. 认可订阅机制以 `useStoreWithEqualityFn` + `sameUpstreamRefs` 取代已批准计划中的 `useShallow` 订阅派生切片。
 2. 认可 `use-video-gen-panel.ts` 随本次一并迁入 `features/canvas/hooks/`（原在 `panels/`）。
-3. 认可本 Spec 为事后记录：现转「已确认」，代码提交获批且验收通过后转「已实现」。
+3. 认可本 Spec 为事后记录：确认时转「已确认」，代码提交且验收通过后转「已实现」。
 
 ## 当前状态
 
-- 2026-10-30：用户确认两项待确认事项，状态转「已确认」。a0f5d055、93df74b0 已合入 main 并推送；hook 迁移、媒体去重状态打包、比较循环收敛、`parentId` 直读收敛与本文档在工作区，未提交。验证：`tsc --noEmit`、改动文件 ESLint、canvas 测试 71 文件 / 666 用例均通过。代码提交获批后按验收标准复核并转「已实现」。
+- 2026-10-30：用户确认两项待确认事项；实现与验证完成后提交为 0600e741（hook 迁移、媒体去重状态打包、比较循环收敛、`parentId` 直读收敛与本 Spec）。验证：`tsc --noEmit`、改动文件 ESLint、canvas 测试 71 文件 / 666 用例均通过，验收标准 1–4 通过，状态转「已实现」。
