@@ -90,5 +90,5 @@ function UserMenuPopoverImpl({ open, onOpenChange, trigger, placement = "bottomR
   );
 }
 
-// 外壳在位置帧每帧重渲染：触发元素、items 与回调由调用方稳定化后，本组件直接 bail。
+// 外壳在程序化位置帧逐帧重渲染：触发元素、items 与回调由调用方稳定化后，本组件直接 bail。
 export const UserMenuPopover = memo(UserMenuPopoverImpl);

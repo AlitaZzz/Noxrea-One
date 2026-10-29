@@ -15,6 +15,24 @@ export interface AlignmentGuide {
   end: number;
 }
 
+/**
+ * 辅助线列表按值相等（同序；同 type/position/start/end）。
+ * 状态更新前用它判断是否真的有变化：拖拽位置帧大多没有对齐参考，
+ * 或沿同一条参考线滑动，此时不应提交新数组、重渲染辅助线层。
+ */
+export function sameAlignmentGuides(a: AlignmentGuide[], b: AlignmentGuide[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x.type !== y.type || x.position !== y.position || x.start !== y.start || x.end !== y.end) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export interface AlignmentResult {
   /** X 轴吸附后的节点位置，null 表示无对齐 */
   snapX: number | null;

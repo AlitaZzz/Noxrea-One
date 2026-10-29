@@ -1,26 +1,24 @@
 /**
  * 节点拖拽对齐辅助线。
- * 把 use-alignment-guides 计算出的画布坐标辅助线换算为屏幕坐标并叠加渲染。
+ * 订阅拖动预览会话发布的画布坐标辅助线，换算为屏幕坐标后叠加渲染。
  */
 "use client";
 
 import { useReactFlow } from "@xyflow/react";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 
-import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
-
-interface Props {
-  guides: AlignmentGuide[];
-}
+import { getPreviewGuides, subscribePreviewGuides } from "@/features/canvas/drag/preview-guides";
 
 /**
  * 对齐辅助线渲染组件。
  *
- * 将画布坐标系下的对齐线数据通过 `flowToScreenPosition` 转换为屏幕坐标，
- * 以半透明绿色虚线绘制在画布叠加层上。
+ * 辅助线是拖动期的瞬态量：不经 props、不进 store，直接订阅预览会话的发布通道，
+ * 画布外壳与节点树不随辅助线变化重渲染（规则 3.3）。将画布坐标系下的对齐线
+ * 数据通过 `flowToScreenPosition` 转换为屏幕坐标，以半透明绿色虚线绘制。
  */
-export default function AlignmentGuides({ guides }: Props) {
+export default function AlignmentGuides() {
   const rf = useReactFlow();
+  const guides = useSyncExternalStore(subscribePreviewGuides, getPreviewGuides, getPreviewGuides);
 
   // 将画布坐标转换为屏幕坐标
   const screenLines = useMemo(() => {

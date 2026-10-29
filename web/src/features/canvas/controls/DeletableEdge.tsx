@@ -18,7 +18,6 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   type EdgeProps,
-  getBezierPath,
   useReactFlow,
 } from "@xyflow/react";
 import { useEffect, useRef, useState } from "react";
@@ -26,8 +25,13 @@ import { useTranslation } from "react-i18next";
 
 import { ScissorOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
+import {
+  registerEdgeGeometry,
+  unregisterEdgeGeometry,
+} from "@/features/canvas/drag/edge-geometry-registry";
+import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { EDGE_BASE_COLOR, insetEdgeAnchor } from "@/lib/constants";
+import { EDGE_BASE_COLOR } from "@/lib/constants";
 import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
 
 import { FlowLines } from "./EdgeFlow";
@@ -46,6 +50,8 @@ type FlowPoint = { x: number; y: number };
 export default function DeletableEdge(props: EdgeProps) {
   const {
     id,
+    source,
+    target,
     sourceX,
     sourceY,
     targetX,
@@ -57,14 +63,31 @@ export default function DeletableEdge(props: EdgeProps) {
   const { t } = useTranslation();
   const { screenToFlowPosition } = useReactFlow();
 
-  // 端点从轨道收回节点边缘
-  const source = insetEdgeAnchor(sourcePosition, sourceX, sourceY);
-  const target = insetEdgeAnchor(targetPosition, targetX, targetY);
-
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX: source.x, sourceY: source.y, sourcePosition,
-    targetX: target.x, targetY: target.y, targetPosition,
+  // 端点从轨道收回节点边缘后取贝塞尔路径（几何实现全库唯一）
+  const { path: edgePath, labelX, labelY } = computeEdgePath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
   });
+
+  // 登记端点几何：拖动预览会话据此重算路径（拖动期 React Flow 的 nodeLookup
+  // 不更新，本组件坐标停留在拖动前，登记值就是预览的唯一几何来源）
+  useEffect(() => {
+    registerEdgeGeometry(id, {
+      sourceId: source,
+      targetId: target,
+      sourceX,
+      sourceY,
+      targetX,
+      targetY,
+      sourcePosition,
+      targetPosition,
+    });
+    return () => unregisterEdgeGeometry(id);
+  }, [id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
 
   const highlightedEdgeIds = useHighlightedEdges();
   const isHighlighted = highlightedEdgeIds.has(id);

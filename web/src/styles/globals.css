@@ -487,10 +487,10 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 
 /* ── Handle / 轨道显示规则 ──
    唯一开关是画布容器的 data-interaction（由 use-canvas-interaction 状态机驱动）：
-   1) hover 节点 → 无条件显示（即时反馈：框选后仍可直接拖线）
+   1) hover 节点 → 显示（即时反馈：框选后仍可直接拖线）；拖动节点中例外，见下
    2) 空闲 / 点击选中态（idle）→ 选中节点的 handle 常驻显示
-   3) 框选 / 拖动节点 / 拖线状态 → 选中不触发显示，仅 hover 生效
-       （框选与拖动是容器级判定，无需关心组内成员是否被标记 .dragging）
+   3) 框选 / 拖线状态 → 选中不触发显示，仅 hover 生效；拖动节点中 hover 也不
+       显示（状态机 dragging-nodes 的既定意图「隐藏 handle」，见下方规则）
    4) 拖线中源 handle 按住（:active）保持显示
    组节点例外（见下）：hover 不触发，仅点击选中（激活）后常驻显示——
    组是容器，批量连线是低频操作，与成员轨道的意图区分靠激活方式。
@@ -527,9 +527,20 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
     pointer-events: auto;
   }
 }
+/* 拖动节点中：hover / 选中都不显示节点轨道。拖动时光标必然压在拖动节点上，
+   沿用 hover 规则会让左右轨道全程跟随节点晃动；拖动期本就不能起连线。
+   必须排在上面所有「显示」规则之后：与触屏规则同权重，靠源序覆盖。
+   只作用于节点 DOM 内的轨道——外框批量轨道（ViewportPortal 内）不在节点
+   DOM 里，由下方「批量连线轨道」的常显规则同样排除拖动态（同一开关） */
+.react-flow[data-interaction="dragging-nodes"] .react-flow__node .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
 /* 批量连线轨道（仅框选外框，ViewPortal 内渲染）：与节点轨道同一套
    「条带 + 圆点」两段式架构（.connection-rail / .connection-rail-dot），
-   仅两处例外——外框不是节点，没有 hover/选中态可依托，条带常显；
+   仅两处例外——外框不是节点，没有 hover/选中态可依托，条带常显
+   （拖动节点中除外：随节点轨道一起隐藏，回落到 .connection-rail 的
+   默认隐藏态；2026-10-29 用户确认「一起隐藏」）；
    ViewPortal 内无定位上下文，min(100%, 80px) 的百分比参照失效，
    条带高取常量 RAIL_WIDTH（正方形命中区；外框高恒大于 80px——外框
    高 = bbox 高 + 80px 选择框外扩，无需按外框夹窄）。
@@ -538,7 +549,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 .react-flow__handle.connection-rail.batch-connect-handle {
   height: var(--rail-width, 80px) !important;
 }
-.react-flow__handle.batch-connect-handle {
+.react-flow:not([data-interaction="dragging-nodes"]) .react-flow__handle.batch-connect-handle {
   opacity: 1 !important;
   pointer-events: auto;
 }

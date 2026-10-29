@@ -27,28 +27,25 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  useStore,
+  useStoreApi,
 } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import OfflineIndicator from "@/components/layout/OfflineIndicator";
-import { EditOutlined } from "@/components/ui/AppIcon";
 import { AgentIcon } from "@/components/ui/AppIcon";
-import { ChevronDownIcon } from "@/components/ui/AppIcon";
 import { DirUploadIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import { createAssetNode } from "@/features/assets/add-asset";
 import AssetsDialog from "@/features/assets/components/AssetsDialog";
 import type { AssetItem } from "@/features/assets/types";
-import { type UserMenuItem,UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
+import type { UserMenuItem } from "@/features/auth/components/UserMenuPopover";
 import { useAuthStore } from "@/features/auth/store";
 import { useCurrentUser } from "@/features/auth/UserContext";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
@@ -61,11 +58,13 @@ import ConnectionCreateMenu, { type PendingConnectionCreate } from "@/features/c
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
+import ProjectToolbar from "@/features/canvas/controls/ProjectToolbar";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
+import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
+import { pointerClientPoint } from "@/features/canvas/drag/pointer-position";
+import { routePositionFrames } from "@/features/canvas/drag/position-routing";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
-import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
-import { computeAlignment, isAlignmentCandidate } from "@/features/canvas/hooks/use-alignment-guides";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
@@ -87,12 +86,17 @@ import {
   findGroupAtPoint,
   type GroupHitIndex,
   nodeAbsolutePosition,
-  pruneEmptyGroups,
   refitGroupRects,
   resolveDropGroupId,
 } from "@/features/canvas/shared/group-bounds";
+import { isGroupNode, memberParentId, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
 import { selectCanvasStateChanges } from "@/features/canvas/shared/node-changes";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
+import {
+  applyNodePositions,
+  type PositionFrame,
+  toPositionMap,
+} from "@/features/canvas/shared/node-positions";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { findFreePosition, flushAndWait, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
@@ -100,7 +104,7 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
-import { GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
@@ -117,14 +121,19 @@ const RF_EDGE_TYPES = {
   deletable: DeletableEdge,
 };
 
-// 传给 <ReactFlow> 的静态对象同样定义在组件外：位置帧每帧重渲染时，
+// 传给 <ReactFlow> 的静态对象同样定义在组件外：程序化位置帧（如整理动画）会
+// 逐帧替换 nodes 并重渲染本组件（拖动期位置帧只写 DOM，不触发渲染），
 // 内联对象字面量会让 React Flow 的 props 比较全部失效。
 const RF_PRO_OPTIONS = { hideAttribution: true };
 const RF_DEFAULT_EDGE_OPTIONS = { type: "deletable", animated: false };
 const RF_STYLE = { "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties;
 
+// 无待定连线时的稳定空锚点：程序化位置帧逐帧重渲染本组件，返回字面量 [] 会让
+// pendingPreviewAnchors 每次都是新引用。只读、由使用方 map，不做原地修改。
+const NO_PENDING_PREVIEW_ANCHORS: readonly { x: number; y: number }[] = [];
+
 // 节点工具条动作 → store 派发。定义在组件外保证引用稳定，使 NodeToolbarUI
-// （memo）在画布位置帧重渲染时直接 bail，不随每帧重新绑定。
+// （memo）在程序化位置帧重渲染时直接 bail，不随每帧重新绑定。
 const openFrameStrip = (id: string) => useCanvasStore.getState().setFrameCaptureNodeId(id);
 const openClipStrip = (id: string) => useCanvasStore.getState().setClipCaptureNodeId(id);
 const openAudioClip = (id: string) => useCanvasStore.getState().setAudioClipNodeId(id);
@@ -148,9 +157,6 @@ export default function InfiniteCanvas() {
   const setEdges = useCanvasStore((s) => s.setEdges);
   const addNodes = useCanvasStore((s) => s.addNodes);
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
-  const snapToGrid = useCanvasStore((s) => s.snapToGrid);
-  const snapGridSize = useCanvasStore((s) => s.snapGridSize);
-  const snapThreshold = useCanvasStore((s) => s.snapThreshold);
   const annotatingNodeId = useCanvasStore((s) => s.annotatingNodeId);
   const croppingNodeId = useCanvasStore((s) => s.croppingNodeId);
   const editingTextNodeId = useCanvasStore((s) => s.editingTextNodeId);
@@ -162,9 +168,10 @@ export default function InfiniteCanvas() {
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
-  // Position updates replace the nodes array every drag frame. Keep all
-  // cross-node projections in one cached derivation so rail and edge consumers
-  // do not independently scan the full canvas.
+  // Programmatic position frames (e.g. tidy animation) replace the nodes array
+  // every frame; drag previews bypass the store entirely. Keep all cross-node
+  // projections in one cached derivation so rail and edge consumers do not
+  // independently scan the full canvas.
   const canvasDerived = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges));
   const selectedNodeIds = canvasDerived.selectedNodeIds;
 
@@ -173,15 +180,55 @@ export default function InfiniteCanvas() {
   // 整体引用稳定（hook 内已记忆化），可直接作为依赖使用。
   const canvasInteraction = useCanvasInteraction();
 
+  // ---- 拖动预览会话 ----
+  // 拖动期位置帧不写受控 store：会话按 rAF 合并后只写 DOM，松手一次提交。
+  // 因此拖动期间本组件不再随每帧重渲染（规则见 drag/drag-preview-session.ts）。
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const rfStore = useStoreApi();
+  // React Flow store 的 nodes：受控同步（StoreUpdater 的 passive effect）完成后才
+  // 变化，是「渲染层已采用新位置」的唯一信号；拖动帧只更新 internals，不会触发。
+  const renderedNodes = useStore((state) => state.nodes);
+  // 会话实例只在首次渲染创建（依赖全部为稳定引用：ref、store api、模块函数），
+  // 与 CanvasMediaLoadingProvider 的调度器同模式
+  const [dragSession] = useState(
+    () =>
+      new DragPreviewSession({
+        root: canvasContainerRef,
+        getNodes: () => useCanvasStore.getState().nodes,
+        setNodes: (next) => useCanvasStore.getState().setNodes(next),
+        markDirtyImmediate,
+        getZoom: () => rfStore.getState().transform[2],
+      }),
+  );
+
+  // 渲染层采用新节点后：提交路径释放预览偏移，外部写入按新 store 重建会话基准
+  useLayoutEffect(() => {
+    dragSession.syncRenderedNodes();
+  }, [renderedNodes, dragSession]);
+
+  useEffect(() => () => dragSession.dispose(), [dragSession]);
+
+  // 拖动参考点的按下点：React Flow 在越过拖动阈值的首个指针事件才建立拖动
+  // 参考点，按下到该事件之间的指针位移会永久丢失（节点整段拖动落后指针）。
+  // 参考点必须取自 d3-drag 使用的同一事件（mousedown/touchstart）：PointerEvent
+  // 的 clientX 保留小数，而 React Flow 读到的 MouseEvent 坐标是整数，混用会在
+  // 补偿里留下亚像素误差。捕获阶段记录，拖拽开始时按差值补偿（规则 2.7）。
+  const pressPointRef = useRef<{ x: number; y: number } | null>(null);
+  const handleCanvasPressCapture = useCallback(
+    (event: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+      pressPointRef.current = pointerClientPoint(event.nativeEvent);
+    },
+    [],
+  );
+
   // 整理需要至少 2 个顶层块（组连同成员算一个块），否则菜单置灰
   const tidyDisabled = useMemo(() => {
     // parentId 是唯一结构关系：成员（有 parentId 且父存在）不算顶层块
-    const groupIds = new Set(
-      nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
-    );
-    const topLevel = nodes.filter(
-      (n) => n.type === NODE_TYPE.GROUP || !n.parentId || !groupIds.has(n.parentId),
-    );
+    const groupIds = new Set(nodes.filter(isGroupNode).map((n) => n.id));
+    const topLevel = nodes.filter((n) => {
+      const parentId = memberParentId(n);
+      return parentId === undefined || !groupIds.has(parentId);
+    });
     return topLevel.length < 2;
   }, [nodes]);
 
@@ -191,12 +238,25 @@ export default function InfiniteCanvas() {
   const hideSelectionRect = useMemo(() => {
     const selected = nodes.filter((n) => n.selected);
     if (selected.length < 2) return true;
-    return selected.every((n) => n.type === NODE_TYPE.GROUP);
+    return selected.every(isGroupNode);
   }, [nodes]);
 
   // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle。
   // bbox 与成员轨道钳制统一由 canvas-derived 几何投影提供
   const selectionFrame = canvasDerived.selectionFrame;
+
+  // 批量轨道锚点：外框右缘正中。selectionFrame 由 canvasDerived 按 nodes/edges
+  // 引用缓存，非位置帧变化时引用不变，锚点对象随之稳定（BatchConnectHandle 可直接 bail）
+  const batchConnectAnchor = useMemo(
+    () =>
+      selectionFrame
+        ? {
+            x: selectionFrame.bbox.x + selectionFrame.bbox.width + GROUP_NODE_PADDING,
+            y: selectionFrame.bbox.y + selectionFrame.bbox.height / 2,
+          }
+        : null,
+    [selectionFrame],
+  );
 
   // 组节点批量输出轨道不再由这里渲染：它渲染在 GroupNode 的节点 DOM 内
   // （GroupConnectRail），显隐才能走标准 Handle 规则（hover/选中/按住），
@@ -222,13 +282,6 @@ export default function InfiniteCanvas() {
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
   const { t } = useTranslation();
 
-  const [editName, setEditName] = useState(projectName);
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [prevProjectName, setPrevProjectName] = useState(projectName);
-  if (projectName !== prevProjectName) {
-    setPrevProjectName(projectName);
-    setEditName(projectName);
-  }
   // 画布内容恢复的唯一入口在页面层（page.tsx 按 URL projectId 拉取后 restore）：
   // 本组件仅在 loader 门开启（恢复已完成）后挂载，此处不再重复恢复。
   // React Flow 内部视口跟随 restoreFromProject：订阅应用次数信号。
@@ -276,7 +329,6 @@ export default function InfiniteCanvas() {
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
-  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -288,7 +340,6 @@ export default function InfiniteCanvas() {
   const handleGridMenuOpenChange = useCallback((nodeId: string, open: boolean) => {
     setGridMenuNodeId(open ? nodeId : null);
   }, []);
-  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const dragGroupIndexRef = useRef<GroupHitIndex | null>(null);
   const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
 
@@ -410,129 +461,45 @@ export default function InfiniteCanvas() {
 
   // ---- Change handlers ----
 
+  /** 直接写入口径：会话未激活时的位置帧兜底（无拖动开始的程序化位置变更） */
+  const applyPositionFrames = useCallback(
+    (frames: PositionFrame[]) => {
+      const positions = toPositionMap(frames);
+      const { nodes: next, changed } = applyNodePositions(
+        useCanvasStore.getState().nodes,
+        positions,
+      );
+      if (!changed) return;
+      setNodes(next);
+      markDirty();
+    },
+    [setNodes],
+  );
+
   const handleNodesChange = useCallback(
     (changes: NodeChange<AnyNode>[]) => {
-      // Zustand is the controlled React Flow source of truth. User interaction
-      // and measured dimensions must be applied here so the renderer's node
-      // lookup stays initialized while structural changes remain owned by
-      // canvas actions.
+      // Zustand 是受控 React Flow 的唯一真源，但拖动位置帧不写 store：
+      // 预览会话按 rAF 合并后只写 DOM，松手时一次提交（drag/drag-preview-session.ts）。
       const stateChanges = selectCanvasStateChanges(changes);
       if (stateChanges.length === 0) return;
 
       const positionChanges = stateChanges.filter(
-        (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> =>
-          c.type === "position" && c.dragging === true,
+        (c): c is Extract<NodeChange<AnyNode>, { type: "position" }> => c.type === "position",
       );
-
       if (isTidyAnimating() && positionChanges.length > 0) {
         cancelTidy();
       }
 
-      const currentNodes = useCanvasStore.getState().nodes;
-      const applied = applyNodeChanges(stateChanges, currentNodes);
+      // 过程帧只进会话预览（不写 store），终态帧是提交点（规则 1.2、1.4）
+      routePositionFrames(positionChanges, dragSession, applyPositionFrames);
 
-      // 检查是否有节点正在被拖拽（拖动中的位置变更，供吸附共用）。
-      // 组移动带动成员由 React Flow Sub Flow 原生处理（成员相对坐标不变、
-      // 绝对位置随父重算），这里只处理单个被拖节点的吸附。
-      const draggedNodeIds = new Set(positionChanges.map((c) => c.id));
-
-      let appliedNodes: AnyNode[];
-      let newGuides: AlignmentGuide[] = [];
-
-      if (snapToGrid) {
-        // 吸附与对齐判定统一在绝对坐标空间：成员 position 是组内相对坐标，
-        // 先换算为绝对值，吸附结果再换回相对坐标写回
-        const nodeById = buildNodeIndex(currentNodes);
-        const absPositionOf = (n: AnyNode) => nodeAbsolutePosition(n, nodeById);
-
-        if (draggedNodeIds.size === 1) {
-          const draggedId = positionChanges[0].id;
-          const dragged = applied.find((n) => n.id === draggedId);
-          if (!dragged) {
-            appliedNodes = applied;
-          } else {
-            // 父节点在拖拽中不动（拖成员时组未被拖拽），绝对位置 = 父位置 + 相对位置
-            const absPos = absPositionOf(dragged);
-            const nodeSize = {
-              width: Number(dragged.style?.width) || Number(dragged.measured?.width) || 200,
-              height: Number(dragged.style?.height) || Number(dragged.measured?.height) || 120,
-            };
-            // 空间分区：只对可能产生吸附的邻近节点构建边界，大幅降低大画布下每帧开销
-            const dragBounds = { id: draggedId, position: absPos, ...nodeSize };
-            const nodeBounds = applied
-              .filter((m) => m.id !== draggedId && isAlignmentCandidate(dragBounds, {
-                id: m.id,
-                position: absPositionOf(m),
-                width: Number(m.style?.width) || Number(m.measured?.width) || 200,
-                height: Number(m.style?.height) || Number(m.measured?.height) || 120,
-              }, snapThreshold, LAYOUT_GAP))
-              .map((m) => ({
-                id: m.id,
-                position: absPositionOf(m),
-                width: Number(m.style?.width) || Number(m.measured?.width) || 200,
-                height: Number(m.style?.height) || Number(m.measured?.height) || 120,
-              }));
-
-            const result = computeAlignment(
-              dragBounds,
-              nodeBounds,
-              snapThreshold,
-              LAYOUT_GAP,
-            );
-
-            let absX = result.snapX ?? Math.round(absPos.x / snapGridSize) * snapGridSize;
-            let absY = result.snapY ?? Math.round(absPos.y / snapGridSize) * snapGridSize;
-            newGuides = result.guides;
-            const parent = dragged.parentId ? nodeById.get(dragged.parentId) : undefined;
-            if (parent) {
-              absX -= parent.position.x;
-              absY -= parent.position.y;
-            }
-            // 位置未变化则复用原引用，避免无关节点重渲染
-            if (dragged.position.x === absX && dragged.position.y === absY) {
-              appliedNodes = applied;
-            } else {
-              appliedNodes = applied.map((n) =>
-                n.id === draggedId ? { ...n, position: { x: absX, y: absY } } : n,
-              );
-            }
-          }
-        } else if (draggedNodeIds.size > 1) {
-          // 多选拖动：跳过节点间对齐吸附（避免 O(n²) 且多选对齐意义不大），
-          // 照常跟随 React Flow 移动；未拖拽节点保持 store 位置
-          appliedNodes = applied.map((n) => {
-            if (draggedNodeIds.has(n.id)) return n;
-            const original = nodeById.get(n.id);
-            return original && (original.position.x !== n.position.x || original.position.y !== n.position.y)
-              ? { ...n, position: original.position }
-              : n;
-          });
-        } else {
-          // 非拖拽批次（如拖拽结束的 dragging:false 汇总、dimension 变更）：
-          // 保持 store 中的位置，避免释放鼠标时被未吸附的位置覆盖
-          appliedNodes = applied.map((n) => {
-            const original = nodeById.get(n.id);
-            return original && (original.position.x !== n.position.x || original.position.y !== n.position.y)
-              ? { ...n, position: original.position }
-              : n;
-          });
-        }
-      } else {
-        // snapToGrid 关闭：位置变更原样采用（含组拖动的成员自动跟随）
-        appliedNodes = applied;
-      }
-
-      setNodes(appliedNodes);
-      // 空→空不产生新状态：拖动位置帧大多没有对齐参考，避免每帧强制一次
-      // 外壳状态更新与 AlignmentGuides 重渲染。
-      setAlignmentGuides((prev) =>
-        prev.length === 0 && newGuides.length === 0 ? prev : newGuides
-      );
-      if (stateChanges.some((change) => change.type === "position")) {
-        markDirty();
+      // 选中 / 实测尺寸等其余变更照常写 store；位置变更已由会话或兜底路径处理
+      const otherChanges = stateChanges.filter((c) => c.type !== "position");
+      if (otherChanges.length > 0) {
+        setNodes(applyNodeChanges(otherChanges, useCanvasStore.getState().nodes));
       }
     },
-    [cancelTidy, setNodes, snapToGrid, snapGridSize, snapThreshold],
+    [applyPositionFrames, cancelTidy, dragSession, setNodes],
   );
 
   const handleEdgesChange = useCallback(
@@ -744,7 +711,7 @@ export default function InfiniteCanvas() {
    *  （多选扇出每个选中节点一根，单节点即一根），无有效盒尺寸的节点跳过。
    *  锚点统一在绝对坐标空间计算（成员 position 是组内相对坐标） */
   const pendingPreviewAnchors = useMemo(() => {
-    if (!pendingConnectionCreate) return [];
+    if (!pendingConnectionCreate) return NO_PENDING_PREVIEW_ANCHORS;
     const nodeById = buildNodeIndex(nodes);
     const side = pendingConnectionCreate.direction === "output" ? "right" : "left";
     return pendingConnectionCreate.sourceNodeIds
@@ -800,19 +767,37 @@ export default function InfiniteCanvas() {
     []
   );
 
-  const handleNodeDragStart = useCallback(() => {
-    pushHistory(takeCanvasSnapshot());
-    dragGroupIndexRef.current = buildGroupHitIndex(useCanvasStore.getState().nodes);
-    canvasInteraction.onNodeDragStart();
-    // 拖入高亮随每次拖拽重新开始计算（上一轮残留即刻清空）
-    useCanvasStore.getState().setDragOverGroup(null);
-  }, [pushHistory, canvasInteraction]);
+  const handleNodeDragStart = useCallback(
+    (event: unknown, _node: AnyNode, dragItems: AnyNode[]) => {
+      // 激活后的第一件事是建立会话并补出首帧（规则 2.8）：会话基准只取当前 store
+      // 与 DOM，不依赖下面的簿记工作；历史压栈、组命中索引与交互状态后置，
+      // 起手落位不被它们推后（历史快照取的是 store，会话不写 store，语义不变）
+      // 吸附设置在拖动开始时捕获一次：拖动期不再订阅 store
+      const { snapToGrid, snapGridSize, snapThreshold } = useCanvasStore.getState();
+      // 阈值事件发生在按下点之后：这段指针位移由会话补回（规则 2.7）
+      const pointerDown = pressPointRef.current;
+      const pointerAtStart = pointerClientPoint(event);
+      dragSession.begin(
+        dragItems.map((node) => node.id),
+        { snapToGrid, snapGridSize, snapThreshold },
+        pointerDown && pointerAtStart
+          ? { x: pointerAtStart.x - pointerDown.x, y: pointerAtStart.y - pointerDown.y }
+          : undefined,
+      );
+      pushHistory(takeCanvasSnapshot());
+      dragGroupIndexRef.current = buildGroupHitIndex(useCanvasStore.getState().nodes);
+      canvasInteraction.onNodeDragStart();
+      // 拖入高亮随每次拖拽重新开始计算（上一轮残留即刻清空）
+      useCanvasStore.getState().setDragOverGroup(null);
+    },
+    [pushHistory, canvasInteraction, dragSession],
+  );
 
   // 拖入组高亮：拖拽中实时以「落点归属」同口径（resolveDropGroupId）计算
   // 松手将加入的组，组边框高亮反馈归属结果；组节点拖拽不参与。
   // 只在归属「将变化」时高亮：悬停在自己当前组内归属不变，高亮即噪音
   const handleNodeDrag = useCallback((_: unknown, rawNode: AnyNode) => {
-    if (rawNode.type === NODE_TYPE.GROUP) return;
+    if (isGroupNode(rawNode)) return;
     const { setDragOverGroup } = useCanvasStore.getState();
     const index = dragGroupIndexRef.current;
     if (!index) return;
@@ -823,20 +808,21 @@ export default function InfiniteCanvas() {
   const handleNodeDragStop = useCallback(
     (_: unknown, rawNode: AnyNode) => {
       canvasInteraction.onNodeDragStop();
-      setAlignmentGuides([]);
+      // 终态帧已在 handleNodesChange 提交；未到达时以最后预览几何兜底提交
+      dragSession.stop();
       useCanvasStore.getState().setDragOverGroup(null);
 
       const allNodes = useCanvasStore.getState().nodes;
-      // 受控模式下每次位置变更都已提交到 store，拖拽停止只负责处理最终
-      // 归属和组几何，不再从 React Flow 内部复制第二份节点数组。
+      // 拖动位置已由预览会话在终态帧一次提交到 store，拖拽停止只负责处理
+      // 最终归属和组几何，不再从 React Flow 内部复制第二份节点数组。
       const draggedNode = allNodes.find((n) => n.id === rawNode.id);
       if (!draggedNode) {
         dragGroupIndexRef.current = null;
         return;
       }
-      if (draggedNode.type === NODE_TYPE.GROUP) {
+      if (isGroupNode(draggedNode)) {
+        // 位置提交（含落库）已由会话完成
         dragGroupIndexRef.current = null;
-        markDirtyImmediate();
         return;
       }
 
@@ -848,7 +834,7 @@ export default function InfiniteCanvas() {
       dragGroupIndexRef.current = null;
 
       if (nextParentId === oldParentId) {
-        markDirtyImmediate();
+        // 位置提交（含落库）已由会话完成，归属未变时无额外写入
         return;
       }
 
@@ -880,7 +866,7 @@ export default function InfiniteCanvas() {
       setNodes(finalNodes);
       markDirtyImmediate();
     },
-    [canvasInteraction, setAlignmentGuides, setNodes]
+    [canvasInteraction, dragSession, setNodes]
   );
 
   const handlePaneClick = useCallback(() => {
@@ -992,7 +978,8 @@ export default function InfiniteCanvas() {
   }, [fitView]);
 
   // ---- 外壳渲染边界 ----
-  // 位置帧每帧重渲染 InfiniteCanvas；外壳组件由 memo 收口，传参引用必须稳定，
+  // 程序化位置帧逐帧重渲染 InfiniteCanvas（拖动期位置帧只写 DOM）；外壳组件由
+  // memo 收口，传参引用必须稳定，
   // 否则 memo 恒失效。以下回调只依赖 setter / router / 模块函数（语义与原内联一致）。
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
@@ -1017,18 +1004,6 @@ export default function InfiniteCanvas() {
       { key: "delete", label: t("project.delete") },
     ],
     [t],
-  );
-  const projectMenuTrigger = useMemo(
-    () => (
-      <Button type="button" variant="ghost" size="sm" aria-label={t("auth.accountSettings")} className="h-7 shrink-0 gap-1 rounded px-1">
-        <img src="/favicon.ico" alt="Noxrea" style={{ width: 24, height: 24 }} />
-        <ChevronDownIcon
-          className="shrink-0 transition-transform duration-200"
-          style={{ width: 10, height: 10, transform: toolbarMenuOpen ? "rotate(180deg)" : "none" }}
-        />
-      </Button>
-    ),
-    [t, toolbarMenuOpen],
   );
   const handleUserMenuSelect = useCallback((key: string) => {
     if (key === "home") {
@@ -1080,7 +1055,6 @@ export default function InfiniteCanvas() {
     message.success(t("asset.added"));
   }, [addNodes, message, t]);
 
-  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   useCanvasEvents(canvasContainerRef);
   const { handleDragOver, handleDragStart, handleDrop, isFileDragging } = useFileDrop(screenToFlowPosition, shouldIgnoreFileDrop, canvasContainerRef, handleAssetDrop);
 
@@ -1119,11 +1093,13 @@ export default function InfiniteCanvas() {
       ref={canvasContainerRef}
       className={hideSelectionRect ? "canvas-container hide-selection-rect" : "canvas-container"}
       style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
+      onMouseDownCapture={handleCanvasPressCapture}
+      onTouchStartCapture={handleCanvasPressCapture}
       onDragOver={handleDragOver}
       onDragStart={handleDragStart}
       onDrop={handleDrop}
     >
-      <AlignmentGuides guides={alignmentGuides} />
+      <AlignmentGuides />
       <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <BatchConnectContext.Provider value={batchConnectHandlers}>
       <CanvasMediaLoadingProvider key={activeProjectId}>
@@ -1152,7 +1128,10 @@ export default function InfiniteCanvas() {
         onSelectionStart={handleSelectionStart}
         defaultViewport={defaultViewport}
         selectionMode={SelectionMode.Partial}
-        nodeDragThreshold={2}
+        // 拖动阈值取库默认 1px（2026-10-29 用户要求由 2 降到 1）：阈值只保留
+        // 「点击/拖动判定」职责，按下的位移补偿与首帧由拖动会话负责（规则 2.7/2.8），
+        // 阈值越大，起拖死区越长
+        nodeDragThreshold={1}
         nodeClickDistance={3}
         multiSelectionKeyCode={["Shift", "Control", "Meta"]}
         deleteKeyCode={[]}
@@ -1192,66 +1171,12 @@ export default function InfiniteCanvas() {
         {/* Top-left panel: quick toolbar */}
         {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}
         <Panel position="top-left" style={{ margin: 0, marginLeft: canvasExplorerOpen ? DRAWER_WIDTH : 0, transition: "margin-left 0.2s ease", pointerEvents: "none" }}>
-          <div style={{ paddingLeft: 30, paddingTop: 30 }}>
-            <Card className="pointer-events-auto flex h-9 w-[280px] shrink-0 flex-row items-center gap-1 rounded-lg border-border bg-card/70 px-2 py-0 backdrop-blur-[10px]">
-              <UserMenuPopover
-                open={toolbarMenuOpen}
-                onOpenChange={setToolbarMenuOpen}
-                placement="bottomLeft"
-                items={projectMenuItems}
-                onItemClick={handleUserMenuSelect}
-                onLogout={openLogoutConfirm}
-                trigger={projectMenuTrigger}
-              />
-              <Separator orientation="vertical" className="mx-0.5 h-5" />
-              {isEditingName ? (
-                <Input
-                  className="bg-transparent text-sm outline-none border-none flex-1 min-w-0"
-                  style={{ height: 24, cursor: "text" }}
-                  placeholder={t("project.untitled")}
-                  autoFocus
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  onFocus={(e) => e.target.setSelectionRange(0, e.target.value.length)}
-                  onBlur={() => {
-                    setIsEditingName(false);
-                    const activeId = useProjectStore.getState().activeProjectId;
-                    if (activeId && editName.trim()) {
-                      useProjectStore.getState().renameProject(activeId, editName.trim());
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return;
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                    if (e.key === "Escape") { setIsEditingName(false); setEditName(projectName); }
-                  }}
-                />
-              ) : (
-                /* 编辑入口对齐节点标题：双击文字或点悬停铅笔（样式见 NodeTitle） */
-                <div
-                  className="group/name flex h-6 min-w-0 flex-1 items-center"
-                >
-                  <div
-                    className="h-6 min-w-0 cursor-default select-none truncate text-sm leading-6 text-foreground"
-                    onDoubleClick={() => setIsEditingName(true)}
-                  >
-                    {editName || "Untitled"}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t("common.edit")}
-                    className="ml-1.5 shrink-0 opacity-0 transition-opacity group-hover/name:opacity-100 focus-visible:opacity-100"
-                    onClick={() => setIsEditingName(true)}
-                  >
-                    <EditOutlined />
-                  </Button>
-                </div>
-              )}
-            </Card>
-
-          </div>
+          <ProjectToolbar
+            projectName={projectName}
+            items={projectMenuItems}
+            onItemClick={handleUserMenuSelect}
+            onLogout={openLogoutConfirm}
+          />
         </Panel>
 
         {/* Bottom-left panel: minimap + controls */}
@@ -1413,12 +1338,9 @@ export default function InfiniteCanvas() {
             条带锚在外框右缘正中、自此向右延伸，参与集 = 选中节点，常显（外框不是
             节点，无显隐规则可依托）。条带高取常量 RAIL_WIDTH（外框恒高于 80px）。
             组节点的批量轨道由 GroupNode 内部的 GroupConnectRail 渲染 */}
-        {selectionFrame && (
+        {selectionFrame && batchConnectAnchor && (
           <BatchConnectHandle
-            anchor={{
-              x: selectionFrame.bbox.x + selectionFrame.bbox.width + GROUP_NODE_PADDING,
-              y: selectionFrame.bbox.y + selectionFrame.bbox.height / 2,
-            }}
+            anchor={batchConnectAnchor}
             participantIds={selectionFrame.ids}
             onConnect={batchConnect}
             onConnectToBlank={openBatchCreateMenu}

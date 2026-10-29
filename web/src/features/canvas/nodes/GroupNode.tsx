@@ -39,9 +39,10 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
   // 只派生 GroupNode 真正依赖的原始值（成员相对矩形、成员数），用 useShallow
   // 保证仅在"成员几何/归属"变化时重渲染，而非每次 nodes 数组变更
   // （如选中状态、无关节点位移）都重渲染整个组。
-  // 成员归属来自画布共享投影（按 nodes 引用缓存），这里只遍历本组成员，
-  // 位置帧不再对全表做 O(N) 扫描。成员 position 是组内相对坐标，直接与
-  // 组框尺寸比较即可。
+  // 成员归属来自画布共享投影（按 nodes 引用缓存）：位置变化产生新的 nodes 引用
+  // （拖动提交一次、整理动画逐帧），
+  // 全表归属仍会重组一次（O(N)），但所有组共享同一份结果，本组件只遍历本组成员。
+  // 成员 position 是组内相对坐标，直接与组框尺寸比较即可。
   const { childMaxX, childMaxY, memberCount } = useCanvasStore(
     useShallow((s) => {
       const members = getGroupMembership(s.nodes).membersByGroup.get(id);

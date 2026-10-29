@@ -4,7 +4,8 @@
  * 与节点轨道同一套两段式架构：透明条带（80px 命中区）+ 镂空圆点（静止于
  * 贴框缘 RAIL_DOT_EDGE_GAP，hover 条带内二维跟随），复用 .connection-rail /
  * .connection-rail-dot 样式与 use-rail-dot-follow。
- * 唯一例外是常显（.batch-connect-handle 覆写 opacity）——外框不是节点，
+ * 唯一例外是常显（.batch-connect-handle 覆写 opacity；拖动节点中除外——
+ * 与节点轨道同一交互态开关）——外框不是节点，
  * 没有 hover/选中态可依托；条带高 = RAIL_WIDTH（正方形命中区，外框恒
  * 高于 80px 无需按外框夹窄；ViewPortal 内无定位上下文，min(100%, 80px)
  * 的百分比参照失效，高度由 CSS 变量 --rail-width 取常量 80）。
@@ -15,7 +16,7 @@
 "use client";
 
 import { Position, ViewportPortal } from "@xyflow/react";
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 
 import { RAIL_WIDTH } from "@/lib/constants";
 
@@ -40,7 +41,7 @@ interface Props {
   screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number };
 }
 
-export default function BatchConnectHandle({
+function BatchConnectHandle({
   anchor,
   participantIds,
   onConnect,
@@ -86,3 +87,6 @@ export default function BatchConnectHandle({
     </ViewportPortal>
   );
 }
+
+// 外壳在程序化位置帧逐帧重渲染：anchor / 参与集 / 回调由调用方稳定化后，本组件直接 bail。
+export default memo(BatchConnectHandle);
