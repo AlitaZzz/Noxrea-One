@@ -9,7 +9,7 @@ import type { Edge } from "@xyflow/react";
 
 import { NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_PADDING, RAIL_WIDTH } from "@/lib/constants";
 
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
 import { isGroupNode, memberParentId } from "./group-membership";
@@ -46,35 +46,10 @@ export interface CanvasDerived {
   railWidths: ReadonlyMap<string, number>;
 }
 
-/** 上游文本引用（生成面板）：内容已 trim，空内容不进入结果。 */
-export interface UpstreamTextRef {
-  id: string;
-  content: string;
-}
-
-/** 上游媒体引用（生成面板）：src / label 已 trim，空 src 不进入结果。 */
-export interface UpstreamMediaRef {
-  id: string;
-  src: string;
-  label: string;
-}
-
-export interface NodeUpstreamRefs {
-  /** 上游图片 src，按节点数组顺序（与生成面板既有顺序一致）。 */
-  images: string[];
-  /** 上游文本，按连线顺序，按节点 id 去重。 */
-  texts: UpstreamTextRef[];
-  /** 上游音频，按连线顺序，按节点 id 与 src 双重去重。 */
-  audios: UpstreamMediaRef[];
-  /** 上游视频，按连线顺序，按节点 id 与 src 双重去重。 */
-  videos: UpstreamMediaRef[];
-}
-
 const derivedCache = new WeakMap<AnyNode[], WeakMap<Edge[], CanvasDerived>>();
 const selectedSetCache = new Map<string, ReadonlySet<string>>();
 const outlineCache = new Map<string, CanvasOutline>();
 const membershipCache = new WeakMap<AnyNode[], GroupMembership>();
-const upstreamCache = new Map<string, NodeUpstreamRefs>();
 const edgeSetCache = new WeakMap<Edge[], Map<string, ReadonlySet<string>>>();
 const objectIdentity = new WeakMap<object, number>();
 let nextObjectIdentity = 1;
@@ -174,7 +149,8 @@ function buildGroupMembership(nodes: AnyNode[]): GroupMembership {
 
 /**
  * 组成员归属（按 nodes 引用缓存）。
- * 组框尺寸与元素树都消费同一份归属；按引用缓存避免位置帧重复扫描全表。
+ * 组框尺寸与元素树都消费同一份归属：每个 nodes 引用只组装一次，
+ * 避免每个组各自扫描全表（位置变化仍会因新 nodes 引用重组一次：拖动提交一次、整理动画逐帧，属共享成本）。
  */
 export function getGroupMembership(nodes: AnyNode[]): GroupMembership {
   const cached = membershipCache.get(nodes);
@@ -315,104 +291,6 @@ export function getCanvasDerived(nodes: AnyNode[], edges: Edge[]): CanvasDerived
   const value = derive(nodes, edges);
   byEdges.set(edges, value);
   return value;
-}
-
-// ============================================================
-// 上游引用（生成面板）
-// ============================================================
-
-/**
- * 结构键：只包含决定上游引用结果的输入——入边序列与上游节点的身份/数据。
- * 拖动只替换位置（node.data 引用不变），因此位置帧命中同一键并复用同一份引用，
- * 面板订阅不会随每帧重渲染。
- */
-function upstreamKey(nodes: AnyNode[], edges: Edge[], nodeId: string): string {
-  const upstreamIds = new Set<string>();
-  let key = nodeId;
-  for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    upstreamIds.add(edge.source);
-    key += `\u0001${edge.id}\u0000${edge.source}`;
-  }
-  for (const node of nodes) {
-    if (!upstreamIds.has(node.id)) continue;
-    key += `\u0001${node.id}\u0000${node.type ?? ""}\u0000${nodeDataIdentity(node)}`;
-  }
-  return key;
-}
-
-/** 媒体引用统一规则：src / label trim，空 src 丢弃，按节点 id 与 src 双重去重。 */
-function pushMediaRef(
-  refs: UpstreamMediaRef[],
-  seenIds: Set<string>,
-  seenSrcs: Set<string>,
-  node: AnyNode,
-): void {
-  const src = ((node.data as { src?: string }).src || "").trim();
-  const label = ((node.data as { label?: string }).label || "").trim();
-  if (src === "" || seenIds.has(node.id) || seenSrcs.has(src)) return;
-  seenIds.add(node.id);
-  seenSrcs.add(src);
-  refs.push({ id: node.id, src, label });
-}
-
-function buildUpstreamRefs(nodes: AnyNode[], edges: Edge[], nodeId: string): NodeUpstreamRefs {
-  const incoming: Edge[] = [];
-  const upstreamIds = new Set<string>();
-  for (const edge of edges) {
-    if (edge.target !== nodeId) continue;
-    incoming.push(edge);
-    upstreamIds.add(edge.source);
-  }
-
-  // 图片按节点数组顺序（生成面板既有顺序），其余按连线顺序
-  const byId = new Map<string, AnyNode>();
-  const images: string[] = [];
-  for (const node of nodes) {
-    if (!upstreamIds.has(node.id)) continue;
-    byId.set(node.id, node);
-    if (node.type !== NODE_TYPE.IMAGE) continue;
-    const src = (node.data as { src?: string }).src;
-    if (src) images.push(src);
-  }
-
-  const texts: UpstreamTextRef[] = [];
-  const audios: UpstreamMediaRef[] = [];
-  const videos: UpstreamMediaRef[] = [];
-  const seenTextIds = new Set<string>();
-  const seenAudioIds = new Set<string>();
-  const seenAudioSrcs = new Set<string>();
-  const seenVideoIds = new Set<string>();
-  const seenVideoSrcs = new Set<string>();
-
-  for (const edge of incoming) {
-    const node = byId.get(edge.source);
-    if (!node) continue;
-    if (node.type === NODE_TYPE.TEXT) {
-      const content = ((node.data as { plainText?: string }).plainText || "").trim();
-      if (content === "" || seenTextIds.has(node.id)) continue;
-      seenTextIds.add(node.id);
-      texts.push({ id: node.id, content });
-    } else if (node.type === NODE_TYPE.AUDIO) {
-      pushMediaRef(audios, seenAudioIds, seenAudioSrcs, node);
-    } else if (node.type === NODE_TYPE.VIDEO) {
-      pushMediaRef(videos, seenVideoIds, seenVideoSrcs, node);
-    }
-  }
-
-  return { images, texts, audios, videos };
-}
-
-/** 生成面板共用的上游引用投影：同一结构键返回同一引用。 */
-export function getNodeUpstreamRefs(
-  nodes: AnyNode[],
-  edges: Edge[],
-  nodeId: string,
-): NodeUpstreamRefs {
-  const key = upstreamKey(nodes, edges, nodeId);
-  const cached = upstreamCache.get(key);
-  if (cached) return cached;
-  return cacheValue(upstreamCache, key, buildUpstreamRefs(nodes, edges, nodeId), 128);
 }
 
 export function canvasRailKey(nodeId: string | null, side: "left" | "right"): string | null {

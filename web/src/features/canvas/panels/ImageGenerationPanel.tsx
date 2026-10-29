@@ -23,14 +23,14 @@ import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
-import { getNodeUpstreamRefs } from "@/features/canvas/shared/canvas-derived";
+import { useNodeGenerating } from "@/features/canvas/panels/use-node-generating";
+import { useNodeUpstreamRefs } from "@/features/canvas/panels/use-node-upstream-refs";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import ModelParamFields from "@/features/model/components/ModelParamFields";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
-import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 
 import ImageRefCard from "../shared/ImageRefCard";
@@ -148,11 +148,8 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelParams]);
 
-  // 上游引用（图片 / 文本）：共享结构缓存（canvas-derived），位置帧复用同一引用，
-  // 拖动当前节点时面板不随每帧重渲染。
-  const { images: refImages, texts: upstreamTexts } = useCanvasStore((s) =>
-    getNodeUpstreamRefs(s.nodes, s.edges, nodeId)
-  );
+  // 上游引用（图片 / 文本）：按内容订阅，位置变化（拖动提交、整理动画）不重渲染。
+  const { images: refImages, texts: upstreamTexts } = useNodeUpstreamRefs(nodeId);
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 图片节点上游只有文本与图片；排序只在同类型内生效（文本参考不可拖动）。
@@ -180,11 +177,7 @@ const ImageGenerationPanel = memo(function ImageGenerationPanel({ nodeId }: Prop
   }, [refOrder]);
 
   // Button disabled state derived from persistent node.data.task_status
-  // （布尔原语订阅：只有生成状态变化才重渲染面板）
-  const isGenerating = useCanvasStore((s) => {
-    const node = s.nodes.find((n) => n.id === nodeId);
-    return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
-  });
+  const isGenerating = useNodeGenerating(nodeId);
 
   // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /

@@ -12,10 +12,9 @@
 
 import { useMemo } from "react";
 
-import { getNodeUpstreamRefs } from "@/features/canvas/shared/canvas-derived";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
-import { isGenerating as isGeneratingBinding } from "@/lib/constants";
+import { useNodeGenerating } from "@/features/canvas/panels/use-node-generating";
+import { useNodeUpstreamRefs } from "@/features/canvas/panels/use-node-upstream-refs";
+import type { VideoGenSettings } from "@/features/canvas/types";
 
 import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
@@ -46,14 +45,13 @@ export interface VideoGenPanelDerived {
 export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerived {
   const { nodeId, prompt } = input;
 
-  // 上游引用（图片 / 文本 / 音频 / 视频）：共享结构缓存（canvas-derived），
-  // 位置帧复用同一引用，拖动当前节点时面板不随每帧重渲染。
+  // 上游引用（图片 / 文本 / 音频 / 视频）：按内容订阅，位置变化（拖动提交、整理动画）不重渲染。
   const {
     images: refImages,
     texts: upstreamTexts,
     audios: upstreamAudio,
     videos: upstreamVideos,
-  } = useCanvasStore((s) => getNodeUpstreamRefs(s.nodes, s.edges, nodeId));
+  } = useNodeUpstreamRefs(nodeId);
 
   // ── 排序偏好（genSettings，响应式只读）──
   const genSettings = useGenSettings(nodeId);
@@ -110,11 +108,7 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
   }, [audioOrder, refOrder, refVideoOrder, audioSrcLabel, upstreamVideos]);
 
   // Button disabled state derived from persistent node.data.task_status
-  // （布尔原语订阅：只有生成状态变化才重渲染面板）。
-  const isGenerating = useCanvasStore((s) => {
-    const node = s.nodes.find((node) => node.id === nodeId);
-    return isGeneratingBinding((node?.data as MediaGenFields)?.taskBinding);
-  });
+  const isGenerating = useNodeGenerating(nodeId);
 
   return {
     refImages,

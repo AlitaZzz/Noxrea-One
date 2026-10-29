@@ -21,12 +21,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import WheelGuard from "@/components/ui/WheelGuard";
 import { generationApi } from "@/features/canvas/api/generation-api";
-import { getNodeUpstreamRefs } from "@/features/canvas/shared/canvas-derived";
+import { useNodeGenerating } from "@/features/canvas/panels/use-node-generating";
+import { useNodeUpstreamRefs } from "@/features/canvas/panels/use-node-upstream-refs";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
-import { isGenerating as isGeneratingBinding } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
@@ -88,21 +88,16 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "text", allModels) });
   }, [allModels, genSettings?.modelKey, nodeId]);
 
-  // 上游引用（图片 / 文本 / 音频 / 视频）：共享结构缓存（canvas-derived），
-  // 位置帧复用同一引用，拖动当前节点时面板不随每帧重渲染。
+  // 上游引用（图片 / 文本 / 音频 / 视频）：按内容订阅，位置变化（拖动提交、整理动画）不重渲染。
   const {
     images: refImages,
     texts: upstreamTexts,
     audios: upstreamAudio,
     videos: upstreamVideos,
-  } = useCanvasStore((s) => getNodeUpstreamRefs(s.nodes, s.edges, nodeId));
+  } = useNodeUpstreamRefs(nodeId);
 
   // Button disabled state derived from persistent node.data.task_status
-  // （布尔原语订阅：只有生成状态变化才重渲染面板）
-  const isGenerating = useCanvasStore((s) => {
-    const node = s.nodes.find((n) => n.id === nodeId);
-    return isGeneratingBinding((node?.data as TextNodeData)?.taskBinding);
-  });
+  const isGenerating = useNodeGenerating(nodeId);
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。
