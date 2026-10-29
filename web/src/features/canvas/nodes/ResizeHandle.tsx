@@ -10,10 +10,10 @@ import { useCallback, useRef } from "react";
 
 import { ResizeCornerIcon } from "@/components/ui/AppIcon";
 import { shiftGroupMembers } from "@/features/canvas/shared/group-bounds";
+import { isGroupNode } from "@/features/canvas/shared/group-membership";
 import { markDirty, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
@@ -75,7 +75,7 @@ export default function ResizeHandle({
       // 组节点 resize：top/left 角拖动会改变组自身 position，成员（相对坐标）
       // 会跟着视觉位移。对齐官方 XYResizer 行为，拖动帧同步补偿成员相对位置
       // （成员减去组原点位移量，保持视觉位置不动），单次 setNodes 批量写入。
-      const isGroupResize = currentNode.type === NODE_TYPE.GROUP;
+      const isGroupResize = isGroupNode(currentNode);
 
       startRef.current = {
         x: e.clientX,

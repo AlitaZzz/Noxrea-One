@@ -1,6 +1,6 @@
 /**
  * group-bounds 测试：Sub Flow 模型（parentId + 相对坐标）下的组框自适应几何、
- * 成员判定、拖入归属判定与轨道钳制。
+ * 拖入归属判定与轨道钳制（成员归属原语见 group-membership.test.ts）。
  */
 
 import { describe, expect, it } from "vitest";
@@ -11,10 +11,7 @@ import {
   computeFittedGroupRect,
   findGroupAtPoint,
   groupContainsPoint,
-  groupMembers,
-  isGroupMember,
   nodeAbsolutePosition,
-  pruneEmptyGroups,
   refitGroupRects,
   resolveDropGroupId,
   toAbsoluteNodes,
@@ -145,55 +142,6 @@ describe("groupContainsPoint / findGroupAtPoint（组框为绝对坐标）", () 
     const nodes = [group("bottom", 0, 0, 200, 200), group("top", 50, 50, 200, 200)];
     expect(findGroupAtPoint(nodes, { x: 100, y: 100 })).toBe("top");
     expect(findGroupAtPoint(nodes, { x: 10, y: 10 })).toBe("bottom");
-  });
-});
-
-describe("isGroupMember / groupMembers（parentId 唯一口径）", () => {
-  it("按 parentId 显式归属取成员，组节点与无关节点不参与", () => {
-    const nodes = [
-      member("a", 0, 0, 50, 50, "g"),
-      member("b", 100, 0, 50, 50, "g"),
-      member("x", 200, 0, 50, 50, "other"),
-      node("y", 300, 0, 50, 50, { type: "text-node" }),
-      group("g", 0, 0, 100, 100),
-    ];
-    expect(groupMembers(nodes, "g").map((n) => n.id)).toEqual(["a", "b"]);
-    expect(groupMembers(nodes, "missing")).toEqual([]);
-    expect(isGroupMember(nodes[0], "g")).toBe(true);
-    expect(isGroupMember(nodes[4], "g")).toBe(false);
-  });
-});
-
-describe("pruneEmptyGroups（空组即删）", () => {
-  it("删除没有任何成员的组，有成员的组保留", () => {
-    const nodes = [
-      group("empty", 0, 0, 100, 100),
-      member("a", 0, 0, 50, 50, "kept"),
-      group("kept", 0, 0, 200, 200),
-    ];
-    const out = pruneEmptyGroups(nodes);
-    expect(out.map((n) => n.id)).toEqual(["a", "kept"]);
-  });
-
-  it("无空组时返回原数组引用（零拷贝快路径）", () => {
-    const nodes = [member("a", 0, 0, 50, 50, "g"), group("g", 0, 0, 100, 100)];
-    expect(pruneEmptyGroups(nodes)).toBe(nodes);
-  });
-
-  it("没有组的数组返回原引用", () => {
-    const nodes = [node("a", 0, 0, 50, 50, { type: "text-node" })];
-    expect(pruneEmptyGroups(nodes)).toBe(nodes);
-  });
-
-  it("多个组只删空的，顺序保持不变", () => {
-    const nodes = [
-      group("g1", 0, 0, 100, 100),
-      member("a", 0, 0, 50, 50, "g2"),
-      group("g2", 0, 0, 100, 100),
-      group("g3", 0, 0, 100, 100),
-      member("b", 10, 10, 50, 50, "g1"),
-    ];
-    expect(pruneEmptyGroups(nodes).map((n) => n.id)).toEqual(["g1", "a", "g2", "b"]);
   });
 });
 

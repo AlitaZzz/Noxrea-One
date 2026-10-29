@@ -1,14 +1,13 @@
 /**
- * 组框几何与成员判定工具：React Flow 官方 Sub Flow 模型（parentId + 相对坐标）下的
- * 组框自适应、归属判定与坐标换算。
+ * 组框几何工具：React Flow 官方 Sub Flow 模型（parentId + 相对坐标）下的
+ * 组框自适应、归属落点与坐标换算。
  *
  * 模型约定（全库唯一口径）：
  * - 父子关系唯一表达是节点顶层字段 `parentId`；子节点 position 为组内相对坐标。
  * - 组（NODE_TYPE.GROUP）恒为顶层节点（组不嵌套组），成员恒为一层嵌套，因此
  *   成员绝对位置 = 组.position + 相对位置，换算成本低。
- * - 成员归属的判定只此一处：isGroupMember / groupMembers 是全库唯一口径
- *   （显式归属 parentId 指向存在的组，组节点自身不可能是成员、不存在嵌套组；
- *   删除组连带删除成员——容器型语义，保留内容只拆壳走「取消编组」）。
+ * - 成员归属判定不在这里：唯一口径是 group-membership 的
+ *   isGroupMember / groupMembers（本模块只在几何计算中复用它们）。
  * - 组框「探出才扩、只扩不缩」refit：以当前组框为底，仅当成员矩形探出组框时
  *   才朝该侧扩张（并外扩 GROUP_NODE_PADDING）；组内成员（含贴边）不推动组框，
  *   用户手动放大的组框不被破坏。拖拽中的自动扩框（expandParent）刻意不启用：
@@ -18,8 +17,9 @@
  * - 尺寸取值链与 tidy-layout 一致：measured > style > 兜底。
  */
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
+import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING } from "@/lib/constants";
 
+import { groupMembers, isGroupMember, isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./tidy-layout";
 
 // ============================================================
@@ -66,36 +66,6 @@ export function toAbsoluteNodes(nodes: AnyNode[]): AnyNode[] {
     const abs = nodeAbsolutePosition(n, nodeById);
     return abs === n.position ? n : { ...n, position: abs };
   });
-}
-
-// ============================================================
-// 成员判定（唯一口径）
-// ============================================================
-
-/** 是否为组的成员节点（顶层字段 parentId 指向组 id；组节点自身不参与成员） */
-export function isGroupMember(node: AnyNode, groupId: string): boolean {
-  return node.type !== NODE_TYPE.GROUP && node.parentId === groupId;
-}
-
-/** 组的成员节点列表（isGroupMember 的集合形态） */
-export function groupMembers(nodes: AnyNode[], groupId: string): AnyNode[] {
-  return nodes.filter((n) => isGroupMember(n, groupId));
-}
-
-/**
- * 空组即删：移除没有任何成员的组节点，返回过滤后的数组（无空组时原引用返回）。
- * 组不承载内容、也没有任何连线（组不可连，批量轨道绕过边系统），成员全部
- * 离开后没有存在意义。在成员归属减少的入口统一调用：drag stop 脱离/换组
- * （InfiniteCanvas）、成员删除（canvas-store.removeNodes）、重新编组后旧组变空
- * （use-group-operations）。组的诞生自带成员，无合法空组阶段。
- */
-export function pruneEmptyGroups(nodes: AnyNode[]): AnyNode[] {
-  const membered = new Set<string>();
-  for (const n of nodes) {
-    if (n.type !== NODE_TYPE.GROUP && n.parentId) membered.add(n.parentId);
-  }
-  if (nodes.every((n) => n.type !== NODE_TYPE.GROUP || membered.has(n.id))) return nodes;
-  return nodes.filter((n) => n.type !== NODE_TYPE.GROUP || membered.has(n.id));
 }
 
 // ============================================================
@@ -190,7 +160,7 @@ export function refitGroupRects(nodes: AnyNode[], groupIds: Iterable<string>): A
   // 第一遍：计算各目标组的新矩形与原点位移（成员相对坐标在补偿前读取）
   const updates = new Map<string, { rect: { x: number; y: number; width: number; height: number }; dx: number; dy: number }>();
   for (const n of nodes) {
-    if (n.type !== NODE_TYPE.GROUP || !ids.has(n.id)) continue;
+    if (!isGroupNode(n) || !ids.has(n.id)) continue;
     const rect = computeFittedGroupRect(n, groupMembers(nodes, n.id));
     if (!rect) continue;
     updates.set(n.id, { rect, dx: rect.x - n.position.x, dy: rect.y - n.position.y });
@@ -199,7 +169,7 @@ export function refitGroupRects(nodes: AnyNode[], groupIds: Iterable<string>): A
   // 第二遍：组更新 position/size，成员按各自组的原点位移补偿（多组同刷时
   // 成员集互斥，顺序补偿可叠加）
   let out: AnyNode[] = nodes.map((n) => {
-    if (n.type !== NODE_TYPE.GROUP) return n;
+    if (!isGroupNode(n)) return n;
     const u = updates.get(n.id);
     if (!u) return n;
     return {
@@ -234,7 +204,7 @@ export interface GroupHitIndex {
 export function buildGroupHitIndex(nodes: AnyNode[]): GroupHitIndex {
   const nodeById = buildNodeIndex(nodes);
   const groups = nodes
-    .filter((node) => node.type === NODE_TYPE.GROUP)
+    .filter(isGroupNode)
     .map((node) => {
       const size = measureNode(node);
       return { node, x: node.position.x, y: node.position.y, width: size.width, height: size.height };
@@ -267,9 +237,9 @@ export function resolveDropGroupId(
     x: abs.x + size.width / 2,
     y: abs.y + size.height / 2,
   };
-  const oldParentId = node.type !== NODE_TYPE.GROUP ? node.parentId : undefined;
+  const oldParentId = memberParentId(node);
   const oldGroup = oldParentId ? nodeById.get(oldParentId) : undefined;
-  if (oldGroup && oldGroup.type === NODE_TYPE.GROUP && groupContainsPoint(oldGroup, center)) {
+  if (oldGroup && isGroupNode(oldGroup) && groupContainsPoint(oldGroup, center)) {
     return oldParentId;
   }
   return findIndexedGroupAtPoint(index, center);
@@ -286,7 +256,7 @@ export function findGroupAtPoint(
 ): string | undefined {
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if (n.type === NODE_TYPE.GROUP && groupContainsPoint(n, point)) return n.id;
+    if (isGroupNode(n) && groupContainsPoint(n, point)) return n.id;
   }
   return undefined;
 }

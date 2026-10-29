@@ -9,9 +9,8 @@
  * - 组未勾、成员被勾 → 成员单独删（组若因此清空自动随之移除）。
  */
 import type { AgentToolCall, ConfirmDecision } from "@/features/canvas/agent/types";
-import { groupMembers } from "@/features/canvas/shared/group-bounds";
+import { groupMembers, memberParentId } from "@/features/canvas/shared/group-membership";
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
 
 /** delete_nodes 的容器型展开：组 id → 组 + 全体成员（去重，顺序保持） */
 export function expandGroupDeletionIds(nodes: AnyNode[], ids: string[]): string[] {
@@ -89,7 +88,7 @@ export function applyConfirmSelections(
       for (const id of display) {
         if (inArgs.has(id) || !kept.has(id)) continue;
         const member = nodes.find((n) => n.id === id);
-        const pid = member && member.type !== NODE_TYPE.GROUP ? member.parentId : undefined;
+        const pid = member ? memberParentId(member) : undefined;
         if (pid && !kept.has(pid)) effective.push(id);
       }
       // 用户在卡上勾掉的项数（按展开集计）

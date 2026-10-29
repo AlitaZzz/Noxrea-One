@@ -16,7 +16,9 @@ import dagre, { type EdgeLabel, type GraphLabel, type NodeLabel } from "@dagrejs
 import type { Edge } from "@xyflow/react";
 
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, LAYOUT_GAP, NODE_TYPE, TIDY_MAX_ROW_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_PADDING, LAYOUT_GAP, TIDY_MAX_ROW_WIDTH } from "@/lib/constants";
+
+import { groupMembers, isGroupNode, memberParentId } from "./group-membership";
 
 /** 节点尺寸兜底（未测量到时的猜测值） */
 const FALLBACK_WIDTH = 200;
@@ -96,20 +98,18 @@ export function measureNode(node: AnyNode): Size {
 function collectUnits(nodes: AnyNode[]): LayoutUnit[] {
   const units: LayoutUnit[] = [];
   const groupIds = new Set(
-    nodes.filter((n) => n.type === NODE_TYPE.GROUP).map((n) => n.id),
+    nodes.filter(isGroupNode).map((n) => n.id),
   );
 
   // 组块：组节点 position 是绝对坐标；成员 position 是组内相对坐标
   for (const group of nodes) {
-    if (group.type !== NODE_TYPE.GROUP) continue;
+    if (!isGroupNode(group)) continue;
     const gSize = measureNode(group);
 
     const memberIds: string[] = [];
     let contentW = 0;
     let contentH = 0;
-    for (const n of nodes) {
-      if (n.type === NODE_TYPE.GROUP) continue;
-      if (n.parentId !== group.id) continue;
+    for (const n of groupMembers(nodes, group.id)) {
       memberIds.push(n.id);
       const s = measureNode(n);
       contentW = Math.max(contentW, n.position.x + s.width);
@@ -130,8 +130,9 @@ function collectUnits(nodes: AnyNode[]): LayoutUnit[] {
 
   // 独立节点；parentId 指向不存在的组时按未分组处理（脏数据兜底）
   for (const n of nodes) {
-    if (n.type === NODE_TYPE.GROUP) continue;
-    if (n.parentId && groupIds.has(n.parentId)) continue;
+    if (isGroupNode(n)) continue;
+    const parentId = memberParentId(n);
+    if (parentId && groupIds.has(parentId)) continue;
     const s = measureNode(n);
     units.push({
       id: n.id,

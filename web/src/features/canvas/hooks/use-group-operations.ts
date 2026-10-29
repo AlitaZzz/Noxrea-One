@@ -14,7 +14,8 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
-import { buildNodeIndex, groupMembers, isGroupMember, nodeAbsolutePosition, pruneEmptyGroups } from "@/features/canvas/shared/group-bounds";
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { groupMembers, isGroupMember, isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
 import { measureNode } from "@/features/canvas/shared/tidy-layout";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -26,7 +27,6 @@ import {
   GROUP_NODE_PADDING,
   LAYOUT_GAP,
   NODE_TITLE_HEIGHT,
-  NODE_TYPE,
 } from "@/lib/constants";
 
 // ============================================================
@@ -196,7 +196,7 @@ export function useGroupOperations() {
   useEffect(() => {
     function onGroupNodes() {
       const allNodes = useCanvasStore.getState().nodes;
-      const selected = allNodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
+      const selected = allNodes.filter((n) => n.selected && !isGroupNode(n));
       if (selected.length < 2) return;
 
       // Calculate bounding box of selected nodes（绝对坐标：选中节点可能原属
@@ -240,7 +240,7 @@ export function useGroupOperations() {
 
     function onUngroupNodes() {
       const allNodes = useCanvasStore.getState().nodes;
-      const selectedGroup = allNodes.filter((n) => n.selected && n.type === NODE_TYPE.GROUP);
+      const selectedGroup = allNodes.filter((n) => n.selected && isGroupNode(n));
       if (selectedGroup.length === 0) return;
 
       pushHistory(takeCanvasSnapshot());
@@ -276,7 +276,7 @@ export function useGroupOperations() {
 
       const store = useCanvasStore.getState();
       const group = store.nodes.find((n) => n.id === detail.nodeId);
-      if (!group || group.type !== NODE_TYPE.GROUP) return;
+      if (!group || !isGroupNode(group)) return;
 
       const members = groupMembers(store.nodes, group.id);
       if (members.length === 0) return;

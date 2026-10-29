@@ -11,9 +11,9 @@
  * 尺寸（measured），两者皆无（未渲染）的节点不参与命中。
  */
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
 
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
+import { isGroupNode } from "./group-membership";
 
 /** 命中盒坐标 */
 export interface NodeBox {
@@ -61,7 +61,7 @@ export function nodeEdgeAnchor(
 /**
  * 返回包含 flow 坐标点 point 的最上层节点，未命中返回 null。
  *
- * 组节点（NODE_TYPE.GROUP）不参与命中——组是空间容器而非可连接实体（行业内
+ * 组节点（group-node）不参与命中——组是空间容器而非可连接实体（行业内
  * 节点画布的通行口径），其空白区域对连线表现为画布空白（松手弹创建菜单、
  * 悬停无反馈），组内子节点则正常命中（子节点渲染在组之上，跳过组也保证了
  * 悬停组内子节点时不会错误地命中最上层的组）。发起端节点命中（自连）由调用方
@@ -74,7 +74,7 @@ export function findNodeAtFlowPoint(
   const nodeById = buildNodeIndex(nodes);
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
-    if (n.type === NODE_TYPE.GROUP) continue;
+    if (isGroupNode(n)) continue;
     const box = getNodeBox(n, nodeById);
     if (!box) continue;
     if (

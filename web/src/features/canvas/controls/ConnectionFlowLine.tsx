@@ -12,9 +12,10 @@ import { Fragment, useEffect } from "react";
 
 import { connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
+import { isGroupNode } from "@/features/canvas/shared/group-membership";
 import { findNodeAtFlowPoint, getNodeBox, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { EDGE_BASE_COLOR, insetHandleCenter, NODE_TYPE } from "@/lib/constants";
+import { EDGE_BASE_COLOR, insetHandleCenter } from "@/lib/constants";
 
 import { applyConnectionTilt, clearConnectionTilt } from "./connection-tilt";
 import { FlowLines } from "./EdgeFlow";
@@ -132,7 +133,7 @@ export default function ConnectionFlowLine({
     const bundleNodes = useCanvasStore.getState().nodes;
     const bundleById = buildNodeIndex(bundleNodes);
     for (const n of bundleNodes) {
-      if (!n.selected || n.type === NODE_TYPE.GROUP || n.id === fromNode.id) continue;
+      if (!n.selected || isGroupNode(n) || n.id === fromNode.id) continue;
       const a = nodeEdgeAnchor(n, side, bundleById);
       if (!a) continue;
       const [p] = getBezierPath({

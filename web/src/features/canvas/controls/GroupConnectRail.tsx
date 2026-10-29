@@ -19,7 +19,7 @@
 import { Position } from "@xyflow/react";
 import { useCallback } from "react";
 
-import { groupMembers } from "@/features/canvas/shared/group-bounds";
+import { groupMembers } from "@/features/canvas/shared/group-membership";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useBatchConnect } from "@/providers/BatchConnectContext";
 

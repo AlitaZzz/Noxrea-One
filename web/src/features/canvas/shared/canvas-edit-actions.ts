@@ -16,7 +16,8 @@ import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
-import { isGroupMember, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
+import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
+import { isGroupMember, isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import type { CanvasState } from "@/features/canvas/stores/canvas-store";
 import { markDirtyImmediate, markDirtyUndo, pushHistoryThrottled, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
@@ -99,11 +100,14 @@ export function copySelection(): boolean {
   // 选中组时自动带上其全部成员：复制组 = 复制整组内容（成员经粘贴重映射归新组）
   const selSet = new Set(selIds);
   const selectedGroupIds = new Set(
-    nodes.filter((n) => n.type === NODE_TYPE.GROUP && selSet.has(n.id)).map((n) => n.id)
+    nodes.filter((n) => isGroupNode(n) && selSet.has(n.id)).map((n) => n.id)
   );
   const expanded = selectedGroupIds.size
     ? nodes.filter(
-        (n) => selSet.has(n.id) || (n.parentId !== undefined && selectedGroupIds.has(n.parentId)),
+        (n) => {
+          const parentId = memberParentId(n);
+          return selSet.has(n.id) || (parentId !== undefined && selectedGroupIds.has(parentId));
+        },
       )
     : nodes.filter((n) => selSet.has(n.id));
   // 与复制集相关的连线一并入剪贴板（任一端在集内）：集内端点粘贴时重映射到
@@ -235,7 +239,7 @@ export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: nu
   if (nodes.some((n) => {
     if (n.parentId === undefined) return false;
     const parent = nodeById.get(n.parentId);
-    return !isGroupMember(n, n.parentId) || (parent !== undefined && parent.type !== NODE_TYPE.GROUP);
+    return !isGroupMember(n, n.parentId) || (parent !== undefined && !isGroupNode(parent));
   })) return false;
 
   const edges = parsed.edges;
@@ -285,7 +289,7 @@ function pasteNodes(
   // 剪贴板内的组节点 → 副本组：随迁成员的 parentId 重映射到新组
   const parentIdMap = new Map<string, string>();
   clipNodes.forEach((orig) => {
-    if (orig.type === NODE_TYPE.GROUP) parentIdMap.set(orig.id, idMap.get(orig.id)!);
+    if (isGroupNode(orig)) parentIdMap.set(orig.id, idMap.get(orig.id)!);
   });
 
   // 第二遍：落位。整体平移基准 = 剪贴板内容的绝对包围盒左上角

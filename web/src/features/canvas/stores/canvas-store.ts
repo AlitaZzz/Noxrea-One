@@ -8,11 +8,8 @@ import type { Edge } from "@xyflow/react";
 import { create } from "zustand";
 
 import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
-import {
-  buildNodeIndex,
-  nodeAbsolutePosition,
-  pruneEmptyGroups,
-} from "@/features/canvas/shared/group-bounds";
+import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
 import { assertUniqueNodeIds } from "@/features/canvas/shared/node-identity";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ViewportState } from "@/features/canvas/types";
@@ -20,7 +17,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { DEFAULT_VIEWPORT, NODE_TYPE } from "@/lib/constants";
+import { DEFAULT_VIEWPORT } from "@/lib/constants";
 import { nodeRectOf } from "@/lib/utils/image-utils";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
@@ -468,7 +465,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       // 属于防御性一致，不会误删成员相关状态）
       const removedIds = new Set(toDelete);
       for (const n of stripped) {
-        if (n.type === NODE_TYPE.GROUP && !nodes.includes(n)) removedIds.add(n.id);
+        if (isGroupNode(n) && !nodes.includes(n)) removedIds.add(n.id);
       }
       removedProgressIds = removedIds;
       const patch: Partial<CanvasState> = {

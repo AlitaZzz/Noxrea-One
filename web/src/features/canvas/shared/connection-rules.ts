@@ -23,6 +23,8 @@
 import type { AnyNode } from "@/features/canvas/types";
 import { canConnect, NODE_TYPE } from "@/lib/constants";
 
+import { isGroupNode } from "./group-membership";
+
 /** 判定所需的最小画布状态（结构化入参，便于纯函数测试） */
 export interface ConnectionRuleState {
   nodes: AnyNode[];
@@ -113,7 +115,7 @@ export function buildConnectionPairs(
 
   // 多选扇出：拖线起点/终点在多选集合（≥2 非组节点）中时，
   // 扩展为「所有选中节点 ↔ 对端节点」的批量连线，任一类型不可连则整体拒绝
-  const selected = nodes.filter((n) => n.selected && n.type !== NODE_TYPE.GROUP);
+  const selected = nodes.filter((n) => n.selected && !isGroupNode(n));
   const inSelection = (n: AnyNode) => selected.some((s) => s.id === n.id);
   const pairs: { source: string; target: string }[] = [];
   if (selected.length > 1 && inSelection(src) && !inSelection(tgt)) {

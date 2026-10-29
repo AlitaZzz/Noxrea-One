@@ -27,6 +27,7 @@ import {
 } from "@/features/canvas/node-defaults";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { isGroupNode } from "@/features/canvas/shared/group-membership";
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
@@ -645,7 +646,7 @@ function execDuplicateNode(args: ToolArgs): ExecOutcome {
   if (!node) {
     return { content: `节点 ${nodeId} 不存在。可从画布状态里查看现有节点 id。`, mutated: false, failed: true };
   }
-  if (node.type === NODE_TYPE.GROUP) {
+  if (isGroupNode(node)) {
     return {
       content: `group 节点 ${nodeId} 不支持复制（成员节点不会跟着复制，会得到一个空组框）。如需复制内容，请对组内各成员节点分别调用 duplicate_node。`,
       mutated: false,

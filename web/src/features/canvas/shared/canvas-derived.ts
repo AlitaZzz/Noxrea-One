@@ -12,6 +12,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_WIDTH } from "@/lib/constants";
 
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
+import { isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./tidy-layout";
 
 export interface SelectionFrame {
@@ -146,16 +147,17 @@ function buildGroupMembership(nodes: AnyNode[]): GroupMembership {
   const ungrouped: AnyNode[] = [];
 
   for (const node of nodes) {
-    if (node.type !== NODE_TYPE.GROUP) continue;
+    if (!isGroupNode(node)) continue;
     groupNodes.push(node);
     groupIds.add(node.id);
   }
   for (const node of nodes) {
-    if (node.type === NODE_TYPE.GROUP) continue;
-    if (node.parentId && groupIds.has(node.parentId)) {
-      const members = membersByGroup.get(node.parentId);
+    if (isGroupNode(node)) continue;
+    const parentId = memberParentId(node);
+    if (parentId && groupIds.has(parentId)) {
+      const members = membersByGroup.get(parentId);
       if (members) members.push(node);
-      else membersByGroup.set(node.parentId, [node]);
+      else membersByGroup.set(parentId, [node]);
     } else {
       ungrouped.push(node);
     }
@@ -207,7 +209,7 @@ function computeSelectionFrame(
   nodes: AnyNode[],
   nodeById: Map<string, AnyNode>,
 ): SelectionFrame | null {
-  const selected = nodes.filter((node) => node.selected && node.type !== NODE_TYPE.GROUP);
+  const selected = nodes.filter((node) => node.selected && !isGroupNode(node));
   if (selected.length < 2) return null;
 
   let minX = Infinity;
@@ -235,15 +237,15 @@ function buildRailWidths(
 ): ReadonlyMap<string, number> {
   const groupSizes = new Map<string, { width: number }>();
   for (const node of nodes) {
-    if (node.type === NODE_TYPE.GROUP) groupSizes.set(node.id, { width: measureNode(node).width });
+    if (isGroupNode(node)) groupSizes.set(node.id, { width: measureNode(node).width });
   }
   const frameIds = selectionFrame ? new Set(selectionFrame.ids) : null;
   const widths = new Map<string, number>();
 
   for (const node of nodes) {
-    if (node.type === NODE_TYPE.GROUP) continue;
-    const memberGroup = node.parentId ? nodeById.get(node.parentId) : undefined;
-    const groupSize = memberGroup?.type === NODE_TYPE.GROUP ? groupSizes.get(memberGroup.id) : undefined;
+    if (isGroupNode(node)) continue;
+    const parentId = memberParentId(node);
+    const groupSize = parentId ? groupSizes.get(parentId) : undefined;
     const nodeSize = measureNode(node);
     const memberLeft = groupSize
       ? node.position.x <= 0 ? RAIL_WIDTH : Math.min(RAIL_WIDTH, node.position.x)
