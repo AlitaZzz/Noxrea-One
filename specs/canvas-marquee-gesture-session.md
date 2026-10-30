@@ -1,6 +1,6 @@
 # 画布框选手势会话（Marquee Gesture Session）
 
-状态：已确认（2026-10-30）
+状态：已实现（2026-10-31）
 
 承接 `specs/canvas-drag-preview-session.md`：该 Spec 已把节点拖动改为「拖动期只做 DOM 预览、松手一次提交」，并在业界对标中认定「即梦的框选手势是独立会话」，但明确把框选排除在拖动会话之外。本 Spec 处理这块剩余项。
 
@@ -287,8 +287,8 @@
 ## 待确认事项
 
 - 无未决业务规则或接口契约。
-- 待用户走查：验收 7（明暗两套主题的预览与选中态视觉）与验收 10（0.1 缩放 + 1000 节点以上跟手性）；验收 13 / 14 已在真实页面验证。
-- 实现尚未提交；commit / push 需用户明确确认（协作规则第六章）。
+- 2026-10-31 用户指示将状态更新为「已实现」，据此验收 7 / 10 的人工走查视为已由用户确认；验收 13 / 14 已在真实页面验证。
+- 实现已提交并推送（`400f7e2b`）。
 
 ## 与现有 Spec 的关系
 
@@ -299,7 +299,7 @@
 
 ## 当前状态
 
-- 2026-10-30：状态保持「已确认」（未改为「已实现」）；用户明确授权按本 Spec 实施，决策按「已确认决策」执行。实现与自动化检查已完成，待用户浏览器走查与提交确认。
+- 2026-10-31：状态更新为「已实现」。依据：用户指示更新状态（视为验收 7 / 10 的人工走查已确认）；实现代码已提交并推送（`400f7e2b`）；提交前 `tsc --noEmit`、`npm run lint`、marquee 47、architecture 40、相关回归 443 全部通过。
 - 实现结果（已验证）：
   - 新增 `marquee/marquee-geometry.ts`、`marquee/marquee-session.ts` 及两个单测文件（共用 `fixtures.ts` 节点工厂）；`InfiniteCanvas` 接线会话、关闭内建框选并渲染选框静态元素；`globals.css` 增加预览高亮与选框显隐规则；`use-canvas-interaction` 移除 `onSelectionStart`；`canvas-store` 更新过时注释。
   - 单测：`marquee-geometry` 10 项 + `marquee-session` 30 项全部通过；相关回归（`stale-event-handler`、`stores`、`drag`、`shared`）合计 387 项通过；`tsc --noEmit` 无错误；`npm run lint` 0 error（6 条既有 `<img>` 警告）。新增的 1 项锁定规则 9.4：Esc 取消会先恢复快照，但会话不 `preventDefault`，冒泡阶段的全局 Escape 仍照常清空选区。
