@@ -33,6 +33,7 @@
     "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/suggestion": "^3.31.3",
     "@xyflow/react": "^12.12.0",
+    "@xyflow/system": "0.0.83",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",

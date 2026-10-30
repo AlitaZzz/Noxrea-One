@@ -11,6 +11,7 @@ import { NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_PADDING, RAIL_WIDTH } from "@/lib/constants";
 
+import { edgeTouchesSelection } from "./edge-selection";
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
 import { isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./tidy-layout";
@@ -261,7 +262,7 @@ function stableHighlightedEdges(edges: Edge[], selectedNodeIds: ReadonlySet<stri
   if (cached) return cached;
   const highlighted = new Set(
     edges
-      .filter((edge) => selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target))
+      .filter((edge) => edgeTouchesSelection(edge, selectedNodeIds))
       .map((edge) => edge.id),
   );
   return cacheValue(bySelection, key, highlighted, 32);

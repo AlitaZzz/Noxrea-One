@@ -25,7 +25,6 @@ import {
   Panel,
   Position,
   ReactFlow,
-  SelectionMode,
   useReactFlow,
   useStore,
   useStoreApi,
@@ -72,6 +71,7 @@ import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/features/canvas/hooks/use-sse-task-monitor";
 import { applyTidyLayout, isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
+import { MarqueeSession } from "@/features/canvas/marquee/marquee-session";
 import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { CANVAS_NODE_TYPES } from "@/features/canvas/nodes/canvas-node-types";
 import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
@@ -99,7 +99,7 @@ import {
   toPositionMap,
 } from "@/features/canvas/shared/node-positions";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
-import { findFreePosition, flushAndWait, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
+import { findFreePosition, flushAndWait, getCanvasProjectId, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
@@ -208,6 +208,41 @@ export default function InfiniteCanvas() {
   }, [renderedNodes, dragSession]);
 
   useEffect(() => () => dragSession.dispose(), [dragSession]);
+
+  // ---- 框选手势会话 ----
+  // React Flow 内建框选已关闭（见下方 selectionOnDrag / selectionKeyCode）：
+  // 空白区左键拖拽由会话接管，激活时冻结几何索引，每帧只写选框与命中差量，
+  // 松手一次提交节点/边选中态（规则见 marquee/marquee-session.ts）。
+  const [marqueeSession] = useState(
+    () =>
+      new MarqueeSession({
+        root: canvasContainerRef,
+        getNodes: () => useCanvasStore.getState().nodes,
+        getEdges: () => useCanvasStore.getState().edges,
+        setNodes: (next) => useCanvasStore.getState().setNodes(next),
+        setEdges: (next, options) => useCanvasStore.getState().setEdges(next, options),
+        dispatchInteraction: (action) =>
+          useCanvasStore.getState().dispatchInteraction({ type: action }),
+        getProjectId: getCanvasProjectId,
+        getTransform: () => rfStore.getState().transform,
+        panBy: (delta) => rfStore.getState().panBy(delta),
+        getNodesSelectionActive: () => rfStore.getState().nodesSelectionActive,
+        setNodesSelectionActive: (active) => rfStore.setState({ nodesSelectionActive: active }),
+        canStartMarquee: () => {
+          const state = rfStore.getState();
+          return state.elementsSelectable && !state.connection.inProgress;
+        },
+      }),
+  );
+
+  useLayoutEffect(() => {
+    marqueeSession.syncRenderedNodes();
+  }, [renderedNodes, marqueeSession]);
+
+  useEffect(() => {
+    marqueeSession.attach();
+    return () => marqueeSession.dispose();
+  }, [marqueeSession]);
 
   // 拖动参考点的按下点：React Flow 在越过拖动阈值的首个指针事件才建立拖动
   // 参考点，按下到该事件之间的指针位移会永久丢失（节点整段拖动落后指针）。
@@ -942,13 +977,6 @@ export default function InfiniteCanvas() {
     [canvasInteraction, setNodes]
   );
 
-  // 框选开始：标记本次选择来自框选，抑制工具栏/面板渲染（直到下次单击节点/空白）。
-  // 注意用 onSelectionStart 而非 onSelectionDragStart：后者依赖“已选中的节点集合”，
-  // 框选前若无选中节点则不会触发，导致“框选恰好一个节点”仍弹出工具栏/面板。
-  const handleSelectionStart = useCallback(() => {
-    canvasInteraction.onSelectionStart();
-  }, [canvasInteraction]);
-
   useGroupOperations();
   const { addNode } = useAddNode();
   // 从右键/双击菜单新增节点时，锚定到触发菜单的点击点（世界坐标）
@@ -1127,9 +1155,7 @@ export default function InfiniteCanvas() {
         onNodeClick={handleNodeClick}
         onPaneContextMenu={handlePaneContextMenu}
         onNodeContextMenu={handleNodeContextMenu}
-        onSelectionStart={handleSelectionStart}
         defaultViewport={defaultViewport}
-        selectionMode={SelectionMode.Partial}
         // 拖动阈值取库默认 1px（2026-10-29 用户要求由 2 降到 1）：阈值只保留
         // 「点击/拖动判定」职责，按下的位移补偿与首帧由拖动会话负责（规则 2.7/2.8），
         // 阈值越大，起拖死区越长
@@ -1146,8 +1172,11 @@ export default function InfiniteCanvas() {
         fitView={false}
         // 画布导航（Figma 约定）：左键拖空白 = 框选，空格+拖拽 或 中键 = 平移。
         // panOnDrag 去掉左键 0、只留中键 1；按住空格时 React Flow 会把 panOnDrag 视为 true。
+        // 内建框选关闭（selectionOnDrag=false、selectionKeyCode=null）：空白区左键
+        // 拖拽由 MarqueeSession 接管，Shift/Ctrl/Meta 也不再触发内建选择。
         panOnDrag={[1]}
-        selectionOnDrag={true}
+        selectionOnDrag={false}
+        selectionKeyCode={null}
         panActivationKeyCode="Space"
         panOnScroll={false}
         zoomOnScroll={true}
@@ -1169,6 +1198,10 @@ export default function InfiniteCanvas() {
         defaultEdgeOptions={RF_DEFAULT_EDGE_OPTIONS}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />
+
+        {/* 框选选框：静态元素，几何由 MarqueeSession 逐帧写 style，避免每帧 React 渲染。
+            复用 React Flow 的 .react-flow__selection 视觉与层级（z-index 6） */}
+        <div className="react-flow__selection react-flow__container" data-canvas-marquee="" />
 
         {/* Top-left panel: quick toolbar */}
         {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}

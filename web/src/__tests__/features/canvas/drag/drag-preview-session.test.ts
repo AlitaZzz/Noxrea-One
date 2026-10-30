@@ -2,6 +2,7 @@
 import { Position } from "@xyflow/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { stubRaf } from "@/__tests__/test-utils/raf";
 import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
 import {
   registerEdgeGeometry,
@@ -41,28 +42,6 @@ const group = (id: string, x: number, y: number): AnyNode =>
 /** 固定 100×100 的盒，便于按锚点关系写出精确期望 */
 const box = (id: string, x: number, y: number, extra: Record<string, unknown> = {}): AnyNode =>
   node(id, x, y, { style: { width: 100, height: 100 }, ...extra });
-
-/** 手动推进 rAF：会话每帧最多写一次 DOM，测试逐帧断言 */
-function stubRaf() {
-  const queue = new Map<number, FrameRequestCallback>();
-  let nextId = 1;
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
-    const id = nextId++;
-    queue.set(id, cb);
-    return id;
-  });
-  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
-    queue.delete(id);
-  });
-  return {
-    flush() {
-      const pending = [...queue.values()];
-      queue.clear();
-      for (const cb of pending) cb(0);
-    },
-    pending: () => queue.size,
-  };
-}
 
 const sessions: DragPreviewSession[] = [];
 
@@ -580,6 +559,32 @@ describe("DragPreviewSession", () => {
     expect(rail.style.visibility).toBe("");
     expect(rail.style.translate).toBe("");
     expect(toolbar.style.translate).toBe("20px 0px");
+  });
+
+  it("整组平移的浮点舍入差异不算混合位移：选中框跟随而不是闪烁", () => {
+    const raf = stubRaf();
+    const harness = createHarness(
+      [node("a", 1.1, 0, { selected: true }), node("b", 2.3, 0, { selected: true })],
+      2,
+    );
+    const { session, container } = harness;
+    addNodeEl(container, "a");
+    addNodeEl(container, "b");
+    const frame = document.createElement("div");
+    frame.className = "react-flow__nodesselection";
+    container.appendChild(frame);
+
+    // 同一段平移加在不同基准位置上：位置反推的位移在末位相差 ~4e-16
+    const delta = 2.547149699531246;
+    session.begin(["a", "b"], NO_GRID);
+    session.preview([
+      { id: "a", position: { x: delta + 1.1, y: 0 } },
+      { id: "b", position: { x: delta + 2.3, y: 0 } },
+    ]);
+    raf.flush();
+
+    expect(frame.style.visibility).toBe("");
+    expect(frame.style.translate).not.toBe("");
   });
 
   it("外部写入：以新 store 重建基准，无重复位移，取消后无残留", () => {

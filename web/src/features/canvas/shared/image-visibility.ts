@@ -1,7 +1,8 @@
+import type { Rect } from "./geometry";
+
 const MULTI_IMAGE_GAP = 8;
 
 export type ImagePlacement = { column?: number; row?: number; stackDepth?: number };
-type Rect = { x: number; y: number; width: number; height: number };
 
 export function layoutMultiImages(urls: string[], mainUrl: string): ImagePlacement[] {
   let remaining = 0;

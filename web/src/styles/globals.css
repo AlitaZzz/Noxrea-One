@@ -235,6 +235,14 @@
   border: 1px dashed var(--marquee-border) !important;
   border-radius: 6px;
 }
+/* 框选手势选框：元素常驻，会话激活时切换 data-active 并逐帧写几何 */
+[data-canvas-marquee] {
+  display: none;
+  pointer-events: none;
+}
+[data-canvas-marquee][data-active="true"] {
+  display: block;
+}
 /* 松手后的多选外框：与拖拽框同色（中性灰），但边框改回实线——
    虚线读作「进行中」，实线读作「已成结果」，靠线型而非颜色区分两个阶段。
    选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
@@ -255,9 +263,17 @@
 .node-surface {
   background: linear-gradient(to bottom right, var(--node-surface-start), var(--node-surface-end));
 }
-.node-body.node-selected {
+/* 框选手势的预览高亮与持久选中态共用同一套声明，视觉完全一致 */
+.node-body.node-selected,
+[data-marquee-hit] .node-body {
   outline: 1px solid var(--ring);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+/* 预览命中与 React Flow 选中节点同一层级（SELECTED_NODE_Z=1000），
+   避免低缩放下被相邻未选中节点盖住；组节点按上方规则始终沉底（-1），
+   不参与抬升，保证预览与提交后的选中视觉一致 */
+.react-flow__node[data-marquee-hit]:not(.react-flow__node-group-node) {
+  z-index: 1000 !important;
 }
 .node-body.node-drag-over {
   outline: 2px solid var(--ring);
@@ -513,10 +529,29 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 }
 
 /* ── 光标 ──
-   拖线进行中：整块画布保持十字准星，表达「正在连线」而非「可拖动画布」 */
-.react-flow[data-interaction="connecting"] .react-flow__pane,
-.react-flow[data-interaction="connecting"] .react-flow__node {
-  cursor: crosshair;
+   手势期间光标由手势状态整体接管，不交给 hover 命中决定（规则 14）：指针会扫过
+   节点、边、节点内控件与空白，逐元素枚举 hover 目标会随节点组件演化漏掉新控件
+   （边、业务组件写在元素上的内联 cursor），光标即在「节点抓手 / 控件指针 /
+   resize / 空白箭头」之间跳变。因此直接对整个画布子树强制接管；!important 用于
+   压过业务组件的内联 cursor。
+   框选判定取选框自身的 data-active（仅手势进行中置位）——data-interaction=
+   "box-selecting" 是「最近一次选中来自框选」，会保留到下一次点击。
+   框选中用普通箭头（2026-10-30 走查：框选不需要十字光标），但仍整体接管，
+   避免指针越过节点时跳回抓手或控件指针 */
+.react-flow:has(> [data-canvas-marquee][data-active="true"]),
+.react-flow:has(> [data-canvas-marquee][data-active="true"]) * {
+  cursor: default !important;
+}
+/* 拖线进行中：整块画布保持十字准星，表达「正在连线」而非「可拖动画布」 */
+.react-flow[data-interaction="connecting"],
+.react-flow[data-interaction="connecting"] * {
+  cursor: crosshair !important;
+}
+/* 拖动节点中：整块画布保持抓取手势。拖动预览按 rAF 合帧并补偿阈值位移，指针
+   会短暂落在节点外，hover 命中会闪回箭头或相邻节点的抓手 */
+.react-flow[data-interaction="dragging-nodes"],
+.react-flow[data-interaction="dragging-nodes"] * {
+  cursor: grabbing !important;
 }
 
 /* 无 hover 能力（触屏）的设备：选中即显示 handle，不依赖悬停

@@ -16,6 +16,7 @@ import type { RefObject } from "react";
 
 import type { AlignmentGuide } from "@/features/canvas/shared/alignment-guides";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
+import { type Point, samePoint } from "@/features/canvas/shared/geometry";
 import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
 import { groupMembers, isGroupNode } from "@/features/canvas/shared/group-membership";
 import {
@@ -26,7 +27,6 @@ import {
 } from "@/features/canvas/shared/node-positions";
 import {
   emptySnapState,
-  type Point,
   resolveSnap,
   type SnapBounds,
   type SnapSessionState,
@@ -454,12 +454,8 @@ export class DragPreviewSession {
         continue;
       }
 
-      if (
-        sourceDelta &&
-        targetDelta &&
-        sourceDelta.x === targetDelta.x &&
-        sourceDelta.y === targetDelta.y
-      ) {
+      // 两端位移在浮点容差内相同：平移整条边（同一段刚性平移反推的位移带末位噪声）
+      if (sourceDelta && targetDelta && samePoint(sourceDelta, targetDelta)) {
         // 两端同位移：平移整条边，不改路径（规则 4.2）
         if (edge.mode === "path") this.restoreEdgePath(edge, geometry);
         edge.group.style.translate = `${sourceDelta.x}px ${sourceDelta.y}px`;
@@ -515,7 +511,7 @@ export class DragPreviewSession {
       const delta = deltas.get(id);
       if (!delta) return null;
       if (!first) first = delta;
-      else if (delta.x !== first.x || delta.y !== first.y) return null;
+      else if (!samePoint(delta, first)) return null;
     }
     return first;
   }

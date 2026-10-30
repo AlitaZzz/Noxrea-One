@@ -313,7 +313,7 @@ type StableInteractionMode = "idle" | "box-selecting";
 export type CanvasInteraction =
   /** 空闲或点击选中：正常显示选中态 UI（工具栏 / 生成面板 / 选中 handle） */
   | { mode: "idle" }
-  /** 框选（Shift 拖拽）产生的选中：只做高亮，不显示选中态 UI，直到下次点击 */
+  /** 框选（空白区左键拖拽）产生的选中：只做高亮，不显示选中态 UI，直到下次点击 */
   | { mode: "box-selecting" }
   /** 拖动节点中：隐藏 handle / 工具栏 / 生成面板，避免跟随节点飘动；prev 用于松手后恢复 */
   | { mode: "dragging-nodes"; prev: StableInteractionMode }

@@ -1,7 +1,8 @@
+import type { Rect } from "./geometry";
+
 export type MediaLoadPriority = 0 | 1 | null;
 export const MEDIA_PREFETCH_MARGIN = 240;
 
-type Rect = { x: number; y: number; width: number; height: number };
 type Viewport = { width: number; height: number; transform: readonly [number, number, number] };
 
 export function mediaLoadPriority(rect: Rect, viewport: Viewport): MediaLoadPriority {

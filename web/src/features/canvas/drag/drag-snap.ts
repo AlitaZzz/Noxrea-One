@@ -5,10 +5,10 @@
  * 与吸附帧；吸附计算由 `shared/snap-engine.ts` 完成，最终偏移按相对坐标
  * 应用回拖动项。规则见 specs/canvas-snap-alignment.md。
  */
+import type { Point } from "@/features/canvas/shared/geometry";
 import { nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import {
   isValidSnapBounds,
-  type Point,
   shiftBounds,
   type SnapAxis,
   type SnapBounds,

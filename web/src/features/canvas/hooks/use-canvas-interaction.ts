@@ -24,7 +24,6 @@ export function useCanvasInteraction() {
   const interaction = useCanvasStore((s) => s.interaction);
   const dispatch = useCanvasStore((s) => s.dispatchInteraction);
 
-  const onSelectionStart = useCallback(() => dispatch({ type: "selection-start" }), [dispatch]);
   const onClick = useCallback(() => dispatch({ type: "click" }), [dispatch]);
   const onNodeDragStart = useCallback(() => dispatch({ type: "node-drag-start" }), [dispatch]);
   const onNodeDragStop = useCallback(() => dispatch({ type: "node-drag-stop" }), [dispatch]);
@@ -40,13 +39,12 @@ export function useCanvasInteraction() {
     () => ({
       mode: interaction.mode,
       showSelectionChrome,
-      onSelectionStart,
       onClick,
       onNodeDragStart,
       onNodeDragStop,
       onConnectStart,
       onConnectEnd,
     }),
-    [interaction.mode, showSelectionChrome, onSelectionStart, onClick, onNodeDragStart, onNodeDragStop, onConnectStart, onConnectEnd]
+    [interaction.mode, showSelectionChrome, onClick, onNodeDragStart, onNodeDragStop, onConnectStart, onConnectEnd]
   );
 }

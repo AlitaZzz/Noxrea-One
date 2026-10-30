@@ -73,7 +73,7 @@
 - `snapGridSize` 默认值 20、`LAYOUT_GAP` 60。
 - 辅助线现有渲染位置与层级（屏幕坐标 SVG、节点之上）；不改为视口门户/节点之下。React key 生成不属于层级调整，按技术影响 1 修正。
 - 缩放/旋转手柄（`ResizeHandle.tsx`）不接入吸附。
-- 框选外框拖动（`.react-flow__nodesselection`）不接入拖动会话，仍不吸附。
+- 聚合选中外框（`.react-flow__nodesselection`）的整组拖动：保持 React Flow 默认命中，外框拖动经 `onNodeDragStart` 进入拖动会话，整组移动正常走本 Spec 的吸附（`specs/canvas-marquee-gesture-session.md` 规则 1.5）。
 - 组框 refit、归属判定、空组删除、历史与自动保存规则。
 - 拖动预览会话的 DOM 预览、边路径、释放时机与外部写入重建机制。
 
@@ -241,7 +241,7 @@
 ### 1. 模块与接口
 
 - `shared/snap-engine.ts`（新增）：
-  - 常量：`SNAP_ENTER_TOLERANCE_PX`、`SNAP_RELEASE_TOLERANCE_PX`、`SNAP_GRID_MIN_SCREEN_PX`、`SNAP_EPSILON`；
+  - 常量：`SNAP_ENTER_TOLERANCE_PX`、`SNAP_RELEASE_TOLERANCE_PX`、`SNAP_GRID_MIN_SCREEN_PX`；几何容差 `GEOMETRY_EPSILON` 来自 `shared/geometry.ts`；
   - 类型：`SnapTarget`（id、绝对盒、order）、`SnapSessionState`（每轴锁定关系）、`SnapModifiers`、`SnapSettings`（总开关/步长）；`AlignmentGuide` 类型在 `shared/alignment-guides.ts`；
   - `resolveSnap(frame)`：纯函数，`frame.state` 为上一帧每轴锁定关系，返回每轴偏移、新状态、辅助线；不读写 store/DOM。
 - `drag/drag-snap.ts`：`buildSnapFrame(...)` + `applySnapOffset(...)` 适配层；会话提供移动集基准绝对盒与原始位移，适配层构建并集主体、目标集合与吸附帧，引擎结果按世界坐标偏移应用回拖动项相对位置。

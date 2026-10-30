@@ -11,6 +11,7 @@
 import { LAYOUT_GAP } from "@/lib/constants";
 
 import type { AlignmentGuide } from "./alignment-guides";
+import { GEOMETRY_EPSILON, type Point, type Rect } from "./geometry";
 
 /** 进入吸附的屏幕像素阈值 */
 const SNAP_ENTER_TOLERANCE_PX = 5;
@@ -18,25 +19,12 @@ const SNAP_ENTER_TOLERANCE_PX = 5;
 const SNAP_RELEASE_TOLERANCE_PX = 8;
 /** 网格吸附的最小屏幕像素步长；低于它网格整体关闭 */
 const SNAP_GRID_MIN_SCREEN_PX = 8;
-/** 浮点比较容差：辅助线恰好对齐（规则 5.1）与线段合并共用；阈值比较不使用 */
-const SNAP_EPSILON = 1e-6;
 
 export type SnapAxis = "x" | "y";
 type SnapAnchor = "start" | "center" | "end";
 
-/** 二维值：位置或位移，数值语义由持有它的字段决定 */
-export interface Point {
-  x: number;
-  y: number;
-}
-
-/** 绝对（世界）坐标下的矩形盒 */
-export interface SnapBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+/** 绝对（世界）坐标下的矩形盒；结构复用共享 Rect，领域命名保持不变。 */
+export type SnapBounds = Rect;
 
 /** 吸附目标：绝对盒 + store 顺序（排序并列时使用） */
 export interface SnapTarget {
@@ -322,8 +310,8 @@ function guideSpan(
   const subjectEnd = snapAnchorValue(movedSubject, cross, "end");
   const targetStart = snapAnchorValue(target, cross, "start");
   const targetEnd = snapAnchorValue(target, cross, "end");
-  if (subjectStart > targetEnd + SNAP_EPSILON) return [targetEnd, subjectStart];
-  if (targetStart > subjectEnd + SNAP_EPSILON) return [subjectEnd, targetStart];
+  if (subjectStart > targetEnd + GEOMETRY_EPSILON) return [targetEnd, subjectStart];
+  if (targetStart > subjectEnd + GEOMETRY_EPSILON) return [subjectEnd, targetStart];
   return [Math.min(subjectStart, targetStart), Math.max(subjectEnd, targetEnd)];
 }
 
@@ -346,7 +334,7 @@ function buildGuides(
         target.bounds,
         axis,
         (subjectAnchor, targetAnchor, subjectValue, targetValue) => {
-          if (Math.abs(subjectValue - targetValue) > SNAP_EPSILON) return;
+          if (Math.abs(subjectValue - targetValue) > GEOMETRY_EPSILON) return;
           const [start, end] = guideSpan(
             movedSubject,
             target.bounds,
@@ -378,9 +366,9 @@ function mergeGuides(guides: AlignmentGuide[]): AlignmentGuide[] {
       const other = merged[index];
       const sameLine =
         other.type === current.type &&
-        Math.abs(other.position - current.position) <= SNAP_EPSILON;
+        Math.abs(other.position - current.position) <= GEOMETRY_EPSILON;
       const overlaps =
-        other.start <= current.end + SNAP_EPSILON && current.start <= other.end + SNAP_EPSILON;
+        other.start <= current.end + GEOMETRY_EPSILON && current.start <= other.end + GEOMETRY_EPSILON;
       if (sameLine && overlaps) {
         current = {
           type: current.type,
