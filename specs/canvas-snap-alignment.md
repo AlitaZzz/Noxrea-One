@@ -1,6 +1,6 @@
 # 画布吸附与对齐（Snap & Alignment）
 
-状态：已确认
+状态：已实现
 
 ## 背景
 
@@ -358,4 +358,4 @@
 - 2026-10-30：总开关语义实现完成。全链路更名 `snapToGrid` → `snapEnabled`（canvas store、项目 `CanvasData` / delta / 历史快照、server schema 与 delta 合并、工具栏、测试夹具）；默认值统一取 `DEFAULT_SNAP_ENABLED`（`true`）；`resolveSnap` 在总开关关闭时短路为零偏移、无辅助线、空锁定（`emptySnapState()` 工厂）；文案改「吸附开 / 吸附关」；旧存档的 `snapToGrid` 不迁移，忽略后落到默认开启。整理布局、Agent 整理与方向键微移按决策 5 受总开关控制（关闭时方向键按 5px 步进）。
 - 验证（已验证事实）：web 与根目录 `tsc --noEmit` 通过；改动文件 ESLint 通过；web canvas + project 82 文件 / 783 用例、server canvas 33 用例全部通过，含新增「总开关关闭时引擎与拖动会话均无吸附、锁定清空」回归用例。浏览器 A/B（测试画布 mvubeirp5219lc，zoom 1）：关闭时拖动 +13px 落点 (273,297)，为原始位移、拖动中无辅助线、不取整；开启后拖动 +6px，拖动中出现辅助线，落点 (280,300)（y 对齐 300、x 网格取整 280）；开关状态刷新后保持；旧存档打开画布为吸附开启。
 - 复审修复：`CanvasControls` 头注释由「网格吸附开关」改为「吸附总开关」（旧描述把总开关说成仅网格）；三处 `{ x: null, y: null }` 字面量收敛为 `emptySnapState()`；`DEFAULT_SNAP_ENABLED` 补入「范围」；`specs/canvas-shared-module-convergence.md` 因 `orderGroupsBeforeMembers` 修复尚未提交，状态由「已实现」暂回「已确认」。
-- 当前状态说明：实现、检查与自动化浏览器走查已完成，但代码尚未提交，总开关语义也尚未经用户手工走查确认。按 AGENTS.md 十二.4，状态保持「已确认」；提交并经用户确认走查后转「已实现」。
+- 当前状态说明：实现已提交并推送（be612033，2026-10-30），验收标准 1–10 的单测、检查与浏览器 A/B 走查均已完成；用户于 2026-10-30 要求转为「已实现」，状态转「已实现」。
