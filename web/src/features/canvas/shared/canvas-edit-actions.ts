@@ -68,7 +68,7 @@ export const CLIPBOARD_NODE_MARKER = "noxrea-nodes:";
 
 /**
  * 方向键移动选中节点（画布键盘 hook 的方向键分支调用）。
- * 与 RF a11y 行为对齐：步长 5px，Shift ×4；开启网格吸附时按网格步长。
+ * 与 RF a11y 行为对齐：步长 5px，Shift ×4；吸附总开关开启时按网格步长。
  * 不依赖焦点——RF 的 a11y 焦点路径（nodesFocusable/disableKeyboardA11y）已永久关闭。
  * @returns 是否有选中节点被移动
  */
@@ -76,7 +76,7 @@ export function nudgeSelectedNodes(direction: { x: number; y: number }, factor: 
   const s = useCanvasStore.getState();
   const selected = s.nodes.filter((n) => n.selected);
   if (selected.length === 0) return false;
-  const step = s.snapToGrid ? s.snapGridSize : 5;
+  const step = s.snapEnabled ? s.snapGridSize : 5;
   const dx = direction.x * step * factor;
   const dy = direction.y * step * factor;
   if (dx === 0 && dy === 0) return false;
@@ -509,7 +509,7 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
     // （React Flow 只在挂载与 viewportSyncCount 变化时同步），进而把旧视口落库、
     // 视口中心类锚点计算错位
     if (snapshot.minimapVisible !== undefined) useCanvasStore.setState({ minimapVisible: snapshot.minimapVisible });
-    if (snapshot.snapToGrid !== undefined) useCanvasStore.setState({ snapToGrid: snapshot.snapToGrid });
+    if (snapshot.snapEnabled !== undefined) useCanvasStore.setState({ snapEnabled: snapshot.snapEnabled });
   });
   markDirtyUndo();
 }

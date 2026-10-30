@@ -389,6 +389,27 @@ describe("撤销/重做不恢复视口", () => {
   });
 });
 
+describe("撤销/重做恢复归属快照时的节点顺序", () => {
+  beforeEach(() => {
+    resetUndoBaseline();
+  });
+
+  it("历史快照中成员排在组之前时，恢复经 setNodes 归一化为组先于成员", () => {
+    // 模拟旧数据写入的快照：直接 setState 绕过 store 写入边界
+    const group = makeNode("g1", NODE_TYPE.GROUP, 100, 100);
+    const member = { ...makeNode("m1", NODE_TYPE.TEXT, 20, 40), parentId: "g1" };
+    useCanvasStore.setState({ nodes: [member, group] });
+    useHistoryStore.getState().push(takeCanvasSnapshot());
+    // 当前现场：成员已删除，仅剩组
+    useCanvasStore.getState().setNodes([group]);
+
+    expect(undoAction()).toBe(true);
+    const nodes = useCanvasStore.getState().nodes;
+    expect(nodes.map((n) => n.id)).toEqual(["g1", "m1"]);
+    expect(nodes.find((n) => n.id === "m1")?.parentId).toBe("g1");
+  });
+});
+
 describe("恢复快照的悬空编辑态清理", () => {
   beforeEach(() => {
     resetUndoBaseline();
@@ -507,6 +528,8 @@ describe("方向键微调入栈", () => {
     vi.useFakeTimers();
     // 快进到节流窗口之外：文件内先前用例的真实时间戳压栈不影响本例的确定性
     vi.setSystemTime(Date.now() + 60_000);
+    // 总开关关闭：方向键按 5px 步进，不按网格步长（整理布局同口径）
+    useCanvasStore.setState({ snapEnabled: false });
     select("imgA");
     const before = useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position;
 

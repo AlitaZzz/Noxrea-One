@@ -10,6 +10,7 @@ import {
   isGroupMember,
   isGroupNode,
   memberParentId,
+  orderGroupsBeforeMembers,
   pruneEmptyGroups,
 } from "@/features/canvas/shared/group-membership";
 import type { AnyNode } from "@/features/canvas/types";
@@ -83,5 +84,38 @@ describe("pruneEmptyGroups（空组即删）", () => {
   it("多个组只删空的，顺序保持不变", () => {
     const nodes = [group("g1"), member("a", "g2"), group("g2"), group("g3"), member("b", "g1")];
     expect(pruneEmptyGroups(nodes).map((n) => n.id)).toEqual(["g1", "a", "g2", "b"]);
+  });
+});
+
+describe("orderGroupsBeforeMembers（父先于子）", () => {
+  it("成员排在组之前时把组前置，各自内部顺序保持不变", () => {
+    const nodes = [topLevel("t1"), member("m1", "g1"), topLevel("t2"), group("g1"), member("m2", "g1")];
+    expect(orderGroupsBeforeMembers(nodes).map((n) => n.id)).toEqual([
+      "g1",
+      "t1",
+      "m1",
+      "t2",
+      "m2",
+    ]);
+  });
+
+  it("顺序已合法时返回原数组引用（零拷贝快路径）", () => {
+    const nodes = [group("g1"), member("m1", "g1"), topLevel("t1"), group("g2"), member("m2", "g2")];
+    expect(orderGroupsBeforeMembers(nodes)).toBe(nodes);
+  });
+
+  it("无组的数组返回原引用", () => {
+    const nodes = [topLevel("a"), topLevel("b")];
+    expect(orderGroupsBeforeMembers(nodes)).toBe(nodes);
+  });
+
+  it("幽灵 parentId（父不存在）不触发重排", () => {
+    const nodes = [member("m", "missing"), topLevel("t")];
+    expect(orderGroupsBeforeMembers(nodes)).toBe(nodes);
+  });
+
+  it("父不是组（模型外数据）不触发重排：判定与修复口径一致", () => {
+    const nodes = [member("m", "t1"), topLevel("t1")];
+    expect(orderGroupsBeforeMembers(nodes)).toBe(nodes);
   });
 });

@@ -142,7 +142,7 @@ function buildCanvasData(): CanvasData {
     edges: clean.edges as AnyEdge[],
     viewport: clean.viewport,
     minimapVisible: clean.minimapVisible,
-    snapToGrid: clean.snapToGrid,
+    snapEnabled: clean.snapEnabled,
     agentModel: useCanvasStore.getState().agentModel ?? undefined,
   };
 }
@@ -171,7 +171,7 @@ function createCanvasDataDelta(base: CanvasData, current: CanvasData): CanvasDat
   };
   if (!sameJson(base.viewport, current.viewport)) delta.viewport = current.viewport;
   if (base.minimapVisible !== current.minimapVisible) delta.minimapVisible = current.minimapVisible;
-  if (base.snapToGrid !== current.snapToGrid) delta.snapToGrid = current.snapToGrid;
+  if (base.snapEnabled !== current.snapEnabled) delta.snapEnabled = current.snapEnabled;
   if (base.agentModel !== current.agentModel) delta.agentModel = current.agentModel ?? null;
   return delta;
 }

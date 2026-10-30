@@ -46,7 +46,7 @@ beforeEach(() => {
   setCanvasLease("p1", 42);
   useCanvasStore.getState().restoreFromProject("p1", {
     nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 },
-    minimapVisible: true, snapToGrid: false,
+    minimapVisible: true, snapEnabled: false,
   });
 });
 
@@ -157,12 +157,12 @@ describe("SaveManager snapshot serialization", () => {
   });
 
   it("saves empty canvas data and the latest viewport and settings", async () => {
-    useCanvasStore.setState({ minimapVisible: false, snapToGrid: true, agentModel: "test-model" });
+    useCanvasStore.setState({ minimapVisible: false, snapEnabled: true, agentModel: "test-model" });
     const viewport = { x: -50, y: -100, zoom: 1.5 };
     syncLiveViewport(viewport);
 
     expect(await saveCanvas()).toEqual({
-      nodes: [], edges: [], viewport, minimapVisible: false, snapToGrid: true, agentModel: "test-model",
+      nodes: [], edges: [], viewport, minimapVisible: false, snapEnabled: true, agentModel: "test-model",
     });
   });
 
@@ -223,7 +223,7 @@ describe("画布增量保存", () => {
       nodes,
       edges: [oldEdge],
       minimapVisible: true,
-      snapToGrid: false,
+      snapEnabled: false,
       agentModel: "base-model",
     });
     syncLiveViewport({ x: 0, y: 0, zoom: 1 });
@@ -233,7 +233,7 @@ describe("画布增量保存", () => {
     useCanvasStore.setState({
       edges: [newEdge],
       minimapVisible: false,
-      snapToGrid: true,
+      snapEnabled: true,
       agentModel: "next-model",
     });
     syncLiveViewport({ x: -80, y: 40, zoom: 1.25 });
@@ -249,13 +249,13 @@ describe("画布增量保存", () => {
       edges: { upsert: AnyEdge[]; delete: string[] };
       viewport: { x: number; y: number; zoom: number };
       minimapVisible: boolean;
-      snapToGrid: boolean;
+      snapEnabled: boolean;
       agentModel: string;
     };
     expect(body.edges).toEqual({ upsert: [newEdge], delete: ["old"] });
     expect(body.viewport).toEqual({ x: -80, y: 40, zoom: 1.25 });
     expect(body.minimapVisible).toBe(false);
-    expect(body.snapToGrid).toBe(true);
+    expect(body.snapEnabled).toBe(true);
     expect(body.agentModel).toBe("next-model");
   });
 });
@@ -292,14 +292,14 @@ describe("takeCanvasSnapshot", () => {
   it("captures the live viewport and settings without sharing viewport references", () => {
     const viewport = { x: -200, y: -300, zoom: 2 };
     syncLiveViewport(viewport);
-    useCanvasStore.setState({ minimapVisible: false, snapToGrid: true });
+    useCanvasStore.setState({ minimapVisible: false, snapEnabled: true });
 
     const snapshot = takeCanvasSnapshot();
     viewport.x = 500;
 
     expect(snapshot).toEqual({
       nodes: [], edges: [], viewport: { x: -200, y: -300, zoom: 2 },
-      minimapVisible: false, snapToGrid: true,
+      minimapVisible: false, snapEnabled: true,
     });
   });
 });

@@ -60,6 +60,7 @@ import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import ProjectToolbar from "@/features/canvas/controls/ProjectToolbar";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
+import { dragInputFromEvent } from "@/features/canvas/drag/drag-input";
 import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
 import { pointerClientPoint } from "@/features/canvas/drag/pointer-position";
 import { routePositionFrames } from "@/features/canvas/drag/position-routing";
@@ -772,18 +773,19 @@ export default function InfiniteCanvas() {
       // 激活后的第一件事是建立会话并补出首帧（规则 2.8）：会话基准只取当前 store
       // 与 DOM，不依赖下面的簿记工作；历史压栈、组命中索引与交互状态后置，
       // 起手落位不被它们推后（历史快照取的是 store，会话不写 store，语义不变）
-      // 吸附设置在拖动开始时捕获一次：拖动期不再订阅 store
-      const { snapToGrid, snapGridSize, snapThreshold } = useCanvasStore.getState();
+      // 吸附开关与网格设置在拖动开始时捕获一次：拖动期不再订阅 store；对齐阈值
+      // 由会话按开始时的 zoom 换算，修饰键初值取本事件（规则 4.5、8.3、10.4）
+      const { snapEnabled, snapGridSize } = useCanvasStore.getState();
       // 阈值事件发生在按下点之后：这段指针位移由会话补回（规则 2.7）
       const pointerDown = pressPointRef.current;
       const pointerAtStart = pointerClientPoint(event);
-      dragSession.begin(
-        dragItems.map((node) => node.id),
-        { snapToGrid, snapGridSize, snapThreshold },
-        pointerDown && pointerAtStart
-          ? { x: pointerAtStart.x - pointerDown.x, y: pointerAtStart.y - pointerDown.y }
-          : undefined,
-      );
+      dragSession.begin(dragItems.map((node) => node.id), { snapEnabled, snapGridSize }, {
+        preThresholdOffset:
+          pointerDown && pointerAtStart
+            ? { x: pointerAtStart.x - pointerDown.x, y: pointerAtStart.y - pointerDown.y }
+            : undefined,
+        ...dragInputFromEvent(event),
+      });
       pushHistory(takeCanvasSnapshot());
       dragGroupIndexRef.current = buildGroupHitIndex(useCanvasStore.getState().nodes);
       canvasInteraction.onNodeDragStart();

@@ -54,3 +54,28 @@ export function pruneEmptyGroups(nodes: AnyNode[]): AnyNode[] {
   if (nodes.every(isPopulated)) return nodes;
   return nodes.filter(isPopulated);
 }
+
+/**
+ * 节点数组顺序归一化：React Flow 的子流程模型要求父节点出现在子节点之前。
+ * 成员排在组之前时 React Flow 解析不到父节点（告警后按顶层计算绝对坐标），
+ * 成员会渲染在相对坐标处，之后的每次拖动都按错误的绝对坐标产生位置帧，
+ * 偏移量恰好是组原点——落点因此错位并被当成顶层节点。
+ *
+ * 组恒为顶层且组不嵌套组，因此「组全部前置」即满足该不变量；顺序已合法时
+ * 原引用返回。在 store 的整体写入边界统一调用（setNodes / addNodes /
+ * restoreFromProject），覆盖拖入组、粘贴、撤销/重做与历史数据加载等全部
+ * 归属变化路径。
+ */
+export function orderGroupsBeforeMembers(nodes: AnyNode[]): AnyNode[] {
+  const indexById = new Map(nodes.map((node, index) => [node.id, index] as const));
+  const ordered = nodes.every((node, index) => {
+    const parentId = memberParentId(node);
+    if (parentId === undefined) return true;
+    const parentIndex = indexById.get(parentId);
+    // 父不存在（幽灵 parentId）或父不是组（模型外数据）不构成顺序约束：
+    // 判定与修复都只针对组父，修复后不会留下判定仍不通过的顺序
+    return parentIndex === undefined || !isGroupNode(nodes[parentIndex]) || parentIndex < index;
+  });
+  if (ordered) return nodes;
+  return [...nodes.filter(isGroupNode), ...nodes.filter((node) => !isGroupNode(node))];
+}

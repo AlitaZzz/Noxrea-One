@@ -1,5 +1,5 @@
 /**
- * 磁吸图标，用于画布控制条的对齐吸附开关。
+ * 磁吸图标，用于画布控制条的吸附总开关（对齐 + 网格）。
  */
 import type { CSSProperties } from "react";
 

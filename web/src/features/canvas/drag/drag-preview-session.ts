@@ -14,8 +14,9 @@
  */
 import type { RefObject } from "react";
 
-import type { AlignmentGuide } from "@/features/canvas/hooks/use-alignment-guides";
+import type { AlignmentGuide } from "@/features/canvas/shared/alignment-guides";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
+import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
 import { groupMembers, isGroupNode } from "@/features/canvas/shared/group-membership";
 import {
   applyNodePositions,
@@ -23,9 +24,26 @@ import {
   toPositionFrames,
   toPositionMap,
 } from "@/features/canvas/shared/node-positions";
+import {
+  emptySnapState,
+  type Point,
+  resolveSnap,
+  type SnapBounds,
+  type SnapSessionState,
+  type SnapTarget,
+} from "@/features/canvas/shared/snap-engine";
 import type { AnyNode } from "@/features/canvas/types";
+import { DEFAULT_SNAP_ENABLED, DEFAULT_SNAP_GRID_SIZE } from "@/lib/constants";
 
-import { type DragSnapSettings, resolveDragPosition } from "./drag-snap";
+import { type DragInput, dragModifiersFromEvent } from "./drag-input";
+import {
+  applySnapOffset,
+  buildSnapFrame,
+  buildSnapTargets,
+  type DragSnapSettings,
+  type MovingBox,
+  nodeAbsoluteBounds,
+} from "./drag-snap";
 import { getEdgeGeometry, type RegisteredEdgeGeometry } from "./edge-geometry-registry";
 import { clearPreviewGuides, setPreviewGuides } from "./preview-guides";
 
@@ -42,18 +60,17 @@ export interface DragPreviewSessionDeps {
   getZoom: () => number;
 }
 
-/** 二维值：数值语义由持有它的字段决定（位置或位移） */
-interface Point {
-  x: number;
-  y: number;
+interface ComputedFrame {
+  /** 拖动项吸附后的相对位置（提交写入口径；无吸附偏移时为拖动帧原 Map） */
+  positions: ReadonlyMap<string, Point>;
+  /** 受影响节点的最终绝对位移（拖动项 + 跟随的组成员，已含吸附偏移） */
+  finalDeltas: Map<string, Point>;
+  guides: AlignmentGuide[];
 }
 
-interface ComputedFrame {
-  /** 拖动项吸附后的相对位置（提交写入口径） */
-  positions: Map<string, Point>;
-  /** 受影响节点的绝对位移（拖动项 + 跟随的组成员） */
-  deltas: Map<string, Point>;
-  guides: AlignmentGuide[];
+export interface DragBeginOptions extends Partial<DragInput> {
+  /** 按下点 → 阈值事件点的屏幕位移（px），由会话按 zoom 换算成画布位移 */
+  preThresholdOffset?: Point;
 }
 
 interface EdgeDom {
@@ -82,6 +99,11 @@ interface DomSnapshot {
   toolbars: ToolbarDom[];
 }
 
+/** 相对基准位置的位移：相对坐标与绝对坐标共享同一差值（规则 9.1） */
+function deltaFrom(position: Point, base: Point): Point {
+  return { x: position.x - base.x, y: position.y - base.y };
+}
+
 export class DragPreviewSession {
   private active = false;
   private commitPending = false;
@@ -89,14 +111,26 @@ export class DragPreviewSession {
   private affectedIds = new Set<string>();
   /** 组成员 → 所属组 id：成员位移跟随被拖动的组 */
   private memberGroupByNode = new Map<string, string>();
-  /** 会话基准：拖动前 store 节点（吸附候选与位移基准） */
-  private baseNodes: AnyNode[] = [];
+  /** 移动集节点的基准绝对盒（拖动开始时构建，每帧只加原始位移） */
+  private baseAbsoluteById = new Map<string, SnapBounds>();
+  /** 吸附候选目标（拖动开始时构建；外部写入重建基准时同步重建） */
+  private targets: SnapTarget[] = [];
+  /** 每轴锁定关系（滞回） */
+  private snapState: SnapSessionState = emptySnapState();
+  /** 本次拖动开始时的缩放（阈值换算；拖动中缩放不改变本次会话） */
+  private snapZoom = 1;
+  /** 修饰键瞬态：Ctrl/Meta 旁路，Shift 轴限 */
+  private bypassHeld = false;
+  private shiftHeld = false;
+  private modifierListenersAttached = false;
+  /** 触屏拖动无修饰键（规则 8.5）：不监听键盘，也不接受初值 */
+  private modifiersEnabled = true;
   private baseById = new Map<string, AnyNode>();
   private selectedIds: string[] = [];
+  /** 拖动开始时由 begin 覆盖；初值与 store 默认共用同一常量 */
   private settings: DragSnapSettings = {
-    snapToGrid: false,
-    snapGridSize: 16,
-    snapThreshold: 5,
+    snapEnabled: DEFAULT_SNAP_ENABLED,
+    snapGridSize: DEFAULT_SNAP_GRID_SIZE,
   };
   /** 拖动参考点补偿（画布坐标）：按下点到阈值事件点之间的指针位移 */
   private pointerOffset: Point = { x: 0, y: 0 };
@@ -127,7 +161,7 @@ export class DragPreviewSession {
   begin(
     dragItemIds: string[],
     settings: DragSnapSettings,
-    preThresholdOffset?: { x: number; y: number },
+    options: DragBeginOptions = {},
   ): void {
     if (this.active) this.cancel();
     const nodes = this.deps.getNodes();
@@ -139,16 +173,66 @@ export class DragPreviewSession {
     this.dragItemIds = ids;
     this.settings = { ...settings };
     const zoom = this.deps.getZoom();
-    this.pointerOffset = preThresholdOffset
-      ? { x: preThresholdOffset.x / zoom, y: preThresholdOffset.y / zoom }
+    this.snapZoom = zoom;
+    // zoom 无效时吸附整体关闭（规则 4.4）；指针补偿仍需有限除数
+    const pointerZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    this.pointerOffset = options.preThresholdOffset
+      ? {
+          x: options.preThresholdOffset.x / pointerZoom,
+          y: options.preThresholdOffset.y / pointerZoom,
+        }
       : { x: 0, y: 0 };
+    this.modifiersEnabled = options.touch !== true;
+    this.bypassHeld = this.modifiersEnabled && (options.modifiers?.bypass ?? false);
+    this.shiftHeld = this.modifiersEnabled && (options.modifiers?.shift ?? false);
     this.pendingFrame = null;
     this.lastFrame = null;
-    this.captureSnapshot(nodes);
+    this.rebuildBaseline(nodes);
+    if (this.modifiersEnabled) this.attachModifierListeners();
     this.dom = this.captureDom();
     // 首帧先于标签隐藏落位：两者都不跨帧，但落位是起手可见结果，其他都是辅助
     this.seedFirstFrame();
     this.hideLabelLayers();
+  }
+
+  /**
+   * 修饰键监听：拖动期间 Ctrl/Meta/Shift 变化必须立即用最后一帧重算，
+   * 不能等下一次指针移动；窗口失焦清空全部状态（规则 8.3、8.4）。
+   */
+  private attachModifierListeners(): void {
+    if (this.modifierListenersAttached) return;
+    window.addEventListener("keydown", this.handleModifierKey);
+    window.addEventListener("keyup", this.handleModifierKey);
+    window.addEventListener("blur", this.handleWindowBlur);
+    this.modifierListenersAttached = true;
+  }
+
+  private detachModifierListeners(): void {
+    if (!this.modifierListenersAttached) return;
+    window.removeEventListener("keydown", this.handleModifierKey);
+    window.removeEventListener("keyup", this.handleModifierKey);
+    window.removeEventListener("blur", this.handleWindowBlur);
+    this.modifierListenersAttached = false;
+  }
+
+  private readonly handleModifierKey = (event: KeyboardEvent): void => {
+    const modifiers = dragModifiersFromEvent(event);
+    this.setModifiers(modifiers.bypass, modifiers.shift);
+  };
+
+  private readonly handleWindowBlur = (): void => {
+    this.setModifiers(false, false);
+  };
+
+  private setModifiers(bypass: boolean, shift: boolean): void {
+    if (!this.active) return;
+    if (this.bypassHeld === bypass && this.shiftHeld === shift) return;
+    this.bypassHeld = bypass;
+    this.shiftHeld = shift;
+    if (this.commitPending) return;
+    // 最新未应用的原始帧优先；没有帧时不做重算
+    const frame = this.pendingFrame ?? this.lastFrame;
+    if (frame) this.applyFrame(frame);
   }
 
   /**
@@ -209,17 +293,18 @@ export class DragPreviewSession {
    */
   stop(): void {
     if (!this.active) return;
-    if (this.commitPending) {
-      clearPreviewGuides();
-      return;
-    }
-    // 未执行的预览帧比已应用帧新：兜底提交必须用它，否则会丢掉最后一段位移
-    const frame = this.pendingFrame ?? this.lastFrame;
-    if (frame && frame.size > 0) {
+    if (!this.commitPending) {
+      // 未执行的预览帧比已应用帧新：兜底提交必须用它，否则会丢掉最后一段位移
+      const frame = this.pendingFrame ?? this.lastFrame;
+      if (!frame || frame.size === 0) {
+        this.cancel();
+        return;
+      }
       this.commit(toPositionFrames(frame));
-      return;
     }
-    this.cancel();
+    // 拖动已结束：锁定状态不再参与任何一帧，辅助线在提交后清空（规则 10.2）
+    clearPreviewGuides();
+    this.snapState = emptySnapState();
   }
 
   /** 丢弃未提交位移（卸载/项目切换）：恢复被改写的边路径，store 不变（规则 1.7） */
@@ -264,7 +349,7 @@ export class DragPreviewSession {
     }
     this.dragItemIds = surviving;
     if (this.dom) this.clearDomOffsets(this.dom);
-    this.captureSnapshot(nodes);
+    this.rebuildBaseline(nodes);
     this.dom = this.captureDom();
     this.hideLabelLayers();
     const last = this.lastFrame;
@@ -282,10 +367,11 @@ export class DragPreviewSession {
   }
 
   private computeFrame(frame: Map<string, Point>): ComputedFrame {
-    const positions = new Map<string, Point>();
-    const deltas = new Map<string, Point>();
-    const single = this.dragItemIds.length === 1;
-    let guides: AlignmentGuide[] = [];
+    const rawById = new Map<string, Point>();
+    const rawDeltas = new Map<string, Point>();
+    const moving: MovingBox[] = [];
+    const movingIds = new Set(this.dragItemIds);
+
     for (const id of this.dragItemIds) {
       const raw = frame.get(id);
       const base = this.baseById.get(id);
@@ -295,34 +381,59 @@ export class DragPreviewSession {
         x: raw.x + this.pointerOffset.x,
         y: raw.y + this.pointerOffset.y,
       };
-      const resolved = single
-        ? resolveDragPosition(id, target, this.baseNodes, this.settings)
-        : { position: target, guides: [] as AlignmentGuide[] };
-      positions.set(id, resolved.position);
-      deltas.set(id, {
-        x: resolved.position.x - base.position.x,
-        y: resolved.position.y - base.position.y,
-      });
-      if (single) guides = resolved.guides;
+      rawById.set(id, target);
+      const delta = deltaFrom(target, base.position);
+      rawDeltas.set(id, delta);
+      const bounds = this.baseAbsoluteById.get(id);
+      if (bounds) moving.push({ bounds, delta });
     }
-    // 组内成员不是拖动项：位移跟随所属组（成员相对坐标不变）
+
+    // 组内成员不是拖动项：以组的原始位移加入并集，吸附偏移随组统一应用
     for (const [memberId, groupId] of this.memberGroupByNode) {
-      const delta = deltas.get(groupId);
-      if (delta) deltas.set(memberId, delta);
+      if (movingIds.has(memberId)) continue;
+      const delta = rawDeltas.get(groupId);
+      const bounds = this.baseAbsoluteById.get(memberId);
+      if (delta && bounds) moving.push({ bounds, delta });
     }
-    return { positions, deltas, guides };
+
+    const snapFrame = buildSnapFrame({
+      moving,
+      targets: this.targets,
+      zoom: this.snapZoom,
+      settings: this.settings,
+      modifiers: { bypass: this.bypassHeld, shift: this.shiftHeld },
+      state: this.snapState,
+    });
+    const resolution = resolveSnap(snapFrame);
+    this.snapState = resolution.state;
+
+    const positions = applySnapOffset(rawById, resolution.offset);
+    // 位移由最终位置反推：预览与提交共用同一份几何，不做第二次偏移运算
+    const finalDeltas = new Map<string, Point>();
+    for (const id of this.dragItemIds) {
+      const position = positions.get(id);
+      const base = this.baseById.get(id);
+      if (!position || !base) continue;
+      finalDeltas.set(id, deltaFrom(position, base.position));
+    }
+    // 组成员跟随所属组的最终位移（成员相对坐标不变）
+    for (const [memberId, groupId] of this.memberGroupByNode) {
+      const delta = finalDeltas.get(groupId);
+      if (delta) finalDeltas.set(memberId, delta);
+    }
+    return { positions, finalDeltas, guides: resolution.guides };
   }
 
   private applyComputed(result: ComputedFrame): void {
     const dom = this.dom;
     if (dom) {
       for (const [id, el] of dom.wrappers) {
-        const delta = result.deltas.get(id);
+        const delta = result.finalDeltas.get(id);
         el.style.translate =
           delta && (delta.x !== 0 || delta.y !== 0) ? `${delta.x}px ${delta.y}px` : "";
       }
-      this.applyEdges(dom, result.deltas);
-      this.applyOverlays(dom, result.deltas);
+      this.applyEdges(dom, result.finalDeltas);
+      this.applyOverlays(dom, result.finalDeltas);
     }
     setPreviewGuides(result.guides);
   }
@@ -411,15 +522,14 @@ export class DragPreviewSession {
 
   // ---- 内部：DOM 快照与清理 ----
 
-  private captureSnapshot(nodes: AnyNode[]): void {
-    const byId = new Map(nodes.map((node) => [node.id, node] as const));
-    this.baseNodes = nodes;
+  private rebuildBaseline(nodes: AnyNode[]): void {
+    const nodeById = buildNodeIndex(nodes);
     this.baseById = new Map();
     this.affectedIds = new Set();
     this.memberGroupByNode = new Map();
     this.selectedIds = nodes.filter((node) => node.selected).map((node) => node.id);
     for (const id of this.dragItemIds) {
-      const node = byId.get(id);
+      const node = nodeById.get(id);
       if (!node) continue;
       this.baseById.set(id, node);
       this.affectedIds.add(id);
@@ -430,6 +540,16 @@ export class DragPreviewSession {
         this.baseById.set(member.id, member);
       }
     }
+
+    // 移动集基准绝对盒：每帧只加原始位移，不再反复换算父子坐标
+    this.baseAbsoluteById = new Map();
+    for (const [id, node] of this.baseById) {
+      const bounds = nodeAbsoluteBounds(node, nodeById);
+      if (bounds) this.baseAbsoluteById.set(id, bounds);
+    }
+    // 候选目标排除完整移动集与隐藏节点；外部写入重建时一起重建
+    this.targets = buildSnapTargets(nodes, this.affectedIds, nodeById);
+    this.snapState = emptySnapState();
   }
 
   private captureDom(): DomSnapshot | null {
@@ -535,13 +655,20 @@ export class DragPreviewSession {
   }
 
   private reset(): void {
+    this.detachModifierListeners();
     this.dom = null;
     this.active = false;
     this.commitPending = false;
     this.dragItemIds = [];
     this.affectedIds = new Set();
     this.baseById = new Map();
-    this.baseNodes = [];
+    this.baseAbsoluteById = new Map();
+    this.targets = [];
+    this.snapState = emptySnapState();
+    this.snapZoom = 1;
+    this.bypassHeld = false;
+    this.shiftHeld = false;
+    this.modifiersEnabled = true;
     this.memberGroupByNode = new Map();
     this.selectedIds = [];
     this.pointerOffset = { x: 0, y: 0 };

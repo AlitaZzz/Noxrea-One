@@ -19,7 +19,7 @@ import { saveMutex } from "@/features/project/save-mutex";
 import type { CanvasProject, ProjectSummary } from "@/features/project/types";
 import { ApiError } from "@/lib/api/client";
 import { resolveApiError } from "@/lib/api/error-message";
-import { DEFAULT_VIEWPORT } from "@/lib/constants";
+import { DEFAULT_SNAP_ENABLED, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { showGlobalNotification } from "@/lib/global-notification";
 import { captureSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
 import { isOffline } from "@/lib/utils/upload";
@@ -31,7 +31,7 @@ import { isOffline } from "@/lib/utils/upload";
 interface CanvasData {
   viewport?: ViewportState;
   minimapVisible?: boolean;
-  snapToGrid?: boolean;
+  snapEnabled?: boolean;
   agentModel?: string;
   nodes?: unknown[];
   edges?: unknown[];
@@ -97,7 +97,7 @@ function mapServerDetail(p: ServerProjectDetail): CanvasProject {
     nodeCount: nodes.length,
     viewport: p.canvasData?.viewport || DEFAULT_VIEWPORT,
     minimapVisible: p.canvasData?.minimapVisible ?? true,
-    snapToGrid: p.canvasData?.snapToGrid || false,
+    snapEnabled: p.canvasData?.snapEnabled ?? DEFAULT_SNAP_ENABLED,
     agentModel: p.canvasData?.agentModel,
     nodes,
     edges: (p.canvasData?.edges || []) as AnyEdge[],

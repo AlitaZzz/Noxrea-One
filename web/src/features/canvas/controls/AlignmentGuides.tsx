@@ -24,15 +24,21 @@ export default function AlignmentGuides() {
   const screenLines = useMemo(() => {
     if (guides.length === 0) return [];
     return guides.map((g) => {
-      if (g.type === "vertical") {
-        const start = rf.flowToScreenPosition({ x: g.position, y: g.start });
-        const end = rf.flowToScreenPosition({ x: g.position, y: g.end });
-        return { x1: start.x, y1: start.y, x2: end.x, y2: end.y, key: `v-${g.position.toFixed(1)}` };
-      } else {
-        const start = rf.flowToScreenPosition({ x: g.start, y: g.position });
-        const end = rf.flowToScreenPosition({ x: g.end, y: g.position });
-        return { x1: start.x, y1: start.y, x2: end.x, y2: end.y, key: `h-${g.position.toFixed(1)}` };
-      }
+      // 竖线固定 x、跨度在 y；横线固定 y、跨度在 x
+      const vertical = g.type === "vertical";
+      const toFlowPoint = (along: number) =>
+        vertical ? { x: g.position, y: along } : { x: along, y: g.position };
+      const start = rf.flowToScreenPosition(toFlowPoint(g.start));
+      const end = rf.flowToScreenPosition(toFlowPoint(g.end));
+      return {
+        x1: start.x,
+        y1: start.y,
+        x2: end.x,
+        y2: end.y,
+        // 同坐标但跨度不相交的辅助线会保留为多条（引擎规则 5.4），key 必须包含完整跨度；
+        // 坐标不能取整，否则相邻坐标也会碰撞
+        key: `${vertical ? "v" : "h"}-${g.position}-${g.start}-${g.end}`,
+      };
     });
   }, [guides, rf]);
 

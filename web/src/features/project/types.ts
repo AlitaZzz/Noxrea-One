@@ -34,7 +34,7 @@ export interface ProjectSummary {
 export interface CanvasProject extends ProjectSummary {
   viewport: ViewportState;
   minimapVisible?: boolean;
-  snapToGrid?: boolean;
+  snapEnabled?: boolean;
   agentModel?: string;
   nodes: AnyNode[];
   edges: AnyEdge[];
@@ -50,7 +50,7 @@ export interface CanvasData {
   edges: AnyEdge[];
   viewport: ViewportState;
   minimapVisible: boolean;
-  snapToGrid: boolean;
+  snapEnabled: boolean;
   agentModel?: string;
 }
 
@@ -59,7 +59,7 @@ export interface CanvasDataDelta {
   edges: { upsert: AnyEdge[]; delete: string[] };
   viewport?: ViewportState;
   minimapVisible?: boolean;
-  snapToGrid?: boolean;
+  snapEnabled?: boolean;
   agentModel?: string | null;
 }
 
@@ -72,7 +72,7 @@ export interface HistorySnapshot {
   edges: AnyEdge[];
   viewport: ViewportState;
   minimapVisible: boolean;
-  snapToGrid: boolean;
+  snapEnabled: boolean;
 }
 
 // ============================================================

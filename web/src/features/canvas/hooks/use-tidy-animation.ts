@@ -160,7 +160,7 @@ export function applyTidyLayout(rf: TidyRfLike, opts: ApplyTidyLayoutOptions = {
 
   const result = computeTidyLayout(store.nodes, store.edges, {
     mode: "auto",
-    snapSize: store.snapToGrid ? store.snapGridSize : 0,
+    snapSize: store.snapEnabled ? store.snapGridSize : 0,
   });
   if (result.movedCount === 0) return false;
 

@@ -35,11 +35,11 @@
   - 规则 4 向全部调用点的落地（同一原子操作合并/离散必入栈）：`InfiniteCanvas.tsx`（建节点+归组+接线、batchConnect、资产拖放）、`nodes/VideoNode.tsx`（分离音频/片段截取/画面裁剪）、`controls/DeletableEdge.tsx`、`shared/AudioRefCard|ImageRefCard|VideoRefCard|TextRefChip`（断开参考）、`explorer/CanvasExplorer.tsx` 与 `features/assets/components/AssetsDialog.tsx`（资产插入）、`hooks/use-add-node.ts`
   - `agent/components/AgentDrawer.tsx`（回合撤销入口走统一守卫）
   - 相关单测
-- 不改动：`history-store.ts` 结构（双栈 / version / popIfTop 语义不变）；保存格式与 `CanvasData` 契约（viewport 仍保存）；服务端；拖拽 / 缩放 / 编组 / 解组 / 组内布局 / 整理的既有直连压栈方式；`minimapVisible`/`snapToGrid` 随快照恢复的现状语义；GEN-02 任务生命周期语义（弹快照不取消任务）。
+- 不改动：`history-store.ts` 结构（双栈 / version / popIfTop 语义不变）；保存格式与 `CanvasData` 契约（viewport 仍保存）；服务端；拖拽 / 缩放 / 编组 / 解组 / 组内布局 / 整理的既有直连压栈方式；`minimapVisible`/`snapEnabled` 随快照恢复的现状语义；GEN-02 任务生命周期语义（弹快照不取消任务）。
 
 ## 业务规则
 
-1. **撤销/重做不恢复视口**（已确认）：`restoreSnapshot` 移除 `setViewport` 调用，只恢复 nodes/edges/minimapVisible/snapToGrid；store `viewport` 与 `_liveViewport` 在撤销/重做前后保持用户当前视角。`takeCanvasSnapshot` 保留 viewport 字段（save-manager 保存链路复用同一函数）。随之根除：撤销后编辑把旧视口落库、保存视口与所见不一致、`getViewportCenter` 锚点错位。
+1. **撤销/重做不恢复视口**（已确认）：`restoreSnapshot` 移除 `setViewport` 调用，只恢复 nodes/edges/minimapVisible/snapEnabled；store `viewport` 与 `_liveViewport` 在撤销/重做前后保持用户当前视角。`takeCanvasSnapshot` 保留 viewport 字段（save-manager 保存链路复用同一函数）。随之根除：撤销后编辑把旧视口落库、保存视口与所见不一致、`getViewportCenter` 锚点错位。
 2. **Agent 回合快照即时压栈**：回合首次要执行画布工具时拍快照并立即 push（废止「回合末统一入栈」）；回合收尾（正常结束 / 出错 / 停止 / 世代失效）时若本回合未产生任何画布变更则 `popIfTop` 补偿弹出。用户中途编辑的快照自然压在回合快照之上，栈内时间序严格单调；「撤销此轮」按钮 version 门控判定不变（压栈时记录 version），一次撤销整回合且不再吞并用户中途编辑。
 3. **方向键微调入栈**：`nudgeSelectedNodes` 写位置前经节流压栈通道——首个微调压栈，300ms 窗口内连续微调合并为一条，可撤销一次回退整段微调。
 4. **离散操作必定压栈 + 原子批量合并**：压栈通道二分——
@@ -66,7 +66,7 @@
 
 - Agent 回合无变更且用户已在中途编辑：`popIfTop` 失败，回合快照残留为一条内容重复的无效步（多按一次撤销）——已知小代价，接受。
 - 生成期间用户编辑导致预生成快照非栈顶：失败终态放弃弹出，撤销多一步但时间序正确。
-- 撤销会一并回退 `minimapVisible`/`snapToGrid`（现状语义保留）；如后续要改为环境设置不随快照恢复，另立需求。
+- 撤销会一并回退 `minimapVisible`/`snapEnabled`（现状语义保留）；如后续要改为环境设置不随快照恢复，另立需求。
 - 项目切换 / 编辑权过期：clear 历史 + 注册表清空，撤销不可穿透到上一项目（现状已正确，回归保护）。
 
 ## 验收标准

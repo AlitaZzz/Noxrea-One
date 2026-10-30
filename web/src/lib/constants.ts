@@ -61,6 +61,11 @@ export const GROUP_NODE_MIN_HEIGHT = 120;
 // 布局节点间距 & 磁吸边对边间距
 export const LAYOUT_GAP = 60;
 
+/** 吸附总开关默认值（store、项目恢复与拖动会话初值共用） */
+export const DEFAULT_SNAP_ENABLED = true;
+/** 网格吸附默认步长（store 初始值与拖动会话初值共用） */
+export const DEFAULT_SNAP_GRID_SIZE = 20;
+
 // 画布整理（tidy）
 /** 单行目标宽度（px），超出即换行 */
 export const TIDY_MAX_ROW_WIDTH = 1600;

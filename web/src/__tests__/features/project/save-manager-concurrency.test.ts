@@ -65,7 +65,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
       minimapVisible: true,
-      snapToGrid: false,
+      snapEnabled: false,
     }),
     getCanvasProjectId: () => mocks.canvasProjectId,
     useCanvasStore: {
@@ -73,7 +73,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => {
         nodes: mocks.snapshotNodes,
         edges: [],
         minimapVisible: true,
-        snapToGrid: false,
+        snapEnabled: false,
         agentModel: undefined,
       }),
     },

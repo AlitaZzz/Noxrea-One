@@ -37,8 +37,35 @@ function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unkn
     edges,
     viewport: { x: 0, y: 0, zoom: 1 },
     minimapVisible: true,
-    snapToGrid: false,
+    snapEnabled: false,
   } as HistorySnapshot;
+}
+
+/** 组成员：position 为组内相对坐标，parentId 指向组 */
+function member(id: string, groupId?: string): AnyNode {
+  return {
+    id, type: "text-node",
+    position: { x: 0, y: 0 },
+    data: { label: id },
+    parentId: groupId,
+  } as unknown as AnyNode;
+}
+
+function group(id: string): AnyNode {
+  return {
+    id, type: NODE_TYPE.GROUP,
+    position: { x: 0, y: 0 },
+    data: { label: id },
+    style: { width: 200, height: 120 },
+  } as unknown as AnyNode;
+}
+
+function topLevel(id: string): AnyNode {
+  return {
+    id, type: "text-node",
+    position: { x: 0, y: 0 },
+    data: { label: id },
+  } as unknown as AnyNode;
 }
 
 beforeEach(() => {
@@ -351,24 +378,6 @@ describe("删除节点时同步清空节点级 UI 态", () => {
 });
 
 describe("removeNodes 级联：空组即删与删组连带成员（容器型）", () => {
-  function member(id: string, groupId?: string): AnyNode {
-    return {
-      id, type: "text-node",
-      position: { x: 0, y: 0 },
-      data: { label: id },
-      parentId: groupId,
-    } as unknown as AnyNode;
-  }
-
-  function group(id: string): AnyNode {
-    return {
-      id, type: NODE_TYPE.GROUP,
-      position: { x: 0, y: 0 },
-      data: { label: id },
-      style: { width: 200, height: 120 },
-    } as unknown as AnyNode;
-  }
-
   it("删除组的最后一个成员时组一并删除（空组即删）", () => {
     useCanvasStore.setState({ nodes: [group("g"), member("a", "g")] });
 
@@ -682,6 +691,41 @@ describe("updateNodeVisual（事件总线拆除后的单写通道）", () => {
     expect(() =>
       useCanvasStore.getState().updateNodeVisual("ghost", { data: { label: "x" } })
     ).not.toThrow();
+  });
+});
+
+describe("节点顺序不变量：组先于成员（store 写入边界统一归一化）", () => {
+  // React Flow 解析不到父节点时会按顶层计算绝对坐标，成员渲染错位且后续拖动
+  // 落点被当成顶层节点——顺序不变量必须在写入边界保证，不能依赖调用方自觉。
+  it("setNodes 把成员之后的组前置，成员内部顺序不变", () => {
+    useCanvasStore.getState().setNodes([
+      topLevel("t1"), member("m1", "g1"), group("g1"), member("m2", "g1"), topLevel("t2"),
+    ]);
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual([
+      "g1", "t1", "m1", "m2", "t2",
+    ]);
+  });
+
+  it("setNodes 顺序已合法时不重排", () => {
+    useCanvasStore.getState().setNodes([group("g1"), member("m1", "g1"), topLevel("t1")]);
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g1", "m1", "t1"]);
+  });
+
+  it("addNodes 追加的成员同样归一化（批量加入不依赖调用方顺序）", () => {
+    useCanvasStore.getState().addNodes([topLevel("t1")], { skipHistory: true });
+    useCanvasStore.getState().addNodes([member("m1", "g1"), group("g1")], { skipHistory: true });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["g1", "t1", "m1"]);
+  });
+
+  it("restoreFromProject 同时满足空组即删与组先于成员", () => {
+    useCanvasStore.getState().restoreFromProject("p1", {
+      nodes: [member("m1", "kept"), group("empty"), group("kept")],
+    });
+
+    expect(useCanvasStore.getState().nodes.map((n) => n.id)).toEqual(["kept", "m1"]);
   });
 });
 

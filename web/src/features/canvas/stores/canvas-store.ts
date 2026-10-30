@@ -9,7 +9,12 @@ import { create } from "zustand";
 
 import { pruneEdgesToCapability } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
-import { isGroupNode, memberParentId, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
+import {
+  isGroupNode,
+  memberParentId,
+  orderGroupsBeforeMembers,
+  pruneEmptyGroups,
+} from "@/features/canvas/shared/group-membership";
 import { assertUniqueNodeIds } from "@/features/canvas/shared/node-identity";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { ViewportState } from "@/features/canvas/types";
@@ -17,7 +22,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
 import { saveManager } from "@/features/project/save-manager";
 import type { HistorySnapshot } from "@/features/project/types";
-import { DEFAULT_VIEWPORT } from "@/lib/constants";
+import { DEFAULT_SNAP_ENABLED, DEFAULT_SNAP_GRID_SIZE, DEFAULT_VIEWPORT } from "@/lib/constants";
 import { nodeRectOf } from "@/lib/utils/image-utils";
 
 /** updateNodeData 自动压栈防抖时间（ms） */
@@ -257,12 +262,10 @@ export interface CanvasState {
   interaction: CanvasInteraction;
   dispatchInteraction: (action: InteractionAction) => void;
 
-  // Snap to grid
-  snapToGrid: boolean;
-  toggleSnapToGrid: () => void;
+  // 吸附总开关（对齐 + 网格）
+  snapEnabled: boolean;
+  toggleSnapEnabled: () => void;
   snapGridSize: number;
-  /** 节点间对齐吸附阈值（px），默认 5 */
-  snapThreshold: number;
 
   // Persistence
   /**
@@ -271,7 +274,7 @@ export interface CanvasState {
    * 同项目的内容恢复不换项目 ID，靠订阅此计数把恢复出的视口应用到 React Flow。
    */
   viewportSyncCount: number;
-  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => void;
+  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapEnabled?: boolean; agentModel?: string }) => void;
 }
 
 /**
@@ -390,7 +393,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   viewportSyncCount: 0,
   setNodes: (nodes) => {
     assertUniqueNodeIds(nodes);
-    set({ nodes });
+    // 顺序不变量（组先于成员）在此统一保证：任何归属写入路径都不会把
+    // React Flow 无法解析的父子顺序留在 store 里（见 orderGroupsBeforeMembers）
+    set({ nodes: orderGroupsBeforeMembers(nodes) });
   },
   getNodes: () => get().nodes,
   setEdges: (edges, options) => {
@@ -405,7 +410,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((s) => {
       const latestNodes = [...s.nodes, ...nodes];
       assertUniqueNodeIds(latestNodes);
-      return { nodes: latestNodes };
+      // 追加同样走顺序归一化：批量加入可能带入组成员（如跨标签页粘贴），
+      // 不能依赖调用方先按合法顺序组织数组
+      return { nodes: orderGroupsBeforeMembers(latestNodes) };
     });
     saveManager.markDirtyImmediate();
   },
@@ -575,24 +582,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set((s) => ({ interaction: interactionReducer(s.interaction, action) }));
   },
 
-  snapToGrid: false,
-  toggleSnapToGrid: () => {
-    set((s) => ({ snapToGrid: !s.snapToGrid }));
+  snapEnabled: DEFAULT_SNAP_ENABLED,
+  toggleSnapEnabled: () => {
+    set((s) => ({ snapEnabled: !s.snapEnabled }));
     saveManager.markDirtyImmediate();
   },
-  snapGridSize: 20,
-  snapThreshold: 5,
+  snapGridSize: DEFAULT_SNAP_GRID_SIZE,
 
   /** 从项目恢复画布状态（内容所有者随之切换；未落库的尾部编辑不随新内容派发保存） */
-  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapToGrid?: boolean; agentModel?: string }) => {
+  restoreFromProject: (projectId: string, data: { nodes?: AnyNode[]; edges?: Edge[]; viewport?: ViewportState; minimapVisible?: boolean; snapEnabled?: boolean; agentModel?: string }) => {
     const vp = data.viewport || DEFAULT_VIEWPORT;
     // 边界归一化：服务端数据在进画布的唯一入口清洗一次。
     // 分组直接使用 parentId + 相对坐标，不进行格式转换。
     // 1. 空组清洗：保证组必有成员。
     // 2. className 剥离：渲染挂钩类随 type 由 React Flow 自动派生，属于运行时外观。
     // 3. 边能力清洗：保证 target 可接受输入，避免 xyflow 找不到 Handle（error #008）。
-    const nodes = pruneEmptyGroups(
-      (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
+    const nodes = orderGroupsBeforeMembers(
+      pruneEmptyGroups(
+        (data.nodes || []).map(({ className: _stale, ...n }) => ({ ...n, data: { ...n.data } }) as AnyNode),
+      ),
     );
     assertUniqueNodeIds(nodes);
     const edges = pruneEdgesToCapability(nodes, (data.edges || []) as Edge[]);
@@ -611,7 +619,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       edges,
       viewport: vp,
       minimapVisible: data.minimapVisible !== false,
-      snapToGrid: data.snapToGrid || false,
+      snapEnabled: data.snapEnabled ?? DEFAULT_SNAP_ENABLED,
       agentModel: data.agentModel ?? null,
       viewportSyncCount: get().viewportSyncCount + 1,
     });
@@ -629,7 +637,7 @@ export function takeCanvasSnapshot(): HistorySnapshot {
     edges: s.edges,
     viewport: { ..._liveViewport },
     minimapVisible: s.minimapVisible,
-    snapToGrid: s.snapToGrid,
+    snapEnabled: s.snapEnabled,
   };
 }
 

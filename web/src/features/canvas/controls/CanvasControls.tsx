@@ -1,6 +1,6 @@
 /**
  * 画布右下角控制条。
- * 提供缩放调节、适应视图、主题与语言切换、吸附开关，
+ * 提供缩放调节、适应视图、主题与语言切换、吸附总开关，
  * 以及资产库 / 渠道配置 / 侧边栏的打开入口；偏好项变更会同步保存到用户配置。
  */
 "use client";
@@ -106,8 +106,8 @@ function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, ca
   const viewport = useViewport();
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
   const toggleMinimap = useCanvasStore((s) => s.toggleMinimap);
-  const snapToGrid = useCanvasStore((s) => s.snapToGrid);
-  const toggleSnapToGrid = useCanvasStore((s) => s.toggleSnapToGrid);
+  const snapEnabled = useCanvasStore((s) => s.snapEnabled);
+  const toggleSnapEnabled = useCanvasStore((s) => s.toggleSnapEnabled);
 
   const [zoomOpen, setZoomOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -164,19 +164,19 @@ function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, ca
             </Toggle>
           </TooltipTrigger><TooltipContent>{minimapVisible ? t("canvas.minimap.hide") : t("canvas.minimap.show")}</TooltipContent></Tooltip>
 
-        {/* Snap to grid toggle */}
+        {/* 吸附总开关：关闭时对齐与网格都不生效 */}
         <Tooltip><TooltipTrigger asChild>
             <Toggle
               size="sm"
               variant="default"
               className="size-8 p-0"
-              pressed={snapToGrid}
-              aria-label={snapToGrid ? t("canvas.snap.off") : t("canvas.snap.on")}
-              onPressedChange={toggleSnapToGrid}
+              pressed={snapEnabled}
+              aria-label={snapEnabled ? t("canvas.snap.off") : t("canvas.snap.on")}
+              onPressedChange={toggleSnapEnabled}
             >
               <MagnetIcon />
             </Toggle>
-          </TooltipTrigger><TooltipContent>{snapToGrid ? t("canvas.snap.on") : t("canvas.snap.off")}</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent>{snapEnabled ? t("canvas.snap.on") : t("canvas.snap.off")}</TooltipContent></Tooltip>
 
       {/* Theme toggle */}
       <ThemeToggle />

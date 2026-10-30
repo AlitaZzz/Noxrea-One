@@ -46,7 +46,7 @@ export const canvasDeltaSchema = z.object({
   edges: canvasEdgeDeltaSchema,
   viewport: z.object({ x: z.number(), y: z.number(), zoom: z.number().positive() }).optional(),
   minimapVisible: z.boolean().optional(),
-  snapToGrid: z.boolean().optional(),
+  snapEnabled: z.boolean().optional(),
   agentModel: z.string().nullable().optional(),
   baseRevision: z.number().int().min(1),
   lease: z.number().int().min(1),

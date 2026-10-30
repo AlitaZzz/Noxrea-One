@@ -15,8 +15,10 @@ import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
 
-const NO_SNAP = { snapToGrid: false, snapGridSize: 16, snapThreshold: 5 };
-const SNAP = { snapToGrid: true, snapGridSize: 16, snapThreshold: 5 };
+/** 吸附开启、网格关闭（步长 0）；总开关关闭见 SNAP_OFF */
+const NO_GRID = { snapEnabled: true, snapGridSize: 0 };
+const GRID = { snapEnabled: true, snapGridSize: 16 };
+const SNAP_OFF = { snapEnabled: false, snapGridSize: 16 };
 
 const node = (
   id: string,
@@ -35,6 +37,10 @@ const node = (
 
 const group = (id: string, x: number, y: number): AnyNode =>
   node(id, x, y, { type: NODE_TYPE.GROUP, selected: true });
+
+/** 固定 100×100 的盒，便于按锚点关系写出精确期望 */
+const box = (id: string, x: number, y: number, extra: Record<string, unknown> = {}): AnyNode =>
+  node(id, x, y, { style: { width: 100, height: 100 }, ...extra });
 
 /** 手动推进 rAF：会话每帧最多写一次 DOM，测试逐帧断言 */
 function stubRaf() {
@@ -58,6 +64,8 @@ function stubRaf() {
   };
 }
 
+const sessions: DragPreviewSession[] = [];
+
 function createHarness(nodes: AnyNode[], zoom = 1) {
   let store = nodes;
   const setNodes = vi.fn((next: AnyNode[]) => {
@@ -72,6 +80,7 @@ function createHarness(nodes: AnyNode[], zoom = 1) {
     markDirtyImmediate,
     getZoom: () => zoom,
   });
+  sessions.push(session);
   return {
     session,
     container,
@@ -129,6 +138,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // 修饰键监听挂在 window 上：不结束会话会跨用例泄漏事件
+  for (const session of sessions.splice(0)) session.dispose();
   vi.unstubAllGlobals();
   for (const id of registeredEdges.splice(0)) unregisterEdgeGeometry(id);
   clearPreviewGuides();
@@ -141,7 +152,7 @@ describe("DragPreviewSession", () => {
     const harness = createHarness([node("a", 0, 0, { selected: true }), other]);
     const { session, setNodes, markDirtyImmediate } = harness;
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     session.preview([{ id: "a", position: { x: 20, y: 10 } }]);
     raf.flush();
     session.preview([{ id: "a", position: { x: 30, y: 10 } }]);
@@ -165,7 +176,7 @@ describe("DragPreviewSession", () => {
     const harness = createHarness([node("a", 0, 0, { selected: true })]);
     const { session, setNodes, markDirtyImmediate } = harness;
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     session.commit([{ id: "a", position: { x: 0, y: 0 } }]);
 
     expect(setNodes).not.toHaveBeenCalled();
@@ -180,7 +191,7 @@ describe("DragPreviewSession", () => {
     const el = addNodeEl(container, "a");
 
     // 按下点到阈值事件点指针移动 (40,-20) 屏幕 px，zoom = 2 → 画布位移 (20,-10)
-    session.begin(["a"], NO_SNAP, { x: 40, y: -20 });
+    session.begin(["a"], NO_GRID, { preThresholdOffset: { x: 40, y: -20 } });
     session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
     raf.flush();
 
@@ -198,7 +209,7 @@ describe("DragPreviewSession", () => {
     const el = addNodeEl(container, "a");
 
     // 无 preview 调用：begin 自身补出首帧（规则 2.8）
-    session.begin(["a"], NO_SNAP, { x: 40, y: 20 });
+    session.begin(["a"], NO_GRID, { preThresholdOffset: { x: 40, y: 20 } });
 
     expect(el.style.translate).toBe("20px 10px");
     expect(session.isActive()).toBe(true);
@@ -209,7 +220,7 @@ describe("DragPreviewSession", () => {
     const harness = createHarness([node("a", 0, 0, { selected: true })], 2);
     const { session, setNodes } = harness;
 
-    session.begin(["a"], NO_SNAP, { x: 40, y: 20 });
+    session.begin(["a"], NO_GRID, { preThresholdOffset: { x: 40, y: 20 } });
     session.stop();
 
     const next = setNodes.mock.calls[0][0] as AnyNode[];
@@ -225,7 +236,7 @@ describe("DragPreviewSession", () => {
     const { session, setNodes } = harness;
 
     // 补偿前 x = 187，补 10 后 197 与 b 左边缘差 3px（阈值内）→ 吸附到 200
-    session.begin(["a"], SNAP, { x: 10, y: 0 });
+    session.begin(["a"], GRID, { preThresholdOffset: { x: 10, y: 0 } });
     session.commit([{ id: "a", position: { x: 187, y: 0 } }]);
 
     const next = setNodes.mock.calls[0][0] as AnyNode[];
@@ -240,15 +251,18 @@ describe("DragPreviewSession", () => {
     ]);
     const { session, setNodes } = harness;
 
-    session.begin(["a"], SNAP);
+    session.begin(["a"], GRID);
     session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
     raf.flush();
 
-    const guides = getPreviewGuides();
-    expect(guides.some((g) => g.type === "vertical" && g.position === 200)).toBe(true);
-    expect(guides.some((g) => g.type === "horizontal" && g.position === 0)).toBe(true);
+    const previewGuides = getPreviewGuides();
+    expect(previewGuides.some((g) => g.type === "vertical" && g.position === 200)).toBe(true);
+    expect(previewGuides.some((g) => g.type === "horizontal" && g.position === 0)).toBe(true);
 
     session.commit([{ id: "a", position: { x: 197, y: 2 } }]);
+
+    // 终态提交沿用同一会话状态与解析路径：stop 清理前辅助线与预览一致（规则 10.1）
+    expect(getPreviewGuides()).toEqual(previewGuides);
     const next = setNodes.mock.calls[0][0] as AnyNode[];
     expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 200, y: 0 });
   });
@@ -258,30 +272,95 @@ describe("DragPreviewSession", () => {
     const harness = createHarness([node("a", 0, 0, { selected: true })]);
     const { session, setNodes } = harness;
 
-    session.begin(["a"], SNAP);
+    session.begin(["a"], GRID);
     session.commit([{ id: "a", position: { x: 10, y: 10 } }]);
 
     const next = setNodes.mock.calls[0][0] as AnyNode[];
     expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 16, y: 16 });
   });
 
-  it("多选拖动不吸附，按原始帧提交", () => {
+  it("总开关关闭：不对齐、不取整、不画辅助线，落点等于原始位置", () => {
     stubRaf();
     const harness = createHarness([
       node("a", 0, 0, { selected: true }),
-      node("b", 200, 0, { selected: true }),
+      node("b", 200, 0),
     ]);
     const { session, setNodes } = harness;
 
-    session.begin(["a", "b"], SNAP);
+    session.begin(["a"], SNAP_OFF);
+    session.commit([{ id: "a", position: { x: 197, y: 2 } }]);
+
+    expect(getPreviewGuides()).toEqual([]);
+    const next = setNodes.mock.calls[0][0] as AnyNode[];
+    expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 197, y: 2 });
+  });
+
+  it("多选拖动按并集盒吸附，同一偏移应用到所有拖动项", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      node("a", 0, 0, { selected: true }),
+      node("b", 200, 0, { selected: true }),
+      node("c", 400, 300),
+    ]);
+    const { session, setNodes } = harness;
+
+    // 原始并集 [5,397] × [2,125]；c 左边缘 400 与并集右边缘差 3px
+    session.begin(["a", "b"], NO_GRID);
+    session.preview([
+      { id: "a", position: { x: 197, y: 2 } },
+      { id: "b", position: { x: 5, y: 5 } },
+    ]);
+    raf.flush();
+
+    expect(getPreviewGuides()).toEqual([
+      { type: "vertical", position: 400, start: 125, end: 300 },
+    ]);
+
     session.commit([
       { id: "a", position: { x: 197, y: 2 } },
       { id: "b", position: { x: 5, y: 5 } },
     ]);
-
     const next = setNodes.mock.calls[0][0] as AnyNode[];
-    expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 197, y: 2 });
-    expect(next.find((n) => n.id === "b")?.position).toEqual({ x: 5, y: 5 });
+    expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 200, y: 2 });
+    expect(next.find((n) => n.id === "b")?.position).toEqual({ x: 8, y: 5 });
+  });
+
+  it("多选并集与单选同几何时吸附结果一致（规则 7.1、验收 3）", () => {
+    const raf = stubRaf();
+
+    // 单选：100×100 的 s 平移到 x=96，右侧 4px 内命中目标 t 的左边缘
+    const single = createHarness([box("s", 0, 0), box("t", 200, 0)]);
+    single.session.begin(["s"], NO_GRID);
+    single.session.preview([{ id: "s", position: { x: 96, y: 0 } }]);
+    raf.flush();
+    const singleGuides = getPreviewGuides();
+    single.session.commit([{ id: "s", position: { x: 96, y: 0 } }]);
+    const singleNode = (single.setNodes.mock.calls[0][0] as AnyNode[]).find((n) => n.id === "s");
+
+    // 多选：两个 50×100 首尾相接，并集与单选同几何、同一基准位移
+    const multi = createHarness([
+      node("a", 0, 0, { style: { width: 50, height: 100 } }),
+      node("b", 50, 0, { style: { width: 50, height: 100 } }),
+      box("t", 200, 0),
+    ]);
+    multi.session.begin(["a", "b"], NO_GRID);
+    multi.session.preview([
+      { id: "a", position: { x: 96, y: 0 } },
+      { id: "b", position: { x: 146, y: 0 } },
+    ]);
+    raf.flush();
+    expect(getPreviewGuides()).toEqual(singleGuides);
+
+    multi.session.commit([
+      { id: "a", position: { x: 96, y: 0 } },
+      { id: "b", position: { x: 146, y: 0 } },
+    ]);
+    const multiNodes = multi.setNodes.mock.calls[0][0] as AnyNode[];
+    expect(multiNodes.find((n) => n.id === "a")?.position.x).toBe(singleNode?.position.x);
+    // b 的基准 x 比 a 大 50，吸附偏移与 a 相同
+    expect((multiNodes.find((n) => n.id === "b")?.position.x ?? 0) - 50).toBe(
+      singleNode?.position.x,
+    );
   });
 
   it("组拖动：成员随组平移，提交只写组位置，释放后无残留偏移", () => {
@@ -292,7 +371,7 @@ describe("DragPreviewSession", () => {
     const groupEl = addNodeEl(container, "g");
     const memberEl = addNodeEl(container, "m");
 
-    session.begin(["g"], NO_SNAP);
+    session.begin(["g"], NO_GRID);
     session.preview([{ id: "g", position: { x: 150, y: 100 } }]);
     raf.flush();
 
@@ -321,7 +400,7 @@ describe("DragPreviewSession", () => {
     const { session, setNodes } = harness;
 
     // 原始相对位置 (410,20) → 绝对 (510,1020)，与 x 左/上边各差 2px → 吸附到 (508,1018)
-    session.begin(["m"], SNAP);
+    session.begin(["m"], GRID);
     session.commit([{ id: "m", position: { x: 410, y: 20 } }]);
 
     const next = setNodes.mock.calls[0][0] as AnyNode[];
@@ -345,7 +424,7 @@ describe("DragPreviewSession", () => {
     const e1 = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e1"]')!;
     const e2 = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e2"]')!;
 
-    session.begin(["a", "b"], NO_SNAP);
+    session.begin(["a", "b"], NO_GRID);
     session.preview([
       { id: "a", position: { x: 10, y: 0 } },
       { id: "b", position: { x: 410, y: 0 } },
@@ -377,7 +456,7 @@ describe("DragPreviewSession", () => {
     registerEdge("e1", "a", "b");
     const edge = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e1"]')!;
 
-    session.begin(["a", "b"], NO_SNAP);
+    session.begin(["a", "b"], NO_GRID);
     session.preview([
       { id: "a", position: { x: 10, y: 0 } },
       { id: "b", position: { x: 400, y: 0 } },
@@ -412,7 +491,7 @@ describe("DragPreviewSession", () => {
     registerEdge("e1", "a", "b");
     const edge = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e1"]')!;
 
-    session.begin(["a", "b"], NO_SNAP);
+    session.begin(["a", "b"], NO_GRID);
     session.preview([
       { id: "a", position: { x: 10, y: 0 } },
       { id: "b", position: { x: 400, y: 0 } },
@@ -440,7 +519,7 @@ describe("DragPreviewSession", () => {
     labelLayer.className = "react-flow__edgelabel-renderer";
     container.appendChild(labelLayer);
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     expect(labelLayer.style.visibility).toBe("hidden");
 
     session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
@@ -475,7 +554,7 @@ describe("DragPreviewSession", () => {
     toolbar.dataset.id = "a";
     container.appendChild(toolbar);
 
-    session.begin(["a", "b"], NO_SNAP);
+    session.begin(["a", "b"], NO_GRID);
     session.preview([
       { id: "a", position: { x: 10, y: 0 } },
       { id: "b", position: { x: 400, y: 5 } },
@@ -509,7 +588,7 @@ describe("DragPreviewSession", () => {
     const { session, container, setNodes } = harness;
     const el = addNodeEl(container, "a");
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
     raf.flush();
     expect(el.style.translate).toBe("10px 0px");
@@ -537,7 +616,7 @@ describe("DragPreviewSession", () => {
     const { session, container, setNodes } = harness;
     const el = addNodeEl(container, "a");
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     harness.writeStore([node("b", 300, 300)]);
     session.syncRenderedNodes();
 
@@ -546,12 +625,63 @@ describe("DragPreviewSession", () => {
     expect(setNodes).not.toHaveBeenCalled();
   });
 
+  it("外部写入重建时清空两轴锁定（规则 10.3）", () => {
+    const raf = stubRaf();
+    const harness = createHarness([box("a", 0, 0), box("t", 200, 0)]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 96, y: 0 } }]);
+    raf.flush();
+    // 右边缘 196 吸附到目标左边缘 200：位置 100，位移 100
+    expect(el.style.translate).toBe("100px 0px");
+
+    // 偏差 -8：在保持阈值内继续锁定，但已超出进入阈值
+    session.preview([{ id: "a", position: { x: 108, y: 0 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("100px 0px");
+
+    // 外部写入（新数组）触发重建：清空锁定后用最后一帧重算，-8 不再吸附
+    harness.writeStore([box("a", 0, 0), box("t", 200, 0)]);
+    session.syncRenderedNodes();
+    expect(el.style.translate).toBe("108px 0px");
+
+    session.preview([{ id: "a", position: { x: 108, y: 0 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("108px 0px");
+    // X 轴未吸附：不产生竖向辅助线（Y 轴同高仍正常对齐）
+    expect(getPreviewGuides().every((g) => g.type === "horizontal")).toBe(true);
+  });
+
+  it("外部写入重建保留修饰键状态（规则 10.3）", () => {
+    const raf = stubRaf();
+    const harness = createHarness([box("a", 0, 0), box("t", 200, 0)]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], NO_GRID, { modifiers: { bypass: true, shift: false } });
+    session.preview([{ id: "a", position: { x: 96, y: 0 } }]);
+    raf.flush();
+    // Ctrl/Meta 旁路：右边缘进入吸附范围也不吸附
+    expect(el.style.translate).toBe("96px 0px");
+
+    harness.writeStore([box("a", 0, 0), box("t", 200, 0)]);
+    session.syncRenderedNodes();
+    // 重建清空锁定但保留旁路：用最后一帧重算仍不吸附
+    expect(el.style.translate).toBe("96px 0px");
+
+    session.preview([{ id: "a", position: { x: 96, y: 0 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("96px 0px");
+  });
+
   it("无终态帧时 stop 用最新未应用帧兜底提交", () => {
     stubRaf();
     const harness = createHarness([node("a", 0, 0, { selected: true })]);
     const { session, setNodes, markDirtyImmediate } = harness;
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     // 帧已排入 rAF 但尚未执行：兜底提交必须用它，不能退回更旧的已应用帧
     session.preview([{ id: "a", position: { x: 20, y: 0 } }]);
     session.stop();
@@ -571,7 +701,7 @@ describe("DragPreviewSession", () => {
     labelLayer.className = "react-flow__edgelabel-renderer";
     container.appendChild(labelLayer);
 
-    session.begin(["a"], NO_SNAP);
+    session.begin(["a"], NO_GRID);
     session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
     raf.flush();
     expect(el.style.translate).toBe("10px 0px");
@@ -584,5 +714,207 @@ describe("DragPreviewSession", () => {
     expect(getPreviewGuides()).toEqual([]);
     expect(setNodes).not.toHaveBeenCalled();
     expect(session.isActive()).toBe(false);
+  });
+
+  it("滞回：锁定后 8px 内保持，超出后释放，回到 5px 内重新进入", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      box("a", 0, 0, { selected: true }),
+      box("b", 200, 0),
+    ]);
+    const { session, container, setNodes } = harness;
+    const el = addNodeEl(container, "a");
+    const moveTo = (x: number) => {
+      session.preview([{ id: "a", position: { x, y: 0 } }]);
+      raf.flush();
+    };
+
+    session.begin(["a"], NO_GRID);
+
+    // 进入：右边缘 196 与 b 左边缘 200 差 4px ≤ 5px
+    moveTo(96);
+    expect(el.style.translate).toBe("100px 0px");
+
+    // 保持：偏差 -8px 仍在保持阈值内，落点不跳
+    moveTo(108);
+    expect(el.style.translate).toBe("100px 0px");
+
+    // 释放：偏差 -8.5px 超过保持阈值，也超出进入阈值 → 原始位置
+    moveTo(108.5);
+    expect(el.style.translate).toBe("108.5px 0px");
+
+    // 重新进入前 6px 仍不吸附，5px 时重新锁定
+    moveTo(106);
+    expect(el.style.translate).toBe("106px 0px");
+    moveTo(105);
+    expect(el.style.translate).toBe("100px 0px");
+
+    // 提交沿用会话锁定状态；拖动结束清空辅助线
+    session.commit([{ id: "a", position: { x: 105, y: 0 } }]);
+    const next = setNodes.mock.calls[0][0] as AnyNode[];
+    expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 100, y: 0 });
+    session.stop();
+    expect(getPreviewGuides()).toEqual([]);
+  });
+
+  it("Ctrl 旁路：拖动中按下立即回到原始帧，松开后重新吸附", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      box("a", 0, 0, { selected: true }),
+      box("b", 200, 0),
+    ]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("200px 0px");
+    expect(getPreviewGuides().length).toBeGreaterThan(0);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true }));
+    expect(el.style.translate).toBe("197px 2px");
+    expect(getPreviewGuides()).toEqual([]);
+
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" }));
+    expect(el.style.translate).toBe("200px 0px");
+    expect(getPreviewGuides().length).toBeGreaterThan(0);
+  });
+
+  it("Shift 轴限：只保留主导轴吸附，另一轴不吸附不画线", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      box("a", 0, 0, { selected: true }),
+      box("b", 200, 0),
+    ]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], GRID);
+    session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("200px 0px");
+
+    // 原始位移 x=197 > y=2 → 只吸附 X；Y 保持原始 2px
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", shiftKey: true }));
+    expect(el.style.translate).toBe("200px 2px");
+    expect(getPreviewGuides().some((g) => g.type === "vertical")).toBe(true);
+    expect(getPreviewGuides().some((g) => g.type === "horizontal")).toBe(false);
+
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift" }));
+    expect(el.style.translate).toBe("200px 0px");
+    expect(getPreviewGuides().some((g) => g.type === "horizontal")).toBe(true);
+  });
+
+  it("窗口失焦清空全部修饰键并按最后一帧恢复吸附", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      box("a", 0, 0, { selected: true }),
+      box("b", 200, 0),
+    ]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("200px 0px");
+
+    // Ctrl 旁路 + Shift 轴限同时按下：原始位置、无辅助线
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Control", ctrlKey: true, shiftKey: true }),
+    );
+    expect(el.style.translate).toBe("197px 2px");
+    expect(getPreviewGuides()).toEqual([]);
+
+    // 失焦必须同时清空旁路与轴限，而不是只清其一
+    window.dispatchEvent(new Event("blur"));
+    expect(el.style.translate).toBe("200px 0px");
+    expect(getPreviewGuides().some((g) => g.type === "vertical")).toBe(true);
+    expect(getPreviewGuides().some((g) => g.type === "horizontal")).toBe(true);
+  });
+
+  it("触屏拖动不响应修饰键：初值与键盘都不产生旁路（规则 8.5）", () => {
+    const raf = stubRaf();
+    const harness = createHarness([box("a", 0, 0), box("b", 200, 0)]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    // 初值带旁路与轴限也必须被忽略
+    session.begin(["a"], NO_GRID, {
+      touch: true,
+      modifiers: { bypass: true, shift: true },
+    });
+    session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("200px 0px");
+
+    // 未挂键盘监听：拖动中按 Ctrl/Shift 不改变预览
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Control", ctrlKey: true, shiftKey: true }),
+    );
+    expect(el.style.translate).toBe("200px 0px");
+  });
+
+  it("非触屏拖动：开局按住的修饰键首帧即生效（异常表）", () => {
+    const raf = stubRaf();
+
+    // Ctrl 旁路：begin 传入的初值让首帧就不吸附
+    const bypass = createHarness([box("a", 0, 0), box("b", 200, 0)]);
+    const bypassEl = addNodeEl(bypass.container, "a");
+    bypass.session.begin(["a"], NO_GRID, {
+      modifiers: { bypass: true, shift: false },
+    });
+    bypass.session.preview([{ id: "a", position: { x: 196, y: 0 } }]);
+    raf.flush();
+    expect(bypassEl.style.translate).toBe("196px 0px");
+    expect(getPreviewGuides()).toEqual([]);
+
+    // Shift 轴限：首帧只吸附主导轴 X
+    const axis = createHarness([box("a", 0, 0), box("b", 200, 0)]);
+    const axisEl = addNodeEl(axis.container, "a");
+    axis.session.begin(["a"], NO_GRID, {
+      modifiers: { bypass: false, shift: true },
+    });
+    axis.session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+    expect(axisEl.style.translate).toBe("200px 2px");
+  });
+
+  it("拖动组：组与成员都不成为吸附目标", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      group("g", 0, 0),
+      node("m", 10, 10, { parentId: "g" }),
+    ]);
+    const { session, container } = harness;
+    const gEl = addNodeEl(container, "g");
+    const mEl = addNodeEl(container, "m");
+
+    session.begin(["g"], NO_GRID);
+    session.preview([{ id: "g", position: { x: 8, y: 2 } }]);
+    raf.flush();
+
+    // 若成员错误地留在目标集合，组会吸附到成员左上角 x=10
+    expect(gEl.style.translate).toBe("8px 2px");
+    expect(mEl.style.translate).toBe("8px 2px");
+    expect(getPreviewGuides()).toEqual([]);
+  });
+
+  it("隐藏节点不参与吸附目标", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      box("a", 0, 0, { selected: true }),
+      box("h", 200, 0, { hidden: true }),
+    ]);
+    const { session, container } = harness;
+    const el = addNodeEl(container, "a");
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 197, y: 2 } }]);
+    raf.flush();
+
+    expect(el.style.translate).toBe("197px 2px");
+    expect(getPreviewGuides()).toEqual([]);
   });
 });

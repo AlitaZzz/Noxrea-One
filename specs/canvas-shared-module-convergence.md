@@ -21,7 +21,7 @@
 
 ## 业务规则
 
-1. **归属原语唯一**：`isGroupNode` / `memberParentId` / `isGroupMember` / `groupMembers` / `pruneEmptyGroups` 是成员判定的唯一实现。调用方读取「归属父」一律经 `memberParentId`，不得直接读 `parentId` 做归属判断；组节点不可能是成员（`memberParentId` 对组节点返回 undefined）。
+1. **归属原语唯一**：`isGroupNode` / `memberParentId` / `isGroupMember` / `groupMembers` / `pruneEmptyGroups` 是成员判定的唯一实现。调用方读取「归属父」一律经 `memberParentId`，不得直接读 `parentId` 做归属判断；组节点不可能是成员（`memberParentId` 对组节点返回 undefined）。`orderGroupsBeforeMembers` 维护 React Flow 子流程模型的顺序不变量（父先于子），由 store 整体写入边界（`setNodes` / `addNodes` / `restoreFromProject`）统一调用。
 2. **上游引用投影是纯函数**：输入只有入边与上游节点的类型、数据；节点位置不参与结果。图片按节点数组顺序，文本与媒体按连线顺序；文本按节点 id 去重，媒体按节点 id 与 src 双重去重；空文本与空 src 不进入结果。
 3. **按值订阅**：`useNodeUpstreamRefs` 以 `sameUpstreamRefs` 作为 zustand equalityFn，内容不变即复用上次结果；不设全局缓存或字符串键。
 4. **生成中状态是布尔原语**：`useNodeGenerating` 只订阅该节点的 taskBinding 派生布尔值；节点不存在按未生成处理。
@@ -58,3 +58,5 @@
 ## 当前状态
 
 - 2026-10-30：用户确认两项待确认事项；实现与验证完成后提交为 0600e741（hook 迁移、媒体去重状态打包、比较循环收敛、`parentId` 直读收敛与本 Spec）。验证：`tsc --noEmit`、改动文件 ESLint、canvas 测试 71 文件 / 666 用例均通过，验收标准 1–4 通过，状态转「已实现」。
+- 2026-10-30：`group-membership` 新增顺序不变量原语 `orderGroupsBeforeMembers`（尚未提交）：React Flow 子流程模型要求父节点先于子节点，成员排在组之前时父节点解析失败、成员按顶层坐标参与拖动，导致拖出组后落点偏移一个组原点。原语在 `canvas-store` 的 `setNodes` / `addNodes` / `restoreFromProject` 统一归一化。该修复在 `specs/canvas-snap-alignment.md` 验收 10 走查中发现并实施，回归用例见 `group-membership.test.ts`、`canvas-store.test.ts` 与 `canvas-edit-actions.test.ts`；用户以「验收 10 走查通过」确认，已并入本 Spec 业务规则 1。
+- 状态说明（AGENTS.md 十二.4）：`orderGroupsBeforeMembers` 修复随吸附总开关功能一并提交（2026-10-30，提交经用户确认），验收标准 1–4 已通过，状态转回「已实现」。

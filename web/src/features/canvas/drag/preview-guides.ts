@@ -8,7 +8,7 @@
 import {
   type AlignmentGuide,
   sameAlignmentGuides,
-} from "@/features/canvas/hooks/use-alignment-guides";
+} from "@/features/canvas/shared/alignment-guides";
 
 let guides: AlignmentGuide[] = [];
 const listeners = new Set<() => void>();

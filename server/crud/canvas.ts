@@ -179,7 +179,7 @@ export async function updateProjectDelta(
       const next: Record<string, unknown> = { ...current, nodes, edges };
       if (delta.viewport !== undefined) next.viewport = delta.viewport;
       if (delta.minimapVisible !== undefined) next.minimapVisible = delta.minimapVisible;
-      if (delta.snapToGrid !== undefined) next.snapToGrid = delta.snapToGrid;
+      if (delta.snapEnabled !== undefined) next.snapEnabled = delta.snapEnabled;
       if (delta.agentModel !== undefined) next.agentModel = delta.agentModel;
 
       const summary = deriveCanvasSummary(next);

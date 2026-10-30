@@ -78,9 +78,9 @@ function nodeSize(n: AnyNode): { width: number; height: number } {
   };
 }
 
-/** 网格吸附取值与画布其余入口一致（Runtime.tidyCanvas / handleTidyCanvas 同款） */
-function getSnapSize(state: { snapToGrid: boolean; snapGridSize: number }): number {
-  return state.snapToGrid ? state.snapGridSize : 0;
+/** 网格步长取值与画布其余入口一致（整理布局同款：总开关关闭时为 0） */
+function getSnapSize(state: { snapEnabled: boolean; snapGridSize: number }): number {
+  return state.snapEnabled ? state.snapGridSize : 0;
 }
 
 function snapValue(v: number, snapSize: number): number {
@@ -276,7 +276,7 @@ function execCreateNode(args: ToolArgs): ExecOutcome {
 
   // 批量布局：复用整理布局纯函数（有连线 → 分层，无连线 → 网格），批次内互不重叠；
   // 整批作为一块经 findFreePosition 放到锚点附近（与画布已有内容错开），无需再 arrange_canvas
-  // 网格吸附与画布其余入口一致：
+  // 网格步进与画布其余入口一致：
   // 单节点与批量路径都吸附，避免同一设置下行为随批量大小变化
   const snapSize = getSnapSize(store);
   const snap = (v: number) => snapValue(v, snapSize);

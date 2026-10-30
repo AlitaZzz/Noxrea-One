@@ -118,8 +118,8 @@
       "hide": "Hide Minimap"
     },
     "snap": {
-      "on": "Snap On",
-      "off": "Snap Off"
+      "on": "Snap on",
+      "off": "Snap off"
     },
     "zoom": {
       "in": "Zoom In",

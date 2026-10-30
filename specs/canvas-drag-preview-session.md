@@ -38,10 +38,10 @@
 - 选中动作工具栏在拖动期本就不渲染（`showSelectionChrome` 仅在 `idle` 为真，`hooks/use-canvas-interaction.ts:36`、`InfiniteCanvas.tsx:1326`）。
 - MiniMap、rail 宽度、媒体优先级与 LOD 的派生都读取 store 几何（`shared/canvas-derived.ts:283-294`、`hooks/use-canvas-media-priority.ts`），拖动期不写 store 时只会滞后到提交。
 
-### 4. 现有吸附/历史语义（必须保留）
+### 4. 现有吸附/历史语义（当时实现事实；吸附部分已被 `specs/canvas-snap-alignment.md` 取代）
 
-- 吸附仅对「拖动项 = 1」且 `snapToGrid` 开启生效，在绝对坐标空间对齐后换回相对坐标；多选与框选外框拖动不吸附（`InfiniteCanvas.tsx:446-527`）。
-- 对齐辅助线由 `computeAlignment` 产生，经 `sameAlignmentGuides` 短路后才更新（`InfiniteCanvas.tsx:532`）。
+- 吸附仅对「拖动项 = 1」且 `snapToGrid` 开启生效，在绝对坐标空间对齐后换回相对坐标；多选与框选外框拖动不吸附（`InfiniteCanvas.tsx:446-527`）。此项为 2026-10-29 的实现事实，已被 `specs/canvas-snap-alignment.md` 规则 1–8 取代。
+- 对齐辅助线由 `computeAlignment` 产生，经 `sameAlignmentGuides` 短路后才更新（`InfiniteCanvas.tsx:532`）。计算入口已迁至 `shared/snap-engine.ts`，辅助线类型与按值比较迁至 `shared/alignment-guides.ts`。
 - 拖动开始时压入拖动前历史快照（`:806`），停止时处理归属、组框重算与空组删除并 `markDirtyImmediate`（`:825-886`）。
 - 已验证的既有缺陷：`snapToGrid` 开启时，非拖拽位置帧（`dragging !== true`）会回退为 store 位置（`:514-523`）。本仓库键盘微移不经过该路径：`use-canvas-keyboard` → `nudgeSelectedNodes` 直接 `setNodes`（`shared/canvas-edit-actions.ts:75-93`），且 RF a11y 键盘已关闭（`disableKeyboardA11y`，`InfiniteCanvas.tsx:1130`）；`updateNodePositions(dragging=false)` 只由 RF a11y 键盘路径调用（`@xyflow/react:1730-1769`、`:2071-2107`、`:2260-2327`），在本仓库不可达。该缺陷现状下无用户可见表现；规则 6.4 按「非拖拽位置帧直接提交」修复，并为将来任何 `updateNodePositions(dragging=false)` 调用方兜底。
 
@@ -97,7 +97,7 @@
 1.3 指针位置帧按 rAF 合并：每帧最多应用一次 DOM 预览，取该帧最新的拖动位置；预览写入使用 `style.translate`，不覆盖 React 管理的 `transform`。
 1.4 终态由终态位置帧（`dragging === false`）判定：取消未执行的预览帧，按吸附后的最终几何提交一次。`onNodeDragStop` 负责归属判定与浮层清理，同时作为兜底：若会话仍未收到终态帧，以最后预览几何提交（React Flow 在 `nodePositionsChanged === false` 时只回调 stop，`@xyflow/system:2328-2345`）。
 1.5 提交顺序：一次 `setNodes` → `markDirtyImmediate` → 待渲染层真正采用新位置后清除预览偏移。清除时机不得导致回跳或一帧过冲，也不允许使用固定延时兜底。
-1.6 会话只管理几何。选中态、尺寸、节点数据变更仍按现状即时写入 store；吸附开关、网格与阈值取会话开始时的设置。
+1.6 会话只管理几何。选中态、尺寸、节点数据变更仍按现状即时写入 store；吸附开关与网格设置（`snapEnabled`、`snapGridSize`）取会话开始时的设置，对齐阈值按屏幕像素除以开始时的 zoom 换算（`specs/canvas-snap-alignment.md` 规则 4）。
 1.7 终态提交后清除全部预览偏移、恢复被隐藏的层、清空辅助线与拖入组高亮。组件卸载、项目切换或画布根节点移除时 `cancel()`：清除预览、丢弃未提交位移，store 不变。
 1.8 提交是会话唯一的 store 写入口；将来若出现拒绝源（协作锁、服务端权威、权限撤销），在此判定失败并放弃写入、清除预览、结束会话，不另设校验层（2026-10-29 已确认）。
 
@@ -115,7 +115,7 @@
 
 ### 3. 吸附与对齐辅助线
 
-3.1 吸附口径不变：仅「拖动项 = 1」且 `snapToGrid` 开启时启用；多选与框选外框拖动不吸附；网格取整、对齐阈值与 `LAYOUT_GAP` 与现状一致；组成员仍按绝对/相对坐标换算（`InfiniteCanvas.tsx:446-503`）。
+3.1 吸附口径由 `specs/canvas-snap-alignment.md` 取代：唯一总开关同时控制对齐与网格，关闭时两者都不生效，开启时对齐优先、网格只在无对齐的轴并受缩放门槛约束；单选、多选、组拖动统一按移动集并集盒吸附；阈值以屏幕像素归一并有 5/8 滞回；候选排除移动集与隐藏节点；Ctrl/Meta 旁路、Shift 轴限。框选外框拖动仍不接入会话、不吸附（`specs/canvas-snap-alignment.md` 范围「不改动」）。
 3.2 吸附与辅助线在预览几何上计算，得到该帧的吸附后位移；提交使用同一算法对终态位置计算，保证所见即所得。
 3.3 辅助线不属于画布数据：不进 store、不进历史、不落库。拖动期通过独立瞬态订阅只驱动 `AlignmentGuides`，不得让 `InfiniteCanvas` 或节点树每帧重渲染。
 3.4 拖入组高亮沿用现状：读取 React Flow 回调的原始拖动位置执行 `resolveDropGroupId`，仅在归属将变化时高亮（`setDragOverGroup` 的相等短路保留）。
@@ -140,7 +140,7 @@
 6.1 历史语义不变：拖动开始压入拖动前快照（`InfiniteCanvas.tsx:806`），提交不再压栈。
 6.2 拖动期不 `markDirty`；提交有位置变化时 `markDirtyImmediate` 一次，无位置变化不写 store、不落库；自动保存不写入中间位置。
 6.3 提交只改 `position`；组成员相对位置不变。组归属、组框重算、空组删除仍在 `onNodeDragStop` 执行，顺序与现状一致。
-6.4 非拖拽位置帧（`dragging !== true`，会话未激活）按终态位置直接提交、不吸附；吸附只作用于指针拖动。本仓库键盘微移走 `nudgeSelectedNodes` 直接写 store（不经过位置帧路径），此处修复的是「`snapToGrid` 开启时非拖拽位置帧被回退」的既有缺陷，并为将来任何 `updateNodePositions(dragging=false)` 调用方兜底（2026-10-29 已确认纳入）。
+6.4 非拖拽位置帧（`dragging !== true`，会话未激活）按终态位置直接提交、不吸附；吸附只作用于指针拖动。本仓库键盘微移走 `nudgeSelectedNodes` 直接写 store（不经过位置帧路径），此处修复的是「吸附开启时非拖拽位置帧被回退」的既有缺陷，并为将来任何 `updateNodePositions(dragging=false)` 调用方兜底（2026-10-29 已确认纳入）。
 6.5 增删节点/边、修改节点数据等结构调整不受影响。
 
 ### 7. 拖动期外部写入
@@ -201,7 +201,7 @@
 
 1. 单元测试断言：预览帧不调用 `setNodes`；终态帧恰好提交一次；拖动期 `markDirty` 为 0、会话提交有位移时 `markDirtyImmediate` 为 1（无位移不写 store、不落库）；位置帧分流的测试证明过程帧永不经过直接写入口径（触发 `markDirty` 的唯一路径）。组归属变化的拖动另在 `onNodeDragStop` 产生一次结构写入与 `markDirtyImmediate`（规则 6.3），不计入会话提交的落库次数。
 2. DOM 测试（jsdom）：预览后 wrapper 的 `style.translate` 正确、组成员同步平移、清理后无残留；同位移边平移、混合位移边 `d` 更新且与 `DeletableEdge` 几何一致；边标签层隐藏并恢复。
-3. 吸附：单选 + `snapToGrid` 的落点与辅助线与改造前一致；多选与框选外框拖动不吸附。
+3. 吸附：按 `specs/canvas-snap-alignment.md` 验收标准 1–7 覆盖单选、多选、组/成员、隐藏目标、阈值滞回、辅助线、网格与修饰键；预览帧与提交帧落点、辅助线一致。框选外框拖动不吸附。
 4. 兜底：无终态帧时由 stop 提交最后预览几何；abort 路径由终态帧提交。
 5. 外部写入：撤销/回填期间会话重建，无重复位移与残留偏移；拖动中节点被删除时正确退出。
 6. 卸载/取消：无残留 `style.translate`、无残留隐藏层、store 未被写入。
@@ -265,10 +265,11 @@
   - 复验：重载到干净构建后重新拖动，控制台无错误；此前控制台的 `markDragStartPhase is not defined` 来自诊断代码删除前编译的旧页面实例，当前源码与 dev 构建产物均不含该标识符（已验证）。
 - 2026-10-29 上述走查由 Agent 在预览环境完成（合成指针事件）；验收标准 8 的真人操作与「跟手」主观体验仍需用户确认。
 - 2026-10-30 用户确认验收标准 8 走查通过；实现与编译依赖同批提交（`6d14d5eb` feat(canvas): 拖动改为 DOM 预览会话并在终态一次提交），状态更新为「已实现」。提交树已在独立工作树复核：`tsc --noEmit` 通过，`src/__tests__/features/canvas` 69 文件 / 661 例通过。
+- 2026-10-30 吸附规则由 `specs/canvas-snap-alignment.md` 取代（对齐常开、网格独立、多选/组并集吸附、屏幕像素阈值与滞回、修饰键）。本 Spec 规则 1.6、3.1、验收标准 3 已同步；拖动预览、边路径、释放时机与外部写入重建机制不变。
 
 ## 调查记录
 
-- 项目代码：`InfiniteCanvas.tsx`（拖动链路、吸附、历史）、`DeletableEdge.tsx`、`AlignmentGuides.tsx`、`BatchConnectHandle.tsx`、`NodeToolbar.tsx`、`editing/*`、`use-canvas-interaction.ts`、`use-alignment-guides.ts`、`canvas-store.ts`、`canvas-derived.ts`、`group-membership.ts`、`node-identity.ts`、`use-canvas-keyboard.ts`、`use-tidy-animation.ts`、`ResizeHandle.tsx`。
+- 项目代码：`InfiniteCanvas.tsx`（拖动链路、吸附、历史）、`DeletableEdge.tsx`、`AlignmentGuides.tsx`、`BatchConnectHandle.tsx`、`NodeToolbar.tsx`、`editing/*`、`use-canvas-interaction.ts`、`use-alignment-guides.ts`（2026-10-30 已删除，几何规则并入 `shared/snap-engine.ts`，类型与按值比较并入 `shared/alignment-guides.ts`）、`canvas-store.ts`、`canvas-derived.ts`、`group-membership.ts`、`node-identity.ts`、`use-canvas-keyboard.ts`、`use-tidy-animation.ts`、`ResizeHandle.tsx`。
 - 依赖源码：`@xyflow/react` 12.12（`setNodes` / `triggerNodeChanges` / `NodeWrapper` / `NodesSelection` / `NodeToolbar` / `BaseEdge`）、`@xyflow/system`（`XYDrag`、`getDragItems`、`getEventHandlerParams`、`updateChildNode`、`getNodeToolbarTransform`）。
 - 对标：即梦 `ai-canvas` 生产 bundle 静态分析（`65cefeba57f29641.js` 等），仅作方向参照，未在运行时验证。
 - 跟手问题（2026-10-29）：`@xyflow/system` 的 `getDragItems`（2050-2065，`distance = 参考点 − 节点位置`）、d3-drag `start`/`drag` 阈值分支（2271-2320，越过阈值才调用 `startDrag`，且该事件不触发 `updateNodes`）；运行时合成拖动（rAF 分隔）测得节点位移 = 指针位移 − 阈值事件点位移。排除项（代码与运行时均已核对）：每帧 store 写入、逐帧 React 渲染、吸附/对齐逐帧开销（`snapToGrid` 关闭时 O(1)）、节点 wrapper 的 CSS 过渡与滤镜、rAF 合并（输入在帧内先于 rAF 派发，合并不增加显示延迟）。
