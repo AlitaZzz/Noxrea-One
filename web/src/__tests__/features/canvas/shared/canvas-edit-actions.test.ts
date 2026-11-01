@@ -45,6 +45,7 @@ import {
 } from "@/features/canvas/node-defaults";
 import {
   canUndoNow,
+  clearSelection,
   CLIPBOARD_NODE_MARKER,
   copySelection,
   deleteSelection,
@@ -543,5 +544,24 @@ describe("方向键微调入栈", () => {
 
     expect(undoAction()).toBe(true);
     expect(useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position).toEqual(before);
+  });
+});
+
+describe("清空选区（画布空白点击与 Esc 共用）", () => {
+  it("同时清空节点与连线选中态；无选中项时不重建数组", () => {
+    select("imgA");
+    useCanvasStore.setState((s) => ({ edges: s.edges.map((e) => ({ ...e, selected: true })) }));
+
+    clearSelection();
+
+    const cleared = useCanvasStore.getState();
+    expect(cleared.nodes.some((n) => n.selected)).toBe(false);
+    expect(cleared.edges.some((e) => e.selected)).toBe(false);
+
+    // 已无选中项：再次调用保持数组引用不变（否则每次点击空白都会触发下游派生重算）
+    const { nodes, edges } = cleared;
+    clearSelection();
+    expect(useCanvasStore.getState().nodes).toBe(nodes);
+    expect(useCanvasStore.getState().edges).toBe(edges);
   });
 });

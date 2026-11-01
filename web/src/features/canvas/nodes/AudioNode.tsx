@@ -24,7 +24,9 @@ import {
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { tryApplyAudioSpeedOnClient, tryExtractAudioClipOnClient } from "@/features/canvas/editing/client-media/client-video";
 import { resolveBusyLabelKey, useMediaEditTask } from "@/features/canvas/editing/use-media-edit-task";
+import { useNodeSelectionChange } from "@/features/canvas/hooks/use-node-selected";
 import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
 import { createAudioNodeFromRef } from "@/features/canvas/upload";
@@ -43,7 +45,7 @@ import UploadFailedOverlay from "./UploadFailedOverlay";
 
 const AudioWaveform = dynamic(() => import("./AudioWaveform"), { ssr: false });
 
-function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
+function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
@@ -68,11 +70,11 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
   const clipActive = useCanvasStore((s) => s.audioClipNodeId === id);
 
   // 取消选中（点画布空白 / 点其他节点）即停止播放——这是取消选中暂停的唯一路径。
-  // 放在 effect 里而不是渲染阶段的 setState 调整块：pause() 是对外部媒体系统的
-  // 命令式副作用（相邻 prevDataSrc 块的渲染期调整只做 setState，是官方许可的形态）
-  useEffect(() => {
+  // 选中态经独立订阅读取，节点主体不随选中重渲染（见 shared/memo-canvas-node.ts）；
+  // pause() 是对外部媒体系统的命令式副作用，只在选中态翻转时执行
+  useNodeSelectionChange(id, (selected) => {
     if (!selected) pauseAudio(id);
-  }, [selected, id]);
+  });
 
   // 波形就绪：回填 duration 到节点数据（唯一真相），供标题栏与进度显示。
   // 波形组件每次挂载都会按源回调一次；时长已一致时不写，避免无意义的数据更新
@@ -228,11 +230,11 @@ function AudioNode({ id, data, selected }: NodeProps<AudioNodeType>) {
       <div
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-          ${selected ? "node-selected" : ""}
           node-surface text-foreground
         `}
         onContextMenu={(e) => e.preventDefault()}
       >
+        <LimeRing />
         {agentGhost && <AgentGhostOverlay />}
         {data.upload?.uploading ? (
           <div className="relative h-full w-full flex flex-col items-center justify-center gap-2 px-8">

@@ -4,9 +4,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const { writeGenSettings, modelState } = vi.hoisted(() => ({
+// 与真实 useGenerationSubmit 一致：回调在 hook 内 useCallback 稳定，
+// 面板的「隐藏 / 目标切换」重置 effect 以 invalidate 为依赖，每次渲染换新函数
+// 会让该 effect 反复执行并关掉受控浮层。
+const { writeGenSettings, modelState, submit } = vi.hoisted(() => ({
   writeGenSettings: vi.fn(),
   modelState: { hasModels: true, paramsAvailable: true },
+  submit: {
+    beginRun: vi.fn(),
+    isCurrent: () => true,
+    invalidate: vi.fn(),
+    submitWithOwner: vi.fn(),
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -32,11 +41,15 @@ vi.mock("@/lib/model-store", () => ({
   }),
 }));
 
-vi.mock("@/features/canvas/shared/ref-order", () => ({
+vi.mock("@/features/canvas/shared/gen-settings", () => ({
   useGenSettings: () => ({ modelKey: "provider/video-model", prompt: "prompt", refMode: "text" }),
   writeGenSettings,
+}));
+
+vi.mock("@/features/canvas/shared/ref-order", () => ({
   writeOrderPref: vi.fn(),
   swapOrderItems: vi.fn(),
+  collectLiveRefs: () => ({ refOrder: [], refAudioOrder: [], refVideoOrder: [] }),
 }));
 
 vi.mock("@/features/canvas/shared/last-model", () => ({
@@ -58,12 +71,7 @@ vi.mock("@/features/canvas/hooks/use-video-gen-panel", () => ({
 }));
 
 vi.mock("@/features/canvas/panels/use-generation-submit", () => ({
-  useGenerationSubmit: () => ({
-    beginRun: vi.fn(),
-    isCurrent: () => true,
-    invalidate: vi.fn(),
-    submitWithOwner: vi.fn(),
-  }),
+  useGenerationSubmit: () => submit,
 }));
 
 vi.mock("@/features/canvas/api/generation-api", () => ({
@@ -128,7 +136,7 @@ describe("VideoGenerationPanel parameter availability", () => {
     Object.assign(modelState, { hasModels, paramsAvailable });
     const { container } = render(
       <TooltipProvider>
-        <VideoGenerationPanel nodeId="video-node" />
+        <VideoGenerationPanel nodeId="video-node" active />
       </TooltipProvider>,
     );
     const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
@@ -142,7 +150,7 @@ describe("VideoGenerationPanel reference mode menu", () => {
   it("keeps an unavailable mode open and unchanged on Enter", () => {
     render(
       <TooltipProvider>
-        <VideoGenerationPanel nodeId="video-node" />
+        <VideoGenerationPanel nodeId="video-node" active />
       </TooltipProvider>,
     );
 
@@ -161,7 +169,7 @@ describe("VideoGenerationPanel reference mode menu", () => {
   it("keeps an unavailable mode open and unchanged on pointer selection", () => {
     render(
       <TooltipProvider>
-        <VideoGenerationPanel nodeId="video-node" />
+        <VideoGenerationPanel nodeId="video-node" active />
       </TooltipProvider>,
     );
 

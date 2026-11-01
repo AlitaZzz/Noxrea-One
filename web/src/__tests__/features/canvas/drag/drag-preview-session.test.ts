@@ -12,9 +12,26 @@ import {
   clearPreviewGuides,
   getPreviewGuides,
 } from "@/features/canvas/drag/preview-guides";
+import {
+  getFlowDrawable,
+  removeFlowEdge,
+  setFlowEdge,
+} from "@/features/canvas/flow/flow-registry";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
+
+// 记录候选目标构建次数：吸附总开关关闭时起拖不得构建全画布目标
+type BuildSnapTargets = typeof import("@/features/canvas/drag/drag-snap").buildSnapTargets;
+const { buildSnapTargetsSpy } = vi.hoisted(() => ({
+  buildSnapTargetsSpy: vi.fn<BuildSnapTargets>(),
+}));
+
+vi.mock("@/features/canvas/drag/drag-snap", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/canvas/drag/drag-snap")>();
+  buildSnapTargetsSpy.mockImplementation(actual.buildSnapTargets);
+  return { ...actual, buildSnapTargets: buildSnapTargetsSpy };
+});
 
 /** 吸附开启、网格关闭（步长 0）；总开关关闭见 SNAP_OFF */
 const NO_GRID = { snapEnabled: true, snapGridSize: 0 };
@@ -109,18 +126,25 @@ const registeredEdges: string[] = [];
 
 function registerEdge(id: string, sourceId: string, targetId: string) {
   registerEdgeGeometry(id, edgeGeometry(sourceId, targetId));
+  // 强调边同时登记画布流光几何：拖动预览按覆盖几何绘制流光
+  const geometry = computeEdgePath(edgeGeometry(sourceId, targetId));
+  setFlowEdge(id, { curve: geometry.curve, length: geometry.length });
   registeredEdges.push(id);
 }
 
 beforeEach(() => {
   clearPreviewGuides();
+  buildSnapTargetsSpy.mockClear();
 });
 
 afterEach(() => {
   // 修饰键监听挂在 window 上：不结束会话会跨用例泄漏事件
   for (const session of sessions.splice(0)) session.dispose();
   vi.unstubAllGlobals();
-  for (const id of registeredEdges.splice(0)) unregisterEdgeGeometry(id);
+  for (const id of registeredEdges.splice(0)) {
+    unregisterEdgeGeometry(id);
+    removeFlowEdge(id);
+  }
   clearPreviewGuides();
 });
 
@@ -274,6 +298,22 @@ describe("DragPreviewSession", () => {
     expect(next.find((n) => n.id === "a")?.position).toEqual({ x: 197, y: 2 });
   });
 
+  it("吸附总开关关闭：起拖不构建候选目标；开启时才构建", () => {
+    const harness = createHarness([
+      node("a", 0, 0, { selected: true }),
+      node("b", 200, 0),
+    ]);
+
+    harness.session.begin(["a"], SNAP_OFF);
+    expect(buildSnapTargetsSpy).not.toHaveBeenCalled();
+    harness.session.cancel();
+
+    buildSnapTargetsSpy.mockClear();
+    harness.session.begin(["a"], NO_GRID);
+    expect(buildSnapTargetsSpy).toHaveBeenCalledTimes(1);
+    harness.session.cancel();
+  });
+
   it("多选拖动按并集盒吸附，同一偏移应用到所有拖动项", () => {
     const raf = stubRaf();
     const harness = createHarness([
@@ -420,6 +460,74 @@ describe("DragPreviewSession", () => {
     for (const path of e2.querySelectorAll("path")) {
       expect(path.getAttribute("d")).toBe(expected);
     }
+
+    // 流光跟随预览几何：整段平移用位移覆盖，端点重算用预览控制点
+    expect(getFlowDrawable("e1")?.geometry.offset).toEqual({ x: 10, y: 0 });
+    expect(getFlowDrawable("e2")?.geometry.curve).toEqual(
+      computeEdgePath({ ...edgeGeometry("a", "c"), sourceX: 210 }).curve,
+    );
+
+    // 会话结束清除覆盖，回落到登记几何
+    session.cancel();
+    expect(getFlowDrawable("e1")?.geometry.offset).toBeUndefined();
+    expect(getFlowDrawable("e2")?.geometry.curve).toEqual(computeEdgePath(edgeGeometry("a", "c")).curve);
+  });
+
+  it("路径预览先于强调登记到达时，登记后仍按预览几何绘制", () => {
+    const raf = stubRaf();
+    const harness = createHarness([node("a", 0, 0, { selected: true }), node("c", 0, 400)]);
+    const { session, container } = harness;
+    addNodeEl(container, "a");
+    addEdgeEl(container, "e2");
+    // 边已挂载（拖动几何可查），强调态要等选中提交后才登记流光几何
+    registerEdgeGeometry("e2", edgeGeometry("a", "c"));
+    registeredEdges.push("e2");
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
+    raf.flush();
+
+    // 选中提交 → DeletableEdge 以拖动前几何登记，预览先到也不能被丢弃
+    const base = computeEdgePath(edgeGeometry("a", "c"));
+    setFlowEdge("e2", { curve: base.curve, length: base.length });
+
+    expect(getFlowDrawable("e2")?.geometry.curve).toEqual(
+      computeEdgePath({ ...edgeGeometry("a", "c"), sourceX: 210 }).curve,
+    );
+
+    session.cancel();
+    expect(getFlowDrawable("e2")?.geometry.curve).toEqual(base.curve);
+  });
+
+  it("整段平移的预览先于强调登记到达时，登记后按位移覆盖绘制", () => {
+    const raf = stubRaf();
+    const harness = createHarness([
+      node("a", 0, 0, { selected: true }),
+      node("b", 400, 0, { selected: true }),
+    ]);
+    const { session, container } = harness;
+    addNodeEl(container, "a");
+    addNodeEl(container, "b");
+    addEdgeEl(container, "e1");
+    registerEdgeGeometry("e1", edgeGeometry("a", "b"));
+    registeredEdges.push("e1");
+
+    session.begin(["a", "b"], NO_GRID);
+    session.preview([
+      { id: "a", position: { x: 10, y: 0 } },
+      { id: "b", position: { x: 410, y: 0 } },
+    ]);
+    raf.flush();
+
+    const base = computeEdgePath(edgeGeometry("a", "b"));
+    setFlowEdge("e1", { curve: base.curve, length: base.length });
+
+    const drawable = getFlowDrawable("e1");
+    expect(drawable?.geometry.offset).toEqual({ x: 10, y: 0 });
+    expect(drawable?.geometry.curve).toEqual(base.curve);
+
+    session.cancel();
+    expect(getFlowDrawable("e1")?.geometry.offset).toBeUndefined();
   });
 
   it("路径模式切回平移模式时按登记几何还原基准路径", () => {
@@ -487,6 +595,8 @@ describe("DragPreviewSession", () => {
       expect(path.getAttribute("d")).toBe(baseD);
     }
     expect(edge.style.translate).toBe("");
+    // 流光覆盖同步清除，不保留上一帧的陈旧几何
+    expect(getFlowDrawable("e1")?.geometry.curve).toEqual(computeEdgePath(edgeGeometry("a", "b")).curve);
   });
 
   it("边标签层拖动期隐藏，提交并释放后恢复", () => {

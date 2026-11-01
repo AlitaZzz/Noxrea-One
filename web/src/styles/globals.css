@@ -263,8 +263,10 @@
 .node-surface {
   background: linear-gradient(to bottom right, var(--node-surface-start), var(--node-surface-end));
 }
-/* 框选手势的预览高亮与持久选中态共用同一套声明，视觉完全一致 */
-.node-body.node-selected,
+/* 框选手势的预览高亮与持久选中态共用同一套声明，视觉完全一致。
+   持久选中态读 React Flow 包装层的 .selected：节点主体不再因选中重渲染，
+   描边只由包装层类变化驱动（见 shared/memo-canvas-node.ts） */
+.react-flow__node.selected .node-body,
 [data-marquee-hit] .node-body {
   outline: 1px solid var(--ring);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
@@ -277,6 +279,16 @@
 }
 .node-body.node-drag-over {
   outline: 2px solid var(--ring);
+}
+/* 文本节点滚动区：未选中且未编辑时不参与命中，滚轮穿透到画布缩放；选中/编辑时
+   由节点内滚动消费（滚轮监听常驻，是否命中由这里决定）。选中态读包装层类，
+   节点主体不随选中重渲染（见 shared/memo-canvas-node.ts） */
+.node-text-scroll {
+  pointer-events: none;
+}
+.react-flow__node.selected .node-text-scroll,
+.node-text-scroll[data-editing="true"] {
+  pointer-events: auto;
 }
 
 /* Text node rich text editor — 局部排版：补回 preflight 抹掉的块级默认样式 */
@@ -532,15 +544,26 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    手势期间光标由手势状态整体接管，不交给 hover 命中决定（规则 14）：指针会扫过
    节点、边、节点内控件与空白，逐元素枚举 hover 目标会随节点组件演化漏掉新控件
    （边、业务组件写在元素上的内联 cursor），光标即在「节点抓手 / 控件指针 /
-   resize / 空白箭头」之间跳变。因此直接对整个画布子树强制接管；!important 用于
-   压过业务组件的内联 cursor。
+   resize / 空白箭头」之间跳变。
+   拖动节点与框选改用常驻的手势光标层（.canvas-gesture-cursor）接管：层覆盖整个
+   画布，手势期间由只命中该层的窄规则打开，hit test 恒定命中它。不要改回
+   `[data-interaction] *` 全后代规则——根属性切换会让整棵画布子树（探针 3440
+   元素）重算光标样式（实测中位 29.8ms），只命中该层约 1ms。
    框选判定取选框自身的 data-active（仅手势进行中置位）——data-interaction=
    "box-selecting" 是「最近一次选中来自框选」，会保留到下一次点击。
-   框选中用普通箭头（2026-10-30 走查：框选不需要十字光标），但仍整体接管，
-   避免指针越过节点时跳回抓手或控件指针 */
-.react-flow:has(> [data-canvas-marquee][data-active="true"]),
-.react-flow:has(> [data-canvas-marquee][data-active="true"]) * {
-  cursor: default !important;
+   框选中用普通箭头（2026-10-30 走查：框选不需要十字光标）。
+   拖线（connecting）保留全后代规则：拖线中目标 handle 的显示依赖节点 :hover
+   （idle 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见。 */
+.canvas-gesture-cursor {
+  display: none;
+  position: absolute;
+  inset: 0;
+  /* 高于节点（选中态 internals.z = 1000）与 NodeToolbar（节点层级 + 1） */
+  z-index: 2000;
+}
+.react-flow:has(> [data-canvas-marquee][data-active="true"]) > .canvas-gesture-cursor {
+  display: block;
+  cursor: default;
 }
 /* 拖线进行中：整块画布保持十字准星，表达「正在连线」而非「可拖动画布」 */
 .react-flow[data-interaction="connecting"],
@@ -549,9 +572,31 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 }
 /* 拖动节点中：整块画布保持抓取手势。拖动预览按 rAF 合帧并补偿阈值位移，指针
    会短暂落在节点外，hover 命中会闪回箭头或相邻节点的抓手 */
-.react-flow[data-interaction="dragging-nodes"],
-.react-flow[data-interaction="dragging-nodes"] * {
-  cursor: grabbing !important;
+.react-flow[data-interaction="dragging-nodes"] > .canvas-gesture-cursor {
+  display: block;
+  cursor: grabbing;
+}
+
+/* ── 画布流光层 ──
+   容器由 CanvasFlowLayer 插入 .react-flow__viewport 内、.react-flow__nodes 之前
+   （连线之上、节点之下；删除按钮自带 z-10，仍在流光之上）。canvas 的 CSS 尺寸
+   等于视口尺寸，自身 transform 由渲染器逐帧抵消视口变换（视口 transform-origin
+   为 0 0）；后备缓冲按 dpr 分配，缩放不重建。见 specs/canvas-flow-layer.md */
+.canvas-flow-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.canvas-flow-layer__canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transform-origin: 0 0;
+  pointer-events: none;
 }
 
 /* 无 hover 能力（触屏）的设备：选中即显示 handle，不依赖悬停
@@ -656,54 +701,65 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   scrollbar-color: var(--input) transparent;
 }
 
-/* 必须经 @property 声明为角度类型，否则 CSS 无法对自定义属性做插值、动画不生效 */
-@property --lime-flow-ring-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
-}
-
-/* 统一青柠流光描边：conic-gradient 绕圈旋转，mask 挖空中间只留 1.5px 一圈。
-   连接目标和 Agent 使用伪元素，生成浮层使用 .generation-border 元素；三者共享同一套节奏和颜色。
-   底色淡青柠保证静止时也有轮廓；高光有两颗，相隔 180° 同步绕行。 */
-.node-body.node-connect-ok::before,
-.agent-flow-button::before,
-.generation-border {
+/* 统一青柠流光描边：生成浮层 / 连接目标 / Agent 入口共用（LimeRing）。
+   外层只做静态裁切（padding 1.5px + mask 挖空中间），内层是一块足够大的
+   conic-gradient，动画只旋转内层 transform——可交给合成器，长任务期间不冻结，
+   也不再每帧触发主线程样式重算/重绘。
+   内层边长 150cqmax：容器查询单位按描边层自身尺寸计算，任意长宽比下
+   内层对角线都大于容器的外接圆直径，旋转到任意角度仍能盖满整圈。
+   底色淡青柠保证静止时也有轮廓；高光两颗，相隔 180° 同步绕行。 */
+.lime-ring {
   position: absolute;
   inset: 0;
+  display: block;
   padding: 1.5px;
   border-radius: inherit;
-  background: conic-gradient(
-    from var(--lime-flow-ring-angle),
-    var(--brand-lime-flow-stops)
-  );
+  overflow: hidden;
+  container-type: size;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: lime-flow-ring 4s linear infinite;
   pointer-events: none;
 }
-.node-body.node-connect-ok::before,
-.agent-flow-button::before {
-  content: "";
+.lime-ring__spin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150cqmax;
+  height: 150cqmax;
+  /* 用独立 translate 居中：内层比容器大，inset+auto margin 会退化为左上对齐 */
+  translate: -50% -50%;
+  background: conic-gradient(var(--brand-lime-flow-stops));
+  animation: lime-flow-spin 4s linear infinite;
+  will-change: transform;
 }
-@keyframes lime-flow-ring {
+@keyframes lime-flow-spin {
   to {
-    --lime-flow-ring-angle: 360deg;
+    transform: rotate(360deg);
   }
 }
 
-/* Agent 入口的品牌流光描边：两道相隔 180° 的高光保持对称绕行。 */
+/* 连接目标：节点 body 内常驻一份描边（connection-tilt 命令式切换状态类，
+   不经过 React），只有可连时才显示；层级高于不可连蒙层（z-index 29）。 */
+.node-body > .lime-ring {
+  display: none;
+}
+.node-body.node-connect-ok > .lime-ring {
+  display: block;
+  z-index: 30;
+}
+
+/* Agent 入口：描边在内容之下，按钮自身边框透明 */
 .agent-flow-button {
   position: relative;
   isolation: isolate;
   border-color: transparent;
 }
-.agent-flow-button::before {
+.agent-flow-button > .lime-ring {
   z-index: 0;
 }
-.agent-flow-button > * {
+.agent-flow-button > :not(.lime-ring) {
   position: relative;
   z-index: 1;
 }
@@ -714,9 +770,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   z-index: 2;
 }
 @media (prefers-reduced-motion: reduce) {
-  .node-body.node-connect-ok::before,
-  .agent-flow-button::before,
-  .generation-border {
+  .lime-ring__spin {
     animation: none;
   }
 }
@@ -955,15 +1009,12 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    状态类由 controls/connection-tilt.ts 命令式写在与维护，只加在节点 body 上
    （不含标题栏）；整卡倾斜由 .node-tilt 的内联 transform 承担：
    - .node-connect-ok：可连目标——整卡倾斜 + body 叠流动描边
-     （描边本体规则在 .node-body.node-connect-ok::before 处定义）；
+     （描边本体为共享 .lime-ring，显隐与层级见上方统一规则）；
    - .node-connect-no：不可连目标——整卡保持平整，body 覆盖毛玻璃蒙层。 */
 .node-tilt {
   /* 不加 will-change: transform——它会常驻给每个节点开独立合成层，节点多时白吃显存；
      transform 过渡期间浏览器本就会自动提升合成层 */
   transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.node-body.node-connect-ok::before {
-  z-index: 30;
 }
 /* 不可连目标：蒙层覆盖标题以下整个 body。低强度模糊让内容保持"幽灵可见"（重 blur 会把
    空节点上少量内容糊到看不见，只剩一块黑洞），配合独立噪点层提供磨砂颗粒质感——

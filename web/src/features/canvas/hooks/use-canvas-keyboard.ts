@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import {
+  clearSelection,
   copySelection,
   deleteSelection,
   duplicateSelection,
@@ -163,16 +164,10 @@ export function useCanvasKeyboard() {
       }
 
       // ---- Escape: clear selection ----
-      if (e.key === "Escape") {
-        const s = useCanvasStore.getState();
-        // 必须写回 zustand store：画布是受控模式（nodes 由 store 提供），
-        // React Flow 的 setNodes() 只改它自己的内部 store、不触发 onNodesChange，
-        // 会导致 selectedNodeIds 不更新（工具栏不消失）且下次同步时选区“复活”。
-        s.setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
-        s.setEdges(
-          s.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true }
-        );
-      }
+      // 必须写回 zustand store：画布是受控模式（nodes 由 store 提供），
+      // React Flow 的 setNodes() 只改它自己的内部 store、不触发 onNodesChange，
+      // 会导致 selectedNodeIds 不更新（工具栏不消失）且下次同步时选区“复活”。
+      if (e.key === "Escape") clearSelection();
 
       // ---- Group (Ctrl+G) / Ungroup (Ctrl+Shift+G) ----
       // 注意：按下 Shift 时 e.key 返回大写 'G'，必须用 toLowerCase() 匹配

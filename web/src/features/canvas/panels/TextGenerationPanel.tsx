@@ -7,10 +7,9 @@
 
 "use client";
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { PlusOutlined } from "@/components/ui/AppIcon";
 import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -30,63 +29,52 @@ import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
+import { useGenSettings, writeGenSettings } from "../shared/gen-settings";
+import GenerationRefChrome from "../shared/GenerationRefChrome";
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
+import { modelsForCapability } from "../shared/model-catalog";
 import PresetMenuContent from "../shared/PresetMenuContent";
 import { expandPresetTokens, replacePresetToken, usePromptTemplateCatalog } from "../shared/prompt-presets";
-import { EMPTY_ORDER, mergeOrder, swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
+import { EMPTY_ORDER, mergeOrder, swapOrderItems, writeOrderPref } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
+import { useGenerationPanelState } from "./use-generation-panel-state";
 import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
 
 interface Props {
   nodeId: string;
+  /** 面板当前是否可见：隐藏时停止订阅、复位本地交互态，仅保留编辑器实例与内容 */
+  active: boolean;
 }
 
-const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props) {
+const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId, active }: Props) {
   const { t } = useTranslation();
   const providers = useModelStore((s) => s.providers);
   const { notification } = useAppFeedback();
 
-  const allModels = useMemo(() => providers
-    .flatMap((c) =>
-      c.models
-        .filter((m) => m.capabilities?.includes("text"))
-        .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name })),
-    )
-    .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
+  const allModels = useMemo(() => modelsForCapability(providers, "text"), [providers]);
 
   // ── 受控模式：genSettings 是唯一数据源 ──
   // useGenSettings 反应式读取，外部写入（画布 Agent update_node 等）即时可见；
   // 编辑经 writeGenSettings 立即写回（skipHistory，保存由 SaveManager 合并）。
-  const genSettings = useGenSettings(nodeId) as Partial<TextGenSettings> | undefined;
+  const genSettings = useGenSettings(nodeId, active) as Partial<TextGenSettings> | undefined;
   const prompt = genSettings?.prompt ?? "";
   const modelKey = resolveModelKey(genSettings?.modelKey, "text", allModels);
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
 
-  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
-  const [isRefDragging, setIsRefDragging] = useState(false);
-
   // 预设目录（与图片面板同机制）：按 target 取文本预设（反推 / 扩写），
   // 选中后以令牌 chip 形式插入提示词，提交前统一展开为模板全文
   const { data: promptTemplateCatalog } = usePromptTemplateCatalog("text");
-  const [presetOpen, setPresetOpen] = useState(false);
   const handleApplyPreset = useCallback((presetId: string) => {
     setPrompt(replacePresetToken(prompt, presetId));
   }, [prompt, setPrompt]);
 
-  // 悬空模型键纠偏（同 ImageGenerationPanel）：持久化的 modelKey 已不存在时，
-  // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
-  // 未持久化时不写：展示层由 resolveModelKey 回退，避免固化「记住上次使用的模型」。
-  useEffect(() => {
-    if (allModels.length === 0) return;
-    const persisted = genSettings?.modelKey;
-    if (!persisted || allModels.some((m) => m.value === persisted)) return;
-    writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "text", allModels) });
-  }, [allModels, genSettings?.modelKey, nodeId]);
+  // 悬空模型键纠偏统一在数据层完成（writeGenSettings 写入口 + 画布级归一化），
+  // 挂载面板不再写回节点数据；展示层仍由 resolveModelKey 回退。
 
   // 上游引用（图片 / 文本 / 音频 / 视频）：按内容订阅，位置变化（拖动提交、整理动画）不重渲染。
   const {
@@ -94,10 +82,17 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     texts: upstreamTexts,
     audios: upstreamAudio,
     videos: upstreamVideos,
-  } = useNodeUpstreamRefs(nodeId);
+  } = useNodeUpstreamRefs(nodeId, active);
 
   // Button disabled state derived from persistent node.data.task_status
-  const isGenerating = useNodeGenerating(nodeId);
+  const isGenerating = useNodeGenerating(nodeId, active);
+
+  // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
+  // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
+  // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
+  const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
+  const { submitting, setSubmitting, isRefDragging, setIsRefDragging, menuOpen, setMenuOpen } =
+    useGenerationPanelState(nodeId, active, invalidate);
 
   // 参考显示顺序：排序偏好（genSettings，唯一写者 = 拖拽排序事件）+ 连线实时列表，纯派生合并。
   // 参考区按类型分组（文本 → 音频 → 图片 → 视频），排序只在同类型内生效，跨类型拖放被禁止。
@@ -222,16 +217,6 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
   /** 参考区添加：上传图片 / 音频 / 视频 -> 新建对应参考节点并自动连到当前生成节点 */
   const handleRefUpload = useRefUpload(nodeId, { accept: "image/*,video/*,audio/*" });
 
-  /**
-   * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
-   * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
-   */
-  const [submitting, setSubmitting] = useState(false);
-  // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
-  // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
-  // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
-  const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
-
   const handleGenerate = async () => {
     if ((!prompt.trim() && upstreamTexts.length === 0) || !modelKey || isGenerating || submitting) return;
     const entry = allModels.find((m) => m.value === modelKey);
@@ -314,47 +299,18 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
     <>
       <WheelGuard asChild>
         <Card className="ui-select-none nodrag nopan w-[580px] gap-2 px-4 py-3">
-        <div
-          className="flex gap-2 flex-wrap"
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.dataTransfer.types.includes("application/x-ref-image") || e.dataTransfer.types.includes("application/x-ref-video") || e.dataTransfer.types.includes("application/x-ref-audio") || e.dataTransfer.types.includes("application/x-ref-text")) {
-              e.dataTransfer.dropEffect = "none"; // 排序仅限同类缩略图上，加号/空白一律禁止
-              return;
-            }
-            e.dataTransfer.dropEffect = "move";
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-            {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
-            {refGroups.map((group, i) => (
-              <Fragment key={group.key}>
-                {i > 0 && <Separator orientation="vertical" className="mx-1 h-14 self-center" />}
-                {group.content}
-              </Fragment>
-            ))}
-            {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-            <Tooltip><TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-14 shrink-0 rounded-md border-dashed p-0"
-                  onClick={handleRefUpload}>
-                  <PlusOutlined className="size-5" />
-                </Button>
-              </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
-          </div>
+        {/* 参考区与操作区随面板显隐：隐藏时整组卸载（Radix 浮层随之关闭、
+            参考卡片停止媒体订阅）；编辑器实例与内容常驻，重新可见时只挂这层 chrome */}
+        <GenerationRefChrome active={active} groups={refGroups} onUpload={handleRefUpload} />
         <MentionPrompt
+          nodeId={nodeId}
+          active={active}
           references={references}
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderText")}
         />
+        {active && (
         <div className="flex items-center gap-2">
           <ModelSelector
             models={allModels}
@@ -363,7 +319,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             placeholder={t("modelConfig.selectModel")}
           />
           <Separator orientation="vertical" className="h-7 self-center" />
-          <Popover open={presetOpen} onOpenChange={setPresetOpen}>
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
@@ -372,12 +328,12 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              {!presetOpen && <TooltipContent>{t("node.creationPreset")}</TooltipContent>}
+              {!menuOpen && <TooltipContent>{t("node.creationPreset")}</TooltipContent>}
             </Tooltip>
             <PopoverContent side="bottom" align="start" className="w-auto max-w-[min(90vw,48rem)] p-1">
               <PresetMenuContent
                 catalog={promptTemplateCatalog}
-                onSelect={(presetId) => { setPresetOpen(false); handleApplyPreset(presetId); }}
+                onSelect={(presetId) => { setMenuOpen(false); handleApplyPreset(presetId); }}
               />
             </PopoverContent>
           </Popover>
@@ -388,6 +344,7 @@ const TextGenerationPanel = memo(function TextGenerationPanel({ nodeId }: Props)
             onClick={isGenerating || submitting ? handleCancel : handleGenerate}
           />
         </div>
+        )}
         </Card>
       </WheelGuard>
     </>

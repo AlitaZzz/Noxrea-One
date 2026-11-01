@@ -29,8 +29,10 @@ import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import { isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
+import { modelsForCapability } from "@/features/canvas/shared/model-catalog";
 import { applyRatioToNode, ratioToNodeSize } from "@/features/canvas/shared/ratio-size";
 import { allowedRefModesFor, resolveRefMode } from "@/features/canvas/shared/ref-modes";
+import { applySelection } from "@/features/canvas/shared/selection";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { computeTidyLayout } from "@/features/canvas/shared/tidy-layout";
 import {
@@ -367,13 +369,7 @@ function applyAgentParams(
   const gs = (node.data as { genSettings?: { modelKey?: string } } | undefined)?.genSettings;
 
   const { providers, findModelParams } = useModelStore.getState();
-  const allModels = providers
-    .flatMap((c) =>
-      c.models
-        .filter((m) => m.capabilities?.includes(capability))
-        .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, name: m.name })),
-    )
-    .filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i);
+  const allModels = modelsForCapability(providers, capability);
   if (allModels.length === 0) return [{}, ["没有可用的生成模型，未设置参数"]];
 
   const key = resolveModelKey(gs?.modelKey, capability, allModels);
@@ -912,14 +908,12 @@ function execSelectNodes(args: ToolArgs): ExecOutcome {
   if (ids.length === 0) return { content: "未提供 nodeIds。", mutated: false, failed: true };
 
   const idSet = new Set(ids);
-  const nodes = useCanvasStore.getState().nodes;
-  const found = ids.filter((id) => nodes.some((n) => n.id === id));
+  const store = useCanvasStore.getState();
+  const found = ids.filter((id) => store.nodes.some((n) => n.id === id));
   if (found.length === 0) return { content: `所有节点都不存在：${ids.join(", ")}`, mutated: false, failed: true };
 
-  useCanvasStore.getState().setNodes(
-    nodes.map((n) => ({ ...n, selected: idSet.has(n.id) })),
-  );
-  markDirtyImmediate();
+  // 选中写入统一走 applySelection：只克隆选中态变化的节点，选区未变时不写回。
+  if (applySelection(store.nodes, (n) => idSet.has(n.id), store.setNodes)) markDirtyImmediate();
 
   if (args.focus === true) {
     getCanvasAgentRuntime()?.focusNodes(found);

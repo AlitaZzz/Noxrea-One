@@ -25,10 +25,10 @@ import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
 import { useGridSplit } from "@/features/canvas/editing/GridSplitter";
 import { createImageNode, createTextNode } from "@/features/canvas/node-defaults";
-import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import { imagePlacementStyle, layoutMultiImages } from "@/features/canvas/shared/image-visibility";
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import MediaPreviewOverlay, { type PreviewItem } from "@/features/canvas/shared/MediaPreviewOverlay";
 import { localizeText, presetTokenOf, usePromptPresets } from "@/features/canvas/shared/prompt-presets";
 import { markDirtyImmediate,useCanvasStore } from "@/features/canvas/stores/canvas-store";
@@ -50,7 +50,7 @@ import UploadFailedOverlay from "./UploadFailedOverlay";
 
 const PanoramaPanel = dynamic(() => import("@/features/canvas/editing/PanoramaPanel"), { ssr: false });
 
-function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
+function ImageNode({ id, data }: NodeProps<ImageNodeType>) {
   const { t, i18n } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
@@ -59,12 +59,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
   const uploadHashBytes = uploadProgress?.phase === "hashing" && uploadProgress.loadedBytes > 0
     ? formatBytes(uploadProgress.loadedBytes)
     : null;
-  // 多选时隐藏全景工具栏：订阅画布共享投影的选中集合（布尔原语，仅跨阈值重渲染）。
-  // 选中集合按 (nodes, edges) 引用缓存，画布内所有消费者共享同一次线性派生，
-  // 避免每个图片节点各自扫描全表的 O(图片数 × N)。
-  const multiSelect = useCanvasStore(
-    (s) => getCanvasDerived(s.nodes, s.edges).selectedNodeIds.size > 1
-  );
   // cropOpen / annotateOpen 完全由 store 的 croppingNodeId / annotatingNodeId 驱动，
   // 直接派生即可，避免「setState-in-effect」导致的级联渲染。
   const setCroppingNodeId = useCanvasStore((s) => s.setCroppingNodeId);
@@ -329,10 +323,10 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
           className={`
             node-body w-full h-full flex items-center justify-center rounded-lg relative group/body
             ${isMulti ? "overflow-visible" : "overflow-hidden"}
-            ${selected ? "node-selected" : ""}
             ${hasImage ? "bg-transparent" : "node-surface"}
           `}
         >
+          <LimeRing />
           {agentGhost && <AgentGhostOverlay />}
           {isMulti && !expanded && (
             <div className="absolute top-2 right-2 z-20 nodrag">
@@ -524,7 +518,6 @@ function ImageNode({ id, data, selected }: NodeProps<ImageNodeType>) {
             <PanoramaPanel
               src={mediaUrl}
               sourceId={id}
-              selected={selected && !multiSelect}
               onClose={() => setPanoramaOpen(false)}
             />
           </div>

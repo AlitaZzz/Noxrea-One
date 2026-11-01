@@ -12,12 +12,14 @@ import { useTranslation } from "react-i18next";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 
+import { useGenerationPanelActive } from "./generation-panel-active";
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";
 import { type ReferenceItemAttrs, refLabelKey, refThumbnailUrl } from "./reference";
 
 export default function MentionChip({ node }: NodeViewProps) {
   const { i18n, t } = useTranslation();
   const { data: presets } = usePromptPresets();
+  const panelActive = useGenerationPanelActive();
   const item = node.attrs as ReferenceItemAttrs;
 
   if (item.kind === "preset") {
@@ -42,6 +44,10 @@ export default function MentionChip({ node }: NodeViewProps) {
         <span className="mention-wave">
           <WaveIcon style={{ width: 20, height: 20 }} />
         </span>
+      ) : !panelActive ? (
+        // 面板隐藏：编辑器实例常驻，chip 的缩略图必须停止 URL 解析与 signed
+        // 地址的主动刷新，退化为同尺寸占位；重新可见时按缓存地址即时恢复
+        <span className="mention-thumb" aria-hidden="true" />
       ) : item.kind === "video" ? (
         <ResolvedVideo
           value={refThumbnailUrl(item.src, item.kind)}

@@ -1,12 +1,28 @@
 /**
- * Agent 工具执行器纯函数回归测试。
+ * Agent 工具执行器回归测试。
  * 锁定 fillNodeData 的分类型写入语义（prompt 预填 / 文本 HTML 化 / 音频节点
- * 无生成面板不写 genSettings——T3 删除半成品后的回归防线）与比例串解析。
+ * 无生成面板不写 genSettings——T3 删除半成品后的回归防线）与比例串解析；
+ * select_nodes 锁定选中写入走 applySelection 的契约（只克隆选中态变化的
+ * 节点，选区未变时不写回 store）。
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fillNodeData, parseRatioValue } from "@/features/canvas/agent/tools/executors";
+// 执行器写回会触发保存调度；测试只关心 store 写入，隔离保存计时器
+vi.mock("@/features/project/save-manager", () => ({
+  saveManager: {
+    markDirty: vi.fn(),
+    markDirtyImmediate: vi.fn(),
+    markDirtyUndo: vi.fn(),
+    flushAndWait: vi.fn(),
+    resetForProjectSwitch: vi.fn(),
+  },
+}));
+
+import { executeCanvasToolCall, fillNodeData, parseRatioValue } from "@/features/canvas/agent/tools/executors";
 import { createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AnyNode } from "@/features/canvas/types";
+import { saveManager } from "@/features/project/save-manager";
 import { NODE_TYPE } from "@/lib/constants";
 
 const at = { x: 0, y: 0 };
@@ -77,5 +93,66 @@ describe("parseRatioValue", () => {
     expect(parseRatioValue("adaptive")).toBeNull();
     expect(parseRatioValue("auto")).toBeNull();
     expect(parseRatioValue("a:b")).toBeNull();
+  });
+});
+
+describe("select_nodes", () => {
+  function textNode(id: string, selected = false): AnyNode {
+    return {
+      id,
+      type: "text-node",
+      position: at,
+      data: {},
+      style: { width: 120, height: 80 },
+      selected,
+    } as unknown as AnyNode;
+  }
+
+  function select(nodeIds: string[]) {
+    return executeCanvasToolCall({ id: "call-1", name: "select_nodes", args: { nodeIds } });
+  }
+
+  beforeEach(() => {
+    useCanvasStore.setState({ nodes: [], edges: [] });
+    vi.mocked(saveManager.markDirtyImmediate).mockClear();
+  });
+
+  it("只克隆选中态变化的节点，未变化节点保持引用", () => {
+    const nodes = [textNode("a"), textNode("b"), textNode("c", true)];
+    useCanvasStore.setState({ nodes });
+
+    const result = select(["a"]);
+
+    const next = useCanvasStore.getState().nodes;
+    expect(result.content).toBe("已选中 1 个节点。");
+    expect(result.failed).toBeFalsy();
+    expect(next.map((n) => n.selected)).toEqual([true, false, false]);
+    expect(next[0]).not.toBe(nodes[0]); // 选中 → 克隆
+    expect(next[1]).toBe(nodes[1]); // 保持未选中 → 引用不变
+    expect(next[2]).not.toBe(nodes[2]); // 被取消选中 → 克隆
+    expect(saveManager.markDirtyImmediate).toHaveBeenCalledTimes(1);
+  });
+
+  it("选区未变时不写回 store，也不标记改脏", () => {
+    const nodes = [textNode("a", true), textNode("b", true)];
+    useCanvasStore.setState({ nodes });
+
+    const result = select(["a", "b"]);
+
+    expect(result.failed).toBeFalsy();
+    expect(useCanvasStore.getState().nodes).toBe(nodes);
+    expect(saveManager.markDirtyImmediate).not.toHaveBeenCalled();
+  });
+
+  it("所有节点都不存在时失败且不写回", () => {
+    const nodes = [textNode("a")];
+    useCanvasStore.setState({ nodes });
+
+    const result = select(["x"]);
+
+    expect(result.failed).toBe(true);
+    expect(result.content).toBe("所有节点都不存在：x");
+    expect(useCanvasStore.getState().nodes).toBe(nodes);
+    expect(saveManager.markDirtyImmediate).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,7 @@ import type { RefObject } from "react";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { edgeTouchesSelection } from "@/features/canvas/shared/edge-selection";
 import type { Point, Rect } from "@/features/canvas/shared/geometry";
+import { applySelection } from "@/features/canvas/shared/selection";
 import type { HistoryPushOptions, InteractionAction } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 
@@ -69,21 +70,6 @@ export interface MarqueeSessionDeps {
   setNodesSelectionActive: (active: boolean) => void;
   /** 是否允许开始框选（元素可选中、连线未进行中）。 */
   canStartMarquee: () => boolean;
-}
-
-/** 只克隆选中态发生变化的条目；返回是否发生变化。 */
-function mapSelected<T extends { selected?: boolean }>(
-  items: readonly T[],
-  isSelected: (item: T) => boolean,
-): { next: T[]; changed: boolean } {
-  let changed = false;
-  const next = items.map((item) => {
-    const selected = isSelected(item);
-    if ((item.selected === true) === selected) return item;
-    changed = true;
-    return { ...item, selected } as T;
-  });
-  return { next, changed };
 }
 
 type Phase = "idle" | "candidate" | "active";
@@ -436,16 +422,15 @@ export class MarqueeSession {
     isEdgeSelected: (edge: Edge) => boolean,
     nodesSelectionActive: boolean,
   ): boolean {
-    const nodes = mapSelected(this.deps.getNodes(), isNodeSelected);
-    if (nodes.changed) this.deps.setNodes(nodes.next);
-
-    const edges = mapSelected(this.deps.getEdges(), isEdgeSelected);
-    if (edges.changed) this.deps.setEdges(edges.next, { skipHistory: true });
+    const nodesChanged = applySelection(this.deps.getNodes(), isNodeSelected, this.deps.setNodes);
+    applySelection(this.deps.getEdges(), isEdgeSelected, (next) =>
+      this.deps.setEdges(next, { skipHistory: true }),
+    );
 
     if (this.deps.getNodesSelectionActive() !== nodesSelectionActive) {
       this.deps.setNodesSelectionActive(nodesSelectionActive);
     }
-    return nodes.changed;
+    return nodesChanged;
   }
 
   // ---- 帧循环与预览 ----

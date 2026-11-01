@@ -46,19 +46,36 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
+import { mediaDataHasContent } from "@/features/canvas/shared/gen-settings-node";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import PresetMenuContent from "@/features/canvas/shared/PresetMenuContent";
 import { usePromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS } from "@/lib/constants";
+import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS, NODE_TYPE } from "@/lib/constants";
 
-const NODE_ACTIONS = {
-  IMAGE: "image-node" as const,
-  VIDEO: "video-node" as const,
-  AUDIO: "audio-node" as const,
-  TEXT: "text-node" as const,
-  GROUP: "group-node" as const,
-};
+/**
+ * 节点是否有可供工具条操作的内容。
+ *
+ * 媒体节点的动作全部以 src 为输入，文本节点的动作以 plainText 为输入；没有内容时
+ * 工具条整体不渲染——逐个禁用动作只会留下一排不可用的按钮。分组 / 导演节点没有
+ * 内容概念，其动作不依赖内容，始终显示（与即梦按节点类型挂载 nodeToolbar 的
+ * 选择一致：媒体与文本节点才有内容型工具条）。
+ */
+function nodeHasToolbarContent(
+  nodeType: string | undefined,
+  data: { src?: string; plainText?: string },
+): boolean {
+  switch (nodeType) {
+    case NODE_TYPE.IMAGE:
+    case NODE_TYPE.VIDEO:
+    case NODE_TYPE.AUDIO:
+      return mediaDataHasContent(data);
+    case NODE_TYPE.TEXT:
+      return Boolean(data.plainText?.trim());
+    default:
+      return true;
+  }
+}
 
 interface NodeToolbarProps {
   nodeId: string;
@@ -284,6 +301,8 @@ function NodeToolbar({
       };
     }),
   );
+  // 工具条内容门槛：媒体看 src，文本看去空白后的 plainText；空内容工具条不渲染
+  const hasContent = nodeHasToolbarContent(nodeType, { src: assetSrc, plainText: textContent });
   // 媒体编辑接口只接受存储 key；外部 URL 节点保留下载/预览，但禁用编辑入口
   const editableKey = storageKeyOf(assetSrc);
   // 变速调节模式：点变速按钮进入，滑杆调出目标倍率，✓ 交由服务端生成变速产物
@@ -329,10 +348,13 @@ function NodeToolbar({
     [nodeId, onShowInspector]
   );
 
+  // 空内容节点不显示工具条：所有内容动作都依赖内容，保留只会是一排禁用按钮
+  if (!hasContent) return null;
+
   return (
     <Card className="z-20 flex h-[50px] flex-row items-center gap-1 whitespace-nowrap rounded-xl px-2.5 py-1.5">
       {/* 音频变速调节态：信息按钮不参与调速，隐藏以保持工具栏聚焦 */}
-      {!(nodeType === NODE_ACTIONS.AUDIO && speedMode) && (
+      {!(nodeType === NODE_TYPE.AUDIO && speedMode) && (
         <Tooltip><TooltipTrigger asChild>
             <Button size="icon" variant="ghost"
               onClick={handleInfo}
@@ -341,7 +363,7 @@ function NodeToolbar({
       )}
 
       {/* Image node actions */}
-      {nodeType === NODE_ACTIONS.IMAGE && (
+      {nodeType === NODE_TYPE.IMAGE && (
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           {/* 全景 */}
@@ -456,7 +478,7 @@ function NodeToolbar({
       )}
 
       {/* Video node actions */}
-      {nodeType === NODE_ACTIONS.VIDEO && (
+      {nodeType === NODE_TYPE.VIDEO && (
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <DropdownMenu open={captureOpen} onOpenChange={(open) => {
@@ -520,7 +542,7 @@ function NodeToolbar({
 
       {/* Audio node actions — 二态：变速调节 → 常规（片段截取/变速/下载）；
           音频片段截取中本工具栏整体隐藏（✓/✗ 在节点下方的 AudioClipStripPanel 内） */}
-      {nodeType === NODE_ACTIONS.AUDIO && (
+      {nodeType === NODE_TYPE.AUDIO && (
         <>
           {speedMode ? (
             <AudioSpeedPanel
@@ -560,7 +582,7 @@ function NodeToolbar({
       )}
 
       {/* Text node actions — 复制 / 下载为 Markdown */}
-      {nodeType === NODE_ACTIONS.TEXT && (
+      {nodeType === NODE_TYPE.TEXT && (
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Tooltip><TooltipTrigger asChild>
@@ -575,7 +597,7 @@ function NodeToolbar({
       )}
 
       {/* Group node actions */}
-      {nodeType === NODE_ACTIONS.GROUP && (
+      {nodeType === NODE_TYPE.GROUP && (
         <>
           <Separator orientation="vertical" className="mx-1 h-5 self-center" />
           <Popover open={groupColorOpen} onOpenChange={(open) => {

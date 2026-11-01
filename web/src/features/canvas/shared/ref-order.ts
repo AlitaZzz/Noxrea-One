@@ -18,8 +18,9 @@
  */
 "use client";
 
+import { genKindOfNode, genSettingsOf } from "@/features/canvas/shared/gen-settings-node";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { AnyNode, MediaGenFields } from "@/features/canvas/types";
+import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
 
 /** 空序哨兵：模块级常量保证 selector 返回引用稳定，避免误重渲染 */
@@ -39,13 +40,6 @@ const REF_FIELD_BY_TYPE: Record<string, OrderField> = {
   [NODE_TYPE.IMAGE]: "refOrder",
   [NODE_TYPE.AUDIO]: "refAudioOrder",
   [NODE_TYPE.VIDEO]: "refVideoOrder",
-};
-
-/** 生成面板节点类型 → genSettings.kind（genSettings 不存在时创建初始结构用） */
-const KIND_BY_TYPE: Record<string, string> = {
-  [NODE_TYPE.IMAGE]: "image",
-  [NODE_TYPE.VIDEO]: "video",
-  [NODE_TYPE.TEXT]: "text",
 };
 
 /**
@@ -94,6 +88,8 @@ export function swapOrderItems(
 /**
  * 写入参考排序偏好（事件驱动持久化：拖拽排序等离散操作时调用）。
  * 直接写节点 genSettings；排序不污染 undo 栈（skipHistory），保存由 saveManager 合并落盘。
+ * 本模块位于归一化依赖链下游（ref-modes → ref-order），不能反向依赖
+ * writeGenSettings；排序字段不参与归一化。
  */
 export function writeOrderPref(
   nodeId: string,
@@ -101,35 +97,18 @@ export function writeOrderPref(
 ): void {
   const store = useCanvasStore.getState();
   const node = store.nodes.find((n) => n.id === nodeId);
-  const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Record<string, unknown>;
+  const cur = (genSettingsOf(node) ?? {}) as Record<string, unknown>;
   store.updateNodeData(nodeId, { genSettings: { ...cur, ...patch } }, undefined, { skipHistory: true });
   markDirtyImmediate();
-}
-
-/**
- * 受控写入口：合并 patch 后整体写回 genSettings（skipHistory，连续编辑不压栈）。
- * 生成面板的提示词/模型/参数编辑统一走此函数——store 是唯一数据源，
- * 外部通道（如画布 Agent update_node）的写入经由 useGenSettings 反应式透出。
- */
-export function writeGenSettings(nodeId: string, patch: Record<string, unknown>): void {
-  const store = useCanvasStore.getState();
-  const node = store.nodes.find((n) => n.id === nodeId);
-  const cur = ((node?.data as MediaGenFields | undefined)?.genSettings ?? {}) as Record<string, unknown>;
-  store.updateNodeData(nodeId, { genSettings: { ...cur, ...patch } }, undefined, { skipHistory: true });
-  markDirtyImmediate();
-}
-
-/** 响应式读取节点 genSettings（引用稳定：仅在 genSettings 整体被替换时变化） */
-export function useGenSettings(nodeId: string) {
-  return useCanvasStore((s) => {
-    const node = s.nodes.find((n) => n.id === nodeId);
-    return (node?.data as MediaGenFields | undefined)?.genSettings;
-  });
 }
 
 /** 从当前 nodes/edges 派生某节点的三类实时参考 src 列表（与面板派生逻辑一致，含 src 去重）。
  *  供参考方式（refMode）可用范围推导等下游共享（见 shared/ref-modes） */
-export function collectLiveRefs(nodes: AnyNode[], edges: { source: string; target: string }[], targetId: string): Record<OrderField, string[]> {
+export function collectLiveRefs(
+  nodes: readonly AnyNode[],
+  edges: ReadonlyArray<{ source: string; target: string }>,
+  targetId: string,
+): Record<OrderField, string[]> {
   const live: Record<OrderField, string[]> = { refOrder: [], refAudioOrder: [], refVideoOrder: [] };
   const upstreamIds = new Set(edges.filter((e) => e.target === targetId).map((e) => e.source));
   for (const n of nodes) {
@@ -171,10 +150,10 @@ export function bumpRefOrderToTail(newEdges: ReadonlyArray<{ source: string; tar
   let dirty = false;
   for (const [targetId, added] of byTarget) {
     const targetNode = store.nodes.find((n) => n.id === targetId);
-    const kind = targetNode ? KIND_BY_TYPE[targetNode.type ?? ""] : undefined;
+    const kind = targetNode ? genKindOfNode(targetNode) : null;
     if (!targetNode || !kind) continue; // 非生成面板节点（agent/group 等）无参考概念
 
-    const cur = (((targetNode.data as MediaGenFields | undefined)?.genSettings ?? { kind }) as Record<string, unknown>);
+    const cur = (genSettingsOf(targetNode) ?? { kind }) as Record<string, unknown>;
     const live = collectLiveRefs(store.nodes, store.edges, targetId);
     const patch: Partial<Record<OrderField, string[]>> = {};
     for (const field of ORDER_FIELDS) {

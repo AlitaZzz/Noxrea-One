@@ -37,10 +37,10 @@ export function deriveAllowedRefModes(live: {
 /** 从画布 nodes/edges 推导某视频节点当前可用的参考方式 */
 export function allowedRefModesFor(
   nodeId: string,
-  nodes: AnyNode[],
+  nodes: readonly AnyNode[],
   edges: ReadonlyArray<{ source: string; target: string }>,
 ): string[] {
-  return deriveAllowedRefModes(collectLiveRefs(nodes, [...edges], nodeId));
+  return deriveAllowedRefModes(collectLiveRefs(nodes, edges, nodeId));
 }
 
 export interface ResolvedRefMode {

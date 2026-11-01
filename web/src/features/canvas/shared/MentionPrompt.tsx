@@ -7,6 +7,10 @@
  * 编辑器扩展配置在渲染期创建，回调内不得访问 ref 或 hook 返回值。
  * 因此运行时状态收敛在 bridge（模块级 WeakMap，以编辑器 DOM 为键）中，
  * 由 React state 同步渲染快照。
+ *
+ * 生成面板宿主常驻后本编辑器不再随面板卸载：nodeId 变化时以新目标的文本
+ * 重建 EditorState（插件状态整体重新初始化，撤销栈不会跨目标串联），
+ * 面板隐藏时只关闭 @ 候选并失焦，内容与撤销栈保留给同一目标的再次显示。
  */
 "use client";
 
@@ -14,13 +18,15 @@ import type { JSONContent } from "@tiptap/core";
 import { Mention } from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { EditorState } from "@tiptap/pm/state";
 import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { SuggestionProps } from "@tiptap/suggestion";
 import { exitSuggestion } from "@tiptap/suggestion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { GenerationPanelActiveProvider } from "./generation-panel-active";
 import MentionChip from "./MentionChip";
 import MentionDropdown from "./MentionDropdown";
 import { PRESET_TOKEN_PATTERN, presetTokenOf } from "./prompt-presets";
@@ -32,6 +38,10 @@ function mentionPlainText(attrs: ReferenceItemAttrs): string {
 }
 
 interface Props {
+  /** 当前目标节点：变化时重建编辑器状态（撤销栈不跨目标） */
+  nodeId: string;
+  /** 面板是否可见：隐藏时关闭 @ 候选并失焦，编辑器实例与内容保留 */
+  active: boolean;
   references: ReferenceItem[];
   value: string;
   onChange: (text: string) => void;
@@ -190,7 +200,7 @@ function dismissMention(bridge: SuggestionBridge, setMention: (state: MentionSta
   closeMention(bridge, setMention);
 }
 
-const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
+const MentionPrompt = ({ nodeId, active, references, value, onChange, placeholder }: Props) => {
   const { t } = useTranslation();
 
   const [mention, setMention] = useState<MentionState | null>(null);
@@ -323,11 +333,86 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
     bridges.set(editor.view.dom, bridge);
   }, [editor, references, onChange, t]);
 
+  // 目标切换：以新目标的文本重建编辑器状态。EditorState.create 会重新初始化
+  // 全部插件状态（含 history）——旧目标的撤销栈不会作用到新目标的内容上；
+  // updateState 不经过 Tiptap 的 dispatchTransaction，不触发 onUpdate，
+  // 因此不会把新内容反写回节点。放在 bridge 同步之后、value 同步之前：
+  // 重建后的文本已等于新 value，后续同步 effect 会自然跳过。
+  //
+  // 重建不能在 layout effect 中同步执行：文档里的 mention chip 是 React NodeView，
+  // 视图更新会同步创建 ReactRenderer；Tiptap 在编辑器内容已初始化后调用 flushSync
+  // 挂载它，flushSync 不允许发生在 React 提交阶段（浏览器报
+  // "flushSync was called from inside a lifecycle method"）。
+  // 因此由 layout effect 调度微任务：微任务在本次提交结束、浏览器绘制前执行，
+  // 既不处于 React 生命周期，又能保证首帧就是新目标内容，不闪旧提示词。
+  // 上一次渲染看到的目标：只用于发现「目标切换」并调度重建。
+  // 与下方 contentTargetRef 不能合并——后者记录文档实际承载的目标，由重建微任务
+  // 完成后才推进，两者在切换提交到微任务执行之间必然不同。
+  const prevNodeIdRef = useRef(nodeId);
+  const rebuildSourceRef = useRef({ nodeId, value, references });
+  const rebuildScheduledRef = useRef(false);
+  // 编辑器文档当前承载的目标。重建完成前仍指向上一个目标：
+  // 目标切换的提交阶段文档还是旧目标的，此时内容同步 effect 若用新目标的
+  // references / onChange 去改文档，会把旧内容写进新目标（例如把旧 chip 当作
+  // 「已移除的引用」删除，并把空文本回写成新目标的提示词）。
+  const contentTargetRef = useRef(nodeId);
+
+  // 关闭 @ 候选：bridge 交互态 + body 级 Portal 下拉。目标切换与面板隐藏共用。
+  const closeMentionUi = useCallback(() => {
+    if (!editor) return;
+    const bridge = bridges.get(editor.view.dom);
+    if (bridge) {
+      bridge.mention = null;
+      bridge.dismissed = false;
+    }
+    setMention(null);
+    exitSuggestion(editor.view);
+  }, [editor]);
+
+  useLayoutEffect(() => {
+    rebuildSourceRef.current = { nodeId, value, references };
+    if (!editor || prevNodeIdRef.current === nodeId) return;
+    prevNodeIdRef.current = nodeId;
+
+    closeMentionUi();
+
+    if (rebuildScheduledRef.current) return;
+    rebuildScheduledRef.current = true;
+    queueMicrotask(() => {
+      rebuildScheduledRef.current = false;
+      if (!editor || editor.isDestroyed) return;
+      // 同一轮提交内连续切换目标时，以最后一次渲染的 nodeId / value / references 为准
+      const source = rebuildSourceRef.current;
+      editor.view.updateState(
+        EditorState.create({
+          schema: editor.state.schema,
+          doc: editor.state.schema.nodeFromJSON(textToDoc(source.value, source.references)),
+          plugins: editor.state.plugins,
+        }),
+      );
+      contentTargetRef.current = source.nodeId;
+      editor.commands.blur();
+    });
+  }, [editor, nodeId, value, references, closeMentionUi]);
+
+  // 面板隐藏：关闭 @ 候选并失焦，内容与撤销栈留给同一目标再次显示。
+  useEffect(() => {
+    if (!editor || active) return;
+    // 隐藏是外部事件：下拉与 bridge 交互态必须在同一时机同步清空，否则再次显示会复活旧候选。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 外部事件驱动的同步收尾
+    closeMentionUi();
+    editor.commands.blur();
+  }, [active, editor, closeMentionUi]);
+
   // 外部变更 value（切换节点 / AI 回填）时同步进编辑器；序列化结果一致则跳过，避免循环。
   // 延后到微任务，避免 Tiptap 的 NodeView 更新在 React effect 生命周期内触发 flushSync。
   // 注：textToDoc 不依赖目录数据，presets 不再是解析输入，无需参与本同步。
+  // 面板隐藏时 value 是宿主给的占位值（真实 genSettings 已停止订阅），不得写入编辑器；
+  // 重新可见时本 effect 以实时 value 再同步一次。
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !active) return;
+    // 文档仍属于上一个目标：本次提交由重建微任务接管，不能把新目标的 value 写进旧文档
+    if (contentTargetRef.current !== nodeId) return;
     if (editor.getText({ blockSeparator: "\n" }) === value) return;
 
     let cancelled = false;
@@ -340,12 +425,17 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [value, references, editor]);
+  }, [active, nodeId, value, references, editor]);
 
   // 引用变化：同步 chip 序号（图片1 ↔ 图片2），并移除已从参考区删除的引用
-  // preset chip 无对应引用，跳过清理（其持久化由 genSettings.prompt 直接承载）
+  // preset chip 无对应引用，跳过清理（其持久化由 genSettings.prompt 直接承载）。
+  // 面板隐藏时 references 是空占位（上游投影已停止），清理会误删全部 chip；
+  // 重新可见时以实时 references 再同步。
+  // 文档仍属于上一个目标时同样跳过：重建微任务会按新目标的 references 重建文档，
+  // 这里若按新 references 清理旧文档，会删掉旧 chip 并把结果回写进新目标。
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !active) return;
+    if (contentTargetRef.current !== nodeId) return;
     const { state } = editor;
     const tr = state.tr;
 
@@ -387,14 +477,16 @@ const MentionPrompt = ({ references, value, onChange, placeholder }: Props) => {
     tr.setMeta("addToHistory", false);
     editor.view.dispatch(tr);
     bridges.get(editor.view.dom)?.onChange(editor.getText({ blockSeparator: "\n" }));
-  }, [references, editor]);
+  }, [active, nodeId, references, editor]);
 
   return (
     <div className="relative">
       <div className="scrollbar-ui w-full min-h-[100px] max-h-[240px] overflow-y-auto rounded-md border-0 bg-transparent p-0">
-        <EditorContent editor={editor} />
+        <GenerationPanelActiveProvider value={active}>
+          <EditorContent editor={editor} />
+        </GenerationPanelActiveProvider>
       </div>
-      {mention && mention.items.length > 0 && (
+      {active && mention && mention.items.length > 0 && (
         <MentionDropdown
           items={mention.items}
           position={mention.position}

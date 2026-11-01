@@ -50,6 +50,7 @@ import { useCanvasVideo } from "@/features/canvas/hooks/use-canvas-video";
 import { createEdge } from "@/features/canvas/node-defaults";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import { IDLE_PLAYBACK, type PlaybackMirror } from "@/features/canvas/shared/media-playback";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { notifyActionFailed } from "@/features/canvas/shared/notify";
@@ -190,7 +191,7 @@ const VideoControls = memo(function VideoControls({
   );
 });
 
-function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
+function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
@@ -930,13 +931,13 @@ function VideoNode({ id, data, selected }: NodeProps<VideoNodeType>) {
       <div
         className={`
           node-body flex-1 flex items-center justify-center overflow-hidden rounded-lg relative group/body
-          ${selected ? "node-selected" : ""}
           ${hasVideo ? "bg-transparent" : "node-surface"}
         `}
         onContextMenu={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        <LimeRing />
         {agentGhost && <AgentGhostOverlay />}
         {data.source === "upload" && hasVideo && !data.upload?.uploading && !generating && (
           <div className="absolute top-2 right-2 z-20 nodrag">

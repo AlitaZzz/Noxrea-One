@@ -17,7 +17,7 @@ import type { AnyNode } from "@/features/canvas/types";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
-interface ResizeHandleProps {
+export interface ResizeHandleProps {
   nodeId: string;
   corner: Corner;
   minWidth: number;

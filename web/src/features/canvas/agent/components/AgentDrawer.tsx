@@ -25,6 +25,7 @@ import ConfirmCard from "@/features/canvas/agent/components/ConfirmCard";
 import { useCanvasAgentStream } from "@/features/canvas/agent/hooks/use-canvas-agent-stream";
 import { createSectionGrouper } from "@/features/canvas/agent/utils/group-sections";
 import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-edit-actions";
+import { modelsForCapability } from "@/features/canvas/shared/model-catalog";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { ModelSelector } from "@/features/model/components/ModelSelector";
@@ -44,13 +45,9 @@ function CanvasAgentDrawer({ open, onClose, projectId }: Props) {
   const providers = useModelStore((s) => s.providers);
   const initialize = useModelStore((s) => s.initialize);
   const initializeFailed = useModelStore((s) => s.initializeFailed);
-  // 稳定键 providerId/modelName，与生成面板的 ModelOption 约定一致，
+  // 与生成面板共用模型目录口径（稳定键 providerId/modelName，按稳定键去重），
   // 避免同名模型在不同供应商间选错渠道
-  const modelOptions = providers.flatMap((c) =>
-    c.models
-      .filter((m) => m.capabilities?.includes("text"))
-      .map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, name: m.name, providerName: c.name }))
-  );
+  const modelOptions = modelsForCapability(providers, "text");
 
   const agentModel = useCanvasStore((s) => s.agentModel);
   const setAgentModel = useCanvasStore((s) => s.setAgentModel);

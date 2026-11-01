@@ -6,10 +6,10 @@
 
 "use client";
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { DownOutlined, PlusOutlined } from "@/components/ui/AppIcon";
+import { DownOutlined } from "@/components/ui/AppIcon";
 import { ParamsIcon } from "@/components/ui/AppIcon";
 import { TextToVideoIcon } from "@/components/ui/AppIcon";
 import { VideoCameraIcon } from "@/components/ui/AppIcon";
@@ -37,30 +37,36 @@ import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";
+import { useGenSettings, writeGenSettings } from "../shared/gen-settings";
+import GenerationRefChrome from "../shared/GenerationRefChrome";
 import ImageRefCard from "../shared/ImageRefCard";
 import { recordLastModel, resolveModelKey } from "../shared/last-model";
 import MentionPrompt from "../shared/MentionPrompt";
+import { modelsForCapability } from "../shared/model-catalog";
 import { applyRatioToNode } from "../shared/ratio-size";
 import { deriveAllowedRefModes, resolveRefMode } from "../shared/ref-modes";
-import { swapOrderItems, useGenSettings, writeGenSettings, writeOrderPref } from "../shared/ref-order";
+import { swapOrderItems, writeOrderPref } from "../shared/ref-order";
 import TextRefChip from "../shared/TextRefChip";
 import VideoRefCard from "../shared/VideoRefCard";
+import { useGenerationPanelState } from "./use-generation-panel-state";
 import { popPreGenSnapshot, useGenerationSubmit } from "./use-generation-submit";
 
-interface Props { nodeId: string; }
+interface Props {
+  nodeId: string;
+  /** 面板当前是否可见：隐藏时停止订阅、复位本地交互态，仅保留编辑器实例与内容 */
+  active: boolean;
+}
 
-const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Props) {
+const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId, active }: Props) {
   const { t } = useTranslation();
   const providers = useModelStore((s) => s.providers);
-  const allModels = useMemo(() => providers.flatMap((c) =>
-    c.models.filter((m) => m.capabilities?.includes("video")).map((m) => ({ value: `${c.id}/${m.name}`, providerId: c.id, modelId: m.id, name: m.name, providerName: c.name }))
-  ).filter((m, i, arr) => arr.findIndex((x) => x.value === m.value) === i), [providers]);
+  const allModels = useMemo(() => modelsForCapability(providers, "video"), [providers]);
 
   // ── 受控模式：genSettings 是唯一数据源 ──
   // useGenSettings 反应式读取，外部写入（画布 Agent update_node 等）即时可见；
   // 编辑经 writeGenSettings 立即写回（skipHistory：连续编辑不压 undo 栈，保存由 SaveManager 合并）。
   // 未持久化的字段回退到当前模型的默认值。
-  const genSettings = useGenSettings(nodeId) as Partial<VideoGenSettings> | undefined;
+  const genSettings = useGenSettings(nodeId, active) as Partial<VideoGenSettings> | undefined;
   const modelKey = resolveModelKey(genSettings?.modelKey, "video", allModels);
 
   // 查找当前模型的参数配置（params + defaults + constraints）
@@ -76,7 +82,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const prompt = genSettings?.prompt ?? "";
   // 未就绪不落值：params 缓存未到达时 defaults 为空、fields 为空（参数区本就不渲染），
   // 字段保持 undefined，等缓存到达后由 defaults 物化——不硬编码兜底值，杜绝
-  // 「错误兜底值被渲染一瞬再被纠偏 effect 改写」的双写与闪烁
+  // 「错误兜底值被渲染一瞬再被改写」的双写与闪烁
   const resolution = genSettings?.resolution ?? (defaults.resolution as string | undefined);
   const ratio = genSettings?.ratio ?? (defaults.ratio as string | undefined);
   const seconds = genSettings?.seconds ?? (defaults.seconds as number | undefined);
@@ -86,21 +92,6 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   // write-through setters：保持旧签名，编辑立即落 store
   const setPrompt = useCallback((v: string) => writeGenSettings(nodeId, { prompt: v }), [nodeId]);
   const setModelKey = useCallback((v: string) => writeGenSettings(nodeId, { modelKey: v }), [nodeId]);
-
-  const [refModeOpen, setRefModeOpen] = useState(false);
-  // 参考区是否有任意参考正在拖拽：拖拽期间抑制所有卡片的放大预览浮层
-  const [isRefDragging, setIsRefDragging] = useState(false);
-
-  // 悬空模型键纠偏：持久化的 modelKey 已不存在（模型被移除 / 换渠道 ID 变化）时，
-  // 按「上次使用的模型 → 第一个可用」写回（resolveModelKey(undefined, …) 即该回退链）；
-  // 未持久化（modelKey 为空）时不写：展示层由 resolveModelKey 回退，
-  // 一旦写回会把「记住上次使用的模型」永久固化到节点数据。
-  useEffect(() => {
-    if (allModels.length === 0) return;
-    const persisted = genSettings?.modelKey;
-    if (!persisted || allModels.some((m) => m.value === persisted)) return;
-    writeGenSettings(nodeId, { modelKey: resolveModelKey(undefined, "video", allModels) });
-  }, [allModels, genSettings?.modelKey, nodeId]);
 
   // capabilities 能力声明：refMode 选项由模型声明，未声明则不渲染（不支持参考）
   const refModeOptions = useMemo(
@@ -124,40 +115,15 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     else if (name === "n") writeGenSettings(nodeId, { n: value });
   };
 
-  // 模型切换 / 持久化值不属于当前模型 options 时：纠偏到字段默认值。
-  // 缓存未就绪时字段值为 undefined，由 cur !== undefined 守卫跳过，不落任何兜底值。
-  // correctedFor 守卫保证同一份 fields 只纠偏一次；受控模式下经 writeGenSettings 写回 store。
-  const correctedForRef = useRef<unknown>(null);
-  useEffect(() => {
-    const currentFields = Array.isArray(modelParams?.fields) ? modelParams.fields : null;
-    if (!currentFields || currentFields === correctedForRef.current) return;
-    correctedForRef.current = currentFields;
-    // 空节点占位框按当前模型默认比例落位（ratio 未设置时），与建节点工厂同一规则；
-    // 覆盖建节点时参数配置尚未就绪、占位框暂落结构默认尺寸的场景
-    const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
-    const gs = (node?.data as MediaGenFields | undefined)?.genSettings as VideoGenSettings | undefined;
-    if (node && !(node.data as { src?: string }).src && !gs?.ratio && typeof defaults.ratio === "string") {
-      applyRatioToNode(nodeId, defaults.ratio);
-    }
-    for (const f of currentFields) {
-      const cur = fieldValues[f.name] as string | number | undefined;
-      if (f.options && f.options.length && cur !== undefined && !f.options.includes(cur)) {
-        setField(f.name, f.default);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelParams]);
+  // 模型切换 / 持久化值越界的纠偏与空节点占位比例统一在数据层完成
+  // （writeGenSettings 写入口 + 画布级归一化），挂载面板不再写回节点数据。
 
   const selectModel = (value: string) => {
-    // 字段纠偏由上方 modelParams effect 统一处理：切换模型必然更换 fields 引用，
-    // effect 会把不属于新模型 options 的持久化值重置为默认值，这里不再重复一份
+    // 字段纠偏由数据层统一处理：切换模型后 writeGenSettings 会按新模型
+    // 把不属于 options 的持久化值收敛到字段默认值，这里不再重复一份
     setModelKey(value);
     recordLastModel("video", value);
   };
-
-  // 参考方式（text = 文生视频）：同样受控于 genSettings。可用范围由 hook 派生的参考列表决定（见下）。
-  const refMode = genSettings?.refMode || "full";
-  const setRefMode = useCallback((v: string) => writeGenSettings(nodeId, { refMode: v }), [nodeId]);
 
   // ── 派生数据与持久化副作用（抽到 useVideoGenPanel） ──
   // 参考存在性与显示顺序均为纯派生：存在性来自连线，顺序 = 排序偏好(genSettings) + 连线合并，
@@ -165,7 +131,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
   const {
     refOrder, audioOrder, refVideoOrder,
     upstreamTexts, upstreamAudio, references, finalPrompt, isGenerating,
-  } = useVideoGenPanel({ nodeId, prompt });
+  } = useVideoGenPanel({ nodeId, prompt, active });
 
   // 同类内拖放交换（图↔图 / 音↔音 / 视频↔视频）：事件驱动写入排序偏好并即时持久化
   const handleAudioReorder = useCallback((dragged: string, target: string) => {
@@ -190,12 +156,14 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     [refOrder, audioOrder, refVideoOrder],
   );
 
-  // 当前模式不在合法范围（上游参考推导 ∩ 模型能力声明）时按共享规则回退：
-  // 回退值幂等可收敛，不会死循环；受控模式下经 setRefMode 写回 store。
-  useEffect(() => {
-    const { value } = resolveRefMode(refMode, refModeOptions, allowedRefModes);
-    if (value !== refMode) setRefMode(value);
-  }, [allowedRefModes, refMode, refModeOptions, setRefMode]);
+  // 参考方式（text = 文生视频）：genSettings.refMode 是持久化偏好，生效值按
+  // 「上游参考推导 ∩ 模型能力声明」派生（resolveRefMode 幂等）；挂载或选中时不写回节点，
+  // 用户主动选择才经 setRefMode 落库，展示与提交统一使用收敛后的生效值。
+  const refMode = useMemo(
+    () => resolveRefMode(genSettings?.refMode || "full", refModeOptions, allowedRefModes).value,
+    [genSettings?.refMode, refModeOptions, allowedRefModes],
+  );
+  const setRefMode = useCallback((v: string) => writeGenSettings(nodeId, { refMode: v }), [nodeId]);
 
   /** 模式不可用时的禁用原因（挂菜单项 Tooltip）：按模式本身的要求给静态文案。
       refModeOptions 来自模型能力声明，可能出现四个标准模式之外的自定义值——
@@ -205,16 +173,13 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
     return i18n.exists(key) ? i18n.t(key) : undefined;
   };
 
-  /**
-   * 任务创建请求在途：taskBinding 要等拿到真实 taskId 才写入（杜绝空 taskId
-   * 中间态被持久化），提交期间的按钮取消态由该本地状态驱动。
-   */
-  const [submitting, setSubmitting] = useState(false);
   // ── 生成提交：ownership fencing 收口在 useGenerationSubmit（GEN-01）──
   // owner = 画布项目 + 目标节点 + 提交世代；owner 失效（取消 / 新一轮 / 卸载 /
   // 切项目 / 节点已删）时迟到的 taskId 会被静默取消，绝不写绑定
   const { notification } = useAppFeedback();
   const { beginRun, isCurrent, invalidate, submitWithOwner } = useGenerationSubmit();
+  const { submitting, setSubmitting, isRefDragging, setIsRefDragging, menuOpen, setMenuOpen } =
+    useGenerationPanelState(nodeId, active, invalidate);
 
   // 参考区分组（文本 → 音频 → 图片 → 视频）：只收集非空组，渲染时组间插竖线分隔。
   // 组内顺序即该类参考的排序偏好，排序只在同类型内生效（跨类型拖放由卡片拒绝）。
@@ -281,7 +246,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
 
   /**
    * 参考区添加：上传图片 -> 新建参考节点并自动连到当前生成节点。
-   * 参考连上后 allowedRefModes 会包含 full，下面的参考方式纠偏会自动切出「文生视频」。
+   * 参考连上后 allowedRefModes 会包含 full，生效的参考方式由派生规则自动切出「文生视频」。
    */
   const handleRefUpload = useRefUpload(nodeId);
 
@@ -369,48 +334,19 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
       <WheelGuard asChild>
         <Card className="ui-select-none nodrag nopan w-[640px] gap-2 px-4 py-3">
         {/* 参考区常驻显示：文生视频（无参考）时也要能看到素材并上传，否则没有入口加参考。
-            文本参考不可拖动，按连线顺序排在首位 */}
-        <div
-          className="flex gap-2 flex-wrap"
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.dataTransfer.types.includes('application/x-ref-video') || e.dataTransfer.types.includes('application/x-ref-image') || e.dataTransfer.types.includes('application/x-ref-audio') || e.dataTransfer.types.includes('application/x-ref-text')) {
-              e.dataTransfer.dropEffect = 'none'; // 排序仅限同类缩略图上，加号/空白一律禁止
-              return;
-            }
-            e.dataTransfer.dropEffect = 'move';
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-            {/* 参考区按类型分组：文本 → 音频 → 图片 → 视频，组间以竖线分隔 */}
-            {refGroups.map((group, i) => (
-              <Fragment key={group.key}>
-                {i > 0 && <Separator orientation="vertical" className="mx-1 h-14 self-center" />}
-                {group.content}
-              </Fragment>
-            ))}
-            {/* 添加参考：方形加号占位，与参考缩略图同行 */}
-            <Tooltip><TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-14 shrink-0 rounded-md border-dashed p-0"
-                  onClick={handleRefUpload}>
-                  <PlusOutlined className="size-5" />
-                </Button>
-              </TooltipTrigger><TooltipContent>{t("common.reference")}</TooltipContent></Tooltip>
-          </div>
+            文本参考不可拖动，按连线顺序排在首位。
+            参考区与操作区随面板显隐：隐藏时整组卸载（Radix 浮层随之关闭、参考卡片
+            停止媒体订阅）；编辑器实例与内容常驻，重新可见时只挂这层 chrome */}
+        <GenerationRefChrome active={active} groups={refGroups} onUpload={handleRefUpload} />
         <MentionPrompt
+          nodeId={nodeId}
+          active={active}
           references={references}
           value={prompt}
           onChange={setPrompt}
           placeholder={t("generation.promptPlaceholderVideo")}
         />
+        {active && (
         <div className="flex items-center gap-2">
           <ModelSelector
             models={allModels}
@@ -420,7 +356,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
           />
           <Separator orientation="vertical" className="h-7 self-center" />
           {refModeOptions.length > 0 && (
-            <DropdownMenu open={refModeOpen} onOpenChange={setRefModeOpen}>
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="w-[120px] justify-between gap-1.5">
                   <span className="flex min-w-0 items-center gap-1.5 truncate">
@@ -493,6 +429,7 @@ const VideoGenerationPanel = memo(function VideoGenerationPanel({ nodeId }: Prop
             onClick={isGenerating || submitting ? handleCancel : handleGenerate}
           />
         </div>
+        )}
         </Card>
       </WheelGuard>
     </>

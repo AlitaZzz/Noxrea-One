@@ -12,22 +12,17 @@
  */
 
 import { resolveModelKey } from "@/features/canvas/shared/last-model";
+import { modelsForCapability } from "@/features/canvas/shared/model-catalog";
 import { useModelStore } from "@/lib/model-store";
+import type { ModelCapability } from "@/lib/types/models";
 
-type MediaGenKind = "image" | "video";
+/** 有占位框 / 比例默认值的生成能力：仅图像与视频（文本生成没有） */
+type MediaGenKind = Extract<ModelCapability, "image" | "video">;
 
 /** 解析当前默认模型的某项参数默认值；模型或参数配置未就绪返回 undefined */
 export function resolveModelDefaultField(kind: MediaGenKind, field: string): unknown {
   const { providers, findModelParams } = useModelStore.getState();
-  const models: { value: string; providerId: string; name: string }[] = [];
-  for (const c of providers) {
-    for (const m of c.models) {
-      if (!m.capabilities?.includes(kind)) continue;
-      const value = `${c.id}/${m.name}`;
-      if (models.some((x) => x.value === value)) continue;
-      models.push({ value, providerId: c.id, name: m.name });
-    }
-  }
+  const models = modelsForCapability(providers, kind);
   const modelKey = resolveModelKey(undefined, kind, models);
   const entry = models.find((m) => m.value === modelKey);
   if (!entry) return undefined;

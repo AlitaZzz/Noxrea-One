@@ -5,7 +5,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NodeToolbar from "@/features/canvas/nodes/NodeToolbar";
 
-const { dispatchNodeAction } = vi.hoisted(() => ({ dispatchNodeAction: vi.fn() }));
+interface NodeFixture {
+  id: string;
+  data: Record<string, unknown>;
+}
+
+const { dispatchNodeAction, canvasState } = vi.hoisted(() => ({
+  dispatchNodeAction: vi.fn(),
+  canvasState: {
+    nodes: [{ id: "image-1", data: { src: "/image.png" } }] as NodeFixture[],
+  },
+}));
 
 vi.mock("react-i18next", async (importOriginal) => ({
   ...await importOriginal<typeof import("react-i18next")>(),
@@ -15,7 +25,7 @@ vi.mock("@/features/assets/store", () => ({
   useAssetsStore: (selector: (state: unknown) => unknown) => selector({ knownAssetKeys: new Set(), unsaveAssetsByFileKeys: vi.fn() }),
 }));
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
-  useCanvasStore: (selector: (state: unknown) => unknown) => selector({ nodes: [{ id: "image-1", data: { src: "/image.png" } }] }),
+  useCanvasStore: (selector: (state: unknown) => unknown) => selector(canvasState),
 }));
 vi.mock("@/features/canvas/shared/node-action", () => ({ dispatchNodeAction }));
 vi.mock("@/features/canvas/shared/prompt-presets", async (importOriginal) => ({
@@ -30,6 +40,7 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.clearAllMocks();
+  canvasState.nodes = [{ id: "image-1", data: { src: "/image.png" } }];
 });
 
 function renderToolbar() {
@@ -43,6 +54,46 @@ function renderToolbar() {
   // The image toolbar has grid and creation popover triggers, in that order.
   return result.container.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')[1];
 }
+
+function renderNode(nodeType: string, data: Record<string, unknown>) {
+  canvasState.nodes = [{ id: "node-1", data }];
+  return render(
+    <TooltipProvider>
+      <NodeToolbar nodeId="node-1" nodeType={nodeType} gridOpen={false} dismissSignal={0}
+        onShowInspector={vi.fn()} onOpenFrameStrip={vi.fn()} onOpenClipStrip={vi.fn()}
+        onOpenAudioClip={vi.fn()} onOpenLighting={vi.fn()} onGridOpenChange={vi.fn()} />
+    </TooltipProvider>,
+  );
+}
+
+describe("NodeToolbar content gate", () => {
+  it("does not render for media nodes without content", () => {
+    for (const nodeType of ["image-node", "video-node", "audio-node"]) {
+      const { container, unmount } = renderNode(nodeType, { src: "" });
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
+  });
+
+  it("does not render for a whitespace-only text node", () => {
+    const { container } = renderNode("text-node", { plainText: " \n " });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders the content actions for a text node with content", () => {
+    const { container } = renderNode("text-node", { plainText: "hello" });
+    // 信息 / 复制 / 下载
+    expect(container.querySelectorAll("button")).toHaveLength(3);
+  });
+
+  it("keeps rendering for nodes without a content concept", () => {
+    for (const nodeType of ["group-node", "director-node"]) {
+      const { container, unmount } = renderNode(nodeType, {});
+      expect(container.querySelectorAll("button").length).toBeGreaterThan(0);
+      unmount();
+    }
+  });
+});
 
 describe("NodeToolbar creation menu", () => {
   it("keeps tooltip control mode stable across opening and selecting a preset", async () => {

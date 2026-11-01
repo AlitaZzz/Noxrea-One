@@ -17,6 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import WheelGuard from "@/components/ui/WheelGuard";
+import { useMultiSelect, useNodeSelected } from "@/features/canvas/hooks/use-node-selected";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
@@ -28,7 +29,6 @@ import { computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/li
 interface Props {
   src: string;
   sourceId: string;
-  selected?: boolean;
   onClose: () => void;
 }
 
@@ -43,8 +43,13 @@ const ASPECT_RATIOS: Record<Exclude<AspectKey, "original">, number> = {
 // 多视角截图数量：4 / 8 / 12，对应 90° / 45° / 30° 等分 360°
 type ViewCount = 4 | 8 | 12;
 
-export default function PanoramaPanel({ src, sourceId, selected, onClose }: Props) {
+export default function PanoramaPanel({ src, sourceId, onClose }: Props) {
   const { t } = useTranslation();
+  // 面板的可用态跟随宿主节点的选中态；选中订阅留在面板自身（节点主体不再因选中
+  // 重渲染）。多选时节点不是唯一目标：工具栏隐藏、面板不接收指针事件
+  const nodeSelected = useNodeSelected(sourceId);
+  const multiSelect = useMultiSelect();
+  const selected = nodeSelected && !multiSelect;
   // 逻辑 URL → 最终访问地址；解析完成后再创建 viewer，避免请求未授权路径
   // 描述失败时 viewer 永远不会创建，面板会停在空挂载点：给出可重试的失败态
   const { url: accessUrl, failed: accessFailed, refresh: refreshAccess } = useFileAccessUrl(src);

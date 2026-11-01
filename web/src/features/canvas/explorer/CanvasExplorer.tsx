@@ -48,6 +48,7 @@ import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types"
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N } from "@/features/canvas/NodeTypeDisplayMeta";
 import { getCanvasDerived, getCanvasOutline } from "@/features/canvas/shared/canvas-derived";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
+import { applySelection } from "@/features/canvas/shared/selection";
 import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
 import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
@@ -283,7 +284,7 @@ function GroupItem({ group, members, selected, collapsed, onToggle, selectedNode
           aria-current={selected ? "true" : undefined}
           onClick={() => {
             const s = useCanvasStore.getState();
-            s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === group.id })));
+            applySelection(s.nodes, (n) => n.id === group.id, s.setNodes);
             centerNode(s.nodes.find((n) => n.id === group.id) ?? group);
           }}
           className={`h-auto min-w-0 flex-1 justify-start gap-2 rounded-md py-1.5 text-left text-sm font-normal text-foreground${selected ? " bg-accent text-accent-foreground" : " hover:bg-muted dark:hover:bg-muted"}`}
@@ -369,7 +370,7 @@ function ElementItemImpl(props: ElementItemProps) {
   const handleClick = useCallback(() => {
     // 与画布点选节点同一语义：单选该节点（列表选中态来自 nodes 的 selected 标记）并定位居中
     const s = useCanvasStore.getState();
-    s.setNodes(s.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
+    applySelection(s.nodes, (n) => n.id === node.id, s.setNodes);
     centerNode(s.nodes.find((n) => n.id === node.id) ?? node);
   }, [node, centerNode]);
 

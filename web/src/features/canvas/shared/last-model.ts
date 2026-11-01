@@ -8,7 +8,7 @@
 const KEY_PREFIX = "noxrea.lastModel.";
 
 /** 读取该能力最近一次选用的模型；不可用（无记录 / 已失效 / localStorage 不可用）返回空串 */
-export function readLastModel(kind: string, allModels: { value: string }[]): string {
+export function readLastModel(kind: string, allModels: readonly { value: string }[]): string {
   try {
     const v = localStorage.getItem(KEY_PREFIX + kind);
     if (v && allModels.some((m) => m.value === v)) return v;
@@ -36,7 +36,7 @@ export function recordLastModel(kind: string, modelKey: string): void {
 export function resolveModelKey(
   persisted: string | undefined | null,
   kind: string,
-  allModels: { value: string }[],
+  allModels: readonly { value: string }[],
 ): string {
   if (persisted && allModels.some((m) => m.value === persisted)) return persisted;
   return readLastModel(kind, allModels) || allModels[0]?.value || "";

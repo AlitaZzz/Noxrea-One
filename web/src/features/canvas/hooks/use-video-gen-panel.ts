@@ -14,7 +14,8 @@ import { useMemo } from "react";
 
 import type { VideoGenSettings } from "@/features/canvas/types";
 
-import { EMPTY_ORDER, mergeOrder, useGenSettings } from "../shared/ref-order";
+import { useGenSettings } from "../shared/gen-settings";
+import { EMPTY_ORDER, mergeOrder } from "../shared/ref-order";
 import type { ReferenceItem } from "../shared/reference";
 import { useNodeGenerating } from "./use-node-generating";
 import { useNodeUpstreamRefs } from "./use-node-upstream-refs";
@@ -22,6 +23,8 @@ import { useNodeUpstreamRefs } from "./use-node-upstream-refs";
 export interface VideoGenPanelInput {
   nodeId: string;
   prompt: string;
+  /** 面板是否可见：隐藏时停止上游投影与生成态订阅，相关值为空占位（不显示也不接受输入）。 */
+  active: boolean;
 }
 
 export interface VideoGenPanelDerived {
@@ -43,7 +46,7 @@ export interface VideoGenPanelDerived {
 }
 
 export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerived {
-  const { nodeId, prompt } = input;
+  const { nodeId, prompt, active } = input;
 
   // 上游引用（图片 / 文本 / 音频 / 视频）：按内容订阅，位置变化（拖动提交、整理动画）不重渲染。
   const {
@@ -51,10 +54,10 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
     texts: upstreamTexts,
     audios: upstreamAudio,
     videos: upstreamVideos,
-  } = useNodeUpstreamRefs(nodeId);
+  } = useNodeUpstreamRefs(nodeId, active);
 
   // ── 排序偏好（genSettings，响应式只读）──
-  const genSettings = useGenSettings(nodeId);
+  const genSettings = useGenSettings(nodeId, active);
   const prefs = genSettings as Partial<VideoGenSettings> | undefined;
 
   // 最终 prompt：上游文本（按连线顺序）+ 当前 prompt。文本参考不可拖动，不参与排序。
@@ -108,7 +111,7 @@ export function useVideoGenPanel(input: VideoGenPanelInput): VideoGenPanelDerive
   }, [audioOrder, refOrder, refVideoOrder, audioSrcLabel, upstreamVideos]);
 
   // Button disabled state derived from persistent node.data.task_status
-  const isGenerating = useNodeGenerating(nodeId);
+  const isGenerating = useNodeGenerating(nodeId, active);
 
   return {
     refImages,

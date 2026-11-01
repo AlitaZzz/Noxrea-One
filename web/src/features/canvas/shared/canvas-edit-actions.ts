@@ -1,5 +1,5 @@
 /**
- * 画布编辑动作：复制 / 粘贴 / 全选 / 删除 / 撤销 / 重做（操作目标为节点与连线）。
+ * 画布编辑动作：复制 / 粘贴 / 全选 / 清空选中 / 删除 / 撤销 / 重做（操作目标为节点与连线）。
  *
  * 剪贴板语义分两层：
  * - 内部剪贴板（useSelectionStore）：复制节点写入，右键菜单「粘贴」消费，免权限；
@@ -18,6 +18,7 @@ import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/nod
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { isGroupMember, isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
+import { applySelection, updateSelection } from "@/features/canvas/shared/selection";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import type { CanvasState } from "@/features/canvas/stores/canvas-store";
 import { markDirtyImmediate, markDirtyUndo, pushHistoryThrottled, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
@@ -355,9 +356,8 @@ function pasteNodes(
   });
   // 粘贴后选中新节点，与键盘 Ctrl+V 行为保持一致
   const latest = useCanvasStore.getState();
-  latest.setNodes(
-    latest.nodes.map((n) => ({ ...n, selected: newNodes.some((nn) => nn.id === n.id) })),
-  );
+  const pastedIds = new Set(newNodes.map((n) => n.id));
+  applySelection(latest.nodes, (n) => pastedIds.has(n.id), latest.setNodes);
   markDirtyImmediate();
   return true;
 }
@@ -373,7 +373,7 @@ export function createTextNodeWithContent(text: string, at: { x: number; y: numb
   (node.data as { content: string; plainText: string }).plainText = text;
   useCanvasStore.getState().addNodes([node], { forceHistory: true });
   const latest = useCanvasStore.getState();
-  latest.setNodes(latest.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
+  applySelection(latest.nodes, (n) => n.id === node.id, latest.setNodes);
   markDirtyImmediate();
   return node;
 }
@@ -444,7 +444,21 @@ export async function readSystemClipboard(): Promise<{ imageFiles: File[]; text:
 export function selectAllNodes(): void {
   const store = useCanvasStore.getState();
   if (store.nodes.length === 0) return;
-  store.setNodes(store.nodes.map((n) => ({ ...n, selected: true })));
+  applySelection(store.nodes, () => true, store.setNodes);
+}
+
+/**
+ * 清空选区：节点与连线都取消选中。
+ *
+ * 无选中项时不重建数组——否则每次点击空白都会产生新的 nodes / edges 引用，
+ * 触发下游派生投影（highlightedEdgeIds 等）与 React Flow 的无谓重算；
+ * 连线选中态不进入撤销栈（选中只是查看，不属于文档编辑）。
+ * 画布空白点击与 Esc 共用本实现。
+ */
+export function clearSelection(): void {
+  const store = useCanvasStore.getState();
+  applySelection(store.nodes, () => false, store.setNodes);
+  applySelection(store.edges, () => false, (next) => store.setEdges(next, { skipHistory: true }));
 }
 
 /** 删除当前选中的节点与连线。
@@ -502,8 +516,11 @@ function restoreSnapshot(snapshot: HistorySnapshot): void {
       }
     }
     if (Object.keys(uiPatch).length > 0) useCanvasStore.setState(uiPatch);
-    s.setNodes(snapshot.nodes.map((n) => ({ ...n, selected: false })));
-    s.setEdges(snapshot.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
+    // 快照节点来自历史记录，引用天然是新的：这里只需清除选中态，
+    // 不必再克隆整表（updateSelection 对未变化项原样返回）。
+    // 写入必须无条件执行：快照恢复本身就要整表替换 store，与选区是否变化无关。
+    s.setNodes(updateSelection(snapshot.nodes, () => false));
+    s.setEdges(updateSelection(snapshot.edges, () => false), { skipHistory: true });
     // 撤销/重做不恢复视口：相机跟随用户（与 Figma 等主流画布一致）。快照中的
     // viewport 仅服务保存链路；写回会造成 store 与 React Flow 实际视口脱节
     // （React Flow 只在挂载与 viewportSyncCount 变化时同步），进而把旧视口落库、

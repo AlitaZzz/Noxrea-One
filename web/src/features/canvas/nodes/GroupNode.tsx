@@ -18,7 +18,7 @@ import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PAD
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
-import ResizeHandle from "./ResizeHandle";
+import SelectionResizeHandle from "./SelectionResizeHandle";
 
 interface GroupMetrics {
   childMaxX: number;
@@ -29,7 +29,7 @@ interface GroupMetrics {
 /** 无成员组的稳定引用：空组成员几何恒为 0（useShallow 按字段比较）。 */
 const NO_MEMBERS: GroupMetrics = { childMaxX: 0, childMaxY: 0, memberCount: 0 };
 
-function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
+function GroupNode({ id, data }: NodeProps<GroupNodeType>) {
   const { t } = useTranslation();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
@@ -82,11 +82,10 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
         }
       />
 
-      {/* Body — 填充随配色变化，边框沿用 node-body/node-selected（与 ImageNode 一致） */}
+      {/* Body — 填充随配色变化，选中描边沿用 node-body（由包装层选中类驱动，与 ImageNode 一致） */}
       <div
         className={`
           node-body flex-1 rounded-lg pointer-events-none
-          ${selected ? "node-selected" : ""}
           ${dragOver ? "node-drag-over" : ""}
         `}
         style={{ background: colorPreset.fill }}
@@ -104,14 +103,12 @@ function GroupNode({ id, data, selected }: NodeProps<GroupNodeType>) {
       )}
 
       {/* Resize — same as ImageNode */}
-      {selected && (
-        <ResizeHandle
-          nodeId={id}
-          corner="bottom-right"
-          minWidth={dynMinWidth}
-          minHeight={dynMinHeight}
-        />
-      )}
+      <SelectionResizeHandle
+        nodeId={id}
+        corner="bottom-right"
+        minWidth={dynMinWidth}
+        minHeight={dynMinHeight}
+      />
 
     </div>
   );

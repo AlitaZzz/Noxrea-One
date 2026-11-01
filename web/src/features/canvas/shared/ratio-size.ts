@@ -2,6 +2,8 @@ import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/can
 import { NODE_DISPLAY_MAX } from "@/lib/constants";
 import { computeNodeSize } from "@/lib/utils/image-utils";
 
+import { mediaNodeHasContent } from "./gen-settings-node";
+
 /**
  * 面板比例选择 -> 空节点占位框跟随。
  *
@@ -47,7 +49,7 @@ export function applyRatioToNode(nodeId: string, ratio: string) {
   if (!size) return;
   const node = useCanvasStore.getState().nodes.find((n) => n.id === nodeId);
   if (!node) return;
-  if ((node.data as { src?: string }).src) return; // 已有内容不跟随
+  if (mediaNodeHasContent(node)) return; // 已有内容不跟随
 
   const { width, height } = size;
 

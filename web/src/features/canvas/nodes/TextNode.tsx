@@ -20,6 +20,7 @@ import { TextIcon } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import RichTextPanel from "@/features/canvas/editing/RichTextPanel";
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextNode as TextNodeType } from "@/features/canvas/types";
 import { EventNames, isGenerating, TEXT_NODE_MIN_HEIGHT, TEXT_NODE_MIN_WIDTH } from "@/lib/constants";
@@ -29,9 +30,9 @@ import { copyText, downloadTextFile } from "@/lib/utils/text-export";
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
-import ResizeHandle from "./ResizeHandle";
+import SelectionResizeHandle from "./SelectionResizeHandle";
 
-function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
+function TextNode({ id, data }: NodeProps<TextNodeType>) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
   const content = data.content || "";
@@ -172,14 +173,16 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
     return () => el.removeEventListener("mousedown", stopMouse);
   }, [editor, editingContent]);
 
-  // 编辑态或选中态下消费滚轮：仅作用于节点内滚动，不冒泡到画布缩放/平移
+  // 编辑态或选中态下消费滚轮：仅作用于节点内滚动，不冒泡到画布缩放/平移。
+  // 监听常驻：其余状态下滚动区 pointer-events: none（见 globals.css），事件不会
+  // 命中它，因此无需把选中态带进节点渲染
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || (!editingContent && !selected)) return;
+    if (!el) return;
     const stopWheel = (e: WheelEvent) => e.stopPropagation();
     el.addEventListener("wheel", stopWheel);
     return () => el.removeEventListener("wheel", stopWheel);
-  }, [editingContent, selected]);
+  }, []);
 
   const generating = isGenerating(data.taskBinding);
   const charCount = plainText.length;
@@ -198,17 +201,18 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
 
       {/* Body */}
       <div
-        className={`node-body node-surface relative flex-1 flex flex-col overflow-hidden rounded-lg ${selected ? "node-selected" : ""}`}
+        className="node-body node-surface relative flex-1 flex flex-col overflow-hidden rounded-lg"
         onDoubleClick={(e) => {
           e.stopPropagation();
           useCanvasStore.getState().setEditingTextNodeId(id);
         }}
       >
+        <LimeRing />
         {agentGhost && <AgentGhostOverlay />}
         <div
           ref={scrollRef}
-          className={`flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}
-          style={{ pointerEvents: editingContent || selected ? "auto" : "none" }}
+          className={`node-text-scroll flex-1 overflow-auto p-4 ${editingContent ? "nodrag" : ""}`}
+          data-editing={editingContent ? "true" : undefined}
           onBlur={handleEditorBlur}
           onKeyDown={(e) => {
             if (e.key === "Escape") {
@@ -229,9 +233,12 @@ function TextNode({ id, data, selected }: NodeProps<TextNodeType>) {
         </div>
       )}
 
-      {selected && (
-        <ResizeHandle nodeId={id} corner="bottom-right" minWidth={TEXT_NODE_MIN_WIDTH} minHeight={TEXT_NODE_MIN_HEIGHT} />
-      )}
+      <SelectionResizeHandle
+        nodeId={id}
+        corner="bottom-right"
+        minWidth={TEXT_NODE_MIN_WIDTH}
+        minHeight={TEXT_NODE_MIN_HEIGHT}
+      />
 
       <ConnectionSideRail side="left" type="target" />
       <ConnectionSideRail side="right" type="source" />

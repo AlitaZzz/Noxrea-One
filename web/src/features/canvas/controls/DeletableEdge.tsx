@@ -20,7 +20,7 @@ import {
   type EdgeProps,
   useReactFlow,
 } from "@xyflow/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ScissorOutlined } from "@/components/ui/AppIcon";
@@ -29,12 +29,11 @@ import {
   registerEdgeGeometry,
   unregisterEdgeGeometry,
 } from "@/features/canvas/drag/edge-geometry-registry";
+import { removeFlowEdge, setFlowEdge } from "@/features/canvas/flow/flow-registry";
+import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EDGE_BASE_COLOR } from "@/lib/constants";
-import { useHighlightedEdges } from "@/providers/EdgeHighlightContext";
-
-import { FlowLines } from "./EdgeFlow";
 
 /** 删除按钮的出现延迟（驻留时长）：指针在连线上停稳 1s 才出现；沿线移动会重置计时 */
 const DELETE_BUTTON_DELAY_MS = 1000;
@@ -64,14 +63,24 @@ export default function DeletableEdge(props: EdgeProps) {
   const { screenToFlowPosition } = useReactFlow();
 
   // 端点从轨道收回节点边缘后取贝塞尔路径（几何实现全库唯一）
-  const { path: edgePath, labelX, labelY } = computeEdgePath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  });
+  const {
+    path: edgePath,
+    labelX,
+    labelY,
+    curve,
+    length,
+  } = useMemo(
+    () =>
+      computeEdgePath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition,
+        targetPosition,
+      }),
+    [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition],
+  );
 
   // 登记端点几何：拖动预览会话据此重算路径（拖动期 React Flow 的 nodeLookup
   // 不更新，本组件坐标停留在拖动前，登记值就是预览的唯一几何来源）
@@ -89,9 +98,11 @@ export default function DeletableEdge(props: EdgeProps) {
     return () => unregisterEdgeGeometry(id);
   }, [id, source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition]);
 
-  const highlightedEdgeIds = useHighlightedEdges();
-  const isHighlighted = highlightedEdgeIds.has(id);
-  // 选中节点关联的边高亮：由组件自身按 Context 判断，避免父级逐边重建全部边对象
+  // 选中节点关联的边高亮：逐边订阅派生出的布尔值，只有高亮态真正翻转的边才重渲染。
+  // 不能用整表下发的选中集合（Context/数组）——它的引用每次选中都会变，会把一次
+  // 点选放大成全部连线重渲染，边越多选中越慢。
+  const isHighlighted = useCanvasStore((s) =>
+    getCanvasDerived(s.nodes, s.edges).highlightedEdgeIds.has(id));
   const isConnected = isHighlighted || selected;
 
   // hover 与选中/高亮共用同一强调样式（见头注释三态说明）
@@ -202,6 +213,14 @@ export default function DeletableEdge(props: EdgeProps) {
   const buttonY = anchor ? anchor.y : labelY;
   const emphasized = isConnected || hovered || buttonHovered;
 
+  // 强调态登记到画布流光层（specs/canvas-flow-layer.md 规则 7）：流光由帧循环绘制，
+  // 起拖的选中提交只改注册表，不再挂载 6 条 path + 6 个 SMIL animate
+  useEffect(() => {
+    if (!emphasized) return;
+    setFlowEdge(id, { curve, length });
+    return () => removeFlowEdge(id);
+  }, [id, emphasized, curve, length]);
+
   return (
     <>
       <g onMouseEnter={handleEnter} onMouseMove={reanchor} onWheel={handleWheel} onMouseLeave={() => setHovered(false)}>
@@ -216,9 +235,6 @@ export default function DeletableEdge(props: EdgeProps) {
             stroke: EDGE_BASE_COLOR,
           }}
         />
-
-        {/* 管道流光（hover / 选中节点或边时叠加） */}
-        {emphasized && <FlowLines path={edgePath} />}
       </g>
 
       <EdgeLabelRenderer>

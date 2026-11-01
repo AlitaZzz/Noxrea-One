@@ -2,7 +2,8 @@
  * 批量连线 Context。
  * 向渲染在节点 DOM 内、无法经 props 透传回调的节点组件（组节点的批量连接轨道
  * GroupConnectRail）传递接驳回调与视口换算。回调不能塞进持久化的 node data
- * ——会被写进快照与撤销历史，破坏序列化，所以走 Context（参照 EdgeHighlightContext）。
+ * ——会被写进快照与撤销历史，破坏序列化，所以走 Context。Context 只在回调身份
+ * 真正变化时才换值（回调随视口/store 动作稳定），不随选中态等高频状态刷新。
  */
 "use client";
 

@@ -64,10 +64,12 @@ import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session"
 import { pointerClientPoint } from "@/features/canvas/drag/pointer-position";
 import { routePositionFrames } from "@/features/canvas/drag/position-routing";
 import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasExplorer";
+import CanvasFlowLayer from "@/features/canvas/flow/CanvasFlowLayer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
 import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
+import { useGenSettingsNormalization } from "@/features/canvas/hooks/use-gen-settings-normalization";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
 import { useSseTaskMonitor } from "@/features/canvas/hooks/use-sse-task-monitor";
 import { applyTidyLayout, isTidyAnimating, useTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
@@ -75,12 +77,14 @@ import { MarqueeSession } from "@/features/canvas/marquee/marquee-session";
 import { createAudioNode, createEdge, createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
 import { CANVAS_NODE_TYPES } from "@/features/canvas/nodes/canvas-node-types";
 import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
-import ImageGenerationPanel from "@/features/canvas/panels/ImageGenerationPanel";
-import TextGenerationPanel from "@/features/canvas/panels/TextGenerationPanel";
-import VideoGenerationPanel from "@/features/canvas/panels/VideoGenerationPanel";
+import GenerationPanelHost, {
+  type GenerationPanelTarget,
+} from "@/features/canvas/panels/GenerationPanelHost";
 import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
+import { clearSelection } from "@/features/canvas/shared/canvas-edit-actions";
 import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
+import { genKindOfNode } from "@/features/canvas/shared/gen-settings-node";
 import {
   buildGroupHitIndex,
   buildNodeIndex,
@@ -91,6 +95,7 @@ import {
   resolveDropGroupId,
 } from "@/features/canvas/shared/group-bounds";
 import { isGroupNode, memberParentId, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import { selectCanvasStateChanges } from "@/features/canvas/shared/node-changes";
 import { findNodeAtFlowPoint, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import {
@@ -99,6 +104,7 @@ import {
   toPositionMap,
 } from "@/features/canvas/shared/node-positions";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
+import { applySelection } from "@/features/canvas/shared/selection";
 import { findFreePosition, flushAndWait, getCanvasProjectId, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -107,7 +113,6 @@ import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
 import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
-import { EdgeHighlightContext } from "@/providers/EdgeHighlightContext";
 
 const AudioClipStripPanel = dynamic(() => import("@/features/canvas/editing/AudioClipStripPanel"), { ssr: false });
 const ClipStripPanel = dynamic(() => import("@/features/canvas/editing/ClipStripPanel"), { ssr: false });
@@ -150,6 +155,9 @@ export default function InfiniteCanvas() {
   const user = useCurrentUser();
   const { message, notification: notif } = useAppFeedback();
   useSseTaskMonitor(notif);
+  // 生成设置纠偏在数据层运行：模型目录 / 参数缓存 / 连线变化时归一化，
+  // 不再依赖节点被选中，选中与面板挂载都不写节点数据。
+  useGenSettingsNormalization();
 
   // Canvas state
   const nodes = useCanvasStore((s) => s.nodes);
@@ -303,10 +311,6 @@ export default function InfiniteCanvas() {
   // 否则会触发 onViewportChange -> setViewport -> 重渲染 -> defaultViewport 变 -> ∞
   const defaultViewport = useMemo(() => useCanvasStore.getState().viewport, []);
 
-  // Edges connected to selected nodes are part of the same stable projection;
-  // position-only updates keep this Set reference unchanged.
-  const highlightedEdgeIds = canvasDerived.highlightedEdgeIds;
-
   // History
   const pushHistory = useHistoryStore((s) => s.push);
 
@@ -331,37 +335,25 @@ export default function InfiniteCanvas() {
   // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
   const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId ?? angleEditorNodeId ?? panoramaNodeId;
 
-  // Check if a single image node is selected
-  const genTargetId = useMemo(() => {
+  // 单个被选中的生成节点 → 面板目标。类型 → 能力走 genKindOfNode（与面板宿主同一来源），
+  // 这里只补各类型的资格规则；选择 / 让位规则三类共用一份，分开实现时文本分支曾漏掉编辑态让位。
+  const generationPanelTarget = useMemo<GenerationPanelTarget | null>(() => {
     if (!canvasInteraction.showSelectionChrome) return null;
     if (editingNodeId) return null;
     const sel = nodes.filter((n) => n.selected);
     if (sel.length !== 1) return null;
-    if (sel[0].type !== NODE_TYPE.IMAGE) return null;
-    const src = (sel[0].data as ImageNodeData).source;
-    if (src === "upload" || src === "derived") return null;
-    return sel[0].id;
+    const node = sel[0];
+    const kind = genKindOfNode(node);
+    if (!kind) return null;
+    // 上传 / 派生图片与上传视频的内容来自外部，没有可编辑的生成参数
+    if (node.type === NODE_TYPE.IMAGE) {
+      const src = (node.data as ImageNodeData).source;
+      if (src === "upload" || src === "derived") return null;
+    } else if (node.type === NODE_TYPE.VIDEO && (node.data as VideoNodeData).source === "upload") {
+      return null;
+    }
+    return { kind, nodeId: node.id };
   }, [nodes, canvasInteraction.showSelectionChrome, editingNodeId]);
-
-  // Check if a single video node is selected
-  const genTargetVideoId = useMemo(() => {
-    if (!canvasInteraction.showSelectionChrome) return null;
-    if (editingNodeId) return null;
-    const sel = nodes.filter((n) => n.selected);
-    if (sel.length !== 1) return null;
-    if (sel[0].type !== NODE_TYPE.VIDEO) return null;
-    if ((sel[0].data as VideoNodeData).source === "upload") return null;
-    return sel[0].id;
-  }, [nodes, canvasInteraction.showSelectionChrome, editingNodeId]);
-
-  // Check if a single TextNode is selected
-  const textTarget = useMemo(() => {
-    if (!canvasInteraction.showSelectionChrome) return null;
-    const sel = nodes.filter((n) => n.selected);
-    if (sel.length !== 1) return null;
-    if (sel[0].type !== NODE_TYPE.TEXT) return null;
-    return { id: sel[0].id };
-  }, [nodes, canvasInteraction.showSelectionChrome]);
 
   // Inspector state
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
@@ -919,17 +911,9 @@ export default function InfiniteCanvas() {
     setToolbarDismissSignal((value) => value + 1);
     // Exit all node editor modes when clicking the canvas pane
     useCanvasStore.getState().closeForeignNodeEditors(null);
-    // Deselect all nodes and edges。
-    // 无选中项时不重建数组：否则每次点击空白都会产生新的 nodes / edges 引用，
-    // 触发下游 useMemo（如 highlightedEdgeIds）与 React Flow 的无谓重算。
-    const s = useCanvasStore.getState();
-    if (s.nodes.some((n) => n.selected)) {
-      setNodes(s.nodes.map((n) => ({ ...n, selected: false })));
-    }
-    if (s.edges.some((e) => e.selected)) {
-      setEdges(s.edges.map((e) => ({ ...e, selected: false })), { skipHistory: true });
-    }
-  }, [canvasInteraction, setNodes, setEdges]);
+    // Deselect all nodes and edges：与 Esc 共用 clearSelection（无选中项时不重建数组）。
+    clearSelection();
+  }, [canvasInteraction]);
 
   // 右键空白处 → 画布级操作菜单（粘贴 / 全选 / 整理 / 重置视图）。
   // 原生菜单由 use-canvas-events 的 preventCtx 统一屏蔽，这里只负责唤起自定义菜单。
@@ -948,7 +932,7 @@ export default function InfiniteCanvas() {
     e.preventDefault();
     const store = useCanvasStore.getState();
     if (!node.selected) {
-      store.setNodes(store.nodes.map((n) => ({ ...n, selected: n.id === node.id })));
+      applySelection(store.nodes, (n) => n.id === node.id, store.setNodes);
     }
     useContextMenuStore.getState().show(e.clientX, e.clientY, "node", node.id);
   }, []);
@@ -965,14 +949,13 @@ export default function InfiniteCanvas() {
       // Exit editor modes opened on other nodes
       useCanvasStore.getState().closeForeignNodeEditors(nodeId);
       // 当按下修饰键时，由 React Flow 通过 onNodesChange 处理多选
-      if (_event.ctrlKey || _event.metaKey || _event.shiftKey) return;
+      if (_event.ctrlKey || _event.metaKey || _event.shiftKey) {
+        return;
+      }
 
-      setNodes(
-        useCanvasStore.getState().nodes.map((n) => ({
-          ...n,
-          selected: n.id === nodeId,
-        }))
-      );
+      // 只写选中态真正变化的节点：整表克隆会让 React Flow 重建全部内部实例，
+      // 工具条要等整画布提交才能出现（节点越多越明显）
+      applySelection(useCanvasStore.getState().nodes, (n) => n.id === nodeId, setNodes);
     },
     [canvasInteraction, setNodes]
   );
@@ -1130,7 +1113,6 @@ export default function InfiniteCanvas() {
       onDrop={handleDrop}
     >
       <AlignmentGuides />
-      <EdgeHighlightContext.Provider value={highlightedEdgeIds}>
       <BatchConnectContext.Provider value={batchConnectHandlers}>
       <CanvasMediaLoadingProvider key={activeProjectId}>
       <ReactFlow
@@ -1199,9 +1181,16 @@ export default function InfiniteCanvas() {
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />
 
+        {/* 连线流光层：容器插入视口节点层之前（连线之上、节点之下），流光由帧循环绘制 */}
+        <CanvasFlowLayer />
+
         {/* 框选选框：静态元素，几何由 MarqueeSession 逐帧写 style，避免每帧 React 渲染。
             复用 React Flow 的 .react-flow__selection 视觉与层级（z-index 6） */}
         <div className="react-flow__selection react-flow__container" data-canvas-marquee="" />
+
+        {/* 手势光标层：拖动节点/框选期间整块画布稳定接管光标，避免根属性切换触发
+            全子树光标规则重算；显隐与光标见 globals.css「光标」段 */}
+        <div className="canvas-gesture-cursor" aria-hidden="true" />
 
         {/* Top-left panel: quick toolbar */}
         {/* pointer-events: none —— Panel 是绝对定位块，其透明留白（含 30px 内边距）会拦截画布点击与框选；仅内部控件恢复 auto */}
@@ -1257,31 +1246,15 @@ export default function InfiniteCanvas() {
               className="agent-flow-button bg-background dark:bg-background"
               onClick={openAgentDrawer}
             >
+              <LimeRing />
               <AgentIcon style={{ width: 22, height: 22 }} />
               <span className="text-base font-medium">{t("agent.title")}</span>
             </Button>
           </div>
         </Panel>
 
-        {/* Generation panel — follows selected empty image node */}
-        {genTargetId && (
-          <RfNodeToolbar nodeId={genTargetId} position={Position.Bottom} align="center" offset={12}>
-            <ImageGenerationPanel key={genTargetId} nodeId={genTargetId} />
-          </RfNodeToolbar>
-        )}
-
-        {/* Generation panel — follows selected video node */}
-        {genTargetVideoId && (
-          <RfNodeToolbar nodeId={genTargetVideoId} position={Position.Bottom} align="center" offset={12}>
-            <VideoGenerationPanel key={genTargetVideoId} nodeId={genTargetVideoId} />
-          </RfNodeToolbar>
-        )}
-
-        {textTarget && (
-          <RfNodeToolbar nodeId={textTarget.id} position={Position.Bottom} align="center" offset={12}>
-            <TextGenerationPanel nodeId={textTarget.id} />
-          </RfNodeToolbar>
-        )}
+        {/* 生成面板 — 三类面板常驻，跟随单选切换 nodeId 与显隐 */}
+        <GenerationPanelHost target={generationPanelTarget} />
 
         {/* 帧序列面板 — 跟随选中视频节点，不随画布缩放，轨道尺寸恒定 */}
         {frameStripNode && (
@@ -1400,7 +1373,6 @@ export default function InfiniteCanvas() {
       </ReactFlow>
       </CanvasMediaLoadingProvider>
       </BatchConnectContext.Provider>
-      </EdgeHighlightContext.Provider>
 
       <CanvasContextMenu
         onAddText={handleAddText}

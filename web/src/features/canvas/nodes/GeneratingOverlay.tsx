@@ -10,6 +10,7 @@
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import LimeRing from "@/features/canvas/shared/LimeRing";
 import { formatElapsed } from "@/lib/utils/format-elapsed";
 
 function GeneratingOverlay({
@@ -53,7 +54,7 @@ function GeneratingOverlay({
       <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 7000}ms` }} aria-hidden />
       {/* 噪点抖动：打散渐变色带 */}
       <div className="gen-noise" aria-hidden />
-      <div className="generation-border" aria-hidden />
+      <LimeRing className="generation-border" />
       {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
       <span className="relative text-xs text-white/80">
         {text ?? t("common.generating")}

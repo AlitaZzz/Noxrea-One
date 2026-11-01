@@ -14,6 +14,12 @@
  */
 import type { RefObject } from "react";
 
+import {
+  clearFlowPreview,
+  clearFlowPreviews,
+  setFlowPreview,
+  setFlowPreviewOffset,
+} from "@/features/canvas/flow/flow-registry";
 import type { AlignmentGuide } from "@/features/canvas/shared/alignment-guides";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import { type Point, samePoint } from "@/features/canvas/shared/geometry";
@@ -44,7 +50,11 @@ import {
   type MovingBox,
   nodeAbsoluteBounds,
 } from "./drag-snap";
-import { getEdgeGeometry, type RegisteredEdgeGeometry } from "./edge-geometry-registry";
+import {
+  edgeIdsForNodes,
+  getEdgeGeometry,
+  type RegisteredEdgeGeometry,
+} from "./edge-geometry-registry";
 import { clearPreviewGuides, setPreviewGuides } from "./preview-guides";
 
 export interface DragPreviewSessionDeps {
@@ -349,6 +359,8 @@ export class DragPreviewSession {
     }
     this.dragItemIds = surviving;
     if (this.dom) this.clearDomOffsets(this.dom);
+    // 基准已变：旧覆盖对新基准无效，待下方按最后一帧重新发布
+    clearFlowPreviews();
     this.rebuildBaseline(nodes);
     this.dom = this.captureDom();
     this.hideLabelLayers();
@@ -451,6 +463,7 @@ export class DragPreviewSession {
       if ((sourceAffected && !sourceDelta) || (targetAffected && !targetDelta)) {
         edge.group.style.translate = "";
         if (edge.mode === "path") this.restoreEdgePath(edge, geometry);
+        clearFlowPreview(edgeId);
         continue;
       }
 
@@ -460,6 +473,8 @@ export class DragPreviewSession {
         if (edge.mode === "path") this.restoreEdgePath(edge, geometry);
         edge.group.style.translate = `${sourceDelta.x}px ${sourceDelta.y}px`;
         edge.mode = "translate";
+        // 流光跟随整段平移：只发布位移，绘制按登记几何平移（未登记时暂存）
+        setFlowPreviewOffset(edgeId, sourceDelta);
         continue;
       }
 
@@ -475,6 +490,7 @@ export class DragPreviewSession {
       });
       for (const path of edge.paths) path.setAttribute("d", preview.path);
       edge.mode = "path";
+      setFlowPreview(edgeId, { curve: preview.curve, length: preview.length });
     }
   }
 
@@ -543,8 +559,11 @@ export class DragPreviewSession {
       const bounds = nodeAbsoluteBounds(node, nodeById);
       if (bounds) this.baseAbsoluteById.set(id, bounds);
     }
-    // 候选目标排除完整移动集与隐藏节点；外部写入重建时一起重建
-    this.targets = buildSnapTargets(nodes, this.affectedIds, nodeById);
+    // 候选目标排除完整移动集与隐藏节点；外部写入重建时一起重建。
+    // 总开关关闭时吸附引擎不会读取目标，起拖路径不为本次拖动构建无用的全画布目标。
+    this.targets = this.settings.snapEnabled
+      ? buildSnapTargets(nodes, this.affectedIds, nodeById)
+      : [];
     this.snapState = emptySnapState();
   }
 
@@ -558,18 +577,24 @@ export class DragPreviewSession {
       if (id && this.affectedIds.has(id)) wrappers.set(id, el);
     }
 
+    // 只有与移动集相连的边可能改变路径：无关联边时连 DOM 查询都不做。
+    const affectedEdgeIds = edgeIdsForNodes(this.affectedIds);
     const edges = new Map<string, EdgeDom>();
-    for (const el of root.querySelectorAll<SVGGElement>(".react-flow__edge[data-id]")) {
-      const id = el.dataset.id;
-      if (!id) continue;
-      const geometry = getEdgeGeometry(id);
-      // 未登记几何的边不参与预览（规则 4.5）
-      if (!geometry) continue;
-      if (!this.affectedIds.has(geometry.sourceId) && !this.affectedIds.has(geometry.targetId)) {
-        continue;
+    if (affectedEdgeIds.size > 0) {
+      // id 集合直接写进选择器：无关边既不进入结果，也不读 dataset / 几何登记
+      const selector = Array.from(
+        affectedEdgeIds,
+        (id) => `.react-flow__edge[data-id="${CSS.escape(id)}"]`,
+      ).join(",");
+      for (const el of root.querySelectorAll<SVGGElement>(selector)) {
+        const id = el.dataset.id;
+        if (!id) continue;
+        const geometry = getEdgeGeometry(id);
+        // 未登记几何的边不参与预览（规则 4.5）
+        if (!geometry) continue;
+        const paths = Array.from(el.querySelectorAll<SVGPathElement>("path"));
+        edges.set(id, { group: el, paths, mode: "none" });
       }
-      const paths = Array.from(el.querySelectorAll<SVGPathElement>("path"));
-      edges.set(id, { group: el, paths, mode: "none" });
     }
 
     const labelLayers = Array.from(
@@ -670,6 +695,7 @@ export class DragPreviewSession {
     this.pointerOffset = { x: 0, y: 0 };
     this.lastFrame = null;
     this.pendingFrame = null;
+    clearFlowPreviews();
     clearPreviewGuides();
   }
 }
