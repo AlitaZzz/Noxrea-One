@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ReferenceItem } from "@/features/canvas/shared/reference";
@@ -166,5 +166,46 @@ describe("MentionPrompt 目标切换", () => {
     await waitFor(() => expect(chipSrc()).toBe("images/a.png"));
     expect(onChange).not.toHaveBeenCalled();
     expect(container.querySelector(".ProseMirror")).toBe(editorDom);
+  });
+
+  it("同一微任务内切回原目标不重建文档（选区保留）", async () => {
+    const renderAt = (nodeId: string, value: string) => (
+      <MentionPrompt
+        nodeId={nodeId}
+        active
+        references={references}
+        value={value}
+        onChange={() => {}}
+        placeholder="prompt"
+      />
+    );
+
+    const { container, rerender } = render(renderAt("t1", "hello"));
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+    const editorDom = container.querySelector(".ProseMirror") as HTMLElement;
+    editorDom.focus();
+
+    // 光标放在段尾：EditorState.create 的默认选区在文档起点，重建会把光标拉回开头
+    const paragraph = editorDom.querySelector("p")!;
+    const range = document.createRange();
+    range.setStart(paragraph, paragraph.childNodes.length);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    // 让 ProseMirror 读取 DOM 选区：否则视图状态仍停在文档起点，
+    // 重建前后选区「看起来」相同，测不出重建
+    document.dispatchEvent(new Event("selectionchange"));
+
+    // A → B → A 落在同一微任务内：文档从未承载过 B，不应为「回切」重建状态
+    // （重建会重新初始化插件状态，清空原目标的撤销栈并重置选区）
+    rerender(renderAt("t2", "B 目标"));
+    rerender(renderAt("t1", "hello"));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(window.getSelection()!.anchorNode).toBe(paragraph);
+    expect(window.getSelection()!.anchorOffset).toBe(paragraph.childNodes.length);
   });
 });

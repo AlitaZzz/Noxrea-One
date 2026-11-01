@@ -383,6 +383,9 @@ const MentionPrompt = ({ nodeId, active, references, value, onChange, placeholde
       if (!editor || editor.isDestroyed) return;
       // 同一轮提交内连续切换目标时，以最后一次渲染的 nodeId / value / references 为准
       const source = rebuildSourceRef.current;
+      // 切回原目标：文档在此期间从未离开该目标（旧目标的清理与同步 effect 都被
+      // contentTargetRef 挡住），无需重建——重建会清空撤销栈并重置选区。
+      if (source.nodeId === contentTargetRef.current) return;
       editor.view.updateState(
         EditorState.create({
           schema: editor.state.schema,
