@@ -1,6 +1,6 @@
 # 画布缩放手势会话（Resize Gesture Session）
 
-状态：已确认（2026-11-02）
+状态：已实现（2026-11-02）
 
 承接 `specs/canvas-drag-preview-session.md`：该 Spec 的非目标明确把节点缩放排除在外（「`nodes/ResizeHandle.tsx` 仍是逐帧写 store 的独立路径，如需优化另行 Spec」）。拖动与框选已改为手势会话，缩放是同一根因下最后一条「每次指针移动写受控 store」的指针路径。
 
@@ -228,6 +228,7 @@
 - 2026-11-02 实现完成，待手工走查：新增 `resize/resize-geometry.ts`、`resize/resize-session.ts`、`resize/resize-session-context.ts`；`ResizeHandle` 收窄为右下角并接入会话；`InfiniteCanvas` 创建会话、接管尺寸回传并包裹 Provider；`GroupNode` / `TextNode` 移除 `corner` 传值；`group-bounds.ts` 更新消费方注释。
 - 2026-11-02 代码审查修复：项目切换时也释放缩放会话（`InfiniteCanvas` 以 `activeProjectId` 为依赖释放，避免会话跨项目存活）；移除无引用的 `ResizeSession.isActive()`；修正 `shiftGroupMembers` 的唯一调用方注释；几何用例补充「先取整再夹最小」（39.4 → 39 → 40）。
 - 2026-11-02 复核通过：`npx tsc --noEmit` 无错误；`npm run lint` 0 error（6 条既有 `<img>` warning）；全量 `npx vitest run --maxWorkers=1 --minWorkers=1` 188 文件 / 1512 用例通过（缩放相关 24 例）。
+- 2026-11-02 用户确认验收完成（含浏览器走查），状态更新为「已实现」。实现代码随 `17cd1e08` 提交（仅本地，未推送）。
 - 已通过：`npx tsc --noEmit`、`npm run lint`（0 error）、`npx vitest run`（188 文件 / 1512 用例，单 worker 串行）；新增几何 5 例、会话 19 例。
 - 未验证：浏览器手工走查（验收标准 8）与运行时性能主观对比；**未做运行时性能采样**，即梦缩放行为本轮未做专项对标。
 - 走查通过并经用户确认提交后才更新为「已实现」。
