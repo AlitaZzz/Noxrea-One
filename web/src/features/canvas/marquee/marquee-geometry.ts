@@ -17,7 +17,7 @@
 import type { Rect } from "@/features/canvas/shared/geometry";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
 import { isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
-import { measureNode } from "@/features/canvas/shared/tidy-layout";
+import { measureNode } from "@/features/canvas/shared/node-size";
 import type { AnyNode } from "@/features/canvas/types";
 
 /** uniform grid 单元边长（flow 单位）。 */

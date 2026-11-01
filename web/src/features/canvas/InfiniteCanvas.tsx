@@ -80,6 +80,8 @@ import NodeToolbarUI from "@/features/canvas/nodes/NodeToolbar";
 import GenerationPanelHost, {
   type GenerationPanelTarget,
 } from "@/features/canvas/panels/GenerationPanelHost";
+import { ResizeSession } from "@/features/canvas/resize/resize-session";
+import { ResizeSessionContext } from "@/features/canvas/resize/resize-session-context";
 import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { clearSelection } from "@/features/canvas/shared/canvas-edit-actions";
 import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
@@ -177,6 +179,9 @@ export default function InfiniteCanvas() {
   const audioClipNodeId = useCanvasStore((s) => s.audioClipNodeId);
   const multiExpandedNodeId = useCanvasStore((s) => s.multiExpandedNodeId);
 
+  // 当前激活项目（agent 等子组件按 projectId 寻址；画布子树也按它重挂）
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+
   // Programmatic position frames (e.g. tidy animation) replace the nodes array
   // every frame; drag previews bypass the store entirely. Keep all cross-node
   // projections in one cached derivation so rail and edge consumers do not
@@ -252,6 +257,30 @@ export default function InfiniteCanvas() {
     return () => marqueeSession.dispose();
   }, [marqueeSession]);
 
+  // ---- 缩放手势会话 ----
+  // 缩放期尺寸帧不写受控 store：会话按 rAF 合并后只写节点 wrapper 行内尺寸，
+  // 松手一次提交；活动期接管本节点的尺寸回传（规则见 resize/resize-session.ts）。
+  const [resizeSession] = useState(
+    () =>
+      new ResizeSession({
+        root: canvasContainerRef,
+        getNodes: () => useCanvasStore.getState().nodes,
+        setNodes: (next) => useCanvasStore.getState().setNodes(next),
+        markDirtyImmediate,
+        takeSnapshot: takeCanvasSnapshot,
+        pushHistory: (snapshot) => useHistoryStore.getState().push(snapshot),
+      }),
+  );
+
+  // 渲染层采用新节点后：提交路径释放会话，外部写入按几何是否被改写决定继续/取消
+  useLayoutEffect(() => {
+    resizeSession.syncRenderedNodes();
+  }, [renderedNodes, resizeSession]);
+
+  // 项目切换会按项目重挂画布子树，卸载会销毁组件：缩放会话不跨项目存活。
+  // 布局副作用的清理在所有布局副作用之前执行，因此先于 syncRenderedNodes 释放。
+  useLayoutEffect(() => () => resizeSession.dispose(), [activeProjectId, resizeSession]);
+
   // 拖动参考点的按下点：React Flow 在越过拖动阈值的首个指针事件才建立拖动
   // 参考点，按下到该事件之间的指针位移会永久丢失（节点整段拖动落后指针）。
   // 参考点必须取自 d3-drag 使用的同一事件（mousedown/touchstart）：PointerEvent
@@ -317,8 +346,6 @@ export default function InfiniteCanvas() {
   // 模型库 / 素材库初始化已前移至画布门页（canvas/[projectId]/page.tsx）：
   // 与项目数据并行拉齐后再放行画布，避免面板在空 store 上挂载产生空态竞态
 
-  // 当前激活项目（agent 等子组件按 projectId 寻址）
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projectName = useProjectStore((s) => s.activeProject()?.name || "");
   const { t } = useTranslation();
 
@@ -521,13 +548,19 @@ export default function InfiniteCanvas() {
       // 过程帧只进会话预览（不写 store），终态帧是提交点（规则 1.2、1.4）
       routePositionFrames(positionChanges, dragSession, applyPositionFrames);
 
-      // 选中 / 实测尺寸等其余变更照常写 store；位置变更已由会话或兜底路径处理
-      const otherChanges = stateChanges.filter((c) => c.type !== "position");
+      // 选中 / 实测尺寸等其余变更照常写 store；位置变更已由会话或兜底路径处理。
+      // 缩放会话活动的节点：ResizeObserver 的尺寸回传由会话消费，否则预览期
+      // 会再写一次 store（规则 3.1）
+      const otherChanges = stateChanges.filter(
+        (c) =>
+          c.type !== "position" &&
+          !(c.type === "dimensions" && resizeSession.isResizingNode(c.id)),
+      );
       if (otherChanges.length > 0) {
         setNodes(applyNodeChanges(otherChanges, useCanvasStore.getState().nodes));
       }
     },
-    [applyPositionFrames, cancelTidy, dragSession, setNodes],
+    [applyPositionFrames, cancelTidy, dragSession, resizeSession, setNodes],
   );
 
   const handleEdgesChange = useCallback(
@@ -1115,6 +1148,7 @@ export default function InfiniteCanvas() {
       <AlignmentGuides />
       <BatchConnectContext.Provider value={batchConnectHandlers}>
       <CanvasMediaLoadingProvider key={activeProjectId}>
+      <ResizeSessionContext.Provider value={resizeSession}>
       <ReactFlow
         data-interaction={canvasInteraction.mode}
         data-multiselect={selectionFrame ? "true" : undefined}
@@ -1371,6 +1405,7 @@ export default function InfiniteCanvas() {
             />
           ))}
       </ReactFlow>
+      </ResizeSessionContext.Provider>
       </CanvasMediaLoadingProvider>
       </BatchConnectContext.Provider>
 

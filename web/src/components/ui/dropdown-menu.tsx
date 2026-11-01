@@ -41,6 +41,12 @@ type DropdownMenuContentProps = Omit<
   "onCloseAutoFocus" | "onInteractOutside" | "onPointerDown"
 > & {
   restoreFocus?: boolean
+  /**
+   * 关闭时是否播放退出动画。菜单项的动作为同步改变触发器几何（移动或改尺寸）时
+   * 应关闭动画：退出动画期间浮层仍然存在，会跟随被移动的触发器重新定位，表现为
+   * 菜单闪跳；关闭动画后浮层在同一提交内卸载，与几何变更同帧消失。
+   */
+  closeAnimation?: boolean
 }
 
 function DropdownMenuContent({
@@ -48,6 +54,7 @@ function DropdownMenuContent({
   align = "start",
   sideOffset = 4,
   restoreFocus = true,
+  closeAnimation = true,
   style,
   ref: forwardedRef,
   ...props
@@ -70,7 +77,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) space-y-px overflow-x-hidden overflow-y-auto rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+        className={cn("z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) space-y-px overflow-x-hidden overflow-y-auto rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95", closeAnimation && "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
         style={{ ...style, ...(layerZIndex === undefined ? {} : { zIndex: layerZIndex }) }}
         {...props}
         // 焦点仲裁由本封装拥有（类型层已 Omit，这里置于展开之后防运行时绕过），

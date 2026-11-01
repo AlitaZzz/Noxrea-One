@@ -6,8 +6,8 @@
  *   组内相对坐标），旧组因此变空的按「空组即删」清理；
  * - 解组：detachGroupMembers 把成员还原为顶层绝对坐标并剥离 parentId，清理组
  *   的连线（组不可连）；
- * - 组内布局（宫格/水平/垂直）：成员在组内相对空间重排，组框按内容收缩到
- *   最小包围（布局是唯一允许组框收缩的路径）。
+ * - 组内布局（宫格/水平/垂直/智能）：成员在组内相对空间重排，组框按内容收缩
+ *   到最小包围（布局是唯一允许组框收缩的路径）；算法在 shared/group-layout。
  */
 "use client";
 
@@ -15,19 +15,13 @@ import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
 import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import { arrangeGroup, type GroupLayoutMode } from "@/features/canvas/shared/group-layout";
 import { groupMembers, isGroupMember, isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
-import { measureNode } from "@/features/canvas/shared/tidy-layout";
+import { measureNode } from "@/features/canvas/shared/node-size";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
-import {
-  EventNames,
-  GROUP_NODE_MIN_HEIGHT,
-  GROUP_NODE_MIN_WIDTH,
-  GROUP_NODE_PADDING,
-  LAYOUT_GAP,
-  NODE_TITLE_HEIGHT,
-} from "@/lib/constants";
+import { EventNames, GROUP_NODE_PADDING } from "@/lib/constants";
 
 // ============================================================
 // 归属变换纯函数（导出供单测）
@@ -79,105 +73,6 @@ export function detachGroupMembers(
       selected: true,
     } as AnyNode;
   });
-}
-
-// ============================================================
-// Hook：事件监听与编排
-// ============================================================
-
-/** 布局结果：成员新位置（组内相对坐标）与组框收缩后的尺寸 */
-interface GroupLayoutResult {
-  positioned: Map<string, { x: number; y: number }>;
-  width: number;
-  height: number;
-}
-
-function measureMembers(members: AnyNode[]) {
-  let maxW = 0;
-  let maxH = 0;
-  for (const m of members) {
-    const { width, height } = measureNode(m);
-    maxW = Math.max(maxW, width);
-    maxH = Math.max(maxH, height);
-  }
-  return { maxW, maxH };
-}
-
-/** 布局原点在组内相对空间：padding + 标题栏（成员不可压住组标题） */
-const LAYOUT_ORIGIN = { x: GROUP_NODE_PADDING, y: NODE_TITLE_HEIGHT + GROUP_NODE_PADDING };
-
-function applyGridLayout(members: AnyNode[]): GroupLayoutResult {
-  const count = members.length;
-  const cols = Math.ceil(Math.sqrt(count));
-
-  // 分行流式：行内游标累加（每个节点用自身宽度），行高取该行最高节点
-  const positioned = new Map<string, { x: number; y: number }>();
-  let cursorY = LAYOUT_ORIGIN.y;
-  let maxRowWidth = 0;
-
-  for (let i = 0; i < count; i += cols) {
-    const rowMembers = members.slice(i, i + cols);
-    let cursorX = LAYOUT_ORIGIN.x;
-    let rowMaxH = 0;
-    for (const m of rowMembers) {
-      const { width: w, height: h } = measureNode(m);
-      positioned.set(m.id, { x: cursorX, y: cursorY });
-      cursorX += w + LAYOUT_GAP;
-      rowMaxH = Math.max(rowMaxH, h);
-    }
-    maxRowWidth = Math.max(maxRowWidth, cursorX - LAYOUT_ORIGIN.x - LAYOUT_GAP);
-    cursorY += rowMaxH + LAYOUT_GAP;
-  }
-
-  const contentW = maxRowWidth;
-  const contentH = cursorY - LAYOUT_ORIGIN.y - LAYOUT_GAP;
-  const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
-  const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
-  return { positioned, width, height };
-}
-
-function applyHorizontalLayout(members: AnyNode[]): GroupLayoutResult {
-  const { maxH } = measureMembers(members);
-
-  // 紧凑排列：游标按每个节点自身宽度累加，净间距恒定为 LAYOUT_GAP
-  const positioned = new Map<string, { x: number; y: number }>();
-  let cursorX = LAYOUT_ORIGIN.x;
-  for (const m of members) {
-    const { width: w, height: h } = measureNode(m);
-    positioned.set(m.id, {
-      x: cursorX,
-      y: LAYOUT_ORIGIN.y + Math.max(0, (maxH - h) / 2),
-    });
-    cursorX += w + LAYOUT_GAP;
-  }
-
-  const contentW = cursorX - LAYOUT_ORIGIN.x - LAYOUT_GAP;
-  const contentH = maxH;
-  const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
-  const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
-  return { positioned, width, height };
-}
-
-function applyVerticalLayout(members: AnyNode[]): GroupLayoutResult {
-  const { maxW } = measureMembers(members);
-
-  // 紧凑排列：游标按每个节点自身高度累加，净间距恒定为 LAYOUT_GAP
-  const positioned = new Map<string, { x: number; y: number }>();
-  let cursorY = LAYOUT_ORIGIN.y;
-  for (const m of members) {
-    const { width: w, height: h } = measureNode(m);
-    positioned.set(m.id, {
-      x: LAYOUT_ORIGIN.x + Math.max(0, (maxW - w) / 2),
-      y: cursorY,
-    });
-    cursorY += h + LAYOUT_GAP;
-  }
-
-  const contentW = maxW;
-  const contentH = cursorY - LAYOUT_ORIGIN.y - LAYOUT_GAP;
-  const width = Math.max(GROUP_NODE_MIN_WIDTH, contentW + GROUP_NODE_PADDING * 2);
-  const height = Math.max(GROUP_NODE_MIN_HEIGHT, contentH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2);
-  return { positioned, width, height };
 }
 
 // ============================================================
@@ -270,7 +165,7 @@ export function useGroupOperations() {
       const detail = (e as CustomEvent).detail as {
         nodeId?: string;
         action?: string;
-        mode?: "grid" | "vertical" | "horizontal";
+        mode?: GroupLayoutMode;
       };
       if (detail.action !== "layout" || !detail.nodeId) return;
 
@@ -281,20 +176,8 @@ export function useGroupOperations() {
       const members = groupMembers(store.nodes, group.id);
       if (members.length === 0) return;
 
-      let result: GroupLayoutResult;
-      switch (detail.mode) {
-        case "vertical":
-          result = applyVerticalLayout(members);
-          break;
-        case "horizontal":
-          result = applyHorizontalLayout(members);
-          break;
-        case "grid":
-        default:
-          result = applyGridLayout(members);
-          break;
-      }
-      const { positioned, width, height } = result;
+      // 算法在 shared/group-layout 中：hook 只负责取连线与提交（模式缺省由算法决定）
+      const { positions, width, height } = arrangeGroup(members, store.edges, detail.mode);
 
       pushHistory(takeCanvasSnapshot());
 
@@ -303,7 +186,7 @@ export function useGroupOperations() {
         if (n.id === group.id) {
           return { ...n, style: { ...n.style, width, height } };
         }
-        const pos = positioned.get(n.id);
+        const pos = positions.get(n.id);
         if (pos) return { ...n, position: pos };
         return n;
       });

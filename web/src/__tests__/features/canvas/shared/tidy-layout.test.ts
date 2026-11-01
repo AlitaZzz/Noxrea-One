@@ -1,7 +1,7 @@
 /**
  * 画布整理布局测试。
  *
- * 覆盖：规模边界、网格模式读序排布与锚点保持、分组整体平移、
+ * 覆盖：规模边界、网格模式读序排布 / 行内垂直居中与锚点保持、分组整体平移、
  * 分层模式的上游在左与链路不折行、成环与孤立节点兜底、
  * 超宽节点不重叠、网格吸附。
  */
@@ -128,6 +128,15 @@ describe("computeTidyLayout 网格模式", () => {
     expect(pos("c").y - (pos("b").y + 120)).toBe(LAYOUT_GAP);
   });
 
+  it("行内垂直居中：同一行内高矮混排时矮块相对行顶下移", () => {
+    const nodes = [node("tall", 0, 0, 200, 300), node("short", 400, 0, 200, 120)];
+    const r = computeTidyLayout(nodes, [], { mode: "grid", maxRowWidth: 10_000 });
+    const pos = posOf(nodes, r.positions);
+
+    expect(pos("tall").y).toBe(0);
+    expect(pos("short").y).toBe((300 - 120) / 2);
+  });
+
   it("结果左上角对齐原内容包围盒，内容不会飞走", () => {
     const nodes = [node("a", 500, 300), node("b", 100, 50), node("c", 900, 700)];
     const r = computeTidyLayout(nodes, [], { mode: "grid" });
@@ -186,7 +195,8 @@ describe("computeTidyLayout 分组", () => {
     // 只有 2 个顶层块：组 与 a（成员不单独产出位置）
     expect(r.positions.size).toBe(2);
     const pos = posOf(nodes, r.positions);
-    expect(pos("g").y).toBe(pos("a").y);
+    // 同行：矮块相对行顶下移（行内垂直居中，与组内宫格同一口径）
+    expect(pos("a").y - pos("g").y).toBe((300 - 120) / 2);
     expect(pos("a").x).toBeGreaterThan(pos("g").x);
   });
 

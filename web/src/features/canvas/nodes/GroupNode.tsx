@@ -102,10 +102,9 @@ function GroupNode({ id, data }: NodeProps<GroupNodeType>) {
         </>
       )}
 
-      {/* Resize — same as ImageNode */}
+      {/* Resize — 仅右下角 */}
       <SelectionResizeHandle
         nodeId={id}
-        corner="bottom-right"
         minWidth={dynMinWidth}
         minHeight={dynMinHeight}
       />

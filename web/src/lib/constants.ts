@@ -61,6 +61,13 @@ export const GROUP_NODE_MIN_HEIGHT = 120;
 // 布局节点间距 & 磁吸边对边间距
 export const LAYOUT_GAP = 60;
 
+// 组内布局（宫格 / 水平 / 垂直 / 智能）
+/** 组成员之间的净间距，同时是智能布局的列内行距（dagre nodesep）与尾列行距。
+ *  不复用 LAYOUT_GAP：该常量同时被吸附与画布整理使用，改它会连带改变画布级行为 */
+export const GROUP_LAYOUT_GAP = 60;
+/** 智能布局的列间距（dagre ranksep）与尾列横向偏移 */
+export const GROUP_LAYOUT_COLUMN_GAP = 120;
+
 /** 吸附总开关默认值（store、项目恢复与拖动会话初值共用） */
 export const DEFAULT_SNAP_ENABLED = true;
 /** 网格吸附默认步长（store 初始值与拖动会话初值共用） */

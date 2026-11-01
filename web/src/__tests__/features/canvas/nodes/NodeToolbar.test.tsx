@@ -95,6 +95,27 @@ describe("NodeToolbar content gate", () => {
   });
 });
 
+describe("NodeToolbar group layout menu", () => {
+  it.each([
+    ["node.smartLayout", "smart"],
+    ["node.gridLayout", "grid"],
+    ["node.horizontalLayout", "horizontal"],
+    ["node.verticalLayout", "vertical"],
+  ] as const)("dispatches %s and closes the menu", async (label, mode) => {
+    const { container, unmount } = renderNode("group-node", {});
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+
+    fireEvent.keyDown(trigger!, { key: "ArrowDown" });
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("menuitem", { name: label }));
+
+    expect(dispatchNodeAction).toHaveBeenCalledWith("node-1", "layout", { mode });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    unmount();
+  });
+});
+
 describe("NodeToolbar creation menu", () => {
   it("keeps tooltip control mode stable across opening and selecting a preset", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

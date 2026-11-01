@@ -130,6 +130,7 @@ export * from './icons/canvas/ResizeCornerIcon';
 export * from './icons/canvas/SendToCanvasIcon';
 export * from './icons/canvas/ShortcutIcon';
 export * from './icons/canvas/SmartEditBrushToolIcon';
+export * from './icons/canvas/SmartLayoutIcon';
 export * from './icons/canvas/SpeedIcon';
 export * from './icons/canvas/Storyboard4Icon';
 export * from './icons/canvas/Storyboard25Icon';

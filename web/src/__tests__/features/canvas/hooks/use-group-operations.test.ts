@@ -1,14 +1,27 @@
+// @vitest-environment jsdom
 /**
- * 编组/取消编组归属变换测试（attachNodesToGroup / detachGroupMembers）。
- * 直接测试 hooks 模块导出的纯函数：parentId 结构关系 + 组内相对坐标换算。
+ * 编组/取消编组归属变换与组内布局动作测试。
+ * - 纯函数：parentId 结构关系 + 组内相对坐标换算；
+ * - Hook：canvas:node-action(layout) 写入组框尺寸与成员坐标的分支与忽略条件。
  */
 
-import { describe, expect, it } from "vitest";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { attachNodesToGroup, detachGroupMembers } from "@/features/canvas/hooks/use-group-operations";
+import {
+  attachNodesToGroup,
+  detachGroupMembers,
+  useGroupOperations,
+} from "@/features/canvas/hooks/use-group-operations";
 import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { NODE_TYPE } from "@/lib/constants";
+import { EventNames, GROUP_NODE_PADDING, NODE_TITLE_HEIGHT, NODE_TYPE } from "@/lib/constants";
+
+// 布局动作会触发落库；单测只关心 store 写入，隔离保存副作用
+vi.mock("@/features/project/save-manager", () => ({
+  saveManager: { markDirty: vi.fn(), markDirtyImmediate: vi.fn() },
+}));
 
 // ── 构造辅助 ──────────────────────────────────────────────
 
@@ -96,5 +109,100 @@ describe("detachGroupMembers", () => {
     const g = groupNode("g1", 10, 20);
     const result = detachGroupMembers([g], g);
     expect(result[0]).toBe(g);
+  });
+});
+
+// ── useGroupOperations：组内布局动作 ─────────────────────
+
+function member(id: string, x: number, y: number, w = 200, h = 120): AnyNode {
+  return { ...node(id, x, y, w, h), parentId: "g" } as AnyNode;
+}
+
+/** 挂载 hook、派发一次布局动作，返回写入后的 store 快照 */
+function runLayout(detail: Record<string, unknown>) {
+  const { unmount } = renderHook(() => useGroupOperations());
+  act(() => {
+    window.dispatchEvent(new CustomEvent(EventNames.CANVAS_NODE_ACTION, { detail }));
+  });
+  unmount();
+  return useCanvasStore.getState();
+}
+
+/** 播种一个初始组框与成员，返回播种结果供断言对照 */
+function seedGroup() {
+  const group = groupNode("g", 100, 100);
+  const members = [member("a", 40, 60), member("b", 400, 60, 200, 300)];
+  useCanvasStore.setState({ nodes: [group, ...members], edges: [] });
+  return {
+    group,
+    members,
+    size: [Number(group.style?.width), Number(group.style?.height)],
+  };
+}
+
+describe("useGroupOperations onNodeAction(layout)", () => {
+  afterEach(() => {
+    cleanup();
+    useCanvasStore.setState({ nodes: [], edges: [] });
+  });
+
+  it("四种模式都写入组框尺寸与成员组内坐标，组节点自身不动", () => {
+    for (const mode of ["grid", "horizontal", "vertical", "smart"] as const) {
+      const seeded = seedGroup();
+      const { nodes } = runLayout({ nodeId: "g", action: "layout", mode });
+
+      const group = nodes.find((n) => n.id === "g")!;
+      const width = Number(group.style?.width);
+      const height = Number(group.style?.height);
+      expect(group.position).toEqual(seeded.group.position);
+      // 布局是唯一允许组框收缩的路径：尺寸相对初始组框重算
+      expect([width, height]).not.toEqual(seeded.size);
+
+      for (const original of seeded.members) {
+        const memberWidth = Number(original.style?.width);
+        const memberHeight = Number(original.style?.height);
+        const n = nodes.find((candidate) => candidate.id === original.id)!;
+        expect(n.parentId).toBe("g");
+        expect(n.position.x).toBeGreaterThanOrEqual(GROUP_NODE_PADDING);
+        expect(n.position.y).toBeGreaterThanOrEqual(NODE_TITLE_HEIGHT + GROUP_NODE_PADDING);
+        expect(n.position.x + memberWidth).toBeLessThanOrEqual(width);
+        expect(n.position.y + memberHeight).toBeLessThanOrEqual(height);
+      }
+
+      // 布局确实落盘：成员原始组内坐标已被覆盖
+      const first = seeded.members[0];
+      expect(nodes.find((n) => n.id === first.id)!.position).not.toEqual(first.position);
+    }
+  });
+
+  it("缺省 mode 等同于宫格", () => {
+    seedGroup();
+    const implicit = runLayout({ nodeId: "g", action: "layout" });
+    seedGroup();
+    const grid = runLayout({ nodeId: "g", action: "layout", mode: "grid" });
+
+    expect(implicit.nodes).toEqual(grid.nodes);
+  });
+
+  it("非组节点、未知节点与非 layout 动作都被忽略", () => {
+    for (const detail of [
+      { nodeId: "free", action: "layout", mode: "grid" },
+      { nodeId: "ghost", action: "layout", mode: "grid" },
+      { nodeId: "g", action: "align" },
+    ]) {
+      useCanvasStore.setState({
+        nodes: [groupNode("g", 0, 0), member("a", 40, 60), node("free", 500, 500)],
+        edges: [],
+      });
+      const before = useCanvasStore.getState().nodes;
+      expect(runLayout(detail).nodes).toBe(before);
+    }
+  });
+
+  it("没有成员的组忽略布局动作", () => {
+    useCanvasStore.setState({ nodes: [groupNode("g", 0, 0)], edges: [] });
+    const before = useCanvasStore.getState().nodes;
+
+    expect(runLayout({ nodeId: "g", action: "layout", mode: "grid" }).nodes).toBe(before);
   });
 });

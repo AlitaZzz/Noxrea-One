@@ -235,7 +235,6 @@ function TextNode({ id, data }: NodeProps<TextNodeType>) {
 
       <SelectionResizeHandle
         nodeId={id}
-        corner="bottom-right"
         minWidth={TEXT_NODE_MIN_WIDTH}
         minHeight={TEXT_NODE_MIN_HEIGHT}
       />

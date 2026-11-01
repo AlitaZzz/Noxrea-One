@@ -32,6 +32,7 @@ import { ImageToPromptIcon } from "@/components/ui/AppIcon";
 import { LightingIcon } from "@/components/ui/AppIcon";
 import { MultiAngleIcon } from "@/components/ui/AppIcon";
 import { PanoramaIcon } from "@/components/ui/AppIcon";
+import { SmartLayoutIcon } from "@/components/ui/AppIcon";
 import { SpeedIcon } from "@/components/ui/AppIcon";
 import { UngroupIcon } from "@/components/ui/AppIcon";
 import { VerticalLayoutIcon } from "@/components/ui/AppIcon";
@@ -47,6 +48,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAssetsStore } from "@/features/assets/store";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { mediaDataHasContent } from "@/features/canvas/shared/gen-settings-node";
+import type { GroupLayoutMode } from "@/features/canvas/shared/group-layout";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import PresetMenuContent from "@/features/canvas/shared/PresetMenuContent";
 import { usePromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
@@ -324,6 +326,10 @@ function NodeToolbar({
   const [creationOpen, setCreationOpen] = useState(false);
   const [transformOpen, setTransformOpen] = useState(false);
   const [layoutOpen, setLayoutOpen] = useState(false);
+  // 布局会同步改变组框尺寸；退出动画中的浮层会跟随被移动的触发器重新定位，
+  // 表现为「尺寸先变、菜单再滑走」的闪跳。选中布局项时置位，本次关闭不播放
+  // 退出动画，浮层与尺寸变更同帧卸载；重新打开时复位。
+  const [layoutCloseInstant, setLayoutCloseInstant] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [groupColorOpen, setGroupColorOpen] = useState(false);
   const previousDismissSignal = useRef(dismissSignal);
@@ -346,6 +352,13 @@ function NodeToolbar({
       onShowInspector(nodeId);
     },
     [nodeId, onShowInspector]
+  );
+  const handleLayout = useCallback(
+    (mode: GroupLayoutMode) => {
+      setLayoutCloseInstant(true);
+      dispatchNodeAction(nodeId, "layout", { mode });
+    },
+    [nodeId]
   );
 
   // 空内容节点不显示工具条：所有内容动作都依赖内容，保留只会是一排禁用按钮
@@ -628,7 +641,10 @@ function NodeToolbar({
             </PopoverContent>
           </Popover>
           <DropdownMenu open={layoutOpen} onOpenChange={(open) => {
-            if (open) setPreserveFocusOnDismiss(false);
+            if (open) {
+              setPreserveFocusOnDismiss(false);
+              setLayoutCloseInstant(false);
+            }
             setLayoutOpen(open);
           }}>
             <Tooltip><TooltipTrigger asChild>
@@ -636,14 +652,17 @@ function NodeToolbar({
                   <Button size="icon" variant="ghost"><GroupGridIcon /></Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger><TooltipContent>{t("common.layout")}</TooltipContent></Tooltip>
-            <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss}>
-              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "grid" })}>
+            <DropdownMenuContent side="bottom" align="center" restoreFocus={!preserveFocusOnDismiss} closeAnimation={!layoutCloseInstant}>
+              <DropdownMenuItem onSelect={() => handleLayout("smart")}>
+                <SmartLayoutIcon />{t("node.smartLayout")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleLayout("grid")}>
                 <GridLayoutIcon />{t("node.gridLayout")}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "horizontal" })}>
+              <DropdownMenuItem onSelect={() => handleLayout("horizontal")}>
                 <HorizontalLayoutIcon />{t("node.horizontalLayout")}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchNodeAction(nodeId, "layout", { mode: "vertical" })}>
+              <DropdownMenuItem onSelect={() => handleLayout("vertical")}>
                 <VerticalLayoutIcon />{t("node.verticalLayout")}
               </DropdownMenuItem>
             </DropdownMenuContent>

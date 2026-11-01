@@ -170,6 +170,7 @@
     "gridSplitSuffix": " (宫格切分 {{index}})",
     "gridCustom": "自定义",
     "gridSelect": "选择行列数",
+    "smartLayout": "智能布局",
     "gridLayout": "宫格布局",
     "verticalLayout": "垂直布局",
     "horizontalLayout": "水平布局",

@@ -161,6 +161,31 @@ describe("DropdownMenu", () => {
     });
   });
 
+  it("plays an exit animation by default", () => {
+    render(
+      <DropdownMenu open>
+        <DropdownMenuTrigger asChild><button type="button">Open menu</button></DropdownMenuTrigger>
+        <DropdownMenuContent><DropdownMenuItem>Action</DropdownMenuItem></DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    expect(screen.getByRole("menu")).toHaveClass("data-closed:animate-out", "data-closed:fade-out-0");
+  });
+
+  it("can skip the exit animation when the action moves its trigger", () => {
+    render(
+      <DropdownMenu open>
+        <DropdownMenuTrigger asChild><button type="button">Open menu</button></DropdownMenuTrigger>
+        <DropdownMenuContent closeAnimation={false}><DropdownMenuItem>Action</DropdownMenuItem></DropdownMenuContent>
+      </DropdownMenu>,
+    );
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveClass("data-open:animate-in");
+    expect(menu).not.toHaveClass("data-closed:animate-out");
+    expect(menu).not.toHaveClass("data-closed:fade-out-0");
+  });
+
   it("renders the official controlled structure and selects an item", () => {
     const onOpenChange = vi.fn();
     const onSelect = vi.fn();

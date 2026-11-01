@@ -14,7 +14,7 @@ import { GROUP_NODE_PADDING, RAIL_WIDTH } from "@/lib/constants";
 import { edgeTouchesSelection } from "./edge-selection";
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
 import { isGroupNode, memberParentId } from "./group-membership";
-import { measureNode } from "./tidy-layout";
+import { measureNode } from "./node-size";
 
 export interface SelectionFrame {
   ids: string[];

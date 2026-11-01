@@ -12,20 +12,15 @@
  *
  * 只产出坐标，不修改入参、不触碰 store，由调用方负责压栈 / 落库 / 动画。
  */
-import dagre, { type EdgeLabel, type GraphLabel, type NodeLabel } from "@dagrejs/dagre";
 import type { Edge } from "@xyflow/react";
 
 import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_PADDING, LAYOUT_GAP, TIDY_MAX_ROW_WIDTH } from "@/lib/constants";
 
 import { groupMembers, isGroupNode, memberParentId } from "./group-membership";
-
-/** 节点尺寸兜底（未测量到时的猜测值） */
-const FALLBACK_WIDTH = 200;
-const FALLBACK_HEIGHT = 120;
-
-/** 读序分带的最小带高，防止节点极矮时把所有节点并成一带 */
-const MIN_BAND_HEIGHT = 60;
+import { collectLinks, packLayered } from "./layered-layout";
+import { measureNode } from "./node-size";
+import { sortBoxesByReading } from "./reading-order";
 
 /** 单行最少列数 */
 const MIN_COLUMNS = 1;
@@ -57,11 +52,6 @@ export interface TidyResult {
   movedCount: number;
 }
 
-export interface Size {
-  width: number;
-  height: number;
-}
-
 /** 布局单元：一个独立节点，或一个「组 + 成员」整体块（成员随组平移） */
 interface LayoutUnit {
   /** 块原点对应的节点 id（组块为组节点 id） */
@@ -74,20 +64,6 @@ interface LayoutUnit {
   height: number;
   x: number;
   y: number;
-}
-
-/** 转正数，NaN / 0 / 负数一律视为无效值以走回退链 */
-function toNumber(v: unknown): number | undefined {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : undefined;
-}
-
-/** 取节点尺寸：实测值 > style 显式值 > 兜底猜测 */
-export function measureNode(node: AnyNode): Size {
-  return {
-    width: toNumber(node.measured?.width) ?? toNumber(node.style?.width) ?? FALLBACK_WIDTH,
-    height: toNumber(node.measured?.height) ?? toNumber(node.style?.height) ?? FALLBACK_HEIGHT,
-  };
 }
 
 /**
@@ -148,154 +124,24 @@ function collectUnits(nodes: AnyNode[]): LayoutUnit[] {
   return units;
 }
 
-/** 读序：按 y 分带（同一横带内按 x 升序），贴合视觉阅读顺序 */
-function sortByReading(units: LayoutUnit[]): LayoutUnit[] {
-  if (units.length <= 1) return [...units];
-
-  const avgHeight = units.reduce((sum, u) => sum + u.height, 0) / units.length;
-  // 带高取平均高度的一半：既容得下同一行内的轻微错位，又不会把上下两行并成一行
-  const bandHeight = Math.max(MIN_BAND_HEIGHT, avgHeight / 2);
-
-  const byY = [...units].sort((a, b) => a.y - b.y);
-  const bands: LayoutUnit[][] = [];
-  let band: LayoutUnit[] = [];
-  let bandTop = 0;
-
-  for (const u of byY) {
-    if (band.length === 0) {
-      band = [u];
-      bandTop = u.y;
-      continue;
-    }
-    if (u.y - bandTop < bandHeight) {
-      band.push(u);
-    } else {
-      bands.push(band);
-      band = [u];
-      bandTop = u.y;
-    }
-  }
-  if (band.length > 0) bands.push(band);
-
-  return bands.flatMap((b) => [...b].sort((a, b2) => a.x - b2.x));
-}
-
 /**
- * 用 dagre 做分层布局（Sugiyama：层分配 + 交叉最小化 + 坐标分配）。
- *
- * 主 DAG 交给 dagre：上游在左、下游在右，同层内顺序由 dagre 的重心/中位数
- * 启发式重排，连线交叉显著减少，是 React Flow 官方 Auto Layout 同款实现。
- *
- * 环内块与孤立块不喂给 dagre（dagre 要求无环），而是单列排到主图最右侧，
- * 不打断主链路。
+ * 块级依赖：连线端点映射到所在块（成员边映射为组块间的边）。
+ * 组内连线、自环与悬空边不构成块间上下游关系，由分层布局忽略。
  */
-function packWithDagre(
-  units: LayoutUnit[],
-  edges: Edge[],
-  readingIndex: Map<string, number>,
-): Map<string, { x: number; y: number }> {
-  const placed = new Map<string, { x: number; y: number }>();
-  if (units.length === 0) return placed;
-
-  // —— 构建块级依赖图（连线端点映射到所在块：成员边映射为组块间的边；
-  // 组内连线、自环、悬空边忽略）——
-  const outgoing = new Map<string, Set<string>>();
-  const indegree = new Map<string, number>();
-  for (const u of units) {
-    outgoing.set(u.id, new Set());
-    indegree.set(u.id, 0);
-  }
+function blockLinks(units: LayoutUnit[], edges: Edge[]): Array<[string, string]> {
   const unitOfNode = new Map<string, string>();
   for (const u of units) {
     unitOfNode.set(u.id, u.id);
     for (const m of u.memberIds) unitOfNode.set(m, u.id);
   }
-  for (const e of edges) {
-    const s = unitOfNode.get(e.source);
-    const t = unitOfNode.get(e.target);
-    if (!s || !t || s === t) continue;
-    const set = outgoing.get(s)!;
-    if (set.has(t)) continue; // 平行边去重
-    set.add(t);
-    indegree.set(t, (indegree.get(t) ?? 0) + 1);
-  }
 
-  const byReading = (a: LayoutUnit, b: LayoutUnit) =>
-    (readingIndex.get(a.id) ?? 0) - (readingIndex.get(b.id) ?? 0);
-
-  // Kahn 判环：未访问到的块卡在环里，不能喂给 dagre
-  const deg = new Map(indegree);
-  const visited = new Set<string>();
-  const ready = units
-    .filter((u) => (deg.get(u.id) ?? 0) === 0)
-    .map((u) => u.id)
-    .sort((a, b) => (readingIndex.get(a) ?? 0) - (readingIndex.get(b) ?? 0));
-  while (ready.length > 0) {
-    const id = ready.shift()!;
-    if (visited.has(id)) continue;
-    visited.add(id);
-    for (const next of outgoing.get(id) ?? []) {
-      const d = (deg.get(next) ?? 0) - 1;
-      deg.set(next, d);
-      if (d <= 0 && !visited.has(next)) {
-        ready.push(next);
-        ready.sort((a, b) => (readingIndex.get(a) ?? 0) - (readingIndex.get(b) ?? 0));
-      }
-    }
-  }
-
-  const main: LayoutUnit[] = [];
-  const tail: LayoutUnit[] = [];
-  for (const u of units) {
-    const noIn = (indegree.get(u.id) ?? 0) === 0;
-    const noOut = (outgoing.get(u.id)?.size ?? 0) === 0;
-    if (!visited.has(u.id) || (noIn && noOut)) tail.push(u);
-    else main.push(u);
-  }
-  tail.sort(byReading);
-
-  // —— 主 DAG 交给 dagre ——
-  let mainWidth = 0;
-  let mainHeight = 0;
-  if (main.length > 0) {
-    const g = new dagre.graphlib.Graph<GraphLabel, NodeLabel, EdgeLabel>();
-    g.setGraph({ rankdir: "LR", nodesep: LAYOUT_GAP, ranksep: LAYOUT_GAP });
-    g.setDefaultEdgeLabel(() => ({}));
-    for (const u of main) g.setNode(u.id, { width: u.width, height: u.height });
-    for (const [s, ts] of outgoing) {
-      if (!g.hasNode(s)) continue;
-      for (const t of ts) if (g.hasNode(t)) g.setEdge(s, t);
-    }
-    dagre.layout(g);
-
-    for (const u of main) {
-      const n = g.node(u.id)!;
-      // dagre 给中心点，转左上角（布局后 x/y 必存在）
-      placed.set(u.id, { x: n.x! - u.width / 2, y: n.y! - u.height / 2 });
-    }
-    const graph = g.graph();
-    mainWidth = graph.width ?? 0;
-    mainHeight = graph.height ?? 0;
-  }
-
-  // —— 环内块与孤立块：单列垂直排到主图右侧，并相对主图垂直居中 ——
-  const tailHeight =
-    tail.length === 0
-      ? 0
-      : tail.reduce((sum, u) => sum + u.height, 0) + LAYOUT_GAP * (tail.length - 1);
-  const tailX = mainWidth > 0 ? mainWidth + LAYOUT_GAP : 0;
-  let tailY = tail.length > 0 ? Math.max(0, (mainHeight - tailHeight) / 2) : 0;
-  for (const u of tail) {
-    placed.set(u.id, { x: tailX, y: tailY });
-    tailY += u.height + LAYOUT_GAP;
-  }
-
-  return placed;
+  return collectLinks(edges, (id) => unitOfNode.get(id));
 }
 
 /**
  * 行游标填充：行宽超上限或列数达上限即换行，行高取该行最高块。
- * 按块自身宽度累加（而非固定列宽），保证净间距恒为 LAYOUT_GAP。
+ * 按块自身宽度累加（而非固定列宽），保证净间距恒为 LAYOUT_GAP；行内垂直
+ * 居中——矮块相对行顶下移，与组内宫格同一口径。
  */
 function packRows(
   units: LayoutUnit[],
@@ -315,22 +161,32 @@ function packRows(
     Math.min(widthLimited, Math.ceil(Math.sqrt(units.length))),
   );
 
+  // 先按行宽 / 列数切行（与竖直定位无关），再逐行落位：行高要整行确定后才可知
+  const rows: LayoutUnit[][] = [];
+  let row: LayoutUnit[] = [];
   let cursorX = 0;
-  let cursorY = 0;
-  let rowMaxH = 0;
-  let column = 0;
-
   for (const u of units) {
-    if (column > 0 && (cursorX + u.width > maxRowWidth || column >= maxColumns)) {
+    if (row.length > 0 && (cursorX + u.width > maxRowWidth || row.length >= maxColumns)) {
+      rows.push(row);
+      row = [];
       cursorX = 0;
-      cursorY += rowMaxH + LAYOUT_GAP;
-      rowMaxH = 0;
-      column = 0;
     }
-    placed.set(u.id, { x: cursorX, y: cursorY });
+    row.push(u);
     cursorX += u.width + LAYOUT_GAP;
-    rowMaxH = Math.max(rowMaxH, u.height);
-    column += 1;
+  }
+  if (row.length > 0) rows.push(row);
+
+  let rowTop = 0;
+  for (const current of rows) {
+    let rowHeight = 0;
+    for (const u of current) rowHeight = Math.max(rowHeight, u.height);
+
+    let x = 0;
+    for (const u of current) {
+      placed.set(u.id, { x, y: rowTop + (rowHeight - u.height) / 2 });
+      x += u.width + LAYOUT_GAP;
+    }
+    rowTop += rowHeight + LAYOUT_GAP;
   }
 
   return placed;
@@ -357,15 +213,12 @@ export function computeTidyLayout(
     return { positions: new Map(), movedCount: 0 };
   }
 
-  const reading = sortByReading(units);
-  const readingIndex = new Map(reading.map((u, i) => [u.id, i]));
-
   // 有连线的画布必须走分层：网格填充会在行末折行，把下游甩到上游下方
   const hasEdges = edges.some((e) => e.source !== e.target);
   const useLayer = mode === "layer" || (mode === "auto" && hasEdges);
   const placed = useLayer
-    ? packWithDagre(units, edges, readingIndex)
-    : packRows(reading, maxRowWidth);
+    ? packLayered(units, blockLinks(units, edges), { gap: LAYOUT_GAP, columnGap: LAYOUT_GAP })
+    : packRows(sortBoxesByReading(units), maxRowWidth);
 
   let originX = Infinity;
   let originY = Infinity;

@@ -20,7 +20,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { GROUP_NODE_MIN_HEIGHT, GROUP_NODE_MIN_WIDTH, GROUP_NODE_PADDING } from "@/lib/constants";
 
 import { groupMembers, isGroupMember, isGroupNode, memberParentId } from "./group-membership";
-import { measureNode } from "./tidy-layout";
+import { measureNode } from "./node-size";
 
 // ============================================================
 // 坐标换算（成员相对坐标 ↔ 绝对坐标）
@@ -130,9 +130,9 @@ export function computeFittedGroupRect(
 
 /**
  * 组框原点位移补偿（组几何的唯一原语）：组框是视觉容器，原点移动（向上/向左
- * 扩张、top/left 缩放）时成员相对位置反向平移，保证所有成员的视觉（绝对）
- * 位置不变。dx/dy 为组框原点位移量（新原点 − 旧原点）。无位移时原引用返回。
- * 消费方：refitGroupRects（归属变化重算组框）与 ResizeHandle（组 top/left 缩放）。
+ * 扩张）时成员相对位置反向平移，保证所有成员的视觉（绝对）位置不变。
+ * dx/dy 为组框原点位移量（新原点 − 旧原点）。无位移时原引用返回。
+ * 唯一直接调用方：refitGroupRects（归属变化与组落点创建共用，见其注释）。
  */
 export function shiftGroupMembers(
   nodes: AnyNode[],

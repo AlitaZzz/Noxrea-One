@@ -170,6 +170,7 @@
     "gridSplitSuffix": " (Grid Split {{index}})",
     "gridCustom": "Custom",
     "gridSelect": "Select rows & cols",
+    "smartLayout": "Smart Layout",
     "gridLayout": "Grid Layout",
     "verticalLayout": "Vertical Layout",
     "horizontalLayout": "Horizontal Layout",
