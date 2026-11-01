@@ -939,15 +939,6 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 @media (prefers-reduced-motion: reduce) {
   .login-anim, .login-anim * { animation: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
 }
-/* ===== 生成面板文本域（gen-textarea）=====
-   统一文本域聚焦态描边；原先三面板各自内联样式重复定义，收口至此。 */
-.gen-textarea:focus,
-.gen-textarea-focused {
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
-
 /* ===== 连线拖动目标节点反馈（connection-tilt）=====
    状态类由 controls/connection-tilt.ts 命令式写在与维护，只加在节点 body 上
    （不含标题栏）；整卡倾斜由 .node-tilt 的内联 transform 承担：
