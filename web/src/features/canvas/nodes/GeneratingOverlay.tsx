@@ -1,8 +1,9 @@
 /**
  * 生成中占位浮层（GeneratingOverlay）。
- * 图片 / 文本 / 视频 / 音频节点共用：极光带流转 + 两团呼吸柔光（青柠×深青）+ 实时耗时。
- * 相位去同步：各光斑用 startedAt 对各自周期取模做负 animation-delay，
- * 多节点同时生成时不会齐刷刷同频齐动。
+ * 图片 / 文本 / 视频 / 音频节点共用：纯色深底（#1f1f1f）+ 颗粒漂浮 + 文字流光 +
+ * 文案 / 实时耗时。颗粒只动 transform（交给合成器），文字流光仅重绘文案小面积；
+ * 相位由 startedAt 取模做负 delay，多节点同时生成时不同频。
+ * 不做极光带、中心光晕、大范围模糊与进度条。
  * 通过 absolute 参数适配不同节点的容器布局。
  */
 "use client";
@@ -10,7 +11,6 @@
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import LimeRing from "@/features/canvas/shared/LimeRing";
 import { formatElapsed } from "@/lib/utils/format-elapsed";
 
 function GeneratingOverlay({
@@ -22,7 +22,7 @@ function GeneratingOverlay({
   text?: string;
   /** 是否 absolute 定位铺满容器（Image/Text 用）；false 则用 w-full h-full（Video/Audio 用） */
   absolute?: boolean;
-  /** 任务开始时间戳（ms）；传入时在文案后追加实时耗时，并用于动画相位去同步 */
+  /** 任务开始时间戳（ms）；传入时在文案后追加实时耗时 */
   startedAt?: number;
 }) {
   const { t } = useTranslation();
@@ -37,27 +37,26 @@ function GeneratingOverlay({
   }, [startedAt]);
 
   const elapsedSeconds = startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : null;
-  // 相位去同步：各动画周期不同，用 startedAt 对各自周期取模做负 delay
-  const phaseMs = startedAt ?? 0;
 
   return (
     <div
       className={
         (absolute ? "absolute inset-0" : "w-full h-full relative") +
-        " rounded-lg gen-stage generating-overlay flex flex-col items-center justify-center gap-2.5 overflow-hidden"
+        " gen-stage rounded-lg flex items-center justify-center overflow-hidden"
       }
     >
-      {/* 极光带：斜贯画面的青柠与深青渐变缓慢流转 */}
-      <div className="gen-ribbon" style={{ animationDelay: `-${phaseMs % 13000}ms` }} aria-hidden />
-      {/* 呼吸柔光：光带上下两团错相位（周期与 globals.css 的 gen-drift-* 对应），glow 之上文字保持安静 */}
-      <div className="gen-blob gen-blob-1" style={{ animationDelay: `-${phaseMs % 9000}ms` }} aria-hidden />
-      <div className="gen-blob gen-blob-2" style={{ animationDelay: `-${phaseMs % 7000}ms` }} aria-hidden />
-      {/* 噪点抖动：打散渐变色带 */}
-      <div className="gen-noise" aria-hidden />
-      <LimeRing className="generation-border" />
-      {/* 中心：文案（冷白主文字 + 冷灰耗时，高饱和光晕上暖色会发脏，保持冷调） */}
+      <div
+        className="gen-grain"
+        style={{ animationDelay: `-${(startedAt ?? 0) % 30000}ms` }}
+        aria-hidden
+      />
       <span className="relative text-xs text-white/80">
-        {text ?? t("common.generating")}
+        <span
+          className="gen-text-shimmer"
+          style={{ animationDelay: `-${(startedAt ?? 0) % 5000}ms` }}
+        >
+          {text ?? t("common.generating")}
+        </span>
         {elapsedSeconds !== null && (
           <span className="tabular-nums text-white/60">
             {" · "}

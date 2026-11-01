@@ -29,8 +29,8 @@ describe("LimeRing", () => {
     expect(spin.childElementCount).toBe(0);
   });
 
-  it("透传调用方类名，生成浮层据此保留 .generation-border 定位", () => {
-    const { container } = render(<LimeRing className="generation-border" />);
-    expect(container.firstElementChild).toHaveClass("lime-ring", "generation-border");
+  it("透传调用方类名", () => {
+    const { container } = render(<LimeRing className="custom-ring" />);
+    expect(container.firstElementChild).toHaveClass("lime-ring", "custom-ring");
   });
 });

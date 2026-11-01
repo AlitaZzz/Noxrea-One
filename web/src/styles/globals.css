@@ -763,114 +763,57 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   position: relative;
   z-index: 1;
 }
-.generating-overlay {
-  isolation: isolate;
-}
-.generation-border {
-  z-index: 2;
-}
 @media (prefers-reduced-motion: reduce) {
   .lime-ring__spin {
     animation: none;
   }
 }
 
-/* ===== 生成中浮层动画（GeneratingOverlay）=====
-   「黑暗中浮现」构图：一条青柠×深青渐变光带斜贯画面缓慢流转（大模糊让它读作
-   极光而非图形），辅以两团低幅呼吸柔光。青柠与画布强调色（波形进度/选中态）同源；
-   饱和度高，各层透明度相应压低，靠大模糊晕开避免刺眼。文字安静居中。
-   相位去同步：动画 delay 由 startedAt 取模驱动（组件内联 style）。 */
-/* 舞台底色：石墨黑基底（微绿冷调）+ 极淡静态辉光兜底（减弱动态降级时也有完整观感） */
+/* ===== 生成中浮层（GeneratingOverlay）=====
+   纯色深底（设计参考的卡片色 #1f1f1f）+ 颗粒漂浮 + 文字流光：
+   颗粒只动 transform（交给合成器），文字流光仅重绘文案小面积；
+   不做极光带、中心光晕、大范围模糊与进度条；相位由组件内联的负 animation-delay 去同步。 */
 .gen-stage {
-  background:
-    radial-gradient(
-      70% 52% at 50% 46%,
-      rgba(199, 244, 61, 0.07) 0%,
-      rgba(199, 244, 61, 0.03) 45%,
-      transparent 72%
-    ),
-    radial-gradient(140% 110% at 50% 44%, #11150f 0%, #090b08 55%, #040503 100%);
+  background: #1f1f1f;
 }
-/* 极光带：横贯画面的长椭圆渐变，斜置 + 大模糊，两端隐入黑暗。
-   流转 = 缓慢平移 + 角度微摆 + 明暗起伏，连贯无折返感 */
-.gen-ribbon {
+/* 颗粒漂浮：稀疏尘点 320px 平铺，整层 30s 平移一个 tile（与 tile 对齐，循环无缝） */
+.gen-grain {
   position: absolute;
-  left: -30%;
-  top: 32%;
-  width: 160%;
-  height: 42%;
-  border-radius: 50%;
+  inset: -320px;
   pointer-events: none;
-  background: linear-gradient(
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='28' cy='42' r='1.2' fill-opacity='.6'/%3E%3Ccircle cx='120' cy='20' r='.8' fill-opacity='.4'/%3E%3Ccircle cx='210' cy='58' r='1.5' fill-opacity='.55'/%3E%3Ccircle cx='288' cy='96' r='.9' fill-opacity='.4'/%3E%3Ccircle cx='62' cy='120' r='1' fill-opacity='.5'/%3E%3Ccircle cx='168' cy='148' r='1.3' fill-opacity='.55'/%3E%3Ccircle cx='252' cy='182' r='.8' fill-opacity='.4'/%3E%3Ccircle cx='22' cy='196' r='.9' fill-opacity='.45'/%3E%3Ccircle cx='104' cy='224' r='1.4' fill-opacity='.5'/%3E%3Ccircle cx='196' cy='244' r='.7' fill-opacity='.35'/%3E%3Ccircle cx='292' cy='262' r='1.1' fill-opacity='.45'/%3E%3Ccircle cx='48' cy='292' r='.8' fill-opacity='.4'/%3E%3Ccircle cx='140' cy='276' r='.6' fill-opacity='.3'/%3E%3Ccircle cx='228' cy='300' r='.9' fill-opacity='.4'/%3E%3Ccircle cx='12' cy='84' r='.6' fill-opacity='.3'/%3E%3Ccircle cx='158' cy='92' r='.7' fill-opacity='.35'/%3E%3Ccircle cx='276' cy='136' r='.6' fill-opacity='.3'/%3E%3Ccircle cx='86' cy='168' r='.6' fill-opacity='.3'/%3E%3Ccircle cx='242' cy='72' r='.6' fill-opacity='.3'/%3E%3Ccircle cx='316' cy='42' r='.6' fill-opacity='.3'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 320px 320px;
+  animation: gen-grain-drift 30s linear infinite;
+  will-change: transform;
+}
+@keyframes gen-grain-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-320px, -320px, 0); }
+}
+/* 文字流光：文案亮度缓慢扫过（background-clip: text），只重绘文案小面积 */
+.gen-text-shimmer {
+  background-image: linear-gradient(
     90deg,
-    transparent 0%,
-    rgba(199, 244, 61, 0.13) 26%,
-    rgba(45, 212, 191, 0.16) 50%,
-    rgba(199, 244, 61, 0.13) 74%,
-    transparent 100%
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(255, 255, 255, 0.68) 42%,
+    #ffffff 50%,
+    rgba(255, 255, 255, 0.68) 58%,
+    rgba(255, 255, 255, 0.68) 100%
   );
-  filter: blur(42px);
-  animation: gen-ribbon-flow 13s ease-in-out infinite;
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gen-text-shimmer 5s ease-in-out infinite;
 }
-@keyframes gen-ribbon-flow {
-  0%, 100% { transform: rotate(-14deg) translateX(-5%); opacity: 0.85; }
-  50% { transform: rotate(-10deg) translateX(5%); opacity: 1; }
-}
-.gen-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
-  pointer-events: none;
-}
-/* 青柠团：辉光中心上方呼吸，托住光带 */
-.gen-blob-1 {
-  width: 55%;
-  height: 42%;
-  left: 26%;
-  top: 12%;
-  background: radial-gradient(
-    ellipse,
-    rgba(199, 244, 61, 0.1) 0%,
-    rgba(199, 244, 61, 0.045) 45%,
-    transparent 72%
-  );
-  animation: gen-drift-1 9s ease-in-out infinite;
-}
-/* 深青团：光带下方反向呼吸，拉开纵深 */
-.gen-blob-2 {
-  width: 48%;
-  height: 40%;
-  left: 14%;
-  top: 56%;
-  background: radial-gradient(
-    ellipse,
-    rgba(45, 212, 191, 0.08) 0%,
-    rgba(45, 212, 191, 0.035) 45%,
-    transparent 72%
-  );
-  animation: gen-drift-2 7s ease-in-out infinite;
-}
-@keyframes gen-drift-1 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(4%, 3%) scale(1.08); }
-}
-@keyframes gen-drift-2 {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-4%, -3%) scale(1.07); }
-}
-/* 噪点抖动层：8-bit sRGB 渐变在暗底上会产生等高线状色带（banding），
-   叠一层极淡的 fractalNoise 把色阶差打散，光斑才显得平滑「矢量」 */
-.gen-noise {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.05;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+@keyframes gen-text-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .gen-ribbon,
-  .gen-blob-1,
-  .gen-blob-2 {
+  .gen-grain,
+  .gen-text-shimmer {
     animation: none;
   }
 }

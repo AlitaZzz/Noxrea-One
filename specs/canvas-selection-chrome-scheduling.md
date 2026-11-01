@@ -14,7 +14,7 @@
 
 - 选中链路的同步提交成本：选中状态提交、节点工具条挂载、生成面板挂载。
 - 起拖链路：React Flow 起拖时的选中、拖动会话初始化、历史压栈、交互态切换。
-- 流光描边动画的实现方式：生成浮层、连接目标高亮、Agent 入口按钮共用的描边 recipe。
+- 流光描边动画的实现方式：连接目标高亮、Agent 入口按钮共用的描边 recipe（生成浮层曾接入，2026-11-01 改为纯色深底）。
 
 ### 2.2 不包含
 
@@ -432,7 +432,7 @@
 3. 选中操作不得写回节点数据。
 4. 生成设置纠偏规则不变，只迁移执行时机（已按 5.2 实现）。
 5. 编辑类面板的挂载策略不变。
-6. 流光描边不得使用主线程逐帧动画；生成浮层、连接目标高亮、Agent 入口按钮共用同一可合成实现。
+6. 流光描边不得使用主线程逐帧动画；连接目标高亮、Agent 入口按钮共用同一可合成实现（生成浮层自 2026-11-01 起改为纯色深底，不再接入）。
 7. 起拖路径不得执行与当前交互无关的全画布同步工作；具体边界以 trace 归因为准。
 
 ## 7. 异常与边界
@@ -492,7 +492,7 @@
   - 未修改业务代码，未执行新的运行时测量。
 - 5.3 已实现（工作区未提交，2026-10-31 用户指示「先做 5.3」）：
   - 新增共享组件 `shared/LimeRing.tsx`：外层静态 1.5px 遮罩环（`padding: 1.5px` + `mask-composite: exclude` + `border-radius: inherit`），内层 `150cqmax` 方形静态 `conic-gradient`，动画只旋转内层 `transform`；删除 `@property --lime-flow-ring-angle` 与旧 `::before` 描边规则。
-  - 三处接入：生成浮层 `<LimeRing className="generation-border" />`；TEXT/IMAGE/VIDEO/AUDIO 的 `.node-body` 常驻 `<LimeRing />`，显隐由 `connection-tilt` 命令式切换 `.node-connect-ok`（不触发 React 重渲染）；Agent 入口按钮 `<LimeRing />`。Group/Director 不是连接目标，不接入。
+  - 三处接入：生成浮层 `<LimeRing className="generation-border" />`；TEXT/IMAGE/VIDEO/AUDIO 的 `.node-body` 常驻 `<LimeRing />`，显隐由 `connection-tilt` 命令式切换 `.node-connect-ok`（不触发 React 重渲染）；Agent 入口按钮 `<LimeRing />`。Group/Director 不是连接目标，不接入。（2026-11-01：生成浮层改为纯色深底，该接入点移除。）
   - 独立探针（无节流无头 Chrome，360×180 与 140×320 两个圆角环，深色与浅色两种底色）：新旧实现冻结在同一 45° 相位的截图视觉一致（环宽、圆角、高光位置相同）。
   - 主线程指标（每种实现单独显示 2s）：`TaskDuration` 旧 0.1010–0.1022s → 新 0.0165–0.0191s；`RecalcStyleCount` 旧 120 → 新 24–25；`RecalcStyleDuration` 旧 0.0457–0.0459s → 新 0.0037–0.0039s；`LayoutCount` 两者均为 0。
   - reduced-motion：`--force-prefers-reduced-motion` 下 `matchMedia` 为 true，`.lime-ring__spin` 的 `animationName` 为 `none`、运行中动画数为 0（同一探针内旧 `.old-ring` 仍为 `old-spin`，说明媒体查询本身生效）。
@@ -657,3 +657,19 @@
   - 5.3「长任务期间不停帧」未直接观测：依据是无主线程逐帧重算（transform 动画走合成器）的推断，非录像证据；
   - 5.5 补测（3.3.2/3.3.3）局限：dev 构建、合成 MouseEvent（点击无 PointerEvent）、单次样本、绘制/合成未单独插桩；样式测量以强制 recalc 为口径，含测量自身开销；交互态切换的 ≈30ms 是在拖动任务内推断，未与真实拖动帧逐一对应；
   - 5.4 已实现；5.5 工作项 2/4 按数据不实施、工作项 3 已实现但收益低于测量分辨率。复测为 dev + 合成事件 + 探针项目（缩放 0.6944），生产构建与真实 141 节点项目均未复测；3.3.4 的 Ctrl+A 与上一探针差异未归因。
+- 2026-11-01 生成浮层改版（用户设计反馈）：`GeneratingOverlay` 由
+  「极光带 + 呼吸柔光 + 噪点」动画改为纯色深底 `#1f1f1f`（取自设计参考截图的卡片色），
+  不加极光带 / 进度条；保留现有文案（`生成中 · 耗时`，耗时每秒刷新）
+  与 `absolute` / 非 absolute 两种布局；不再接入 `LimeRing` 描边。同步删除
+  `gen-ribbon` / `gen-blob-*` / `gen-noise` / `.generating-overlay` /
+  `.generation-border` 样式。
+  用户随后选定叠加两种 2026 方向：**颗粒漂浮**与**文字流光**（`gen-text-shimmer`，
+  `background-clip: text` 的亮度扫过 0.68 ↔ 1，5s 一次，仅重绘文案小面积；耗时
+  数字不在流光层内）。颗粒初版为 160px 均匀噪点、opacity 0.03，用户实测反馈
+  「和描述不一样」：在 824px 级节点上实测像素波动仅 ±1 级、且均匀噪点平移不可
+  感知；遂改为**稀疏尘点**（`gen-grain`，320px tile / 20 颗 0.6–1.5px 白点、
+  层 opacity 0.4、30s 平移一个 tile 无缝循环、只动 transform），既保留 #1f1f1f
+  底色，又让漂移可见。用户随后要求去掉中心呼吸微光（2026-11-01）：删除
+  `gen-breathe` 层、关键帧与 reduced-motion 条目，最终浮层只有颗粒 + 文字流光。
+  两者均按 `startedAt` 做负 delay 去同步，`prefers-reduced-motion` 下关闭动画。
+  视觉走查待用户确认。
