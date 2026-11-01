@@ -199,6 +199,19 @@ describe("VideoNode poster-first", () => {
     expect(screen.queryByRole("button", { name: "play" })).toBeNull();
   });
 
+  it("再次生成时旧海报卸载：纯色生成浮层下不得残留上一张画面", async () => {
+    const view = render(<Scene />);
+    await flushMicrotasks();
+    expect(view.container.querySelector("img")).not.toBeNull();
+    // 带 src 的节点重新提交生成：海报若继续垫底，会在画布小数缩放时
+    // 从浮层圆角边缘的反锯齿缝里透出上一张画面
+    setNodeData({ taskBinding: { taskId: "t1", status: "pending", startedAt: Date.now() } });
+    await flushMicrotasks();
+    expect(view.container.querySelector(".gen-stage")).not.toBeNull();
+    expect(view.container.querySelector("img")).toBeNull();
+    expect(view.container.querySelector("video")).toBeNull();
+  });
+
   it("访问地址未就绪时视频元素不渲染空 src（不拿页面自身当媒体请求）", async () => {
     setFileAccessPending(SOURCE_URL);
     render(<Scene />);

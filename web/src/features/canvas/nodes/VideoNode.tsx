@@ -954,10 +954,11 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
               </TooltipTrigger><TooltipContent>{t("common.replace")}</TooltipContent></Tooltip>
           </div>
         )}
-        {hasVideo && posterUrl && (
-          /* 海报垫底：跨模式常驻（静态 / 会话 / 生成中共用同一元素，模式切换不重挂），
-              会话视频从挂载到解出首帧之间是透明的，垫底海报避免闪黑场；
-              视频解出画面后自然盖住海报（同比例 object-contain，边缘对齐） */
+        {hasVideo && posterUrl && !generating && (
+          /* 海报垫底：静态 / 会话模式共用同一元素，模式切换不重挂——会话视频从挂载到
+              解出首帧之间是透明的，垫底海报避免闪黑场；视频解出画面后自然盖住海报
+              （同比例 object-contain，边缘对齐）。生成中不渲染：生成浮层是纯色覆盖层，
+              旧海报留在下面会在画布小数缩放时从浮层边缘的反锯齿缝里透出上一张画面。 */
           <CanvasImage
             nodeId={id}
             src={posterUrl}
