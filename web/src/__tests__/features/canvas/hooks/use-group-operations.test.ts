@@ -206,3 +206,58 @@ describe("useGroupOperations onNodeAction(layout)", () => {
     expect(runLayout({ nodeId: "g", action: "layout", mode: "grid" }).nodes).toBe(before);
   });
 });
+
+// ── useGroupOperations：编组创建几何 ─────────────────────
+
+describe("useGroupOperations onGroupNodes", () => {
+  afterEach(() => {
+    cleanup();
+    useCanvasStore.setState({ nodes: [], edges: [] });
+  });
+
+  /** 挂载 hook、派发一次编组动作，返回写入后的 store 快照 */
+  function runGroup() {
+    const { unmount } = renderHook(() => useGroupOperations());
+    act(() => {
+      window.dispatchEvent(new CustomEvent(EventNames.CANVAS_GROUP_NODES));
+    });
+    unmount();
+    return useCanvasStore.getState();
+  }
+
+  it("组 body 四边保持 40px：组框向上多扩标题带，成员绝对位置不变", () => {
+    useCanvasStore.setState({
+      nodes: [
+        { ...node("a", 100, 100), selected: true },
+        { ...node("b", 400, 300), selected: true },
+      ],
+      edges: [],
+    });
+
+    const { nodes } = runGroup();
+    const group = nodes.find((n) => n.type === NODE_TYPE.GROUP)!;
+    const memberA = nodes.find((n) => n.id === "a")!;
+    const memberB = nodes.find((n) => n.id === "b")!;
+
+    // 成员并集 (100,100)-(600,420)：组节点顶边 = minY - 28 标题带 - 40 body 内边距
+    expect(group.position).toEqual({ x: 60, y: 32 });
+    expect(Number(group.style?.width)).toBe(580);
+    expect(Number(group.style?.height)).toBe(428);
+
+    // 成员绝对位置不变；相对坐标 = 绝对坐标 - 组原点
+    expect(memberA.parentId).toBe(group.id);
+    expect(memberA.position).toEqual({ x: 40, y: 68 });
+    expect(memberB.parentId).toBe(group.id);
+    expect(memberB.position).toEqual({ x: 340, y: 268 });
+
+    // body 四边 40px：上/左与右/下分别验证
+    expect(memberA.position.x).toBe(GROUP_NODE_PADDING);
+    expect(memberA.position.y).toBe(NODE_TITLE_HEIGHT + GROUP_NODE_PADDING);
+    expect(
+      memberB.position.x + Number(memberB.style?.width) + GROUP_NODE_PADDING,
+    ).toBe(Number(group.style?.width));
+    expect(
+      memberB.position.y + Number(memberB.style?.height) + GROUP_NODE_PADDING,
+    ).toBe(Number(group.style?.height));
+  });
+});

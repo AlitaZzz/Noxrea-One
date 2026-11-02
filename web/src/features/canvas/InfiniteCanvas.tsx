@@ -58,6 +58,7 @@ import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
 import PendingConnectionPreview from "@/features/canvas/controls/PendingConnectionPreview";
 import ProjectToolbar from "@/features/canvas/controls/ProjectToolbar";
+import { SelectionToolbarLayer } from "@/features/canvas/controls/SelectionToolbar";
 import NodeInspector from "@/features/canvas/debug/NodeInspector";
 import { dragInputFromEvent } from "@/features/canvas/drag/drag-input";
 import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
@@ -82,7 +83,10 @@ import GenerationPanelHost, {
 } from "@/features/canvas/panels/GenerationPanelHost";
 import { ResizeSession } from "@/features/canvas/resize/resize-session";
 import { ResizeSessionContext } from "@/features/canvas/resize/resize-session-context";
-import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
+import {
+  getCanvasDerived,
+  selectCanvasToolbarMode,
+} from "@/features/canvas/shared/canvas-derived";
 import { clearSelection } from "@/features/canvas/shared/canvas-edit-actions";
 import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
@@ -114,7 +118,13 @@ import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData, VideoNodeData } from "@/features/canvas/types";
 import { useProjectStore } from "@/features/project/store";
 import ApiSettingsDrawer from "@/features/settings/ApiSettingsDrawer";
-import { GROUP_NODE_PADDING, NODE_TYPE, RAIL_CONNECT_RADIUS, RAIL_DOT } from "@/lib/constants";
+import {
+  GROUP_COLORS,
+  GROUP_NODE_PADDING,
+  NODE_TYPE,
+  RAIL_CONNECT_RADIUS,
+  RAIL_DOT,
+} from "@/lib/constants";
 import { BatchConnectContext, type BatchConnectHandlers } from "@/providers/BatchConnectContext";
 
 const AudioClipStripPanel = dynamic(() => import("@/features/canvas/editing/AudioClipStripPanel"), { ssr: false });
@@ -135,7 +145,13 @@ const RF_EDGE_TYPES = {
 // 内联对象字面量会让 React Flow 的 props 比较全部失效。
 const RF_PRO_OPTIONS = { hideAttribution: true };
 const RF_DEFAULT_EDGE_OPTIONS = { type: "deletable", animated: false };
-const RF_STYLE = { "--rail-dot-size": `${RAIL_DOT}px` } as CSSProperties;
+// 画布领域常量注入 React Flow 根节点，供 globals.css 的选择外框规则读取：
+// 外框 padding 与组 body padding 同源，填充色与组节点默认配色同源。
+const RF_STYLE = {
+  "--rail-dot-size": `${RAIL_DOT}px`,
+  "--group-node-padding": `${GROUP_NODE_PADDING}px`,
+  "--selection-frame-bg": GROUP_COLORS.default.fill,
+} as CSSProperties;
 
 // 无待定连线时的稳定空锚点：程序化位置帧逐帧重渲染本组件，返回字面量 [] 会让
 // pendingPreviewAnchors 每次都是新引用。只读、由使用方 map，不做原地修改。
@@ -189,11 +205,18 @@ export default function InfiniteCanvas() {
   // independently scan the full canvas.
   const canvasDerived = useCanvasStore((s) => getCanvasDerived(s.nodes, s.edges));
   const selectedNodeIds = canvasDerived.selectedNodeIds;
+  // selectionKey 用于聚合工具条在选区变化时关闭仍打开的「更多」菜单。
+  const selectionKey = useMemo(() => Array.from(selectedNodeIds).join("\u0000"), [selectedNodeIds]);
 
-  // 画布交互状态机：空闲 / 框选 / 拖动节点 / 拖线，四种状态互斥且由事件驱动。
+  // 画布交互状态机：空闲 / 框选手势 / 框选已提交 / 拖动节点 / 拖线，状态互斥且由事件驱动。
   // handle、节点工具栏、生成面板的可见性与光标全部由此派生，不再各自维护布尔量。
   // 整体引用稳定（hook 内已记忆化），可直接作为依赖使用。
   const canvasInteraction = useCanvasInteraction();
+  // 工具条可见性唯一判定：hidden / aggregate / per-node，见 selectCanvasToolbarMode。
+  const toolbarMode = selectCanvasToolbarMode(
+    canvasInteraction.showSelectionToolbars,
+    canvasDerived.selectionChromeBounds,
+  );
 
   // ---- 拖动预览会话 ----
   // 拖动期位置帧不写受控 store：会话按 rAF 合并后只写 DOM，松手一次提交。
@@ -307,13 +330,10 @@ export default function InfiniteCanvas() {
   }, [nodes]);
 
   // 内置多选外框只在真正「多选」时才有意义：
-  // - 单选时它只是把节点再包一圈（还带 40px 外扩），与节点自身描边重复，反而干扰；
+  // - 单选时它只是把节点再包一圈（还带外扩），与节点自身描边重复，反而干扰；
   // - 选中的全是组节点时，组自己有边框，外框同样冗余。
-  const hideSelectionRect = useMemo(() => {
-    const selected = nodes.filter((n) => n.selected);
-    if (selected.length < 2) return true;
-    return selected.every(isGroupNode);
-  }, [nodes]);
+  // 显隐与聚合工具条锚点共用 selectionChromeBounds.frameVisible，避免两套选区扫描漂移。
+  const hideSelectionRect = !canvasDerived.selectionChromeBounds?.frameVisible;
 
   // 多选外框批量连线：≥2 个非组节点选中时，外框右缘出现批量输出 Handle。
   // bbox 与成员轨道钳制统一由 canvas-derived 几何投影提供
@@ -1362,8 +1382,20 @@ export default function InfiniteCanvas() {
           </RfNodeToolbar>
         )}
 
-        {/* Node toolbars — 仅空闲/点击选中态显示（框选与拖动节点期间不渲染） */}
-        {canvasInteraction.showSelectionChrome && Array.from(selectedNodeIds).map((nid) => {
+        {/* 多选聚合工具条 — 屏幕固定尺寸，锚定全部选中节点（含组）的包围盒。
+            框选手势与拖动期间让位，框选提交（box-selected）后立即出现 */}
+        {toolbarMode.kind === "aggregate" &&
+          !editingNodeId &&
+          !editingTextNodeId && (
+            <SelectionToolbarLayer
+              bounds={toolbarMode.bounds}
+              selectionKey={selectionKey}
+            />
+          )}
+
+        {/* Node toolbars — 框选手势与拖动期间不渲染，框选提交后恢复。
+            多选时整体让位给上面的聚合工具条，避免每个选中节点各挂一条 */}
+        {toolbarMode.kind === "per-node" && Array.from(selectedNodeIds).map((nid) => {
           const n = nodes.find((x) => x.id === nid);
           return (
           <RfNodeToolbar key={nid} nodeId={nid} position={Position.Top} align="center" offset={8}>

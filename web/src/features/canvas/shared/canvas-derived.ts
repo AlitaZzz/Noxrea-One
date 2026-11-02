@@ -9,9 +9,10 @@ import type { Edge } from "@xyflow/react";
 
 import { NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, RAIL_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_PADDING, NODE_TITLE_HEIGHT, RAIL_WIDTH } from "@/lib/constants";
 
 import { edgeTouchesSelection } from "./edge-selection";
+import type { Rect } from "./geometry";
 import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
 import { isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./node-size";
@@ -20,6 +21,34 @@ export interface SelectionFrame {
   ids: string[];
   bbox: { x: number; y: number; width: number; height: number };
 }
+
+/**
+ * 聚合工具条的选区投影：所有选中节点（含组节点）的绝对包围盒，
+ * 以及多选外框显隐与工具条锚点。
+ * 与 selectionFrame 的区别是这里不排除组节点，也不要求非组节点 ≥2：
+ * 选中两个组、或「组 + 散节点」时，工具条仍需要一个覆盖全部选中项的锚点。
+ */
+export interface SelectionChromeBounds {
+  count: number;
+  hasGroup: boolean;
+  /** 选中节点的原始并集（flow 坐标） */
+  bbox: Rect;
+  /**
+   * 多选外框是否可见：≥2 个选中且不全是组节点。
+   * 与画布 `.hide-selection-rect` 共用同一判定，避免显隐与锚点漂移。
+   */
+  frameVisible: boolean;
+  /**
+   * 工具条锚点：外框可见时为 bbox 四边向外扩 GROUP_NODE_PADDING（40px），
+   * 顶部再加标题带 NODE_TITLE_HEIGHT（28px）。工具条因此比可见框再高一个
+   * 标题高度，编组后组标题不会与工具条相撞；选中的全是组时外框隐藏，
+   * 锚点退化为 bbox（组节点自身已包含标题带 + 40px body 内边距）。
+   */
+  containerBbox: Rect;
+}
+
+/** 工具条在可见框上方额外预留的标题带，避免编组后的组标题与工具条重叠。 */
+const SELECTION_TOOLBAR_TITLE_CLEARANCE = NODE_TITLE_HEIGHT;
 
 export interface OutlineGroup {
   type: string;
@@ -42,6 +71,7 @@ export interface GroupMembership {
 
 export interface CanvasDerived {
   selectionFrame: SelectionFrame | null;
+  selectionChromeBounds: SelectionChromeBounds | null;
   selectedNodeIds: ReadonlySet<string>;
   highlightedEdgeIds: ReadonlySet<string>;
   railWidths: ReadonlyMap<string, number>;
@@ -182,18 +212,13 @@ export function getCanvasOutline(nodes: AnyNode[]): CanvasOutline {
   return cacheValue(outlineCache, key, buildOutline(nodes), 128);
 }
 
-function computeSelectionFrame(
-  nodes: AnyNode[],
-  nodeById: Map<string, AnyNode>,
-): SelectionFrame | null {
-  const selected = nodes.filter((node) => node.selected && !isGroupNode(node));
-  if (selected.length < 2) return null;
-
+/** 一组节点的绝对包围盒；调用方保证数组非空。 */
+function unionBounds(nodes: AnyNode[], nodeById: Map<string, AnyNode>): Rect {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const node of selected) {
+  for (const node of nodes) {
     const absolute = nodeAbsolutePosition(node, nodeById);
     const size = measureNode(node);
     minX = Math.min(minX, absolute.x);
@@ -201,10 +226,74 @@ function computeSelectionFrame(
     maxX = Math.max(maxX, absolute.x + size.width);
     maxY = Math.max(maxY, absolute.y + size.height);
   }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+function computeSelectionFrame(
+  nodes: AnyNode[],
+  nodeById: Map<string, AnyNode>,
+): SelectionFrame | null {
+  const selected = nodes.filter((node) => node.selected && !isGroupNode(node));
+  if (selected.length < 2) return null;
   return {
     ids: selected.map((node) => node.id),
-    bbox: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    bbox: unionBounds(selected, nodeById),
   };
+}
+
+function computeSelectionChromeBounds(
+  nodes: AnyNode[],
+  nodeById: Map<string, AnyNode>,
+): SelectionChromeBounds | null {
+  const selected: AnyNode[] = [];
+  let hasGroup = false;
+  let allGroups = true;
+  for (const node of nodes) {
+    if (!node.selected) continue;
+    selected.push(node);
+    if (isGroupNode(node)) hasGroup = true;
+    else allGroups = false;
+  }
+  if (selected.length < 2) return null;
+
+  const bbox = unionBounds(selected, nodeById);
+  const frameVisible = !allGroups;
+  return {
+    count: selected.length,
+    hasGroup,
+    bbox,
+    frameVisible,
+    containerBbox: frameVisible
+      ? {
+          x: bbox.x - GROUP_NODE_PADDING,
+          y: bbox.y - GROUP_NODE_PADDING - SELECTION_TOOLBAR_TITLE_CLEARANCE,
+          width: bbox.width + GROUP_NODE_PADDING * 2,
+          height: bbox.height + GROUP_NODE_PADDING * 2 + SELECTION_TOOLBAR_TITLE_CLEARANCE,
+        }
+      : bbox,
+  };
+}
+
+/**
+ * 节点工具条的可见模式（唯一判定入口）：
+ * - 交互门控关闭（框选手势 / 拖动中）→ hidden；
+ * - 选中 ≥2 个节点 → aggregate，用一条聚合工具条替代 per-node；
+ * - 其余（0/1 个选中）→ per-node，由每个节点的既有规则决定是否显示。
+ *
+ * 聚合分支携带 bounds，调用方无需再重复 `multiSelect` 阈值或做非空收窄。
+ */
+export type CanvasToolbarMode =
+  | { kind: "hidden" }
+  | { kind: "aggregate"; bounds: SelectionChromeBounds }
+  | { kind: "per-node" };
+
+export function selectCanvasToolbarMode(
+  showSelectionToolbars: boolean,
+  selectionChromeBounds: SelectionChromeBounds | null,
+): CanvasToolbarMode {
+  if (!showSelectionToolbars) return { kind: "hidden" };
+  if (selectionChromeBounds) return { kind: "aggregate", bounds: selectionChromeBounds };
+  return { kind: "per-node" };
 }
 
 function buildRailWidths(
@@ -274,6 +363,7 @@ function derive(nodes: AnyNode[], edges: Edge[]): CanvasDerived {
   const selectionFrame = computeSelectionFrame(nodes, nodeById);
   return {
     selectionFrame,
+    selectionChromeBounds: computeSelectionChromeBounds(nodes, nodeById),
     selectedNodeIds,
     highlightedEdgeIds: stableHighlightedEdges(edges, selectedNodeIds),
     railWidths: buildRailWidths(nodes, nodeById, selectionFrame),

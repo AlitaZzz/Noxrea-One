@@ -220,12 +220,15 @@
 }
 .react-flow__minimap { border-radius: 8px; overflow: hidden; }
 .react-flow__background { transition: opacity 0.3s ease; }
-/* Multi-select rect: expand outward by GROUP_NODE_PADDING(40) so selection
-   matches the group node's bounding box size */
+/* Multi-select rect: expand outward by GROUP_NODE_PADDING on all four sides,
+   so the visible frame matches the group body (which also has that body padding);
+   the group title is a separate 28px band above the body and stays outside the
+   frame. The padding value is injected from the same constant via RF_STYLE in
+   InfiniteCanvas.tsx; containerBbox in shared/canvas-derived.ts uses the constant too. */
 .react-flow__nodesselection-rect {
   box-sizing: content-box;
-  padding: 40px;
-  margin: -40px;
+  padding: var(--group-node-padding);
+  margin: calc(var(--group-node-padding) * -1);
 }
 /* 拖拽中的框选矩形：中性灰 + 虚线。
    它是几百毫秒的「工具反馈」，用强调色会让人误以为已经选中，也和选中态抢视觉；
@@ -233,7 +236,7 @@
 .react-flow__selection {
   background: var(--marquee-bg) !important;
   border: 1px dashed var(--marquee-border) !important;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 /* 框选手势选框：元素常驻，会话激活时切换 data-active 并逐帧写几何 */
 [data-canvas-marquee] {
@@ -243,13 +246,14 @@
 [data-canvas-marquee][data-active="true"] {
   display: block;
 }
-/* 松手后的多选外框：与拖拽框同色（中性灰），但边框改回实线——
-   虚线读作「进行中」，实线读作「已成结果」，靠线型而非颜色区分两个阶段。
-   选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
+/* 松手后的多选外框：边框改回实线——虚线读作「进行中」，实线读作「已成结果」，
+   靠线型区分两个阶段；填充与圆角对齐组节点（GROUP_COLORS.default.fill、
+   rounded-lg = var(--radius)），让「框选出来的容器」和「编组后的容器」在创建时
+   视觉一致。选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
 .react-flow__nodesselection-rect {
-  background: var(--marquee-bg) !important;
+  background: var(--selection-frame-bg) !important;
   border: 1px solid var(--marquee-border) !important;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 /* 单选、或选中的全是组节点时隐藏外框：这两种情况下包一圈外框没有信息量 */
 .hide-selection-rect .react-flow__nodesselection-rect {
@@ -552,8 +556,8 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    框选激活信号是根上的 data-marquee-active（会话激活时写、清理时删，与选框
    data-active 同生命周期），不再用 :has(> [data-canvas-marquee][data-active])：
    根属性只命中光标层一条窄规则，选框元素自身的属性变化也不再参与 :has() 失效匹配。
-   不用 data-interaction="box-selecting" 判定：它表示「最近一次选中来自框选」，
-   会保留到下一次点击，而光标只在手势进行中接管。
+   不用 data-interaction 判定：框选手势态只在拖动期间存在，提交后转入
+   box-selected 并保留到下一次点击，而光标只在手势进行中接管。
    框选中用普通箭头（2026-10-30 走查：框选不需要十字光标）。
    拖线（connecting）保留全后代规则：拖线中目标 handle 的显示依赖节点 :hover
    （idle 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见。

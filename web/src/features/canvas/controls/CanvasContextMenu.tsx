@@ -15,7 +15,7 @@ import { useReactFlow } from "@xyflow/react";
 import { memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AppstoreOutlined, CopyOutlined, DeleteOutlined, ExpandOutlined, PartitionOutlined, PictureOutlined, PlusSquareOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
+import { AppstoreOutlined, CopyOutlined, DeleteOutlined, DuplicateIcon, ExpandOutlined, PartitionOutlined, PictureOutlined, RedoOutlined, SelectOutlined, SnippetsOutlined, UndoOutlined, UploadOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
 import { TextIcon } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import {
@@ -203,7 +203,7 @@ function CanvasContextMenu(props: Props) {
         : [
             { key: "copy", icon: <CopyOutlined />, label: t("common.copyNode"), extra: modKey("C"), disabled: !hasSelection },
             ...(singleImageSrc ? [{ key: "copyImage", icon: <PictureOutlined />, label: t("node.copyImage") }] : []),
-            { key: "duplicate", icon: <PlusSquareOutlined />, label: t("common.duplicate"), extra: modKey("D"), disabled: !hasSelection },
+            { key: "duplicate", icon: <DuplicateIcon />, label: t("common.duplicate"), extra: modKey("D"), disabled: !hasSelection },
             { key: "paste", icon: <SnippetsOutlined />, label: t("common.paste"), extra: modKey("V") },
             { type: "divider" },
             { key: "delete", icon: <DeleteOutlined />, label: t("common.delete"), extra: "Delete", disabled: !hasSelection },

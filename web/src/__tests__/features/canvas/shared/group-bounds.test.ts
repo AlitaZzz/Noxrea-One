@@ -17,7 +17,7 @@ import {
   toAbsoluteNodes,
 } from "@/features/canvas/shared/group-bounds";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, NODE_TYPE } from "@/lib/constants";
+import { GROUP_NODE_PADDING, NODE_TITLE_HEIGHT, NODE_TYPE } from "@/lib/constants";
 
 function node(id: string, x: number, y: number, w: number, h: number, extra?: Record<string, unknown>): AnyNode {
   return {
@@ -86,11 +86,12 @@ describe("computeFittedGroupRect（相对空间 refit）", () => {
 
   it("成员探出左上时组框原点随之移动", () => {
     const g = group("g1", 100, 100, 400, 400);
-    // 相对位置 (-100,-100) → 原点相对 -100-padding
+    // 相对位置 (-100,-100) → 左缘 -100-padding；顶部再加标题带高度，
+    // 成员落到 body 顶缘下方 padding
     const members = [member("a", -100, -100, 200, 200, "g1")];
     const rect = computeFittedGroupRect(g, members)!;
     expect(rect.x).toBe(100 - 100 - GROUP_NODE_PADDING);
-    expect(rect.y).toBe(100 - 100 - GROUP_NODE_PADDING);
+    expect(rect.y).toBe(100 - 100 - NODE_TITLE_HEIGHT - GROUP_NODE_PADDING);
   });
 
   it("手动放大的组框不因成员变小而收缩（只扩不缩）", () => {
@@ -207,9 +208,10 @@ describe("refitGroupRects", () => {
     const gOut = out.find((n) => n.id === "g")!;
     const aOut = out.find((n) => n.id === "a")!;
     const bOut = out.find((n) => n.id === "b")!;
-    // 组框上/左扩 60（探出 20 + padding 40），包住 b 并留 padding
-    expect(gOut.position).toEqual({ x: -60, y: -60 });
-    expect(gOut.style).toMatchObject({ width: 460, height: 360 });
+    // 左扩 60（探出 20 + padding 40）；上扩 88（探出 20 + 标题带 28 + padding 40），
+    // 让 b 落在 body 顶缘下方 padding，而不是标题带内
+    expect(gOut.position).toEqual({ x: -60, y: -88 });
+    expect(gOut.style).toMatchObject({ width: 460, height: 388 });
     // 成员视觉位置（组原点 + 相对坐标）严格不变：框动内容不动
     const visual = (n: AnyNode, origin: { x: number; y: number }) => ({
       x: origin.x + n.position.x,
@@ -217,9 +219,24 @@ describe("refitGroupRects", () => {
     });
     expect(visual(aOut, gOut.position)).toEqual({ x: 100, y: 100 });
     expect(visual(bOut, gOut.position)).toEqual({ x: -20, y: -20 });
-    // 被包裹成员距新框缘恰为 padding（成员相对坐标即到框缘距离）
+    // 被包裹成员距新框缘恰为 padding；顶部距离从 body 顶缘起算，需再加标题带
     expect(bOut.position.x).toBe(GROUP_NODE_PADDING);
-    expect(bOut.position.y).toBe(GROUP_NODE_PADDING);
+    expect(bOut.position.y).toBe(NODE_TITLE_HEIGHT + GROUP_NODE_PADDING);
+  });
+
+  it("成员只探出组顶时，组框上扩量包含标题带高度（回归：顶边距退化为 12px）", () => {
+    // 组 (0,0) 400×300；成员相对 y=-20 探出组顶，左右/底部均未探出
+    const g = group("g", 0, 0, 400, 300);
+    const m = member("a", 100, -20, 200, 150, "g");
+    const out = refitGroupRects([g, m], ["g"]);
+    const gOut = out.find((n) => n.id === "g")!;
+    const mOut = out.find((n) => n.id === "a")!;
+    // 组顶上移 20 + 28 + 40 = 88，高度增加 88
+    expect(gOut.position).toEqual({ x: 0, y: -88 });
+    expect(gOut.style).toMatchObject({ width: 400, height: 388 });
+    // 成员视觉位置不变，且距 body 顶缘恰为 padding
+    expect(gOut.position.y + mOut.position.y).toBe(-20);
+    expect(mOut.position.y).toBe(NODE_TITLE_HEIGHT + GROUP_NODE_PADDING);
   });
 
   it("成员已在组框内时该组保持原对象（无需变化）", () => {

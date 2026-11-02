@@ -135,7 +135,10 @@
     "entering": "Entering canvas",
     "enteringSub": "Establishing session · Restoring content · Syncing models",
     "agentThinking": "thinking",
-    "agentRestoring": "restoring canvas…"
+    "agentRestoring": "restoring canvas…",
+    "selection": {
+      "count": "{{count}} nodes"
+    }
   },
   "node": {
     "add": "Add Node",

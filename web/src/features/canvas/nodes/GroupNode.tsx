@@ -82,7 +82,8 @@ function GroupNode({ id, data }: NodeProps<GroupNodeType>) {
         }
       />
 
-      {/* Body — 填充随配色变化，选中描边沿用 node-body（由包装层选中类驱动，与 ImageNode 一致） */}
+      {/* Body — 填充随配色变化，选中描边沿用 node-body（由包装层选中类驱动，与 ImageNode 一致）。
+          标题栏留在 body 之外：组标题是框外标签，不进入组的可见框。 */}
       <div
         className={`
           node-body flex-1 rounded-lg pointer-events-none

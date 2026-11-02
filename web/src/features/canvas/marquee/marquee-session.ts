@@ -50,7 +50,7 @@ interface Viewport {
 /** 会话可派发的交互动作；类型从 store 的动作联合派生，避免两处字面量漂移。 */
 type MarqueeInteractionAction = Extract<
   InteractionAction,
-  { type: "selection-start" | "click" }
+  { type: "selection-start" | "selection-commit" | "click" }
 >["type"];
 
 export interface MarqueeSessionDeps {
@@ -60,7 +60,7 @@ export interface MarqueeSessionDeps {
   getEdges: () => Edge[];
   setNodes: (nodes: AnyNode[]) => void;
   setEdges: (edges: Edge[], options?: HistoryPushOptions) => void;
-  /** 画布交互状态机；激活进入 box-selecting，取消回到 idle。 */
+  /** 画布交互状态机；激活进入 box-selecting，提交进入 box-selected，取消回到 idle。 */
   dispatchInteraction: (action: MarqueeInteractionAction) => void;
   /** 当前画布内容所属项目；用于取消时避免把旧项目选区恢复到新项目。 */
   getProjectId: () => string | null;
@@ -383,6 +383,10 @@ export class MarqueeSession {
       (edge) => edge.selectable !== false && edgeTouchesSelection(edge, selectedIds),
       selectedIds.size > 0,
     );
+
+    // 手势结束、选区已提交：从「框选进行中」进入「框选已提交」，
+    // 聚合工具条据此在松手后出现（spec 7.2），无需等待下一次点击
+    this.deps.dispatchInteraction("selection-commit");
 
     if (nodesChanged) {
       // 预览属性保留到渲染层采用新节点，避免选中视觉闪断；

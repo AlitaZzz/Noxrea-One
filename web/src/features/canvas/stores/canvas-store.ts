@@ -306,15 +306,20 @@ type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
 // 状态放在 store（而非组件内 reducer）：节点组件（如 VideoNode 在连线 / 拖动
 // 期间抑制 hover 预览）与 InfiniteCanvas 共用同一状态，无需再逐层传递。
 
-/** 非瞬时交互状态：空闲/点击选中、框选选中。拖动中会记住进入前的状态 */
-type StableInteractionMode = "idle" | "box-selecting";
+/** 非瞬时交互状态：空闲/点击选中、框选手势、框选已提交。拖动中会记住进入前的状态 */
+type StableInteractionMode = "idle" | "box-selecting" | "box-selected";
 
 /** 画布交互状态（互斥） */
 export type CanvasInteraction =
   /** 空闲或点击选中：正常显示选中态 UI（工具栏 / 生成面板 / 选中 handle） */
   | { mode: "idle" }
-  /** 框选（空白区左键拖拽）产生的选中：只做高亮，不显示选中态 UI，直到下次点击 */
+  /** 框选手势进行中：只做高亮，不显示选中态 UI */
   | { mode: "box-selecting" }
+  /**
+   * 框选已提交：手势结束、选区已写入。节点工具栏（per-node / 聚合）在此态显示，
+   * 满足 spec 7.2「松手后出现」；生成面板等重装饰仍按框选语义让位，避免松手瞬间弹出。
+   */
+  | { mode: "box-selected" }
   /** 拖动节点中：隐藏 handle / 工具栏 / 生成面板，避免跟随节点飘动；prev 用于松手后恢复 */
   | { mode: "dragging-nodes"; prev: StableInteractionMode }
   /** 拖拽连线中：画布保持十字准星光标 */
@@ -322,6 +327,7 @@ export type CanvasInteraction =
 
 export type InteractionAction =
   | { type: "selection-start" }
+  | { type: "selection-commit" }
   | { type: "click" }
   | { type: "node-drag-start" }
   | { type: "node-drag-stop" }
@@ -333,6 +339,10 @@ function interactionReducer(state: CanvasInteraction, action: InteractionAction)
     case "selection-start":
       return state.mode === "box-selecting" ? state : { mode: "box-selecting" };
 
+    // 框选手势结束、选区已写入：进入「框选已提交」，聚合工具条从此刻开始显示
+    case "selection-commit":
+      return state.mode === "box-selecting" ? { mode: "box-selected" } : state;
+
     // 单击节点或点击空白：视为「点击选中」，恢复正常显示
     case "click":
       return state.mode === "idle" ? state : { mode: "idle" };
@@ -341,7 +351,8 @@ function interactionReducer(state: CanvasInteraction, action: InteractionAction)
     // 框选一批节点后再拖动，松手仍属于批量选中态；单击选中后拖动则恢复空闲态
     case "node-drag-start": {
       if (state.mode === "dragging-nodes") return state;
-      const prev: StableInteractionMode = state.mode === "box-selecting" ? "box-selecting" : "idle";
+      const prev: StableInteractionMode =
+        state.mode === "box-selecting" || state.mode === "box-selected" ? state.mode : "idle";
       return { mode: "dragging-nodes", prev };
     }
 

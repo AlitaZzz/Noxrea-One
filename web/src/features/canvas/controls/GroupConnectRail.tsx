@@ -21,11 +21,15 @@ import { useCallback } from "react";
 
 import { groupMembers } from "@/features/canvas/shared/group-membership";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import { NODE_TITLE_HEIGHT } from "@/lib/constants";
 import { useBatchConnect } from "@/providers/BatchConnectContext";
 
 import PendingConnectionPreview from "./PendingConnectionPreview";
 import { useBatchConnectDrag } from "./use-batch-connect-drag";
 import { type RailSide, useRailDotFollow } from "./use-rail-dot-follow";
+
+/** 组 wrapper = 28px 标题带 + body；轨道以 body 垂直居中，需从 wrapper 中心下移半个标题带。 */
+const RAIL_TOP = `calc(50% + ${NODE_TITLE_HEIGHT / 2}px)`;
 
 interface Props {
   /** 所属组节点 id */
@@ -58,7 +62,7 @@ export default function GroupConnectRail({ groupId, side }: Props) {
     <>
       <div
         className={`nopan nodrag react-flow__handle react-flow__handle-${side} connection-rail connection-rail-${side}`}
-        style={{ top: "50%" }}
+        style={{ top: RAIL_TOP }}
         onPointerDown={startDrag}
         onPointerEnter={onPointerEnter}
         onPointerMove={onPointerMove}

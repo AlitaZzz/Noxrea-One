@@ -783,3 +783,50 @@ describe("压栈通道二分与批量守卫（Spec: canvas-undo-redo-integrity�
     expect(useHistoryStore.getState().undoStack.length).toBe(2);
   });
 });
+
+describe("画布交互状态机：框选提交与拖动恢复", () => {
+  beforeEach(() => {
+    useCanvasStore.setState({ interaction: { mode: "idle" } });
+  });
+
+  it("框选激活 → 提交：box-selecting → box-selected", () => {
+    const { dispatchInteraction } = useCanvasStore.getState();
+
+    dispatchInteraction({ type: "selection-start" });
+    expect(useCanvasStore.getState().interaction).toEqual({ mode: "box-selecting" });
+
+    dispatchInteraction({ type: "selection-commit" });
+    expect(useCanvasStore.getState().interaction).toEqual({ mode: "box-selected" });
+  });
+
+  it("框选提交后拖动节点，松手恢复到 box-selected", () => {
+    const { dispatchInteraction } = useCanvasStore.getState();
+    dispatchInteraction({ type: "selection-start" });
+    dispatchInteraction({ type: "selection-commit" });
+
+    dispatchInteraction({ type: "node-drag-start" });
+    expect(useCanvasStore.getState().interaction).toEqual({
+      mode: "dragging-nodes",
+      prev: "box-selected",
+    });
+
+    dispatchInteraction({ type: "node-drag-stop" });
+    expect(useCanvasStore.getState().interaction).toEqual({ mode: "box-selected" });
+  });
+
+  it("框选进行中拖动仍恢复 box-selecting，点击后回到 idle", () => {
+    const { dispatchInteraction } = useCanvasStore.getState();
+    dispatchInteraction({ type: "selection-start" });
+
+    dispatchInteraction({ type: "node-drag-start" });
+    expect(useCanvasStore.getState().interaction).toEqual({
+      mode: "dragging-nodes",
+      prev: "box-selecting",
+    });
+    dispatchInteraction({ type: "node-drag-stop" });
+    expect(useCanvasStore.getState().interaction).toEqual({ mode: "box-selecting" });
+
+    dispatchInteraction({ type: "click" });
+    expect(useCanvasStore.getState().interaction).toEqual({ mode: "idle" });
+  });
+});

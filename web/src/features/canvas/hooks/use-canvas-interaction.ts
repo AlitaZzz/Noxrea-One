@@ -33,7 +33,9 @@ export function canvasRootInteractionAttrs(mode: CanvasInteraction["mode"]) {
 
 /**
  * 提供画布交互状态及事件派发。
- * showSelectionChrome 为唯一的可见性真相源，调用方不应再自行组合条件。
+ * 可见性只从这里派生的两个谓词取值，调用方不应再自行组合 mode 条件：
+ * - showSelectionToolbars：节点工具栏（per-node / 聚合），框选提交后恢复；
+ * - showSelectionChrome：生成面板等重装饰，仅点击选中（idle）时显示。
  */
 export function useCanvasInteraction() {
   const interaction = useCanvasStore((s) => s.interaction);
@@ -45,8 +47,19 @@ export function useCanvasInteraction() {
   const onConnectStart = useCallback(() => dispatch({ type: "connect-start" }), [dispatch]);
   const onConnectEnd = useCallback(() => dispatch({ type: "connect-end" }), [dispatch]);
 
-  /** 选中态装饰（节点工具栏 / 生成面板）是否显示：仅空闲或点击选中时为 true */
+  /**
+   * 生成面板等重装饰是否显示：仅点击选中（idle）为 true。
+   * 框选提交后仍按框选语义让位，避免松手瞬间弹出生成面板。
+   */
   const showSelectionChrome = interaction.mode === "idle";
+
+  /**
+   * 节点工具栏（per-node / 聚合）是否显示。
+   * 框选手势进行中让位，提交后（box-selected）立即恢复——聚合工具条必须在
+   * 「松手后出现」（spec 7.2）；拖动中隐藏，拖停后按 prev 恢复。
+   */
+  const showSelectionToolbars =
+    interaction.mode === "idle" || interaction.mode === "box-selected";
 
   // 返回整体做记忆化：调用方直接把返回值放进依赖数组，引用只在 mode 变化时更新，
   // 避免每次渲染都重建下游 useCallback（否则 React Flow 的回调 props 会每帧变化）
@@ -54,12 +67,22 @@ export function useCanvasInteraction() {
     () => ({
       mode: interaction.mode,
       showSelectionChrome,
+      showSelectionToolbars,
       onClick,
       onNodeDragStart,
       onNodeDragStop,
       onConnectStart,
       onConnectEnd,
     }),
-    [interaction.mode, showSelectionChrome, onClick, onNodeDragStart, onNodeDragStop, onConnectStart, onConnectEnd]
+    [
+      interaction.mode,
+      showSelectionChrome,
+      showSelectionToolbars,
+      onClick,
+      onNodeDragStart,
+      onNodeDragStop,
+      onConnectStart,
+      onConnectEnd,
+    ]
   );
 }

@@ -390,6 +390,8 @@ describe("MarqueeSession", () => {
     expect(harness.setEdges).toHaveBeenCalledTimes(2);
     expect(harness.setEdges.mock.calls[1][1]).toEqual({ skipHistory: true });
     expect(harness.getNodesSelectionActive()).toBe(true);
+    // 提交后离开「框选进行中」：聚合工具条据此在松手后出现（spec 7.2）
+    expect(harness.dispatchInteraction).toHaveBeenLastCalledWith("selection-commit");
     // 渲染层采用之前保留预览属性，避免选中视觉闪断
     expect(harness.wrappers.get("a")?.hasAttribute("data-marquee-hit")).toBe(true);
     expect(harness.marquee.dataset.active).toBe("true");
