@@ -17,10 +17,8 @@ import { EditOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEditableTitle } from "@/features/canvas/hooks/use-editable-title";
+import { fontStringOf, getTextMeasureContext } from "@/features/canvas/shared/text-measure";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-
-/** 量宽用的离屏 canvas（同字体复用，避免每次截断新建） */
-let measureCtx: CanvasRenderingContext2D | null = null;
 
 /**
  * 中间截断文本：超宽时省略号打在中间，头部（源名，身份）与尾部
@@ -29,15 +27,14 @@ let measureCtx: CanvasRenderingContext2D | null = null;
  * 故用 canvas 量宽 + 交替回收找可行的头/尾保留长度。
  */
 function clipText(el: HTMLElement, text: string, avail: number): string {
-  measureCtx ??= document.createElement("canvas").getContext("2d");
+  const measureCtx = getTextMeasureContext();
   if (!measureCtx || avail <= 0) return text;
-  const cs = getComputedStyle(el);
-  measureCtx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  measureCtx.font = fontStringOf(getComputedStyle(el));
   const ellipsis = "…";
   if (measureCtx.measureText(text).width <= avail) return text;
   // 极窄：连省略号都放不下，只显示省略号
   if (measureCtx.measureText(ellipsis).width > avail) return ellipsis;
-  const widthOf = (s: string) => measureCtx!.measureText(s).width;
+  const widthOf = (s: string) => measureCtx.measureText(s).width;
   const availText = avail - widthOf(ellipsis);
   // 头尾按 2:1 字符预算起步（头部是身份，优先多留），超宽时交替回收保持比例
   let headLen = Math.min(Math.floor((text.length * 2) / 3), text.length - 1);

@@ -1,6 +1,6 @@
 # 画布框选手势会话（Marquee Gesture Session）
 
-状态：已实现（2026-10-31）
+状态：已确认
 
 承接 `specs/canvas-drag-preview-session.md`：该 Spec 已把节点拖动改为「拖动期只做 DOM 预览、松手一次提交」，并在业界对标中认定「即梦的框选手势是独立会话」，但明确把框选排除在拖动会话之外。本 Spec 处理这块剩余项。
 
@@ -178,7 +178,7 @@
 
 1. 每帧用当前指针在容器内的位置计算 `calcAutoPan` 等价逻辑（40px 边缘带、速度 15），有位移时调用 RF `panBy`；平移后下一帧重算投影与命中。
 2. 起点锚定在 flow 坐标：手势中可以滚轮缩放或平移（自动平移），选框起点随视口变换移动，与 RF 现状一致。
-3. 容器矩形每帧读取，窗口尺寸/面板变化不影响坐标换算。
+3. 容器矩形在激活时读取一次并缓存；手势期间由 `ResizeObserver` 监听 pane 尺寸变化刷新缓存，下一帧按新原点重投影。窗口尺寸/面板变化不影响坐标换算；帧内不读取布局（每帧 `getBoundingClientRect` 发生在选框样式写入之后，会强制同步布局）。
 
 ### 12. 交互状态与点击语义
 
@@ -195,7 +195,7 @@
 ### 14. 手势光标
 
 1. 手势进行中光标由手势状态整体接管，不交给 hover 命中决定：框选进行中整块画布为 `default`（普通箭头，2026-10-30 走查确认不要十字光标）；连线进行中为 `crosshair`；节点拖动中为 `grabbing`（pane、节点、节点内控件与聚合外框一致）。指针扫过节点、节点内按钮/文本区与空白时不得在「节点抓手 / 控件指针 / 空白箭头」之间跳变。
-2. 框选的判定取选框自身的 `data-active`（仅手势进行中置位）；不能用 `data-interaction="box-selecting"`——该状态表示「最近一次选中来自框选」，会保留到下一次点击。
+2. 框选的判定取画布根上的 `data-marquee-active`（仅手势进行中置位：会话激活时写入、`resetGesture` 删除）；不能用 `data-interaction="box-selecting"`——该状态表示「最近一次选中来自框选」，会保留到下一次点击。根属性只命中光标层一条窄规则；不用 `:has(> [data-canvas-marquee][data-active])` 门控——`:has()` 会让选框与节点子树的属性变化进入失效匹配，扩大选中路径的样式重算范围。
 3. 手势结束后光标回到 hover 派生值（节点 `grab` / 空白 `default`），与现状一致。
 
 ## 技术影响
@@ -219,7 +219,7 @@
   - 会话通过注入回调派发交互动作（`selection-start` / `click`），不直接依赖 React 上下文。
 - `web/src/styles/globals.css`
   - `[data-marquee-hit]` 选中视觉与 z-index（组节点不参与抬升，保持既有沉底）；`[data-canvas-marquee]` 显隐（复用现有 `.react-flow__selection` 视觉）。
-  - 手势光标由状态整体接管（规则 14）：框选取 `[data-canvas-marquee][data-active="true"]`（`default`），连线取 `data-interaction="connecting"`（`crosshair`），节点拖动取 `data-interaction="dragging-nodes"`（`grabbing`）；三者都对 `.react-flow` 子树整体写 `cursor` 并带 `!important`——逐元素枚举会漏掉边、节点内控件的内联 `cursor` 等 hover 目标（规则 14 要求「整块画布」不随命中跳变）。
+  - 手势光标由状态整体接管（规则 14）：节点拖动与框选经常驻覆盖层 `.canvas-gesture-cursor` 打开（根属性 `data-interaction="dragging-nodes"` / `data-marquee-active` → `grabbing` / `default`）；连线取根属性 `data-connecting`，对 `.react-flow` 子树整体写 `cursor: crosshair !important`——拖线中目标 handle 依赖节点 `:hover` 显示，覆盖层会吞掉 hover；门控不用 `data-interaction`，避免选中态切换（idle ↔ box-selecting）触发全子树光标重算。逐元素枚举会漏掉边、节点内控件的内联 `cursor` 等 hover 目标（规则 14 要求「整块画布」不随命中跳变）。
 - `web/src/features/canvas/hooks/use-canvas-interaction.ts`
   - 移除仅供内建框选使用的 `onSelectionStart` 包装（唯一调用方是 `InfiniteCanvas`；框选激活改由会话直接派发 `selection-start`）。
 - `web/src/features/canvas/stores/canvas-store.ts`
@@ -299,6 +299,8 @@
 
 ## 当前状态
 
+- 状态：已确认
+- 基础范围已于 2026-10-31 经用户验收并提交 `400f7e2b`；2026-11-02 规则 11.3 修正与光标门控调整在工作区，待用户验收。
 - 2026-10-31：状态更新为「已实现」。依据：用户指示更新状态（视为验收 7 / 10 的人工走查已确认）；实现代码已提交并推送（`400f7e2b`）；提交前 `tsc --noEmit`、`npm run lint`、marquee 47、architecture 40、相关回归 443 全部通过。
 - 实现结果（已验证）：
   - 新增 `marquee/marquee-geometry.ts`、`marquee/marquee-session.ts` 及两个单测文件（共用 `fixtures.ts` 节点工厂）；`InfiniteCanvas` 接线会话、关闭内建框选并渲染选框静态元素；`globals.css` 增加预览高亮与选框显隐规则；`use-canvas-interaction` 移除 `onSelectionStart`；`canvas-store` 更新过时注释。
@@ -357,6 +359,13 @@
   - 未采纳：框选与拖动两个会话的 DOM wrapper 索引与 rAF 循环不合并——命中过滤（全量节点 + 选框 vs `affectedIds`）与帧语义（持续循环 vs 一次性合并）不同，强行抽取会把两种生命周期耦合在一起。
   - Spec 轴复审：未发现缺失、范围外行为或实现错误；验收 7/10 仍为浏览器走查项。
   - 本轮检查：`tsc --noEmit` 无错误；`npm run lint` 0 error（6 条既有 `<img>` 警告）；`marquee` 47 项、architecture 40 项与相关回归 443 项全部通过。
+- 2026-11-02 选中卡顿修复（工作区未提交；实现随之调整）：
+  - 框选光标门控由 `.react-flow:has(> [data-canvas-marquee][data-active="true"])` 改为根属性 `data-marquee-active`（会话激活时写、`resetGesture` 删除；规则 14.2）。根因：`:has()` 规则使选框与节点子树的属性变化进入样式失效匹配，扩大选中路径的样式重算范围；根属性只命中覆盖层一条窄规则。
+  - 选框每帧 `pane.getBoundingClientRect()` 改为激活时读取并缓存 + `ResizeObserver` 刷新（规则 11.3），`frameKey` 不再包含容器原点。根因：读取发生在选框样式写入之后，每帧强制同步布局（实测整次手势 LayoutCount 21、样式 + 布局 34–42ms）。候选阶段只在按下点换算时读取一次布局，不写入缓存；激活时重新读取，覆盖候选期间容器原点变化。
+  - 根属性置位与会话激活状态对齐：`data-marquee-active` 不再以选框元素存在为前提（选框与光标层是独立元素），并补「选框元素缺失仍置位」回归。
+  - 新增回归单测：激活时写根 `data-marquee-active`、释放后清除；选框元素缺失时仍按激活状态置位；候选阶段容器原点变化后，激活帧按新原点投影；手势中容器尺寸变化经 `ResizeObserver` 重读原点并按新原点投影；`marquee-session` 41 例通过。
+  - 生产构建 CDP 实测（本地 `next start`，合成指针）：框选 3 次 recalc 6.7–6.8ms / 11 次、layout 1.2–1.3ms / 11 次；单击节点（图片）recalc 1.5–1.8ms；整轮无 >50ms 长任务。视频节点的单击仍有 ≈19.5ms layout 残留，未定位（见 `canvas-selection-chrome-scheduling.md` 同日记录）。
+  - 检查（第三轮复核修复后）：ESLint 0 error（6 个既有 `<img>` 警告）；`tsc --noEmit` 通过；marquee / prewarm / NodeTitle / MentionPrompt / use-canvas-interaction 定向 5 文件 / 57 例、web 全量 190 文件 / 1526 例（Vitest 单 worker）全部通过。
 - 本次调查范围：本仓库框选/选择/拖动/历史链路、React Flow 12.12 内建框选实现、即梦线上 bundle 静态阅读。
 - 已验证事实见「现状与已验证事实」与「业界对标」；即梦运行时行为未验证。
 

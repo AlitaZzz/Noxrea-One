@@ -83,10 +83,15 @@ export class MarqueeSession {
   private rootEl: HTMLElement | null = null;
   private pane: HTMLElement | null = null;
   private marqueeEl: HTMLElement | null = null;
+  /** 画布根（.react-flow）：框选光标层由根上的 data-marquee-active 门控。 */
+  private flowRootEl: HTMLElement | null = null;
 
   private pointerId = -1;
   private startClient: Point = { x: 0, y: 0 };
   private lastClient: Point = { x: 0, y: 0 };
+  /** 激活时读取的容器矩形；手势中由 ResizeObserver 在尺寸变化时刷新（规则 11.3）。 */
+  private paneBounds: DOMRect | null = null;
+  private resizeObserver: ResizeObserver | null = null;
   /** 按下点在 flow 坐标系中的位置（激活时换算，视口变化由每帧公式吸收）。 */
   private startFlow: Point = { x: 0, y: 0 };
   /** 追加选择的起点（按下时快照；手势中途按键不改变本次模式）。 */
@@ -177,6 +182,7 @@ export class MarqueeSession {
 
     const viewport = this.readViewport();
     if (!viewport) return;
+    // 按下点换算仍用本次布局；缓存留到激活时再读取（规则 11.3）
     const bounds = target.getBoundingClientRect();
 
     this.phase = "candidate";
@@ -310,11 +316,19 @@ export class MarqueeSession {
     }
 
     const nodes = this.deps.getNodes();
+    // 激活时读取并缓存容器原点：候选阶段容器可能已变化（规则 11.3）；
+    // 手势期间由 ResizeObserver 刷新。必须在任何 DOM 写入前读，避免强制同步布局。
+    this.paneBounds = pane.getBoundingClientRect();
     this.phase = "active";
     this.index = buildMarqueeGeometryIndex(nodes);
     this.previewedIds = EMPTY_SELECTION;
     this.lastFrameKey = null;
     this.captureDomWrappers();
+    // 光标层门控跟随会话激活状态，不依赖选框元素是否存在（两者是独立元素）
+    const flowRootEl = pane.closest<HTMLElement>(".react-flow");
+    this.flowRootEl = flowRootEl;
+    if (flowRootEl) flowRootEl.dataset.marqueeActive = "true";
+    this.observePaneResize();
 
     // 清空已提交选中：依赖选中的面板/工具条按现有行为关闭，视觉交给预览
     this.writeSelection(() => false, () => false, false);
@@ -474,7 +488,10 @@ export class MarqueeSession {
     if (!viewport) return;
     const { x: viewX, y: viewY, zoom } = viewport;
 
-    const bounds = pane.getBoundingClientRect();
+    // 容器矩形缓存在激活时；ResizeObserver 负责尺寸变化后的刷新。
+    // 每帧读取会在选框样式写入后强制布局（实测整次手势 LayoutCount 21、样式+布局 34–42ms）
+    const bounds = this.paneBounds;
+    if (!bounds) return;
     const currentX = this.lastClient.x - bounds.left;
     const currentY = this.lastClient.y - bounds.top;
     const anchorX = this.startFlow.x * zoom + viewX;
@@ -486,7 +503,7 @@ export class MarqueeSession {
       height: Math.abs(currentY - anchorY),
     };
 
-    const frameKey = `${viewX}|${viewY}|${zoom}|${bounds.left}|${bounds.top}|${this.lastClient.x}|${this.lastClient.y}`;
+    const frameKey = `${viewX}|${viewY}|${zoom}|${this.lastClient.x}|${this.lastClient.y}`;
     if (frameKey !== this.lastFrameKey) {
       this.lastFrameKey = frameKey;
       this.writeMarquee(screenRect);
@@ -504,7 +521,24 @@ export class MarqueeSession {
       );
     }
 
-    if (allowAutoPan) this.autoPan({ x: currentX, y: currentY }, bounds);
+    if (allowAutoPan) this.autoPan({ x: currentX, y: currentY }, { width: bounds.width, height: bounds.height });
+  }
+
+  /** 容器尺寸变化时刷新缓存原点，并让下一帧按新原点重投影。 */
+  private observePaneResize(): void {
+    const pane = this.pane;
+    if (!pane || this.resizeObserver || typeof ResizeObserver === "undefined") return;
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.phase !== "active") return;
+      this.paneBounds = pane.getBoundingClientRect();
+      this.lastFrameKey = null;
+    });
+    this.resizeObserver.observe(pane);
+  }
+
+  private disconnectPaneResize(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
   }
 
   private writeMarquee(rect: Rect): void {
@@ -560,6 +594,8 @@ export class MarqueeSession {
   /** 清理手势的全部瞬态状态与 DOM 预览：冻结索引、命中属性、选框、快照与基线。 */
   private resetGesture(): void {
     this.cancelFrame();
+    this.disconnectPaneResize();
+    this.paneBounds = null;
     for (const id of this.previewedIds) {
       this.wrappers.get(id)?.removeAttribute("data-marquee-hit");
     }
@@ -579,6 +615,10 @@ export class MarqueeSession {
       el.style.height = "";
     }
     this.marqueeEl = null;
+    if (this.flowRootEl) {
+      delete this.flowRootEl.dataset.marqueeActive;
+      this.flowRootEl = null;
+    }
   }
 
   // ---- 指针捕获、监听与点击抑制 ----

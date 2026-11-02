@@ -376,15 +376,15 @@
 
 **实施决策（2026-10-31，用户按草案放行后确定）**：
 
-- 工作项 1 采用**手势光标层**：在 `.react-flow` 内新增一个覆盖全画布、常驻但默认隐藏的空层（`.canvas-gesture-cursor`），手势期间由窄规则（只命中该层）打开并声明光标——`dragging-nodes` 为 `grabbing`，框选（`[data-canvas-marquee][data-active="true"]`）为 `default`。根属性/框选属性切换只重匹配该层，不再触发整棵子树（探针 3440 元素）的光标规则重算。
+- 工作项 1 采用**手势光标层**：在 `.react-flow` 内新增一个覆盖全画布、常驻但默认隐藏的空层（`.canvas-gesture-cursor`），手势期间由窄规则（只命中该层）打开并声明光标——`dragging-nodes` 为 `grabbing`，框选（2026-11-02 起为根属性 `data-marquee-active`，原为 `:has(> [data-canvas-marquee][data-active="true"])`）为 `default`。根属性切换只重匹配该层，不再触发整棵子树（探针 3440 元素）的光标规则重算。
   - 选择覆盖层而非根继承/局部规则：根 `cursor` 会被节点抓手、控件指针、resize 与内联 cursor 覆盖；逐元素枚举会随节点组件演化漏项（见 `globals.css` 原注释）。覆盖层是同时满足「整块画布稳定接管」与「不逐元素枚举」的形态。
   - 覆盖层只在拖动节点与框选中启用：两者期间不需要 hover 反馈（handle 已隐藏、媒体预览已暂停、框选命中按几何计算）。手势期间滚轮缩放随手势一起被覆盖层接管，松手恢复——记录为行为变化，随验收走查确认。
-  - `connecting` 保留现有全后代规则：拖线中目标 handle 的显示依赖 `:hover`（`idle` 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见；改目标 handle 的显示语义不在 5.5 范围。因此 connect 起的 ≈29ms 仍存在（不在 5.5 验收项内），若后续需要应以「不依赖 hover 的目标 handle affordance」单独评估。
+  - `connecting` 保留现有全后代规则：拖线中目标 handle 的显示依赖 `:hover`（`idle` 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见；改目标 handle 的显示语义不在 5.5 范围。因此 connect 起的 ≈29ms 仍存在（不在 5.5 验收项内），若后续需要应以「不依赖 hover 的目标 handle affordance」单独评估。2026-11-02 起该规则的门控属性由 `data-interaction` 改为只在拖线期间存在的根属性 `data-connecting`，选中态切换不再触发这条全后代规则的重算；拖线开始/结束本身仍有该成本。
 - 候选 A 按 5.6 原方案提前实施：`memoCanvasNode` 忽略 `selected`（及同类的 `dragging` 运行时 prop）；选中描边改由 `.react-flow__node.selected .node-body` 驱动；依赖选中的行为/UI 改为独立订阅（`useNodeSelected` / `useNodeSelectionChange` / `SelectionResizeHandle`），节点主体不再随选中重渲染。
 
 **实施结果（2026-10-31，用户指示「按草案推进」；工作区未提交）**：
 
-- 工作项 1 已实现：`InfiniteCanvas` 在 `.react-flow` 内渲染常驻覆盖层 `.canvas-gesture-cursor`；`globals.css` 仅保留两条窄规则（`dragging-nodes` → `grabbing`、框选激活 → `default`），根属性/框选属性切换不再命中整棵子树；`connecting` 仍用原全后代规则（原因见上）。
+- 工作项 1 已实现：`InfiniteCanvas` 在 `.react-flow` 内渲染常驻覆盖层 `.canvas-gesture-cursor`；`globals.css` 仅保留两条窄规则（`dragging-nodes` → `grabbing`、框选激活 → `default`），根属性/框选属性切换不再命中整棵子树；`connecting` 仍用原全后代规则（原因见上），2026-11-02 起门控属性改为 `data-connecting`。
 - 候选 A 已实现：节点主体不再因 `selected`/`dragging`/绝对位置重渲染；选中描边由包装层 `.selected` + `.node-body` CSS 驱动；需要选中态的手柄/行为改经 `useNodeSelected`、`useMultiSelect`、`useNodeSelectionChange`、`SelectionResizeHandle` 独立订阅。
 - **新增根因（实测）**：React Flow 默认 `elevateNodesOnSelect=true`，选中时 `internals.z` 由 0 抬升为 1000（`SELECTED_NODE_Z`），NodeWrapper 以 `zIndex` prop 注入节点组件；`memoCanvasNode` 原先只忽略 `positionAbsoluteX/Y`、`selected`、`dragging`，`zIndex` 变化仍使每个选中节点重渲染——仅忽略 `selected` 不足以拦截选中重渲染。已把 `zIndex` 纳入 `RUNTIME_PROPS`，并在 `NodeRenderBoundary.test.tsx` 增加「selected + zIndex 0→1000 不重渲染」断言。
 - 复测（同一 129 节点矩阵：128 文本 + 1 音频；dev；合成事件；未节流）：
@@ -477,8 +477,9 @@
 
 ## 10. 当前状态
 
-- 状态：已实现（2026-11-01 用户确认验收通过并授权提交；实现提交 `a2588aee`，
-  第十一轮检查全量 web 测试 183 文件 / 1447 例通过）
+- 状态：已确认
+- 基础范围已于 2026-11-01 经用户验收并提交 `a2588aee`；2026-11-02 增量待用户验收，缺口见下文「选中卡顿修复」。
+- 后续增量（2026-11-02，工作区未提交，待用户验收）：选中四类根因修复 + 生成面板提示词悬停字形预热；实测与检查见下文「选中卡顿修复」。
 - 状态沿革：已确认（2026-10-31 用户确认整体方案与 5.5 范围；5.6 已作为 5.5 候选 A 提前实施完成；按用户反馈修订根因框架；5.3 已实现并完成独立探针验证，代码未提交；3.3 trace 归因已完成（129 节点探针，测后删除），显示点击/起拖存在随节点数增长的画布级成本；5.5 步骤 0（3.3.1）与候选 B 样式补测（3.3.2）及未节流验收复测（3.3.3）已完成，数据支持工作项 1、排除工作项 5；用户已指示「按草案推进」，5.5 工作项 1（手势光标层）与候选 A（选中不重渲染节点主体）已实现并完成浏览器复测，全量 web 测试 173 文件 / 1406 例通过，代码未提交；2026-10-31 按用户指示「把未做的都做掉」完成 5.4 面板宿主复用（已实现并完成浏览器复测）与 5.5 工作项 2–4 复评（2/4 不实施、3 已实现），验收阈值 9.2-5 待用户确认；2026-10-31 修复 5.4 编辑器复用引入的 `flushSync` 控制台报错与目标切换内容回写，浏览器复测通过，全量 176 文件 / 1416 例通过；2026-10-31 代码审查完成两轴汇总并按根因修复重复实现、死代码与目标规则缺口，第二轮审查补齐面板删除记忆与 Agent 选中写入，检查结果见下方；代码仍未提交）
 - 已完成（实现提交 `a2588aee`）：
   - 4.1 撤销：删除 `hooks/use-deferred-panel-target.ts` 及其测试，生成面板恢复与选中态同步挂载。
@@ -522,7 +523,7 @@
   - 清理：探针项目已通过应用 API 删除（列表已核实不存在）；预览页已离开画布（0 个 canvas），未打开用户真实项目；临时提取/测量脚本已删除；本轮未改业务代码、未提交。
 - 5.5 工作项 1 + 候选 A 已实现（2026-10-31，用户指示「按草案推进」；工作区未提交）：
   - 候选 A（提前 5.6）：`shared/memo-canvas-node.ts` 的运行时 prop 拦截集合加入 `zIndex`。根因（读 `@xyflow/system`/`@xyflow/react` 源码确认）：React Flow 默认 `elevateNodesOnSelect=true`，选中时 `internals.z` 由 0 抬升 1000（`SELECTED_NODE_Z`），NodeWrapper 以 `zIndex` prop 注入节点组件，抵消 `selected` 的拦截——这是候选 A 首轮实现后 Ctrl+A 仍有 270ms 长任务的主因。选中描边改由包装层 `.react-flow__node.selected .node-body` 驱动；节点内需要选中态的 UI/行为改经 `hooks/use-node-selected.ts` 独立订阅（缩放手柄 `SelectionResizeHandle`、AudioNode 取消选中暂停、PanoramaPanel 可用态、文本滚动区命中由 CSS `pointer-events` 承担）。
-  - 工作项 1：`.react-flow` 直接子级新增 `.canvas-gesture-cursor` 覆盖层（inset 0、z-index 2000、默认 `display:none`），仅在 `[data-interaction="dragging-nodes"]`（`cursor:grabbing`）与框选会话激活（`cursor:default`）两条窄规则下显示；`connecting` 保留通用 `cursor: crosshair` 规则（目标手柄显隐依赖 `:hover`）。
+  - 工作项 1：`.react-flow` 直接子级新增 `.canvas-gesture-cursor` 覆盖层（inset 0、z-index 2000、默认 `display:none`），仅在 `[data-interaction="dragging-nodes"]`（`cursor:grabbing`）与框选会话激活（2026-11-02 起取根属性 `[data-marquee-active]`，`cursor:default`）两条窄规则下显示；`connecting` 保留通用 `cursor: crosshair` 规则（目标手柄显隐依赖 `:hover`），门控属性 2026-11-02 起改为 `[data-connecting]`。
   - 同一矩阵复测（129 节点探针，dev 构建，合成事件，Ctrl+A 取 3 次采样）：Ctrl+A 0→129 由 270+78ms 降至 89+59 / 73+55 / 71+52ms（LoAF 脚本 89/74/72ms，帧 117/100/83ms）；无变化的 Ctrl+A（129→129）无长任务，确认选中写入保持未变化项的引用。点击音频无长任务（LoAF 51ms）；点击文本 106ms（面板挂载，归 5.4）；起拖音频无长任务（LoAF 76ms）/ 文本 60ms；拖停音频无长任务（LoAF 81ms）/ 文本 127ms；空闲帧间隔 17ms。
   - 剩余 Ctrl+A 71–89ms 已排除节点主体渲染（129 × ≈0.7ms ≪ 单节点主体 10–30ms），为 React Flow 包装层重渲染与 DOM/样式提交（3.3.2 中 wrapAll recalc 15.8ms 为其一部分）。
   - 检查：`tsc --noEmit` 通过；ESLint 0 error（6 条既有 img 告警）；全量 web 测试 173 文件 / 1406 例全部通过（Vitest 单 worker，200s）。
@@ -673,3 +674,29 @@
   `gen-breathe` 层、关键帧与 reduced-motion 条目，最终浮层只有颗粒 + 文字流光。
   两者均按 `startedAt` 做负 delay 去同步，`prefers-reduced-motion` 下关闭动画。
   视觉走查待用户确认。
+- 选中卡顿修复（2026-11-02，用户指示「修选中卡顿」后实施；工作区未提交；生产构建 CDP 实测）：
+  - 根因 1（已验证，trace）：选中时 `NodeToolbar` / 生成面板向 DOM 插入约 63 个元素，样式引擎对插入元素执行 `:has()` 失效检查；全局样式中 9 条由 shadcn 组件源码生成的 `group-has-*` 工具类（`checkbox` / `switch` / `field` / `input-group` / `alert-dialog`）编译为 `:is(:where(.group/name):has(...) *)`，subject 是任意后代，使每次插入约 25ms 样式重算，且与页面上是否存在匹配元素无关。修复：删除这些源码中的 `group-has-*` 工具类；逐项核对均不可达——`FieldLabel` 全库仅定义未使用，`FieldDescription` 无引用，`InputGroupAddon` 只使用 `inline-end`，`AlertDialogMedia` 只在 `size="sm"` 的 `DestructiveConfirmModal` 使用（被删规则仅匹配 `size=default`）。
+  - 根因 2（已验证）：拖线光标全后代规则以 `data-interaction="connecting"` 门控，而 `data-interaction` 在选中态切换（idle ↔ box-selecting）时同样变化，使整棵画布的 `cursor` 规则在每次单击/框选中重算。修复：画布根新增仅拖线期间存在的 `data-connecting`，CSS 改用它门控。
+  - 根因 3（已验证）：框选光标层由 `:has(> [data-canvas-marquee][data-active="true"])` 门控，选框状态与画布子树变更都会进入 `:has()` 失效匹配。修复：框选会话激活时写画布根 `data-marquee-active`、清理时删除，CSS 改为根属性窄规则（`canvas-marquee-gesture-session.md` 规则 14.2 同步）。
+  - 根因 4（已验证）：框选每帧在写入选框样式后读取 `pane.getBoundingClientRect()`，强制同步布局（整次手势 LayoutCount 21、样式 + 布局 34–42ms）。修复：激活时读取并缓存容器矩形 + `ResizeObserver` 刷新；候选阶段只在按下点换算时读取一次，不写入缓存（`canvas-marquee-gesture-session.md` 规则 11.3 同步）。
+  - 生产构建实测（`npm run build` 后本地 `next start`，CDP 合成指针，同一 12 候选节点画布）：单击图片节点 recalc 1.5–1.8ms / 2 次、layout 0.25–0.29ms（本会话修复前同画布基线 23–63ms recalc）；框选 recalc 6.7–6.8ms / 11 次、layout 1.2–1.3ms / 11 次；框选后单击 recalc 6.2–6.5ms、layout 2.1–2.2ms；清空 recalc 0.7–1.9ms；整轮无 >50ms 长任务（首轮框选有一次 274ms 离群，第二轮未复现）。
+  - 检查：`tsc --noEmit` 通过；ESLint 0 error（6 条既有 `<img>` 警告）；server 100 文件 / 1174 例、web 188 文件 / 1513 例（Vitest 单 worker）全部通过。
+  - 遗留（已根因；字形首次排版已按方案 1 处理）：生成节点单击仍有 ≈18–20ms layout，来源是**生成面板提示词中文文本在该 Chrome 渲染进程中的首次排版（字形生成）成本**，不是选中逻辑、面板挂载或视频节点特有。
+    - 差分（新标签页、同一画布、同一节点）：基线 layout 17.76ms；`.tiptap{display:none}` 2.52ms；`.scrollbar-ui{display:none}` 2.52ms；`.tiptap p{display:none}` 2.70ms；隐藏整个面板 0.31ms；隐藏图片 / 引用卡 / mention、改字体族（YaHei / system-ui）、`word-break` / `white-space` / `font-size` / `line-height` / `contain` / `content-visibility` / `overflow` 均无效果。
+    - 预热差分：不同中文文本预热后仍 14.93ms；拉丁预热 17.81ms；同一段文本预热后 2.82ms；同节点重复点击 0.57ms。
+    - 空白页对照（Chrome 156.0.8078.74、`about:blank` 新渲染进程、纯文本 div，排除画布与应用样式）：453 字 / 242 个唯一汉字 @13px 首次 layout 20.2–26.7ms，重复 0.2–0.3ms；单字重复 455 字 0.2ms；744 字拉丁 1.7ms；445 字日文假名 4.6ms；`Microsoft YaHei` / `SimSun` / `SimHei` / `Microsoft JhengHei` / `Noto Sans CJK` 首次均 23–43ms；14px 仍 23ms。成本按「唯一汉字 × 字体实例」首次生成字形计（≈0.1ms/唯一汉字）。
+    - 字形实例与浏览器对照（已验证）：默认中文栈实际命中 `Microsoft YaHei UI`（`CSS.getPlatformFontsForNode`）；任何系统 CJK 字面首次使用均 23–43ms（DengXian 50.3 / Noto Serif SC 79.7），已预热字面 0.2–1.0ms。全新 headless Chrome（新 profile）与全新标签页均复现（26.3/26.9ms，新标签页重新计费），排除用户配置/扩展；Edge 156.0.4314.58 同一脚本复现（首次 21.9ms、`nowrap` 21.9ms 排除换行、`canvas.measureText` 21.3ms 后同文本 DOM layout 0.4ms、新标签页 21.5ms），说明是 Chromium/Windows 文本栈共性，不是 Chrome 独有。
+    - 结论：成本按「(字面, 字号, 字符集) 在该渲染进程首次 shaping」计费，应用无法让 shaping 本身变快；应用侧唯一根本性杠杆是**在交互前完成 shaping**（`canvas.measureText` 与 DOM 共用字形缓存，已验证）：
+      1. 预热（推荐评估）：悬停生成节点时用 canvas 按编辑器同款 13px 字体栈预热该节点提示词（悬停到点击通常 >150ms）；或在画布加载后分片空闲预热全部生成节点提示词（≈0.1ms/唯一汉字，需分片）。零视觉变化，代价是冷成本移到空闲/悬停期，且每个新文档重新计费。
+      2. 字体实例对齐（13px 改为与应用已预热文本同字号）：仅对已出现字符有效，提示词内容字与 UI 文本重叠有限，收益不确定，且属视觉变更。
+      3. 不处理：每节点首次点击一次性 ≈15–20ms，同节点重复 0.57ms。
+    - 决策与实现（2026-11-02，用户选择方案 1；工作区未提交）：新增 `web/src/features/canvas/shared/prompt-shaping-prewarm.ts`，`InfiniteCanvas` 通过 `onNodeMouseEnter` 接入。
+      - 实现：隐藏 `.mention-editable` 探针解析编辑器计算字体（不硬编码字号 / 字体栈）；按 48 个码点、4ms 预算分片调用 `canvas.measureText`；悬停目标变化时先取消上一段预热（含非生成节点、空提示词、已缓存文本），只保留当前目标；已完成文本保留 256 条 FIFO 缓存。仅对 `genKindOfNode` 且提示词非空的节点启动测量。离屏 canvas 上下文与计算字体简写抽到 `shared/text-measure.ts`，与 `NodeTitle` 中间截断量宽共用。
+      - 回归测试：`web/src/__tests__/features/canvas/shared/prompt-shaping-prewarm.test.ts`（jsdom，8 例：字体解析与分片、非生成节点跳过、空提示词跳过、重复悬停命中缓存、新目标取消前一次、非生成节点取消前一段、空提示词取消前一段、已缓存文本取消前一段）。
+      - 生产构建实测（2026-11-02；基线为端口 3000 上改动前的构建，改动后为隔离 `distDir` 构建跑在 3100；同一探针项目、两个视频节点、各 480 字 / 240 个互不重叠唯一汉字；CDP 真实鼠标输入）：新构建冷态点击（JS 合成 click，不触发 mouseover、无预热）layout 24.5ms / 22.43ms（含一次 50ms 长任务）；新构建悬停 1.5s 后点击 layout 1.95ms / 1.97ms、无长任务；旧构建鼠标点击 18.08ms / 18.07ms。预热自身 10 次 `measureText` / 480 字、script 19.67ms，分片执行无 >50ms 长任务；canvas 字体字符串与点击后 `.mention-editable` 计算字体完全一致（`13px ui-sans-serif, system-ui, sans-serif, …`）。
+      - 局限（已验证）：快速 hover→click 短于预热耗时时，剩余字形仍计入点击；触摸设备无 hover，路径不变；新文档 / 新渲染进程重新计费；点击本身仍有 ≈24ms script（面板挂载与选中），本次只消除字形首次排版；实测为 2 节点探针 + 合成输入，未在真实重负载画布复测。探针项目已删除、测量标签页已关闭、3100 服务与隔离构建已清理。
+      - 审查后根因修复（2026-11-02，工作区未提交）：补齐上述取消语义（原实现对空文本、已缓存文本、非生成节点直接返回，悬停到这些目标不会取消在途预热）；`warmedTexts` 由 `Map<string, true>` 改为 `Set<string>`；测试不再绑定「恰好 3 次测量」，改为断言分片多次且拼接等于原文；框选容器矩形读取时机同时校正为激活时读取（见 `canvas-marquee-gesture-session.md`）。
+      - 第二轮两轴复核后的根因修复（2026-11-02，工作区未提交）：画布根光标门控属性统一由 `canvasRootInteractionAttrs(mode)` 派生（`data-interaction` 与仅在拖线期间存在的 `data-connecting` 同源），新增 `use-canvas-interaction` 单测锁定「仅 connecting 写 data-connecting」，防止选中态切换重新命中全后代光标规则；`.mention-editable` class 抽为 `shared/prompt-editor.ts` 的 `PROMPT_EDITOR_CLASS`，Tiptap 编辑器与字形预热探针共用，避免改名时静默失配。
+      - 第三轮两轴复核后的根因修复（2026-11-02，工作区未提交）：`prewarmPromptShaping` 收为模块内部（生产入口仅 `prewarmPromptForNode`），测试统一走节点入口；`InfiniteCanvas` 悬停处理器参数改为领域类型 `AnyNode`，去掉 `Record<string, unknown>` + 断言；两份 Spec 的状态行收敛为枚举值，进度移入「当前状态」。
+      - 检查（第三轮复核修复后）：ESLint 0 error（6 个既有 `<img>` 警告）；`tsc --noEmit` 通过；定向 5 文件 / 57 例、web 全量 190 文件 / 1526 例（Vitest 单 worker）全部通过。
+    - 6–21ms recalc 离群值未复现：trace 化复测图片节点 3 个窗口 recalc 2.62 / 1.76 / 1.79ms，无 Invalidation 事件；未 trace 的 metrics 窗口偶见 12.63ms，判定为窗口内混入后台任务，不是选中成本。

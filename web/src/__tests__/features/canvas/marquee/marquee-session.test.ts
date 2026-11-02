@@ -76,6 +76,7 @@ function createHarness(options: HarnessOptions) {
   const canStartMarquee = options.canStartMarquee ?? true;
 
   const container = document.createElement("div");
+  container.className = "react-flow";
   // 必须挂到 document 上：window 捕获阶段的 click 抑制依赖完整事件传播路径
   document.body.appendChild(container);
   const pane = document.createElement("div");
@@ -200,6 +201,80 @@ describe("MarqueeSession", () => {
     // 超过阈值才激活（与 paneClickDistance 的「等于仍算点击」语义一致）
     harness.move({ x: 202, y: 200 });
     expect(harness.marquee.dataset.active).toBe("true");
+  });
+
+  it("激活时在画布根写 data-marquee-active，释放后清除", () => {
+    stubRaf();
+    const harness = createHarness({ nodes: [] });
+
+    harness.press({ x: 200, y: 200 });
+    harness.move({ x: 240, y: 240 });
+    expect(harness.container.dataset.marqueeActive).toBe("true");
+
+    harness.release({ x: 240, y: 240 });
+    expect(harness.container.dataset.marqueeActive).toBeUndefined();
+  });
+
+  it("选框元素缺失时光标层门控仍随激活状态置位", () => {
+    stubRaf();
+    const harness = createHarness({ nodes: [] });
+    harness.marquee.remove();
+
+    harness.press({ x: 200, y: 200 });
+    harness.move({ x: 240, y: 240 });
+    expect(harness.container.dataset.marqueeActive).toBe("true");
+
+    harness.release({ x: 240, y: 240 });
+    expect(harness.container.dataset.marqueeActive).toBeUndefined();
+  });
+
+  it("激活时重新读取容器原点，而不是沿用按下时的矩形", () => {
+    stubRaf();
+    const harness = createHarness({ nodes: [] });
+
+    harness.press({ x: 200, y: 200 });
+    // 候选阶段容器原点变化（例如面板布局调整），激活时必须按新原点换算
+    harness.pane.getBoundingClientRect = () =>
+      ({ ...PANE_BOUNDS, left: 100, top: 50, x: 100, y: 50 }) as DOMRect;
+    harness.move({ x: 300, y: 300 });
+
+    // startFlow 仍是按下时的 (200,200)；当前点按新原点换算为 (200,250)
+    expect(harness.marquee.style.transform).toBe("translate(200px, 200px)");
+    expect(harness.marquee.style.width).toBe("0px");
+    expect(harness.marquee.style.height).toBe("50px");
+  });
+
+  it("容器尺寸变化后由 ResizeObserver 刷新原点并重投影", () => {
+    const raf = stubRaf();
+    let notifyResize: (() => void) | undefined;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          notifyResize = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const harness = createHarness({ nodes: [] });
+
+    harness.press({ x: 200, y: 200 });
+    harness.move({ x: 240, y: 240 });
+    expect(harness.marquee.style.width).toBe("40px");
+    expect(harness.marquee.style.height).toBe("40px");
+
+    // 手势中 pane 尺寸变化：ResizeObserver 重读原点，下一帧按新原点投影
+    harness.pane.getBoundingClientRect = () =>
+      ({ ...PANE_BOUNDS, left: 100, top: 50, x: 100, y: 50 }) as DOMRect;
+    notifyResize?.();
+    harness.move({ x: 300, y: 300 });
+    raf.flush();
+
+    expect(harness.marquee.style.transform).toBe("translate(200px, 200px)");
+    expect(harness.marquee.style.width).toBe("0px");
+    expect(harness.marquee.style.height).toBe("50px");
   });
 
   it("候选阶段按 Esc 结束手势，后续拖动不再激活", () => {

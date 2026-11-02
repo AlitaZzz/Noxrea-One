@@ -29,6 +29,7 @@ import { useTranslation } from "react-i18next";
 import { GenerationPanelActiveProvider } from "./generation-panel-active";
 import MentionChip from "./MentionChip";
 import MentionDropdown from "./MentionDropdown";
+import { PROMPT_EDITOR_CLASS } from "./prompt-editor";
 import { PRESET_TOKEN_PATTERN, presetTokenOf } from "./prompt-presets";
 import { type ReferenceItem, type ReferenceItemAttrs, refLabel, refLabelKey } from "./reference";
 
@@ -290,7 +291,7 @@ const MentionPrompt = ({ nodeId, active, references, value, onChange, placeholde
       bridge?.onChange(editor.getText({ blockSeparator: "\n" }));
     },
     editorProps: {
-      attributes: { class: "mention-editable nodrag" },
+      attributes: { class: `${PROMPT_EDITOR_CLASS} nodrag` },
       handleDOMEvents: {
         mousedown: (view) => {
           const bridge = bridges.get(view.dom);

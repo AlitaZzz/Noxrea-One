@@ -67,7 +67,7 @@ import CanvasExplorer, { DRAWER_WIDTH } from "@/features/canvas/explorer/CanvasE
 import CanvasFlowLayer from "@/features/canvas/flow/CanvasFlowLayer";
 import { type AddNodeType, useAddNode } from "@/features/canvas/hooks/use-add-node";
 import { useCanvasEvents } from "@/features/canvas/hooks/use-canvas-events";
-import { useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
+import { canvasRootInteractionAttrs, useCanvasInteraction } from "@/features/canvas/hooks/use-canvas-interaction";
 import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 import { useGenSettingsNormalization } from "@/features/canvas/hooks/use-gen-settings-normalization";
 import { useGroupOperations } from "@/features/canvas/hooks/use-group-operations";
@@ -105,6 +105,7 @@ import {
   type PositionFrame,
   toPositionMap,
 } from "@/features/canvas/shared/node-positions";
+import { prewarmPromptForNode } from "@/features/canvas/shared/prompt-shaping-prewarm";
 import { bumpRefOrderToTail } from "@/features/canvas/shared/ref-order";
 import { applySelection } from "@/features/canvas/shared/selection";
 import { findFreePosition, flushAndWait, getCanvasProjectId, isNodeInUiState, markDirty, markDirtyImmediate, syncLiveViewport, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
@@ -993,6 +994,12 @@ export default function InfiniteCanvas() {
     [canvasInteraction, setNodes]
   );
 
+  // 悬停生成节点时预热提示词字形：面板首次显示的 18–20ms layout 来自
+  // 中文首次 shaping，提前到悬停阶段把成本移出点击路径（见 shared/prompt-shaping-prewarm）。
+  const handleNodeMouseEnter = useCallback((_event: React.MouseEvent, node: AnyNode) => {
+    prewarmPromptForNode(node);
+  }, []);
+
   useGroupOperations();
   const { addNode } = useAddNode();
   // 从右键/双击菜单新增节点时，锚定到触发菜单的点击点（世界坐标）
@@ -1150,7 +1157,7 @@ export default function InfiniteCanvas() {
       <CanvasMediaLoadingProvider key={activeProjectId}>
       <ResizeSessionContext.Provider value={resizeSession}>
       <ReactFlow
-        data-interaction={canvasInteraction.mode}
+        {...canvasRootInteractionAttrs(canvasInteraction.mode)}
         data-multiselect={selectionFrame ? "true" : undefined}
         style={RF_STYLE}
         nodes={nodes}
@@ -1169,6 +1176,7 @@ export default function InfiniteCanvas() {
         onNodeDragStop={handleNodeDragStop}
         onPaneClick={handlePaneClick}
         onNodeClick={handleNodeClick}
+        onNodeMouseEnter={handleNodeMouseEnter}
         onPaneContextMenu={handlePaneContextMenu}
         onNodeContextMenu={handleNodeContextMenu}
         defaultViewport={defaultViewport}

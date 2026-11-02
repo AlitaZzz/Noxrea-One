@@ -549,11 +549,18 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    画布，手势期间由只命中该层的窄规则打开，hit test 恒定命中它。不要改回
    `[data-interaction] *` 全后代规则——根属性切换会让整棵画布子树（探针 3440
    元素）重算光标样式（实测中位 29.8ms），只命中该层约 1ms。
-   框选判定取选框自身的 data-active（仅手势进行中置位）——data-interaction=
-   "box-selecting" 是「最近一次选中来自框选」，会保留到下一次点击。
+   框选激活信号是根上的 data-marquee-active（会话激活时写、清理时删，与选框
+   data-active 同生命周期），不再用 :has(> [data-canvas-marquee][data-active])：
+   根属性只命中光标层一条窄规则，选框元素自身的属性变化也不再参与 :has() 失效匹配。
+   不用 data-interaction="box-selecting" 判定：它表示「最近一次选中来自框选」，
+   会保留到下一次点击，而光标只在手势进行中接管。
    框选中用普通箭头（2026-10-30 走查：框选不需要十字光标）。
    拖线（connecting）保留全后代规则：拖线中目标 handle 的显示依赖节点 :hover
-   （idle 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见。 */
+   （idle 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见。
+   门控属性用 data-connecting 而不是 data-interaction——后者在选中态切换
+   （idle ↔ box-selecting）时同样变化，全后代规则会因此让整棵画布子树重算
+   光标样式（同上文 29.8ms 的同一机制）；data-connecting 只在进入/退出拖线时
+   变化，单击与框选路径不再命中。 */
 .canvas-gesture-cursor {
   display: none;
   position: absolute;
@@ -561,13 +568,13 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
   /* 高于节点（选中态 internals.z = 1000）与 NodeToolbar（节点层级 + 1） */
   z-index: 2000;
 }
-.react-flow:has(> [data-canvas-marquee][data-active="true"]) > .canvas-gesture-cursor {
+.react-flow[data-marquee-active] > .canvas-gesture-cursor {
   display: block;
   cursor: default;
 }
 /* 拖线进行中：整块画布保持十字准星，表达「正在连线」而非「可拖动画布」 */
-.react-flow[data-interaction="connecting"],
-.react-flow[data-interaction="connecting"] * {
+.react-flow[data-connecting],
+.react-flow[data-connecting] * {
   cursor: crosshair !important;
 }
 /* 拖动节点中：整块画布保持抓取手势。拖动预览按 rAF 合帧并补偿阈值位移，指针
