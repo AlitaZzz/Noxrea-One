@@ -457,4 +457,4 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 - 连续缩放跨档（0.6417 → 4.724 → 0.6417，ctrl+wheel 与普通 wheel 均可触发）期间 120 帧：p50 **16.7 ms**、p95 26.5 ms、max 32.4 ms，**0 帧 >50 ms**；换档全程骨架数为 0（规则「换档保留旧图、不闪骨架」成立）。空闲基线 p50 16.8 ms / p95 18.1 ms / max 32.6 ms。
 - 该项覆盖「帧间隔」在换档路径上的空白；**低缩放拖动**路径的帧间隔（2026-10-24 两项改动的对比项）仍未重测，现值仍以 2026-10-23 数据为准。
 
-- 2026-11-03：`CanvasMediaLoadingProvider` 的 viewport context 改为 `useMemo` 稳定身份（已提交 `247d6515`）。此前内联对象在每次 Provider 渲染时都是新身份，选中写入触发的 `InfiniteCanvas` 子树重渲染会向所有图片节点的 LOD hook 下发新 context，绕过 `memoCanvasNode` 全量重渲染；属框选手势增量的一部分（见 `canvas-marquee-gesture-session.md` 当前状态）。未验证：真实页面手感与生产构建 trace 复测。
+- 2026-11-03：`CanvasMediaLoadingProvider` 的 viewport context 改为 `useMemo` 稳定身份（已提交并推送 `247d6515`）。此前内联对象在每次 Provider 渲染时都是新身份，选中写入触发的 `InfiniteCanvas` 子树重渲染会向所有图片节点的 LOD hook 下发新 context，绕过 `memoCanvasNode` 全量重渲染；属框选手势增量的一部分（见 `canvas-marquee-gesture-session.md` 当前状态）。未验证：真实页面手感与生产构建 trace 复测。
