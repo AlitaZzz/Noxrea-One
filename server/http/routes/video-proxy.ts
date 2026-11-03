@@ -21,8 +21,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { createScrubProxy } from "@server/services/storage/video-frames";
-import { probeVideoMetaCached } from "@server/services/storage/media-probe";
-import { ensureArtifact } from "@server/services/storage/artifact";
+import { peekVideoMetaCached, probeVideoMetaCached, type VideoMeta } from "@server/services/storage/media-probe";
+import { ensureArtifact, isPublishedArtifact, recordArtifactHit } from "@server/services/storage/artifact";
 import { proxyKeyOf } from "@server/services/storage/derived-keys";
 import { mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { buildFileUrl } from "@server/services/storage/service";
@@ -39,10 +39,40 @@ const PROXY_WIDTH = 480;
 /** 代理参数版本：编码参数变化后自动生成新代理，不命中旧缓存 */
 const PROXY_VERSION = 3;
 
-/** 读取代理文件的真实时长（探一次后进缓存）；拿不到返回 null */
-async function proxyDurationOf(proxyKey: string): Promise<number | null> {
+/** 读取代理文件的真实时长（按代理键缓存）；拿不到返回 null */
+async function proxyDurationOf(proxyKey: string, signal?: AbortSignal): Promise<number | null> {
   const source = await resolveMediaSource(proxyKey);
-  return (await probeVideoMetaCached(mediaSourceInput(source)))?.duration ?? null;
+  return (await probeVideoMetaCached(mediaSourceInput(source), proxyKey, signal))?.duration ?? null;
+}
+
+interface ProxyPlan {
+  proxyKey: string;
+  width: number;
+  fps: number | null;
+}
+
+/**
+ * 由源键与探测结果推导产物计划。常规链路与租约前预检查必须算出同一个产物键，
+ * 两侧各写一遍迟早漂移，因此收敛为同一纯函数。
+ */
+function planProxy(sourceKey: string, meta: VideoMeta | null): ProxyPlan {
+  // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成
+  const width = meta?.width && meta.width > 0
+    ? Math.min(PROXY_WIDTH, meta.width)
+    : PROXY_WIDTH;
+
+  // 代理名内嵌源键并携带宽度与参数版本（_w{width}v{N}）：同一视频反复打开面板
+  // 直接命中缓存；宽度或版本变化自动生成新代理，不命中旧缓存；构造与解析同址
+  // 于 derived-keys，归属可解析（specs/file-access-ownership.md 规则 7）
+  return {
+    proxyKey: proxyKeyOf(sourceKey, width, PROXY_VERSION),
+    width,
+    fps: meta?.fps ?? null,
+  };
+}
+
+function proxyPayload(plan: ProxyPlan, duration: number | null) {
+  return { url: buildFileUrl(plan.proxyKey), fps: plan.fps, duration };
 }
 
 const router = new Hono();
@@ -57,27 +87,33 @@ router.post(
     // 只产出可缓存的派生产物，不落库新文件：不计数（限流保护的是存储增长），
     // 重型开销由媒体池的个人与全局限额约束
     persistsFileObject: false,
+    // 产物、源元数据与代理元数据缓存都热时，在源租约前直接返回：不再下载整段源。
+    // precheck 契约（specs/media-processing-concurrency.md）禁止触发 ffprobe：
+    // 代理元数据未缓存时退回常规链路，由 run 探测并填充缓存。产物 stat 放在最后：
+    // 前面的缓存任一未热都不会真正复用，也就不该产生命中计数。
+    async precheck({ c, sourceKey }) {
+      const meta = peekVideoMetaCached(sourceKey);
+      if (!meta) return null;
+      const plan = planProxy(sourceKey, meta);
+      const proxyMeta = peekVideoMetaCached(plan.proxyKey);
+      if (!proxyMeta) return null;
+      if (!(await isPublishedArtifact(plan.proxyKey))) return null;
+      recordArtifactHit(plan.proxyKey);
+      return c.json(ok(proxyPayload(plan, proxyMeta.duration)));
+    },
     async run({ c, sourceKey, sourceInput, userId, signal }) {
-      // 帧率与分辨率：读取容器信息，开销可忽略。
-      // 分辨率用来避免把小视频放大——源本身不足 PROXY_WIDTH 时按原尺寸生成；
-      // 帧率用来把关键帧间隔定成 1 秒——探测结果在雪碧图路由间共用，只跑一次
-      const meta = await probeVideoMetaCached(sourceInput);
-      const width = meta?.width && meta.width > 0
-        ? Math.min(PROXY_WIDTH, meta.width)
-        : PROXY_WIDTH;
-
-      // 代理名内嵌源键并携带宽度与参数版本（_w{width}v{N}）：同一视频反复打开面板
-      // 直接命中缓存；宽度或版本变化自动生成新代理，不命中旧缓存；构造与解析同址
-      // 于 derived-keys，归属可解析（specs/file-access-ownership.md 规则 7）
-      const proxyKey = proxyKeyOf(sourceKey, width, PROXY_VERSION);
-      const fps = meta?.fps ?? null;
+      // 帧率与分辨率：读取容器信息，开销可忽略——探测结果按源键缓存，
+      // 与雪碧图路由共用，只跑一次
+      const meta = await probeVideoMetaCached(sourceInput, sourceKey, signal);
+      const plan = planProxy(sourceKey, meta);
 
       await ensureArtifact({
-        key: proxyKey,
+        key: plan.proxyKey,
         signal,
-        produce: (tmpPath, genSignal) => createScrubProxy(sourceInput, tmpPath, width, fps, userId, genSignal),
+        produce: (tmpPath, genSignal) =>
+          createScrubProxy(sourceInput, tmpPath, plan.width, plan.fps, userId, genSignal),
       });
-      return c.json(ok({ url: buildFileUrl(proxyKey), fps, duration: await proxyDurationOf(proxyKey) }));
+      return c.json(ok(proxyPayload(plan, await proxyDurationOf(plan.proxyKey, signal))));
     },
   }),
 );

@@ -5,6 +5,10 @@
  * 定位到目标帧，点「截取」才真正抽帧——时间通过 canvas:node-action 事件交给
  * VideoNode，复用既有的后端抽帧与派生节点创建链路。
  *
+ * 拖动前必须先拿到预览代理：原视频多为长 GOP，直接 seek 不跟手。代理就绪
+ * （含浏览器缓冲）前轨道禁用 scrub，只保留截取入口；雪碧图失败时时间轴改用
+ * 代理的真实时长，不用浏览器读到的标称值（截断文件会虚报）。
+ *
  * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放，轨道尺寸始终稳定。
  */
@@ -21,18 +25,19 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
-import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
+import { useProxyPlayback } from "@/features/canvas/hooks/use-proxy-playback";
 import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
-import { getVideoPlaybackTime, pauseVideo, seekVideo, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
+import { getVideoPlaybackTime, pauseVideo, seekVideo } from "@/features/canvas/shared/video-playback-registry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { SEEK_MARGIN_S } from "@/lib/constants";
 import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, ratioFromClientX } from "./clip-range";
 import { MediaRetryNotice } from "./MediaRetryNotice";
+import { demoteRetryNotice, proxyNoticeOf, ProxyNoticeTextOverlay } from "./ProxyNotice";
+import { resolveTrackDuration } from "./track-duration";
 import useEscapeToClose from "./use-escape-to-close";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
@@ -48,8 +53,9 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   const { t } = useTranslation();
   // 媒体接口只接受存储 key：代理 / 抽帧都以此判定；外部 URL 仍可播放但不提供编辑
   const videoKey = storageKeyOf(videoRef);
-  // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道；
-  // spriteError 带失败原因（限流 / 繁忙 / 生成失败），在轨道上提示并由用户手动重试
+  // 轨道缩略图：服务端出的整条雪碧图，拿不到时轨道退化为无缩略图形态；能否定位
+  // 由预览代理是否可播放另行判定。spriteError 带失败原因（限流 / 繁忙 / 生成失败），
+  // 在轨道上提示并由用户手动重试
   const {
     url: spriteUrl,
     spriteWidth,
@@ -57,7 +63,8 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     cellHeight,
     count,
     frameWidth,
-    duration,
+    duration: spriteDuration,
+    durationSource,
     fps,
     truncated,
     declaredDuration,
@@ -65,8 +72,17 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     error: spriteError,
     retry: retrySprite,
   } = useFrameSprite(videoRef);
-  // 代理地址同时也是拖动时节点播放器的临时播放源；失败原因在轨道上提示并可重试
-  const { url: proxyUrl, error: proxyError, retry: retryProxy } = useVideoProxy(videoRef);
+  // 代理地址同时也是拖动时节点播放器的临时播放源；状态 / 真实时长 / 失败原因与
+  // 重试由共享 hook 提供，换源与「浏览器已缓冲」的判定也收敛在那里。
+  // 代理可播放前轨道禁用 scrub——原视频长 GOP 拖动卡顿
+  const proxyPlayback = useProxyPlayback(nodeId, videoRef);
+  const {
+    status: proxyStatus,
+    duration: proxyDuration,
+    error: proxyError,
+    retry: retryProxy,
+    playable: proxyPlayable,
+  } = proxyPlayback;
   const trackRef = useRef<HTMLDivElement>(null);
   // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
@@ -89,12 +105,15 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     pauseVideo(nodeId);
   }, [nodeId]);
 
-  // 选帧期间把节点播放器切到预览代理：短 GOP 下 seek 最多解码 1 秒画面，毫秒级完成，
-  // 拖动时画面既能连续更新又能与播放头对齐；关闭面板自动恢复原视频并停在所选帧
-  useEffect(() => {
-    if (!proxyUrl) return;
-    return swapVideoSource(nodeId, proxyUrl);
-  }, [nodeId, proxyUrl]);
+  const duration = resolveTrackDuration(durationSource, spriteDuration, proxyDuration);
+  const ready = duration > 0;
+  // 可拖动 = 有时长可映射 + 代理可下载 + 浏览器已缓冲换入的代理：缺一都退回
+  // 原视频长 GOP scrub，正是要避免的卡顿；时长未知时轨道同样保持禁用
+  const canScrub = ready && proxyPlayable;
+  const proxyNotice = proxyNoticeOf(proxyPlayback);
+  // 帧面板的重试入口留在底部原因条：中央只给不可操作的文字说明
+  const centerNotice = demoteRetryNotice(proxyNotice);
+  const currentTime = ready ? ratio * duration : 0;
 
   // 时长就绪后把播放头放到打开时的播放位置（首帧渲染时 duration 仍为 0）
   useEffect(() => {
@@ -108,7 +127,7 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
 
   // ← / → 按一帧步进：轨道像素密度不足以选中长视频的每一帧，用键盘补齐精度
   useEffect(() => {
-    if (duration <= 0) return;
+    if (!canScrub || duration <= 0) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // 面板打开时可能有输入框持有焦点，方向键要留给它们
@@ -124,12 +143,14 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [duration, fps]);
+  }, [canScrub, duration, fps]);
 
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {
+      // 禁用态也拦住事件：轨道在节点 HUD 内，不能让按下穿透成画布拖动
       e.preventDefault();
       e.stopPropagation();
+      if (!canScrub) return;
       const next = ratioFromClientX(trackRef.current, e.clientX);
       if (next !== null) setRatioByUser(next);
       const onMove = (ev: PointerEvent) => {
@@ -147,12 +168,8 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
     },
-    [setRatioByUser],
+    [canScrub, setRatioByUser],
   );
-
-  // 时长是唯一的前置条件：拿不到雪碧图也要能定位与截取，只是轨道上没有画面
-  const ready = duration > 0;
-  const currentTime = ready ? ratio * duration : 0;
 
   // 单格按 contain 规则缩放并居中，与之前 img + object-contain 的效果一致：
   // 横屏时上下留边、竖屏时左右留边，不会为了铺满格子而裁掉画面。
@@ -184,7 +201,7 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   // 反映到播放头与时间码；面板自身轨道拖动期间挂起——拖动中节点时间的轻微
   // 滞后会把播放头往回拽，松手后恢复。挂起只跳过写入：读取注册表无副作用。
   const readNodeTime = useVideoTimeSource(nodeId);
-  useMediaProgress(readNodeTime, ready && duration > 0, (cur) => {
+  useMediaProgress(readNodeTime, ready, (cur) => {
     if (dragCleanupRef.current) return;
     setRatio(clamp01(cur / duration));
   });
@@ -192,21 +209,23 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   // 拖动播放头时同步 seek 节点播放器，形成 scrubbing 预览；
   // rAF 节流保证一帧最多 seek 一次，避免高频 seek 拖垮解码
   useEffect(() => {
-    // 跟随播放引起的 ratio 变化不需要 seek——那会触发 seekVideo 里的 pause，把播放打断
-    if (!ready || !userDrivenRef.current) return;
+    // 跟随播放引起的 ratio 变化不需要 seek——那会触发 seekVideo 里的 pause，把播放打断。
+    // 代理未就绪时也不 seek：原视频长 GOP 拖动不跟手，且 fallback 时长可能是虚报的
+    if (!ready || !canScrub || !userDrivenRef.current) return;
     userDrivenRef.current = false;
     const raf = requestAnimationFrame(() => seekVideo(nodeId, ratio * duration));
     return () => cancelAnimationFrame(raf);
-  }, [ready, nodeId, ratio, duration]);
+  }, [ready, canScrub, nodeId, ratio, duration]);
 
   const handleCapture = useCallback(() => {
     if (!ready || !videoKey) return;
-    // 末帧留 SEEK_MARGIN_S 余量：贴着 duration 抽帧可能落到视频结尾之外
-    const time = Math.max(0, Math.min(currentTime, duration - SEEK_MARGIN_S));
+    // 时间轴末端可能落在音轨尾部（容器时长 > 视频流末帧）；越界请求由服务端
+    // 收敛到末帧，前端不做猜测性截断——截断留余量会把贴边选择悄悄改成前一帧
+    const time = Math.max(0, currentTime);
     // 不在这里关面板：busy 守卫拒绝时（clip.busy 提示）面板保持打开、播放
     // 位置原样保留可重试；抽帧被接受后节点会清除 frameCaptureNodeId 关闭面板
     dispatchNodeAction(nodeId, "capture-frame", { selection: { kind: "time", seconds: time } });
-  }, [ready, currentTime, duration, nodeId, videoKey]);
+  }, [ready, currentTime, nodeId, videoKey]);
 
   // 整块面板不透明：轨道与右侧操作区共用黑色背板，避免按钮直接透出画布内容
   return (
@@ -221,7 +240,7 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
 
       <div
         ref={trackRef}
-        className="relative h-14 cursor-ew-resize overflow-visible"
+        className={`relative h-14 overflow-visible ${canScrub ? "cursor-ew-resize" : "cursor-default"}`}
         style={{ width: FRAME_TRACK_WIDTH }}
         onPointerDown={handleTrackDown}
       >
@@ -250,16 +269,24 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
                   </div>
                 ))
               ) : (
-                // 雪碧图不可用：退化为空轨道，播放头与时间码仍可定位与截取
+                // 雪碧图不可用：退化为空轨道，代理就绪后播放头与时间码仍可定位与截取
                 <div className="size-full bg-white/10" />
               )
-            ) : (
+            ) : centerNotice ? null : (
               <div className="flex size-full items-center justify-center px-4 text-xs text-white/60">
-                {status === "error" ? t("capture.unavailable") : t("capture.loading")}
+                {/* 雪碧图已失败，或雪碧图已定论、代理已就绪却仍拿不到时长：不再等待 */}
+                {status === "error" || (proxyStatus === "ready" && status !== "loading")
+                  ? t("capture.unavailable")
+                  : t("capture.loading")}
               </div>
             )}
           </div>
         </div>
+
+        {/* 代理未就绪 / 缓冲中：轨道禁用 scrub 的居中说明。失败时中央只留文字，
+            底部原因条承担重试；时长未就绪（ready=false）时中央提示同样要出现，
+            不能被通用占位文案盖住 */}
+        <ProxyNoticeTextOverlay notice={centerNotice} />
 
         {/* 播放头：白色圆点 + 竖线 */}
         {ready && (
@@ -276,8 +303,8 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
           </div>
         )}
 
-        {/* 雪碧图 / 代理失败原因 + 手动重试：轨道退化为可定位（雪碧图）与原视频 scrub
-            （代理）的兜底能力保留，不做静默失败；限流 / 繁忙时带 Retry-After 倒计时 */}
+        {/* 雪碧图 / 代理失败原因 + 手动重试：不静默失败。代理失败时轨道保持禁用，
+            不退回原视频长 GOP scrub；限流 / 繁忙时带 Retry-After 倒计时 */}
         {(spriteError || proxyError) && (
           <div className="pointer-events-none absolute inset-x-0 bottom-1.5 z-30 flex flex-col items-center gap-1">
             {spriteError && (

@@ -80,6 +80,44 @@ describe("FFmpeg process lifecycle", () => {
     expect(child.kill).not.toHaveBeenCalled();
   });
 
+  it("rejects a non-zero scan exit by default", async () => {
+    const result = scanPackets([], 100, {});
+    child.stdout.write('{"packets":[{"pts":1,"flags":"K_"}]}');
+    child.stderr.write("Invalid data found when processing input");
+    child.emit("close", 1);
+    await expect(result).rejects.toThrow("ffprobe exited with code 1");
+  });
+
+  it("retains parsed entries when a damaged input exits non-zero in tolerant scan mode", async () => {
+    const seen: unknown[] = [];
+    const result = scanFfprobe([], 100, {
+      section: "frames", tolerateExitErrors: true, onEntry: (entry) => { seen.push(entry); },
+    });
+    child.stdout.write('{"frames":[{"best_effort_timestamp":1},{"best_effort_timestamp":2}]}');
+    child.stderr.write("Invalid data found when processing input");
+    child.emit("close", 1);
+
+    await expect(result).resolves.toEqual({
+      entryCount: 2,
+      stderr: "Invalid data found when processing input",
+      code: 1,
+    });
+    expect(seen).toEqual([{ best_effort_timestamp: 1 }, { best_effort_timestamp: 2 }]);
+  });
+
+  it("keeps delivered entries when a tolerant scan's JSON is truncated by process failure", async () => {
+    const seen: unknown[] = [];
+    const result = scanFfprobe([], 100, {
+      section: "frames", tolerateExitErrors: true, onEntry: (entry) => { seen.push(entry); },
+    });
+    child.stdout.write('{"frames":[{"best_effort_timestamp":1},{"best_effort_timestamp":2}');
+    child.stderr.write("Invalid data found when processing input");
+    child.emit("close", 1);
+
+    await expect(result).resolves.toMatchObject({ entryCount: 2, code: 1 });
+    expect(seen).toEqual([{ best_effort_timestamp: 1 }, { best_effort_timestamp: 2 }]);
+  });
+
   it("parses structured probe output and uses the configured sibling executable", async () => {
     const result = runFfprobe(["-of", "json"], 100);
     child.stdout.write('{"frames":[');
@@ -112,6 +150,42 @@ describe("FFmpeg process lifecycle", () => {
     await result;
     expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
     expect(completed).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("metadata budget") }));
+  });
+
+  it("strips presigned URL credentials from captured diagnostics", async () => {
+    const result = probeFfmpeg([], 100);
+    child.stderr.write(
+      "Error opening input file https://s3.example/bucket/key.mp4?X-Amz-Credential=SECRET&X-Amz-Signature=deadbeef.\n",
+    );
+    child.emit("close", 1);
+
+    const outcome = await result;
+    expect(outcome.stderr).toContain("https://s3.example/bucket/key.mp4?<redacted>");
+    expect(outcome.stderr).not.toContain("SECRET");
+    expect(outcome.stderr).not.toContain("deadbeef");
+  });
+
+  it("redacts a presigned URL that straddles the diagnostic tail boundary", async () => {
+    const result = probeFfmpeg([], 100);
+    const url = "https://s3.example/key.mp4?X-Amz-Signature=SECRET";
+    // URL 起点落在 64 KiB 诊断窗口之前、尾部留在窗口内：先按完整窗口脱敏再截尾
+    child.stderr.write("x".repeat(10) + url + "y".repeat(64 * 1024 - 20));
+    child.emit("close", 1);
+
+    const outcome = await result;
+    expect(outcome.stderr).toContain("?<redacted>");
+    expect(outcome.stderr).not.toContain("SECRET");
+  });
+
+  it("does not echo presigned credentials in probe failure messages", async () => {
+    const result = runFfprobe([], 100);
+    child.stderr.write("https://s3.example/key.mp4?X-Amz-Signature=SECRET: Invalid data found\n");
+    child.emit("close", 1);
+
+    const err = await result.catch((error: Error) => error);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("<redacted>");
+    expect((err as Error).message).not.toContain("SECRET");
   });
 
   it("settles a timed-out probe and preserves its partial diagnostics", async () => {

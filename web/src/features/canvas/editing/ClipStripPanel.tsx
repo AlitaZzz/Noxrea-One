@@ -22,17 +22,20 @@ import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
-import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
+import { useProxyPlayback } from "@/features/canvas/hooks/use-proxy-playback";
 import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
-import { getVideoPlaybackTime, isVideoPlaying, onVideoEnded, pauseVideo, playVideo, seekVideo, setVideoTime, swapVideoSource } from "@/features/canvas/shared/video-playback-registry";
+import { getVideoPlaybackTime, isVideoPlaying, onVideoEnded, pauseVideo, playVideo, seekVideo, setVideoTime } from "@/features/canvas/shared/video-playback-registry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
 
 import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import { MediaRetryNotice } from "./MediaRetryNotice";
+import { proxyNoticeOf, ProxyNoticeOverlay } from "./ProxyNotice";
+import { resolveTrackDuration } from "./track-duration";
+import { TrackNotice } from "./TrackNotice";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
 
@@ -49,8 +52,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   const { t } = useTranslation();
   // 媒体接口只接受存储 key：代理 / 截取都以此判定；外部 URL 仍可播放但不提供编辑
   const videoKey = storageKeyOf(videoRef);
-  // 轨道缩略图：服务端出的整条雪碧图，拿不到时退化为无缩略图但可定位的轨道；
-  // spriteError 带失败原因（限流 / 繁忙 / 生成失败），在轨道上提示并由用户手动重试
+  // 轨道缩略图：服务端出的整条雪碧图，拿不到时轨道退化为无缩略图形态；能否定位
+  // 由预览代理是否可播放另行判定。spriteError 带失败原因（限流 / 繁忙 / 生成失败），
+  // 在轨道上提示并由用户手动重试
   const {
     url: spriteUrl,
     spriteWidth,
@@ -67,24 +71,16 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
     error: spriteError,
     retry: retrySprite,
   } = useFrameSprite(videoRef);
-  // 代理地址同时也是拖动时节点播放器的临时播放源；状态 / 失败原因 / 真实时长与重试
-  // 由共享 hook 提供（pending 禁用面板 / failed 提示可重试），换源时自动回到 pending
+  // 代理地址同时也是拖动时节点播放器的临时播放源；状态 / 失败原因 / 真实时长、
+  // 重试与「浏览器已缓冲」的判定由共享 hook 提供（pending 禁用面板 / failed
+  // 提示可重试），换源时自动回到 pending
+  const proxyPlayback = useProxyPlayback(nodeId, videoRef);
   const {
-    status: proxyState,
-    url: proxyUrl,
     duration: proxyDuration,
-    error: proxyError,
     retry: retryProxy,
-    markFailed: markProxyFailed,
-  } = useVideoProxy(videoRef);
-  // 代理缓冲就绪（canplay）：首次打开时代理刚生成、浏览器缓存全冷，立即拖动
-  // 会触发一串 Range 拉取 + 解码跟不上指针（重开时代理已入缓存故无此问题），
-  // 因此缓冲就绪前保持禁用，拖动发生时数据必在本地
-  const [bufferReady, setBufferReady] = useState(false);
-  // 雪碧图失败时的兜底时长来自浏览器读原视频 moov（截断视频会虚报标称值），
-  // 不可信：此时时间轴改用代理的真实时长——代理只含可解码内容，且正是正在
-  // 播放的实体。代理时长未知（转码中/失败）时按 0 处理，面板保持禁用
-  const duration = durationSource === "fallback" ? proxyDuration ?? 0 : spriteDuration;
+    playable: proxyPlayable,
+  } = proxyPlayback;
+  const duration = resolveTrackDuration(durationSource, spriteDuration, proxyDuration);
   // 自动播放被浏览器拦截时置位：提示用户用下一次轨道按下/方向键恢复（与音频
   // 截取面板的 blocked 机制对等）。ended 循环续播的 play() 拒绝也走这里，
   // 否则出点在文件尾的循环会静默死亡且无任何提示
@@ -132,30 +128,12 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
     pauseVideo(nodeId);
   }, [nodeId]);
 
-  // 选帧期间把节点播放器切到预览代理；循环播放中的换源在元数据就绪后续播，
-  // 暂停中的换源保持暂停；关闭面板自动恢复原视频。
-  // onReady：代理缓冲就绪（canplay）才解锁交互——首次打开时代理刚生成、
-  // 浏览器缓存全冷，立即拖动会触发一串 Range 拉取 + 解码跟不上指针
-  // （重开时代理已入缓存故无此问题）。监听在 swapVideoSource 内部挂载，
-  // 等待的必然是换入的代理而非换源前就绪的旧元素。error 也回调（ok=false）：
-  // 浏览器解码不了代理文件时 canplay 永远不来，只避免冻结的话会解锁一个
-  // 画面死住但可操作的面板——落回 proxyState="failed" 的禁用态，重开重试
-  useEffect(() => {
-    if (!proxyUrl) return;
-    return swapVideoSource(nodeId, proxyUrl, {
-      resume: isVideoPlaying(nodeId),
-      onReady: (ok) => {
-        if (ok) setBufferReady(true);
-        else markProxyFailed();
-      },
-    });
-  }, [nodeId, proxyUrl, markProxyFailed]);
-
-  // 可操作 = 雪碧图时长可信 + 代理已就绪 + 代理缓冲就绪：三者缺一，时间轴与
-  // 画面都不可信（拖原视频长 GOP 必然不跟手、冷缓存 seek 跟不上指针），
-  // 拖动/键盘/确认全部禁用——宁等不乱。代理失败时面板禁用，重开面板重试。
+  // 可操作 = 雪碧图时长可信 + 代理可播放（可下载且浏览器已缓冲换入的代理）：
+  // 缺一，时间轴与画面都不可信（拖原视频长 GOP 必然不跟手、冷缓存 seek 跟不上
+  // 指针），拖动/键盘/确认全部禁用——宁等不乱。代理失败时面板禁用，重开面板重试。
   const ready = duration > 0;
-  const operable = ready && proxyState === "ready" && proxyUrl !== null && bufferReady;
+  const operable = ready && proxyPlayable;
+  const proxyNotice = proxyNoticeOf(proxyPlayback);
   const inTime = ready ? inRatio * duration : 0;
   const outTime = ready ? outRatio * duration : 0;
   // rangeValid 必须等初始化写入真实区间：operable 翻 true 的那一帧里
@@ -659,7 +637,10 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
           {/* 格子/压暗/选区/手柄共用同一坐标系（轨道全宽），雪碧图贴满轨道两端 */}
           <div className="absolute inset-0 bg-black" />
-          <div className="absolute inset-0 flex overflow-hidden">{trackCells}</div>
+          <div className="absolute inset-0 flex overflow-hidden">
+            {/* 时长未就绪时，中央已有代理提示就不叠通用占位文案 */}
+            {ready || !proxyNotice ? trackCells : null}
+          </div>
           {/* 压暗层：选区之外的一切（含两端），与选区框边缘严丝合缝 */}
           {bandRange && (
             <>
@@ -716,61 +697,25 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
           </div>
         )}
 
-        {/* 雪碧图失败原因 + 手动重试：轨道保留「无缩略图但可定位」的兜底能力，
-            不做静默失败（限流 / 繁忙时带 Retry-After 倒计时） */}
+        {/* 雪碧图失败原因 + 手动重试：雪碧图失败不阻断定位——代理可播放时
+            resolveTrackDuration 会改用代理真实时长；不做静默失败
+            （限流 / 繁忙时带 Retry-After 倒计时） */}
         {spriteError && (
           <div className="absolute bottom-1.5 left-1/2 z-40 -translate-x-1/2">
             <MediaRetryNotice error={spriteError} onRetry={retrySprite} />
           </div>
         )}
 
-        {/* 代理未就绪/缓冲中/失败的面板级提示：可操作前提是雪碧图 + 代理 + 缓冲都就绪。
-            服务端拒绝（限流 / 繁忙）时显示原因与重试；代理解不出来（重开重试）时
-            保留原提示——重试拉到的是同一份缓存产物，不会成功 */}
-        {ready && !operable && (
-          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-            {proxyState === "failed" ? (
-              proxyError ? (
-                <MediaRetryNotice error={proxyError} onRetry={retryProxy} />
-              ) : (
-                <span
-                  className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-                >
-                  {t("clip.proxyFailed")}
-                </span>
-              )
-            ) : proxyState === "pending" ? (
-              <span
-                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-              >
-                {t("clip.proxyLoading")}
-              </span>
-            ) : proxyUrl === null ? (
-              // 已定论但没有代理可用（非 key 源；编辑入口本应已禁用）：
-              // 如实显示不可用，而不是永远停在「缓冲中」
-              <span
-                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-              >
-                {t("clip.proxyFailed")}
-              </span>
-            ) : (
-              <span
-                className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-              >
-                {t("clip.buffering")}
-              </span>
-            )}
-          </div>
-        )}
+        {/* 代理未就绪 / 缓冲中 / 失败的中央提示：可操作前提是雪碧图时长可信 +
+            代理可下载 + 浏览器已缓冲。服务端拒绝（限流 / 繁忙）时显示原因与重试；
+            代理解不出来（重开重试）时保留原提示——重试拉到的是同一份缓存产物，
+            不会成功 */}
+        <ProxyNoticeOverlay notice={proxyNotice} onRetry={retryProxy} />
 
         {/* 自动播放被拦截的恢复提示：点击轨道或方向键即可恢复 */}
         {operable && playbackBlocked && (
           <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-            <span
-              className="rounded-md bg-black/65 px-3 py-1 text-xs text-white/85"
-            >
-              {t("clip.autoplayBlocked")}
-            </span>
+            <TrackNotice>{t("clip.autoplayBlocked")}</TrackNotice>
           </div>
         )}
       </div>

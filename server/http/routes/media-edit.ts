@@ -32,6 +32,7 @@ import { findQuotaGateViolation } from "@server/services/storage/quota";
 import { isKeyOwner } from "@server/services/storage/ownership";
 import { acquireMediaFile, mediaSourceInput, resolveMediaSource } from "@server/services/storage/media-source";
 import { tmpDir as workspaceTmpDir } from "@server/services/storage/workspace";
+import { isAbortError, isTimeoutError } from "@server/core/abort";
 import { metrics } from "@server/core/metrics";
 import { failClientDisconnected, failCode } from "@server/core/response";
 import { failRateLimited } from "@server/http/rate-limited";
@@ -86,6 +87,13 @@ export interface MediaEditRouteOptions<T> {
   sourceDelivery?: "lease" | "direct";
   /** 路由特有的错误映射，返回 Response 时优先采用；返回 undefined 走默认映射 */
   mapError?: (err: unknown) => Response | undefined;
+  /**
+   * 租约前的产物命中检查。源键归属与存在性已校验、源尚未下载；只允许读探测缓存
+   * 与派生产物 stat，不得触发 ffprobe / ffmpeg，也不得下载源。返回 Response 直接
+   * 响应，返回 null 继续租约与 run。雪碧图 / 预览代理据此在产物已存在且缓存已热时
+   * 跳过整段源下载。
+   */
+  precheck?: (ctx: { c: Context; sourceKey: string }) => Promise<Response | null>;
   run: (ctx: MediaEditContext<T>) => Promise<Response>;
 }
 
@@ -108,7 +116,7 @@ export function mapMediaError(
   }
 
   // 客户端断开：不记 error 级别，也无需向已断开的一端回复杂信息
-  if ((err as Error).name === "AbortError") {
+  if (isAbortError(err)) {
     logger.debug({ sourceKey: info.sourceKey }, `${info.label} aborted by client`);
     return failClientDisconnected("media.cancelled");
   }
@@ -118,7 +126,7 @@ export function mapMediaError(
   if (code === "ENOENT" || message.includes("ENOENT")) {
     return failCode(500, "media.ffmpeg_missing");
   }
-  if (message.includes("timed out")) {
+  if (isTimeoutError(err)) {
     return failCode(504, "media.timeout");
   }
   return failCode(500, info.failureCode);
@@ -216,6 +224,12 @@ export function createMediaEditRoute<T>(opts: MediaEditRouteOptions<T>): Handler
     };
 
     try {
+      // 产物已存在时在源租约前直接响应：整段下载 / 预签名解析都不必发生。
+      // 预检查只使用缓存与产物 stat，不触发探测自身的 ffmpeg
+      if (opts.precheck) {
+        const cached = await opts.precheck({ c, sourceKey });
+        if (cached) return cached;
+      }
       const baseCtx = {
         c,
         data: parsed.data,

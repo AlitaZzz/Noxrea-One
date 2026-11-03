@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   createProxy: vi.fn(),
   probeMeta: vi.fn(),
   probeIntegrity: vi.fn(),
+  peekMeta: vi.fn(),
+  peekIntegrity: vi.fn(),
   checkRateLimit: vi.fn(async () => ({ allowed: true })),
 }));
 
@@ -30,6 +32,8 @@ vi.mock("@server/services/storage/video-frames", () => ({
 vi.mock("@server/services/storage/media-probe", () => ({
   probeVideoMetaCached: mocks.probeMeta,
   probeVideoIntegrity: mocks.probeIntegrity,
+  peekVideoMetaCached: mocks.peekMeta,
+  peekVideoIntegrityCached: mocks.peekIntegrity,
 }));
 vi.mock("@server/core/settings", () => ({ getSetting: vi.fn() }));
 // 形状与真实现一致；雪碧图 / 代理路由 persistsFileObject: false，全程不应接入限流
@@ -38,6 +42,7 @@ vi.mock("@server/core/ratelimit", () => ({ checkMediaEditRateLimit: mocks.checkR
 
 import { router as spriteRouter } from "@server/http/routes/frame-sprite";
 import { router as proxyRouter } from "@server/http/routes/video-proxy";
+import { metrics } from "@server/core/metrics";
 import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
@@ -53,6 +58,7 @@ const routes = [
     url: "/api/files/frame-sprite",
     generate: mocks.createSprite,
     outDir: "_sprite",
+    tier: "sprite",
     failure: "frame_sprite.generation_failed",
     // 新形态产物文件名（specs/file-access-ownership.md 规则 7）：内嵌源键 + 参数段
     artifactKeyRe: /^\/api\/files\/_sprite\/3\/ab\/[0-9a-f]{64}_c\d+v\d+\.webp$/,
@@ -63,6 +69,7 @@ const routes = [
     url: "/api/files/video-proxy",
     generate: mocks.createProxy,
     outDir: "_proxy",
+    tier: "proxy",
     failure: "video_proxy.generation_failed",
     artifactKeyRe: /^\/api\/files\/_proxy\/3\/ab\/[0-9a-f]{64}_w\d+v\d+\.mp4$/,
   },
@@ -94,12 +101,15 @@ beforeEach(async () => {
   mocks.authenticate.mockResolvedValue({ user: { id: USER_ID } });
   mocks.probeMeta.mockResolvedValue({ duration: 4, fps: 30, width: 640 });
   mocks.probeIntegrity.mockResolvedValue({ decodableDuration: 4, truncated: false });
+  // 默认无缓存：预检查退回常规链路；需要命中产物的用例自行设定
+  mocks.peekMeta.mockReturnValue(null);
+  mocks.peekIntegrity.mockReturnValue(null);
   await fs.rm(path.join(root, "_sprite"), { recursive: true, force: true });
   await fs.rm(path.join(root, "_proxy"), { recursive: true, force: true });
   await fs.rm(path.join(root, "_tmp"), { recursive: true, force: true });
 });
 
-const post = (router: typeof spriteRouter, url: string, signal?: AbortSignal) =>
+const post = async (router: typeof spriteRouter, url: string, signal?: AbortSignal) =>
   router.request(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -110,7 +120,7 @@ const post = (router: typeof spriteRouter, url: string, signal?: AbortSignal) =>
 const listDir = (dir: string) => fs.readdir(path.join(root, dir)).catch(() => [] as string[]);
 const jsonOf = async (res: Response) => (await res.json()) as { data?: { url: string }; error?: string };
 
-describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure, artifactKeyRe }) => {
+describe.each(routes)("$name 路由", ({ router, url, generate, outDir, tier, failure, artifactKeyRe }) => {
   it("首次请求生成并落盘，再次请求直接复用，临时文件不残留", async () => {
     generate.mockImplementation(async (_video: string, out: string) => { await fs.writeFile(out, "artifact"); });
 
@@ -128,6 +138,39 @@ describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure,
     expect(await listDir("_tmp")).toEqual([]);
     // 路由级验证不接入按用户限流：含缓存命中的复用请求也不计数（业务规则 5.2）
     expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("探测缓存与产物都热时在源租约前直接复用：不探测、不生成", async () => {
+    generate.mockImplementation(async (_video: string, out: string) => { await fs.writeFile(out, "artifact"); });
+
+    const first = await post(router, url);
+    expect(first.status).toBe(200);
+    const firstUrl = (await jsonOf(first)).data?.url;
+
+    // 第一次请求已生成产物；真实实现的探测缓存由 probeVideo* 填充，这里直接置热
+    mocks.peekMeta.mockReturnValue({ duration: 4, fps: 30, width: 640 });
+    mocks.peekIntegrity.mockReturnValue({ decodableDuration: 4, truncated: false });
+    mocks.probeMeta.mockClear();
+    mocks.probeIntegrity.mockClear();
+
+    const second = await post(router, url);
+
+    expect(second.status).toBe(200);
+    expect((await jsonOf(second)).data?.url).toBe(firstUrl);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(mocks.probeIntegrity).not.toHaveBeenCalled();
+    // precheck 只读缓存：源与代理的元数据都不得在租约前触发 ffprobe
+    expect(mocks.probeMeta).not.toHaveBeenCalled();
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+
+    // 预检查确实复用了产物：只记一次命中，不能与 ensureArtifact 的命中重复计数
+    const report = vi.spyOn(metrics, "derivedArtifact");
+    try {
+      expect((await post(router, url)).status).toBe(200);
+      expect(report.mock.calls.filter(([, result]) => result === "hit")).toEqual([[tier, "hit"]]);
+    } finally {
+      report.mockRestore();
+    }
   });
 
   it("同一产物的并发请求只生成一次", async () => {
@@ -163,9 +206,11 @@ describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure,
     const followerRes = post(router, url);
     await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
     leader.abort(reason);
-    expect((await leaderRes).status).toBe(499);
-
+    // 创建者即使先中止，生成仍继续到结算；创建者的请求在结算后才以 499 结束
+    // （其 finally 会释放源租约，生成可能仍在读该文件）——该语义由
+    // single-flight 单测精确锁定，这里只验证路由层的搭车结果
     gate.resolve();
+    expect((await leaderRes).status).toBe(499);
     const follower = await followerRes;
     expect(follower.status).toBe(200);
     expect(generate).toHaveBeenCalledTimes(1);
@@ -226,5 +271,26 @@ describe.each(routes)("$name 路由", ({ router, url, generate, outDir, failure,
     expect(generate).toHaveBeenCalledTimes(1);
     expect(await listDir("_tmp")).toEqual([]);
     expect(await listDir(outDir)).toEqual([]);
+  });
+});
+
+describe("video-proxy 预检查顺序", () => {
+  it("代理元数据未热时不统计命中：回退常规链路后只由产物复用记一次", async () => {
+    mocks.createProxy.mockImplementation(async (_video: string, out: string) => { await fs.writeFile(out, "artifact"); });
+    expect((await post(proxyRouter, "/api/files/video-proxy")).status).toBe(200);
+
+    // 源元数据热、代理元数据冷：预检查会在代理元数据这里放弃，产物虽存在但未复用
+    mocks.peekMeta.mockImplementation((key: string) =>
+      key === SOURCE_KEY ? { duration: 4, fps: 30, width: 640 } : null);
+
+    const report = vi.spyOn(metrics, "derivedArtifact");
+    try {
+      const second = await post(proxyRouter, "/api/files/video-proxy");
+      expect(second.status).toBe(200);
+      expect(mocks.createProxy).toHaveBeenCalledTimes(1);
+      expect(report.mock.calls.filter(([, result]) => result === "hit")).toEqual([["proxy", "hit"]]);
+    } finally {
+      report.mockRestore();
+    }
   });
 });

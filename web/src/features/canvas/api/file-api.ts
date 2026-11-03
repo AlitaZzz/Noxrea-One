@@ -79,7 +79,7 @@ export interface FrameSpriteInfo {
 /**
  * 获取（必要时生成）帧序列雪碧图。
  * 服务端一次解码后等间隔采样并拼成一张图，前端按格取图渲染整条轨道；
- * 失败时调用方退化为「无缩略图但可定位」的轨道即可。
+ * 失败时调用方按无缩略图处理即可（定位能力由预览代理是否就绪另行判定）。
  */
 export async function fetchFrameSprite(videoKey: string, signal?: AbortSignal): Promise<Response> {
   return apiRaw("/api/files/frame-sprite", {
@@ -114,6 +114,11 @@ export async function readMediaError(res: Response): Promise<MediaRequestError> 
     retryAfterSeconds: retryAfterOf(res),
     receivedAt: Date.now(),
   };
+}
+
+/** 请求未拿到响应（网络中断 / 等待超时）：与 readMediaError 共用同一错误形状 */
+export function networkError(): MediaRequestError {
+  return { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() };
 }
 
 /** 编辑动作 serverTask 的响应信封上下文（readEditEnvelope / readEditResultKey 共用） */

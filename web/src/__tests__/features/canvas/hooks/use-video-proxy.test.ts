@@ -9,14 +9,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { jsonResponse, makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 
-const { fetchVideoProxy, readMediaError, resolveMediaUrlString } = vi.hoisted(() => ({
+const { fetchVideoProxy, readMediaError, networkError, resolveMediaUrlString } = vi.hoisted(() => ({
   fetchVideoProxy: vi.fn(),
   readMediaError: vi.fn(),
+  networkError: vi.fn(() => ({ code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() })),
   // 默认恒等：未显式设定时解析层把逻辑 URL 原样返回（stream 语义）
   resolveMediaUrlString: vi.fn((url: string) => Promise.resolve(url)),
 }));
 
-vi.mock("@/features/canvas/api/file-api", () => ({ fetchVideoProxy, readMediaError }));
+vi.mock("@/features/canvas/api/file-api", () => ({ fetchVideoProxy, readMediaError, networkError }));
 vi.mock("@/lib/file-access", () => ({ resolveMediaUrlString }));
 
 import { useVideoProxy } from "@/features/canvas/hooks/use-video-proxy";
@@ -102,6 +103,37 @@ describe("useVideoProxy", () => {
     await waitFor(() => expect(result.current.status).toBe("failed"));
     expect(result.current.url).toBeNull();
     expect(result.current.error?.code).toBe("network_error");
+  });
+
+  it("请求悬挂到超时进入 failed 并中止请求；迟到的成功不覆盖超时结论", async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      let resolveRequest!: (res: Response) => void;
+      fetchVideoProxy.mockImplementation((_key: string, s: AbortSignal) => {
+        signal = s;
+        return new Promise<Response>((resolve) => { resolveRequest = resolve; });
+      });
+      const { result } = renderHook(() => useVideoProxy(KEY));
+      expect(result.current.status).toBe("pending");
+
+      await act(async () => {
+        vi.advanceTimersByTime(150_000);
+      });
+
+      expect(result.current.status).toBe("failed");
+      expect(result.current.error?.code).toBe("network_error");
+      expect(signal?.aborted).toBe(true);
+
+      // 请求在超时之后才返回：已中止的请求不得把失败态翻回 ready
+      await act(async () => {
+        resolveRequest(jsonResponse({ data: { url: "http://test/late.mp4", duration: 9 } }));
+      });
+      expect(result.current.status).toBe("failed");
+      expect(result.current.url).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("换源后旧结果立即失效；markFailed 把已就绪代理标为失败", async () => {

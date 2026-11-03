@@ -41,7 +41,7 @@ describe("capture-frame source metadata", () => {
   it("resolves last-frame intent on the server and returns the captured image dimensions", async () => {
     const res = await post({ kind: "last" });
     expect(res.status).toBe(200);
-    expect(mocks.capture).toHaveBeenCalledWith("source.mp4", expect.any(String), { kind: "last" }, expect.any(AbortSignal));
+    expect(mocks.capture).toHaveBeenCalledWith("source.mp4", expect.any(String), { kind: "last" }, "1/test.mp4", expect.any(AbortSignal));
     expect(await res.json()).toMatchObject({ data: { time: 32.8, width: 1280, height: 720 } });
   });
 
@@ -52,11 +52,11 @@ describe("capture-frame source metadata", () => {
     expect(await res.json()).toMatchObject({ data: { time: 6.5 } });
   });
 
-  it("captures an explicit time without requiring video duration probing", async () => {
+  it("captures an explicit time and returns the resolved timestamp", async () => {
     mocks.capture.mockResolvedValue(5);
     const res = await post({ kind: "time", seconds: 5 });
     expect(res.status).toBe(200);
-    expect(mocks.capture).toHaveBeenCalledWith("source.mp4", expect.any(String), { kind: "time", seconds: 5 }, expect.any(AbortSignal));
+    expect(mocks.capture).toHaveBeenCalledWith("source.mp4", expect.any(String), { kind: "time", seconds: 5 }, "1/test.mp4", expect.any(AbortSignal));
     expect(await res.json()).toMatchObject({ data: { time: 5 } });
   });
 
@@ -68,12 +68,12 @@ describe("capture-frame source metadata", () => {
 
   it("passes cancellation to tail decoding and never persists an aborted result", async () => {
     const controller = new AbortController();
-    mocks.capture.mockImplementation(async (_source, _output, _time, signal: AbortSignal) => {
+    mocks.capture.mockImplementation(async (_source, _output, _time, _cacheKey, signal: AbortSignal) => {
       controller.abort();
       signal.throwIfAborted();
     });
     expect((await post({ kind: "last" }, controller.signal)).status).toBe(500);
-    expect(mocks.capture.mock.calls[0][3].aborted).toBe(true);
+    expect(mocks.capture.mock.calls[0][4].aborted).toBe(true);
     expect(mocks.probeImage).not.toHaveBeenCalled();
     expect(mocks.persist).not.toHaveBeenCalled();
   });

@@ -26,44 +26,58 @@ describe("缩略图请求合并", () => {
     expect(results).toEqual(["result", "result", "result"]);
   });
 
-  it("leader 先中止不影响生成，其余等待者仍拿到结果", async () => {
+  it("leader 先中止不取消生成，且等到生成结算才结束（租约输入保持可用）", async () => {
     const deferredResult = deferred<string>();
     let genSignal!: AbortSignal;
+    let leaderSettled = false;
     const controller = new AbortController();
     const leader = runSingleFlight({
       key: "leader-abort",
       signal: controller.signal,
       generate: (signal) => { genSignal = signal; return deferredResult.promise; },
     });
+    leader.catch(() => { leaderSettled = true; });
     const follower = runSingleFlight({ key: "leader-abort", generate: () => deferredResult.promise });
 
     await Promise.resolve();
     controller.abort();
-    await expect(leader).rejects.toMatchObject({ name: "AbortError" });
+    await Promise.resolve();
+    // 生成仍在使用创建者的输入（如 S3 租约临时路径），此时不能结束创建者请求
+    expect(leaderSettled).toBe(false);
     expect(genSignal.aborted).toBe(false);
 
     deferredResult.resolve("done");
+    await expect(leader).rejects.toMatchObject({ name: "AbortError" });
+    expect(leaderSettled).toBe(true);
     await expect(follower).resolves.toBe("done");
   });
 
   it("全部等待者中止后才取消生成", async () => {
-    const deferredResult = deferred<string>();
     let genSignal!: AbortSignal;
     const c1 = new AbortController();
     const c2 = new AbortController();
     const p1 = runSingleFlight({
       key: "all-abort",
       signal: c1.signal,
-      generate: (signal) => { genSignal = signal; return deferredResult.promise; },
+      generate: (signal) => new Promise<string>((_, reject) => {
+        genSignal = signal;
+        signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      }),
     });
-    const p2 = runSingleFlight({ key: "all-abort", signal: c2.signal, generate: () => deferredResult.promise });
+    const p2 = runSingleFlight({
+      key: "all-abort",
+      signal: c2.signal,
+      generate: () => new Promise<string>(() => undefined),
+    });
 
     await Promise.resolve();
     c1.abort();
+    // 创建者中止、仍有搭车者：生成不取消
+    expect(genSignal.aborted).toBe(false);
     c2.abort();
+    expect(genSignal.aborted).toBe(true);
     await expect(p1).rejects.toMatchObject({ name: "AbortError" });
     await expect(p2).rejects.toMatchObject({ name: "AbortError" });
-    expect(genSignal.aborted).toBe(true);
   });
 
   it("过载拒绝由全体等待者共享，条目移除后可重新生成", async () => {
@@ -101,8 +115,8 @@ describe("缩略图请求合并", () => {
     const reason = "Client connection prematurely closed.";
     const pending = deferred<string>();
     const controller = new AbortController();
+    const owner = runSingleFlight({ key: "string-reason", generate: () => pending.promise });
     const waiter = runSingleFlight({ key: "string-reason", signal: controller.signal, generate: () => pending.promise });
-    const follower = runSingleFlight({ key: "string-reason", generate: () => pending.promise });
 
     await Promise.resolve();
     controller.abort(reason);
@@ -114,7 +128,7 @@ describe("缩略图请求合并", () => {
       .rejects.toMatchObject({ name: "AbortError", cause: reason });
 
     pending.resolve("done");
-    await expect(follower).resolves.toBe("done");
+    await expect(owner).resolves.toBe("done");
   });
 
   it("预中止请求不进入合并也不启动生成", async () => {
@@ -154,13 +168,16 @@ describe("缩略图请求合并", () => {
     });
     await Promise.resolve();
     oldController.abort();
-    await expect(old).rejects.toMatchObject({ name: "AbortError" });
 
+    // 最后一个等待者离开时条目已摘除，新请求发起自己的生成
     const newRun = deferred<string>();
     const fresh = vi.fn(() => newRun.promise);
     const first = runSingleFlight({ key: "stale-cleanup", generate: fresh });
+    expect(fresh).toHaveBeenCalledTimes(1);
+
+    // 旧生成随后收尾，不得删掉新生成的条目
     oldRun.resolve("late");
-    await Promise.resolve();
+    await expect(old).rejects.toMatchObject({ name: "AbortError" });
     await Promise.resolve();
     const joiner = vi.fn(async () => "unused");
     const second = runSingleFlight({ key: "stale-cleanup", generate: joiner });

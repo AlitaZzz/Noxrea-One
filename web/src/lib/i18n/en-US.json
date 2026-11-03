@@ -592,7 +592,7 @@
     "peaksUnavailable": "Waveform unavailable — clipping is disabled",
     "processing": "Extracting clip...",
     "proxyLoading": "Generating preview proxy...",
-    "proxyFailed": "Preview proxy failed, close and reopen the panel to retry",
+    "proxyUnavailable": "Preview proxy unavailable",
     "buffering": "Buffering preview...",
     "suffix": " (clip {{range}})"
   },

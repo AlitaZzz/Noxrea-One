@@ -10,13 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { jsonResponse, makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 
-const { fetchFrameSprite, readMediaError, resolveMediaUrlString } = vi.hoisted(() => ({
+const { fetchFrameSprite, readMediaError, networkError, resolveMediaUrlString } = vi.hoisted(() => ({
   fetchFrameSprite: vi.fn(),
   readMediaError: vi.fn(),
+  networkError: vi.fn(() => ({ code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() })),
   resolveMediaUrlString: vi.fn((url: string) => Promise.resolve(url)),
 }));
 
-vi.mock("@/features/canvas/api/file-api", () => ({ fetchFrameSprite, readMediaError }));
+vi.mock("@/features/canvas/api/file-api", () => ({ fetchFrameSprite, readMediaError, networkError }));
 vi.mock("@/lib/file-access", () => ({ resolveMediaUrlString }));
 
 import { useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";

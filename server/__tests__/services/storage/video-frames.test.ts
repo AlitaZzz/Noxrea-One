@@ -35,7 +35,7 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const source = path.join(temp, `source-${fps}.mkv`);
     const output = path.join(temp, `frame-${fps}.jpg`);
     execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", `testsrc2=s=128x72:r=${fps}:d=2`, "-c:v", "ffv1", "-y", source]);
-    const time = await captureVideoFrame(source, output, { kind: "last" });
+    const time = await captureVideoFrame(source, output, { kind: "last" }, source);
     // Matroska timestamps are quantized to milliseconds.
     expect(time).toBeCloseTo(Math.round((2 - 1 / fps) * 1000) / 1000, 4);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
@@ -53,15 +53,48 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const info = JSON.parse(execFileSync(probe, ["-v", "error", "-select_streams", "v:0", "-show_frames", "-show_entries", "frame=pkt_pos", "-of", "json", complete], { encoding: "utf8" })) as { frames: { pkt_pos: string }[] };
     const contents = await fs.readFile(complete);
     await fs.writeFile(source, contents.subarray(0, Number(info.frames[2].pkt_pos)));
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(1);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBe(1);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
+  });
+
+  it("captures the last video frame when the requested time lies in an audio tail", async () => {
+    const source = path.join(temp, "audio-tail.mp4");
+    const output = path.join(temp, "audio-tail.jpg");
+    const reference = path.join(temp, "audio-tail-reference.jpg");
+    // 视频 2s、音轨 4s：容器时长 4s 超过视频流末帧，抽帧面板拖到末端会落在这段空档
+    execFileSync(testFfmpegBin, [
+      "-v", "error",
+      "-f", "lavfi", "-i", "testsrc2=s=128x72:r=24:d=2",
+      "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono",
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-y", source,
+    ]);
+    const info = JSON.parse(execFileSync(testFfprobeBin, [
+      "-v", "error", "-show_entries", "stream=codec_type,duration:format=duration", "-of", "json", source,
+    ], { encoding: "utf8" })) as {
+      streams: { codec_type: string; duration?: string }[];
+      format: { duration: string };
+    };
+    const video = info.streams.find((stream) => stream.codec_type === "video")!;
+    expect(Number(video.duration)).toBeCloseTo(2, 2);
+    expect(Number(info.format.duration)).toBeGreaterThan(3.5);
+
+    // 越过视频末帧的请求收敛到末帧本身，而不是让 ffmpeg 在视频流结束后找不到包
+    expect(await captureVideoFrame(source, output, { kind: "time", seconds: 3.96 }, source)).toBeCloseTo(47 / 24, 4);
+    expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
+    execFileSync(testFfmpegBin, ["-v", "error", "-i", source, "-an", "-vf", "select=eq(n\\,47)", "-frames:v", "1", "-q:v", "2", "-y", reference]);
+    expect(await fs.readFile(output)).toEqual(await fs.readFile(reference));
+
+    // 音轨尾部之内的普通时间点仍按请求时间抽帧
+    expect(await captureVideoFrame(source, path.join(temp, "audio-tail-before.jpg"), { kind: "time", seconds: 1 }, source)).toBe(1);
+    expect(await captureVideoFrame(source, path.join(temp, "audio-tail-last.jpg"), { kind: "last" }, source)).toBeCloseTo(47 / 24, 4);
   });
 
   it("captures a variable-rate tail using its real timestamp", async () => {
     const source = path.join(temp, "variable.mkv");
     const output = path.join(temp, "variable.jpg");
     execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=10:d=2", "-vf", "select='eq(n,0)+eq(n,3)+eq(n,12)'", "-fps_mode", "passthrough", "-c:v", "ffv1", "-y", source]);
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBeCloseTo(1.2, 4);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBeCloseTo(1.2, 4);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
   });
 
@@ -87,7 +120,7 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const reference = JSON.parse(referenceOut) as { frames: { best_effort_timestamp_time: string }[]; format: { start_time: string } };
     const expectedTime = Number(reference.frames.at(-1)!.best_effort_timestamp_time) - Number(reference.format.start_time);
     expect(expectedTime).toBeGreaterThan(10799);
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBeCloseTo(expectedTime, 5);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBeCloseTo(expectedTime, 5);
     expect(await probeImageMeta(output)).toEqual({ width: 32, height: 32 });
   }, 20_000);
 
@@ -101,7 +134,7 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const contents = await fs.readFile(source);
     contents.fill(0, Number(packet.pos), Number(packet.pos) + Number(packet.size));
     await fs.writeFile(source, contents);
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(2);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBe(2);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
   });
 
@@ -109,7 +142,7 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const source = path.join(temp, "delayed-video.mkv");
     const output = path.join(temp, "delayed-video.jpg");
     execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-f", "lavfi", "-i", "anullsrc=r=8000:cl=mono", "-vf", "setpts=PTS+2/TB", "-fps_mode", "passthrough", "-t", "4", "-c:v", "ffv1", "-c:a", "pcm_s16le", "-y", source]);
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(3);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBe(3);
     expect(await probeImageMeta(output)).toEqual({ width: 128, height: 72 });
   });
 
@@ -117,14 +150,14 @@ describe.skipIf(!ffmpegAvailable)("real FFmpeg frame capture", () => {
     const source = path.join(temp, "offset-start.mkv");
     const output = path.join(temp, "offset-start.jpg");
     execFileSync(testFfmpegBin, ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=128x72:r=1:d=2", "-c:v", "ffv1", "-output_ts_offset", "10", "-y", source]);
-    expect(await captureVideoFrame(source, output, { kind: "last" })).toBe(1);
+    expect(await captureVideoFrame(source, output, { kind: "last" }, source)).toBe(1);
   });
 
   it("rejects an already-aborted tail request without producing an image", async () => {
     const output = path.join(temp, "cancelled.jpg");
     const controller = new AbortController();
     controller.abort();
-    await expect(captureVideoFrame(path.join(temp, "unused.mkv"), output, { kind: "last" }, controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(captureVideoFrame(path.join(temp, "unused.mkv"), output, { kind: "last" }, "unused.mkv", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
     await expect(fs.access(output)).rejects.toThrow();
   });
 

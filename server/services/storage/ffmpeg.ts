@@ -18,7 +18,7 @@
 import path from "path";
 import { spawn } from "child_process";
 import { JSONParser } from "@streamparser/json";
-import { AbortError } from "@server/core/abort";
+import { AbortError, TimeoutError } from "@server/core/abort";
 import { getConfig } from "@server/core/config";
 import { resolveFromRoot } from "@server/core/paths";
 import { logEvent } from "@server/core/logger/utils";
@@ -46,7 +46,23 @@ export interface FfmpegHeavyRunOptions extends FfmpegRunOptions {
 }
 
 const DIAGNOSTIC_TAIL_CHARS = 64 * 1024;
+/**
+ * 脱敏前多保留的字符数：诊断窗口按尾部截断，起点可能落在 URL 中间；先按完整
+ * 窗口脱敏再切尾，被切掉的 URL 才不会失去协议前缀而漏过查询串替换。
+ * 预签名 URL 的实际长度远小于此，多留部分最终会被切掉，不进入日志。
+ */
+const REDACTION_CARRY_CHARS = 16 * 1024;
 const PROBE_OUTPUT_LIMIT_BYTES = 16 * 1024 * 1024;
+
+/**
+ * 抹掉 URL 查询串：S3 direct 交付把预签名地址作为输入，ffmpeg/ffprobe 出错时会
+ * 把输入地址原样写进 stderr（含 X-Amz-Credential / Signature），而这些 stderr
+ * 会进入日志与错误消息。查询串只携带凭据，对诊断没有价值；保留协议、主机与
+ * 路径，错误行仍可定位。整段 stderr 收齐后统一处理，避免 URL 跨 chunk 时漏掉。
+ */
+function redactUrlQueries(text: string): string {
+  return text.replace(/(https?:\/\/[^\s?#]+)\?[^\s]*/g, "$1?<redacted>");
+}
 
 interface ProcessOutcome {
   code: number;
@@ -136,7 +152,7 @@ function spawnMediaTool(
 
     ffmpeg.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
-      if (diagnosticLimit) stderr = stderr.slice(-diagnosticLimit);
+      if (diagnosticLimit) stderr = stderr.slice(-(diagnosticLimit + REDACTION_CARRY_CHARS));
     });
     ffmpeg.stdout?.on("data", (chunk: Buffer) => {
       if (outputError || cancelled || killed) return;
@@ -158,7 +174,16 @@ function spawnMediaTool(
     ffmpeg.on("close", (code) => settle(() => {
       if (cancelled) reject(cancelled);
       else if (outputError) reject(outputError);
-      else resolve({ code: code ?? -1, stderr, stdout, killed, spawnError });
+      else {
+        const redacted = redactUrlQueries(stderr);
+        resolve({
+          code: code ?? -1,
+          stderr: diagnosticLimit ? redacted.slice(-diagnosticLimit) : redacted,
+          stdout,
+          killed,
+          spawnError,
+        });
+      }
     }));
 
     ffmpeg.on("error", (err) => {
@@ -189,7 +214,7 @@ export async function runFfmpegHeavy(
     { ...opts, stage: opts.stage ?? "ffmpeg" },
     { tool: "ffmpeg", gate: "ffmpeg_heavy", owner: opts.owner, diagnosticLimit: DIAGNOSTIC_TAIL_CHARS },
   );
-  if (outcome.killed) throw new Error(`ffmpeg timed out after ${timeoutMs}ms`);
+  if (outcome.killed) throw new TimeoutError(`ffmpeg timed out after ${timeoutMs}ms`);
   if (outcome.spawnError) throw outcome.spawnError;
   return { code: outcome.code, stderr: outcome.stderr };
 }
@@ -206,7 +231,7 @@ export async function runFfmpegLight(
     { ...opts, stage: opts.stage ?? "ffmpeg" },
     { tool: "ffmpeg", gate: "ffmpeg_light", diagnosticLimit: DIAGNOSTIC_TAIL_CHARS },
   );
-  if (outcome.killed) throw new Error(`ffmpeg timed out after ${timeoutMs}ms`);
+  if (outcome.killed) throw new TimeoutError(`ffmpeg timed out after ${timeoutMs}ms`);
   if (outcome.spawnError) throw outcome.spawnError;
   return { code: outcome.code, stderr: outcome.stderr };
 }
@@ -255,21 +280,33 @@ export async function runFfprobe(args: string[], timeoutMs: number, opts: Ffmpeg
   return JSON.parse(outcome.stdout) as unknown;
 }
 
-function assertProbeSuccess(outcome: ProcessOutcome, timeoutMs: number) {
-  if (outcome.killed) throw new Error(`ffprobe timed out after ${timeoutMs}ms`);
+function assertProbeSuccess(
+  outcome: ProcessOutcome,
+  timeoutMs: number,
+  opts: { tolerateExitErrors?: boolean } = {},
+) {
+  if (outcome.killed) throw new TimeoutError(`ffprobe timed out after ${timeoutMs}ms`);
   if (outcome.spawnError) throw outcome.spawnError;
-  if (outcome.code !== 0) throw new Error(`ffprobe exited with code ${outcome.code}: ${outcome.stderr.slice(-200)}`);
+  if (outcome.code !== 0 && !opts.tolerateExitErrors) {
+    throw new Error(`ffprobe exited with code ${outcome.code}: ${outcome.stderr.slice(-200)}`);
+  }
 }
 
 interface FfprobeScanOptions extends FfmpegRunOptions {
   section: "packets" | "frames";
   onEntry: (value: unknown) => void;
+  /**
+   * 损坏的尾部常让 ffprobe 以非 0 退出，但此前已解析出的条目仍然有效。容忍退出码
+   * 并保留这些条目，由调用方决定是否回退到更早的位置；超时与启动失败仍上抛。
+   */
+  tolerateExitErrors?: boolean;
 }
 
-/** 一次流式扫描的结果：交付条目数与进程 stderr（-v error 下非空即有容器/解码错误） */
+/** 一次流式扫描的结果：交付条目数、进程 stderr（-v error 下非空即有容器/解码错误）与退出码 */
 export interface FfprobeScanResult {
   entryCount: number;
   stderr: string;
+  code: number;
 }
 
 /** Emit one structured entry at a time, releasing each parsed sibling immediately. */
@@ -286,7 +323,19 @@ export async function scanFfprobe(args: string[], timeoutMs: number, opts: Ffpro
     { ...opts, stage: opts.stage ?? "ffprobe_scan" },
     { tool: "ffprobe", gate: "exempt", diagnosticLimit: DIAGNOSTIC_TAIL_CHARS, consumeOutput: (chunk) => parser.write(chunk) },
   );
-  assertProbeSuccess(outcome, timeoutMs);
-  if (!parser.isEnded) parser.end();
-  return { entryCount, stderr: outcome.stderr };
+  assertProbeSuccess(outcome, timeoutMs, opts);
+  if (!parser.isEnded) {
+    try {
+      parser.end();
+    } catch (error) {
+      // 容忍模式针对的就是损坏输入：进程可能在写完 JSON 之前退出，已交付的条目仍然有效
+      if (!opts.tolerateExitErrors) throw error;
+      logEvent("media", {
+        stage: `${opts.stage ?? "ffprobe_scan"}_truncated`,
+        error: error instanceof Error ? error.message : String(error),
+        ...opts.logFields,
+      });
+    }
+  }
+  return { entryCount, stderr: outcome.stderr, code: outcome.code };
 }

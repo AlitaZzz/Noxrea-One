@@ -14,7 +14,7 @@
 import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, readMediaError } from "@/features/canvas/api/file-api";
+import { fetchFrameSprite, type FrameSpriteInfo, type MediaRequestError, networkError, readMediaError } from "@/features/canvas/api/file-api";
 import { resolveMediaUrlString } from "@/lib/file-access";
 
 /** 轨道内容区宽度（px，不含左右 12px 边距）——格子总宽与之严格相等，
@@ -124,15 +124,11 @@ function loadSpriteSize(url: string): Promise<{ width: number; height: number } 
   });
 }
 
-/** 与「时长不可用」共用同一失败态：面板据 error 展示原因与手动重试入口 */
-function networkError(): MediaRequestError {
-  return { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() };
-}
-
 /**
  * 按给定视频地址加载帧序列雪碧图。
- * 组件卸载或地址变化时会中止未完成的加载；失败时轨道退化为「无缩略图但可定位」，
- * 同时带出失败原因与 retry——面板据此提示并由用户手动重试（不做自动重试）。
+ * 组件卸载或地址变化时会中止未完成的加载；失败时轨道退化为「无缩略图」并带出
+ * 失败原因与 retry——面板据此提示并由用户手动重试（不做自动重试）。是否可定位
+ * 由预览代理是否可播放另行判定，与雪碧图失败相互独立。
  */
 export function useFrameSprite(videoRef: string | null): FrameSpriteState & { retry: () => void } {
   // 结果连同它所属的视频地址一起存：地址切换后旧结果即失效，靠这个标记区分，
@@ -214,8 +210,8 @@ export function useFrameSprite(videoRef: string | null): FrameSpriteState & { re
       }
 
       // 兜底：拿不到雪碧图也要拿到时长，否则播放头无从定位、面板等同于不可用。
-      // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报，
-      // 调用方（片段截取面板）需改用代理元素的真实时长做时间轴；
+      // 注意来源标记为 fallback：浏览器读的是容器标称值，截断视频会虚报；
+      // 两个截取面板统一经 resolveTrackDuration 改用代理元素的真实时长做时间轴。
       // 失败原因（服务端响应、雪碧图地址/加载或原视频地址解析）随状态带出，面板据此提示并重试
       const videoUrl = await resolveMediaUrlString(videoRef).catch(() => null);
       if (cancelled) return;

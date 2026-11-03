@@ -30,9 +30,10 @@ router.post(
     resolveKey: (d) => d.video_key,
     name: "crop",
     failureCode: "crop.failed",
-    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
-      // 源分辨率用于钳位；探测失败按无法裁剪处理（源画面尺寸都拿不到时裁剪无从谈起）
-      const meta = await probeVideoMetaCached(sourceInput);
+    async run({ c, data, sourceKey, sourceInput, userId, signal, tmpDir }) {
+      // 源分辨率用于钳位；探测失败按无法裁剪处理（源画面尺寸都拿不到时裁剪无从谈起）。
+      // 按源存储键缓存：S3 租约的临时下载路径每次请求都不同
+      const meta = await probeVideoMetaCached(sourceInput, sourceKey, signal);
       if (!meta?.width || !meta?.height) {
         return failCode(422, "crop.invalid_rect");
       }

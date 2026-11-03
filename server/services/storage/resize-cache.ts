@@ -15,6 +15,7 @@ import { pipeline } from "stream/promises";
 import { normalizeResizeWidth } from "@noxrea/shared/media-tiers";
 import { cacheKeyOf, posterMasterKey } from "./derived-keys";
 import { acquireMediaFile } from "./media-source";
+import { isAbortError } from "@server/core/abort";
 import { logEvent } from "@server/core/logger/utils";
 import { ArtifactSkipError, ensureArtifact } from "./artifact";
 import { runFfmpegLight } from "./ffmpeg";
@@ -113,7 +114,7 @@ export async function getResizedWebP(
     }
     // sharp 不可用或转换失败时静默返回 null（含客户端中断导致的 AbortError）
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT" && (err as Error).name !== "AbortError") {
+    if (code !== "ENOENT" && !isAbortError(err)) {
       logEvent("media", { stage: "resize_failed", key: storageKey, error: (err as Error).message });
     }
     return null;
@@ -143,7 +144,7 @@ export async function getVideoPosterWebP(
   } catch (err: unknown) {
     if (err instanceof MediaPoolBusyError) throw err;
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== "ENOENT" && (err as Error).name !== "AbortError") {
+    if (code !== "ENOENT" && !isAbortError(err)) {
       logEvent("media", { stage: "video_poster_failed", key: storageKey, error: (err as Error).message });
     }
     return null;

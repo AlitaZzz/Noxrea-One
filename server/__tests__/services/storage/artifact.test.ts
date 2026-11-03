@@ -154,10 +154,11 @@ describe("ensureArtifact", () => {
     const follower = ensureArtifact({ key, produce });
     await vi.waitFor(() => expect(genSignal).toBeDefined());
     leader.abort();
-    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    // 搭车者仍在等待，生成不得取消
     expect(genSignal.aborted).toBe(false);
 
     gate.resolve();
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
     await follower;
     expect(await fs.readFile(abs(key), "utf8")).toBe("kept");
   });

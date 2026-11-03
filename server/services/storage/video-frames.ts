@@ -8,14 +8,26 @@ import path from "path";
 import fs from "fs/promises";
 import { z } from "zod";
 import type { FrameSelection } from "@noxrea/shared";
-import { throwIfAborted } from "@server/core/abort";
+import { isAbortError, throwIfAborted, TimeoutError } from "@server/core/abort";
+import { setBounded } from "@server/core/bounded-cache";
 import { logEvent } from "@server/core/logger/utils";
-import { runFfmpegHeavy, runFfmpegLight, runFfprobe, scanFfprobe } from "./ffmpeg";
+import { runFfmpegHeavy, runFfmpegLight, runFfprobe, scanFfprobe, type FfprobeScanResult } from "./ffmpeg";
 
 /** ffmpeg 抽帧超时：子进程若挂起会持续持有视频文件句柄，必须兜底杀掉 */
 const FFMPEG_TIMEOUT_MS = 30_000;
 /** Timeline, packet indexing, corrupt-tail traversal and image output share one deadline. */
 const FRAME_CAPTURE_BUDGET_MS = 90_000;
+
+/**
+ * 截帧预算耗尽。与单次 ffprobe / ffmpeg 调用的自身超时区分：预算耗尽时已没有
+ * 余量做任何降级，必须上抛给路由映射为 504；单次调用超时只是末帧探测失败，
+ * 余量尚在，普通时间选择仍可退回普通 seek。
+ */
+class FrameCaptureBudgetError extends TimeoutError {
+  constructor() {
+    super("Video frame capture timed out");
+  }
+}
 
 /** 代理转码超时：整段重编码比抽一帧慢得多，给足时间但仍要兜底 */
 const FFMPEG_PROXY_TIMEOUT_MS = 60_000;
@@ -26,92 +38,224 @@ const FFMPEG_SPRITE_TIMEOUT_MS = 60_000;
 /** 探测不到帧率时的 GOP 回退值（帧）：按 25fps 估算，约合 1 秒 */
 const FALLBACK_FPS = 25;
 
+/**
+ * 视频流声明时长可用时，只读取末尾这一窗口来定位末帧。
+ * 窗口须明显大于常见的帧间隔；极低帧率 / 末帧展示区间更长的 VFR 由全量索引兜底。
+ */
+const TAIL_READ_WINDOW_S = 2;
+
+/** ffprobe 用 "N/A" 表示容器未声明该字段（Matroska 的视频流时长即是如此） */
+const optionalSeconds = z.preprocess(
+  (value) => (value === "N/A" ? null : value),
+  z.coerce.number().finite().nullish(),
+);
 const videoTimelineSchema = z.object({
-  streams: z.array(z.object({ time_base: z.string().regex(/^\d+\/[1-9]\d*$/) })),
-  format: z.object({ start_time: z.coerce.number().finite().default(0) }),
+  streams: z.array(z.object({
+    time_base: z.string().regex(/^\d+\/[1-9]\d*$/),
+    start_time: optionalSeconds,
+    duration: optionalSeconds,
+  })),
+  format: z.object({
+    start_time: z.coerce.number().finite().default(0),
+    /** 容器总时长；语义随封装格式不同（MP4 为长度，Matroska 为绝对结束时间） */
+    duration: optionalSeconds,
+  }),
 });
 const frameProbeSchema = z.object({ best_effort_timestamp: z.number().int().nullish() });
 const packetProbeSchema = z.object({ pts: z.number().int().optional(), flags: z.string() });
 
-async function lastVideoFrame(videoPath: string, remaining: () => number, signal?: AbortSignal) {
+interface FrameEnd {
+  /** 绝对 PTS（time_base 单位） */
+  pts: number;
+  /** 相对媒体起点（format.start_time）的播放时间（s） */
+  time: number;
+}
+
+interface TailScan {
+  lastTimestamp: number | undefined;
+  entryCount: number;
+  stderr: string;
+  /** ffprobe 退出码；损坏尾巴可能非 0，但已解码出的帧仍然有效 */
+  code: number;
+}
+
+/**
+ * 从指定绝对时间戳（秒）读视频帧到 EOF，返回最后一帧的 PTS。单次扫描，不重试。
+ */
+async function scanTailFrames(
+  videoPath: string,
+  cacheKey: string,
+  probeArgs: string[],
+  startSeconds: number,
+  remaining: () => number,
+  signal?: AbortSignal,
+): Promise<TailScan> {
+  let lastTimestamp: number | undefined;
+  const outcome = await scanFfprobe([
+    ...probeArgs, "-show_frames", "-read_intervals", `${Math.floor(startSeconds * 1e6) / 1e6}%`,
+    "-show_entries", "frame=best_effort_timestamp", videoPath,
+  ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), {
+    signal, stage: "capture_tail", section: "frames", tolerateExitErrors: true,
+    onEntry: (entry) => {
+      const frame = frameProbeSchema.parse(entry);
+      if (typeof frame.best_effort_timestamp === "number") lastTimestamp = frame.best_effort_timestamp;
+    },
+  });
+  return { lastTimestamp, ...outcome };
+}
+
+/**
+ * GOP 回退路径专用：ffprobe 对「seek 后读至 EOF」的调用存在瞬时空结果缺陷
+ * （exit 0、目标 section 为空、无任何 stderr，紧接重试即恢复；实测 ~0.3%/次，
+ * 与父进程、卷无关），干净空结果重试一次。
+ *
+ * 只用于包索引已证实该关键帧存在的路径——那里的干净空结果只能是探测缺陷，
+ * 不可能是合法内容。时长锚点快路径不走这里：容器时长可能落在视频末帧之后，
+ * 锚点窗口读到 EOF 为空是合法结果，重试只会白跑一次解码；直接退回包索引即可。
+ * 损坏尾巴的扫描带解码错误 stderr 且可能非 0 退出，不重试。
+ */
+async function scanTailFramesWithRetry(
+  videoPath: string,
+  cacheKey: string,
+  probeArgs: string[],
+  startSeconds: number,
+  remaining: () => number,
+  signal?: AbortSignal,
+): Promise<TailScan> {
+  const first = await scanTailFrames(videoPath, cacheKey, probeArgs, startSeconds, remaining, signal);
+  if (first.entryCount !== 0 || first.stderr !== "") return first;
+  // 日志只记稳定内容键：S3 direct 下 videoPath 是预签名 URL，basename 带查询串
+  logEvent("media", { stage: "capture_tail_empty_retry", video: cacheKey });
+  return scanTailFrames(videoPath, cacheKey, probeArgs, startSeconds, remaining, signal);
+}
+
+/**
+ * 定位并解码视频末尾的最后一帧。
+ *
+ * 有可用时长锚点时，直接从锚点前的窗口读到 EOF：ffprobe 会从锚点之前的关键帧
+ * 解码到末尾，成本与视频总长无关。视频流时长优先（最准确），流时长缺失时退回
+ * 容器时长（Matroska 常见）。锚点缺失或读不到帧（截断 / 元数据不一致）时，
+ * 退回全量包索引，从最后一个关键帧开始向前逐个 GOP 尝试——这条路径不依赖时长
+ * 元数据，是截断文件也能取到最后一个可解码帧的原因。
+ */
+async function lastVideoFrame(
+  videoPath: string,
+  cacheKey: string,
+  remaining: () => number,
+  signal?: AbortSignal,
+): Promise<FrameEnd> {
   const probeArgs = ["-v", "error", "-select_streams", "v:0", "-of", "json"];
-  // Demux packet headers without decoding the video, then decode only the final GOP.
   const index = videoTimelineSchema.parse(await runFfprobe([
-    ...probeArgs, "-show_entries", "stream=time_base:format=start_time", videoPath,
+    ...probeArgs, "-show_entries", "stream=time_base,start_time,duration:format=start_time,duration", videoPath,
   ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), { signal, stage: "capture_timeline" }));
+  const stream = index.streams[0];
+  if (!stream) throw new Error("No decoded video frame available");
+  const [numerator, denominator] = stream.time_base.split("/").map(Number);
+  const timeBase = numerator / denominator;
+  const frameEnd = (lastTimestamp: number): FrameEnd => ({
+    pts: lastTimestamp,
+    time: lastTimestamp * timeBase - index.format.start_time,
+  });
+
+  // 锚点只需落在末帧附近：-read_intervals 会从锚点之前的关键帧解码到 EOF，
+  // 锚点略早不影响取到真正的末帧，只影响解码量。优先用视频流时长（最准确）；
+  // Matroska 的流时长常为 N/A，退回容器时长——它可能把更长的音轨算进来，锚点
+  // 落在视频末帧之后超过 TAIL_READ_WINDOW_S 时尾段读不到帧，退回全量包索引；
+  // 结果仍正确，代价是一次不依赖解码的包扫描。
+  const streamEnd = stream.duration !== null && stream.duration !== undefined && stream.duration > 0
+    ? (stream.start_time ?? index.format.start_time) + stream.duration
+    : null;
+  const anchor = streamEnd
+    ?? (index.format.duration !== null && index.format.duration !== undefined && index.format.duration > 0
+      ? index.format.duration
+      : null);
+  if (anchor !== null) {
+    // 锚点窗口的干净空结果可能是合法内容（锚点落在视频末帧之后），不重试；
+    // 读不到帧就直接进入下面的包索引路径
+    const tail = await scanTailFrames(
+      videoPath, cacheKey, probeArgs, Math.max(0, anchor - TAIL_READ_WINDOW_S), remaining, signal,
+    );
+    if (tail.lastTimestamp !== undefined) return frameEnd(tail.lastTimestamp);
+  }
+
+  // Demux packet headers without decoding the video, then decode only the final GOP.
   const keyframes: number[] = [];
-  await scanFfprobe([
+  const indexScan = await scanFfprobe([
     ...probeArgs, "-show_packets", "-show_entries", "packet=pts,flags", videoPath,
   ], Math.min(FFMPEG_SPRITE_TIMEOUT_MS, remaining()), {
-    signal, stage: "capture_keyframes", section: "packets",
+    signal, stage: "capture_keyframes", section: "packets", tolerateExitErrors: true,
     onEntry: (entry) => {
       const packet = packetProbeSchema.parse(entry);
       if (packet.pts !== undefined && packet.flags.includes("K")) keyframes.push(packet.pts);
     },
   });
-  const stream = index.streams[0];
-  if (!keyframes.length || !stream) throw new Error("No decoded video frame available");
-  const [numerator, denominator] = stream.time_base.split("/").map(Number);
-  const timeBase = numerator / denominator;
+  if (!keyframes.length) throw noFrameError(indexScan);
+  let lastTail: TailScan | undefined;
   for (let i = keyframes.length - 1; i >= 0; i--) {
-    let lastTimestamp: number | undefined;
-    const tailScan = () => scanFfprobe([
-      ...probeArgs, "-show_frames", "-read_intervals", `${Math.floor(keyframes[i] * timeBase * 1e6) / 1e6}%`,
-      "-show_entries", "frame=best_effort_timestamp", videoPath,
-    ], Math.min(FFMPEG_TIMEOUT_MS, remaining()), {
-      signal, stage: "capture_tail", section: "frames",
-      onEntry: (entry) => {
-        const frame = frameProbeSchema.parse(entry);
-        if (typeof frame.best_effort_timestamp === "number") lastTimestamp = frame.best_effort_timestamp;
-      },
-    });
-    let scan = await tailScan();
-    // ffprobe 对「seek 后读至 EOF」的调用存在瞬时空结果缺陷：exit 0、目标 section
-    // 为空、无任何 stderr，紧接重试即恢复（实测 ~0.3%/次，与父进程、卷无关）。packets
-    // 索引刚证实关键帧存在，干净空结果必属该缺陷而非内容问题，重试一次；损坏尾巴
-    // 的扫描必带解码错误 stderr，不进此分支，维持「回退前一个 GOP」的既有语义。
-    if (scan.entryCount === 0 && scan.stderr === "") {
-      logEvent("media", { stage: "capture_tail_empty_retry", video: path.basename(videoPath) });
-      scan = await tailScan();
-    }
-    if (lastTimestamp !== undefined) return { pts: lastTimestamp, time: lastTimestamp * timeBase - index.format.start_time };
     // An indexed key packet may be truncated. Search the preceding GOP only if no frame decoded.
+    lastTail = await scanTailFramesWithRetry(
+      videoPath, cacheKey, probeArgs, keyframes[i] * timeBase, remaining, signal,
+    );
+    if (lastTail.lastTimestamp !== undefined) return frameEnd(lastTail.lastTimestamp);
   }
-  throw new Error("No decoded video frame available");
+  throw noFrameError(lastTail ?? indexScan);
+}
+
+/** 没有可解码帧时保留 ffprobe 的退出码与诊断；正常退出则给出内容侧结论 */
+function noFrameError(scan: Pick<FfprobeScanResult, "code" | "stderr">): Error {
+  return scan.code !== 0
+    ? new Error(`ffprobe exited with code ${scan.code}: ${scan.stderr.slice(-200)}`)
+    : new Error("No decoded video frame available");
 }
 
 /**
- * 视频截帧（spawn ffmpeg）
- * 基于 subprocess 调用 ffmpeg
+ * 末帧结果缓存。
+ *
+ * 同一源的内容身份不变，末帧无需每次截取都重新解析。键必须是稳定内容键：
+ * S3 直接交付下 videoPath 是每次请求都不同的预签名 URL，不能作为身份。
+ * 条目上限沿用 media-probe 的整体清空策略，防止长跑进程下 Map 无界增长。
  */
-export async function captureVideoFrame(
+const FRAME_END_CACHE_MAX = 512;
+const frameEndCache = new Map<string, FrameEnd>();
+
+async function lastVideoFrameCached(
+  videoPath: string,
+  cacheKey: string,
+  remaining: () => number,
+  signal?: AbortSignal,
+): Promise<FrameEnd> {
+  const cached = frameEndCache.get(cacheKey);
+  if (cached) return cached;
+  const end = await lastVideoFrame(videoPath, cacheKey, remaining, signal);
+  setBounded(frameEndCache, cacheKey, end, FRAME_END_CACHE_MAX);
+  return end;
+}
+
+/**
+ * 截取并解码指定帧。
+ *
+ * frameEnd 非空表示要的是精确末帧：-copyts 保留原始时间戳，select 按绝对 PTS
+ * 命中该帧；为空时按 time 普通 seek，取目标位置后的第一帧。
+ */
+async function runCaptureFrame(
   videoPath: string,
   outputPath: string,
-  selection: FrameSelection = { kind: "time", seconds: 1 },
-  signal?: AbortSignal,
-): Promise<number> {
-  const deadline = performance.now() + FRAME_CAPTURE_BUDGET_MS;
-  const remaining = () => {
-    throwIfAborted(signal);
-    const timeLeft = deadline - performance.now();
-    if (timeLeft <= 0) throw new Error("Video frame capture timed out");
-    return timeLeft;
-  };
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-
-  const logFields = { video: path.basename(videoPath) };
-  const lastFrame = selection.kind === "last" ? await lastVideoFrame(videoPath, remaining, signal) : null;
-  const time = lastFrame ? lastFrame.time : selection.kind === "time" ? selection.seconds : 0;
+  time: number,
+  frameEnd: FrameEnd | null,
+  logFields: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+  remaining: () => number,
+): Promise<void> {
   // FFmpeg seeks in microseconds. Round down to keep the selected frame within the seek range.
-  const seekTime = lastFrame ? Math.max(0, Math.floor(time * 1e6) / 1e6) : time;
+  const seekTime = Math.max(0, Math.floor(time * 1e6) / 1e6);
   const { code, stderr } = await runFfmpegLight(
     [
       "-nostdin", "-nostats",
-      ...lastFrame ? ["-copyts"] : [],
+      ...frameEnd ? ["-copyts"] : [],
       "-ss", String(seekTime),
       "-i", videoPath,
       "-map", "0:v:0", "-an",
-      ...lastFrame ? ["-vf", `select=eq(pts\\,${lastFrame.pts})`] : [],
+      ...frameEnd ? ["-vf", `select=eq(pts\\,${frameEnd.pts})`] : [],
       "-frames:v", "1", "-fps_mode", "passthrough",
       "-q:v", "2",
       "-y",
@@ -129,7 +273,71 @@ export async function captureVideoFrame(
     });
     throw new Error(`ffmpeg exited with code ${code}: ${stderr.slice(-200)}`);
   }
+}
 
+/**
+ * 视频截帧（spawn ffmpeg）
+ * 基于 subprocess 调用 ffmpeg
+ */
+export async function captureVideoFrame(
+  videoPath: string,
+  outputPath: string,
+  selection: FrameSelection = { kind: "time", seconds: 1 },
+  /**
+   * 稳定内容键（源存储键）：S3 直接交付下 videoPath 是每次请求都不同的预签名
+   * URL，不能作为末帧缓存的身份。
+   */
+  cacheKey: string,
+  signal?: AbortSignal,
+): Promise<number> {
+  const deadline = performance.now() + FRAME_CAPTURE_BUDGET_MS;
+  const remaining = () => {
+    throwIfAborted(signal);
+    const timeLeft = deadline - performance.now();
+    if (timeLeft <= 0) throw new FrameCaptureBudgetError();
+    return timeLeft;
+  };
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  // 日志只记稳定内容键：S3 direct 下 videoPath 是预签名 URL，basename 带查询串
+  const logFields = { video: cacheKey };
+
+  // 显式末帧：定位失败没有可降级的语义，原样上抛
+  if (selection.kind === "last") {
+    const end = await lastVideoFrameCached(videoPath, cacheKey, remaining, signal);
+    await runCaptureFrame(videoPath, outputPath, end.time, end, logFields, signal, remaining);
+    logEvent("media", { stage: "capture_frame", ...logFields });
+    return end.time;
+  }
+
+  // 时间轴末端可能落在音轨尾部（容器时长 > 视频流末帧）：请求越过末帧时收敛到
+  // 末帧本身，而不是让 ffmpeg 在视频流结束后找不到任何包而失败。
+  // 末帧定位只用于这次收敛：定位失败不能让原本可用的普通时间点一起变成 500，
+  // 此时按请求时间直接 seek（即末帧收敛引入之前的语义）。
+  const frameEnd = await lastVideoFrameCached(videoPath, cacheKey, remaining, signal).catch((err: unknown) => {
+    // 取消与截帧预算耗尽不是末帧探测故障，必须照常上抛给路由映射为 499 / 504；
+    // 单次探测调用自身的超时（余量仍在）按探测失败降级，不把普通时间点变成 500
+    if (isAbortError(err) || err instanceof FrameCaptureBudgetError) throw err;
+    // 探测失败可能恰好耗尽预算：此时没有降级余量，不能记成「已降级」
+    remaining();
+    logEvent("media", {
+      stage: "capture_end_probe_failed",
+      reason: err instanceof Error ? err.message : String(err),
+      ...logFields,
+    });
+    return null;
+  });
+  const atFrameEnd = frameEnd !== null && selection.seconds >= frameEnd.time;
+  const time = atFrameEnd ? frameEnd.time : selection.seconds;
+  if (frameEnd !== null && selection.seconds > frameEnd.time) {
+    logEvent("media", {
+      stage: "capture_frame_clamped",
+      requested: selection.seconds,
+      last: frameEnd.time,
+      ...logFields,
+    });
+  }
+  await runCaptureFrame(videoPath, outputPath, time, atFrameEnd ? frameEnd : null, logFields, signal, remaining);
   logEvent("media", { stage: "capture_frame", ...logFields });
   return time;
 }

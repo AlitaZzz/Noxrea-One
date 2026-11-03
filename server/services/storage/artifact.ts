@@ -3,7 +3,7 @@
  * 产物已存在（stat 命中）则直接复用；否则同一产物的并发请求合并为一次生成，
  * 写入本地工作区临时文件后经后端 put 发布（local 为零拷贝 rename，S3 为上传）。
  * 有效产物 = 非空文件：生成出空文件（如 ffmpeg 无输出却正常退出）按生成失败处理、不发布，
- * 命中判定与之同一规则。
+ * 命中判定与之同一规则（isPublishedArtifact 同时服务路由的租约前预检查）。
  */
 
 import fs from "fs/promises";
@@ -12,6 +12,7 @@ import { derivedTierOf } from "./derived-keys";
 import { MediaPoolBusyError } from "./media-pool";
 import { getStorageBackend } from "./service";
 import { allocateTempPath, tmpDir } from "./workspace";
+import { isAbortError } from "@server/core/abort";
 import { runSingleFlight } from "@server/core/single-flight";
 import { metrics } from "@server/core/metrics";
 
@@ -22,14 +23,20 @@ import { metrics } from "@server/core/metrics";
  */
 export class ArtifactSkipError extends Error {}
 
-/** 取消不是生成故障：中止来源可能是 core AbortError 或运行时的 DOMException */
-function isCancellation(err: unknown): boolean {
-  return err instanceof Error && err.name === "AbortError";
-}
-
-async function isPublished(key: string): Promise<boolean> {
+/**
+ * 产物是否已发布（非空文件）。纯读取；惰性生成与租约前预检查共用同一判定，
+ * 避免两处对「有效产物」的定义漂移。命中计数由调用方在确认复用后单独记录：
+ * 预检查可能因其他缓存未热而放弃复用，此时产物虽存在，并没有发生「命中」。
+ */
+export async function isPublishedArtifact(key: string): Promise<boolean> {
   const stat = await getStorageBackend().stat(key);
   return stat !== null && stat.size > 0;
+}
+
+/** 记录一次派生产物命中。只在确实复用已发布产物时调用，档位由 key 命名空间推导。 */
+export function recordArtifactHit(key: string): void {
+  const tier = derivedTierOf(key);
+  if (tier) metrics.derivedArtifact(tier, "hit");
 }
 
 interface EnsureArtifactOptions {
@@ -48,8 +55,8 @@ export async function ensureArtifact({ key, signal, produce }: EnsureArtifactOpt
   if (!tier) throw new Error(`ensureArtifact only serves derived namespaces: ${key}`);
 
   // 命中检查在合并之前：命中不进入在途表
-  if (await isPublished(key)) {
-    metrics.derivedArtifact(tier, "hit");
+  if (await isPublishedArtifact(key)) {
+    recordArtifactHit(key);
     return;
   }
 
@@ -58,8 +65,8 @@ export async function ensureArtifact({ key, signal, produce }: EnsureArtifactOpt
     signal,
     generate: async (genSignal) => {
       // 入口检查与发起生成之间，上一轮同键生成可能刚好落盘；复核一次避免重复生成
-      if (await isPublished(key)) {
-        metrics.derivedArtifact(tier, "hit");
+      if (await isPublishedArtifact(key)) {
+        recordArtifactHit(key);
         return;
       }
       const tmpPath = allocateTempPath(key);
@@ -75,7 +82,7 @@ export async function ensureArtifact({ key, signal, produce }: EnsureArtifactOpt
       } catch (err) {
         if (err instanceof ArtifactSkipError) {
           metrics.derivedArtifact(tier, "skipped");
-        } else if (!isCancellation(err) && !(err instanceof MediaPoolBusyError)) {
+        } else if (!isAbortError(err) && !(err instanceof MediaPoolBusyError)) {
           // 取消是请求生命周期结束，过载拒绝由 mediaBusyRejected 在分类点单点计数；
           // 两者都不是生成故障，记 failed 会让失败率被用户取消与容量波动放大
           metrics.derivedArtifact(tier, "failed");

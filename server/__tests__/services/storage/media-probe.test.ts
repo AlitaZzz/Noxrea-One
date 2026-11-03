@@ -32,7 +32,7 @@ vi.mock("@server/services/storage/ffmpeg", () => ({
   probeFfmpegDecode: ffmpegMocks.probeFfmpegDecode,
 }));
 
-import { probeUploadVideo } from "@server/services/storage/media-probe";
+import { probeUploadVideo, probeVideoMeta } from "@server/services/storage/media-probe";
 import { MediaPoolBusyError } from "@server/services/storage/media-pool";
 
 /** probeFfmpeg 的标准容器信息输出（Duration 10s / 128x720 / 30fps） */
@@ -75,5 +75,18 @@ describe("probeUploadVideo（视频上传体检）", () => {
 
     await expect(probeUploadVideo("3/ac/metaless.mp4", 7)).resolves.toBeUndefined();
     expect(ffmpegMocks.probeFfmpegDecode).not.toHaveBeenCalled();
+  });
+});
+
+describe("probeVideoMeta（容器信息探测）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("进程被超时杀掉：stderr 不完整，丢弃结果而不是当成有效元数据", async () => {
+    // 视频行已在被杀前输出，但可能缺 Duration：此时解析结果会是半份元数据
+    ffmpegMocks.probeFfmpeg.mockResolvedValue({ stderr: META_STDERR, killed: true, spawnFailed: false });
+
+    await expect(probeVideoMeta("3/ae/killed.mp4")).resolves.toBeNull();
   });
 });

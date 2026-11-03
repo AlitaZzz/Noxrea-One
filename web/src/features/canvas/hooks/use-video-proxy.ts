@@ -2,23 +2,23 @@
  * 视频预览代理加载。
  *
  * 拖动播放头时用低分辨率短 GOP 副本做 scrub，seek 最多解码 1 秒画面。
- * 这里刻意不做「超时就放弃」的竞速：转码通常 1–3 秒，一旦放弃，url 就停在
- * null，切换 effect 不会再触发——本次会话再也用不上代理，用户只能一直拿长
- * GOP 的原视频拖动，而后端其实还在转，转完也白白落到缓存里等下次打开才命中。
- * 改成等请求自然完成：期间节点先用原视频 scrub，代理就绪后自动切过去，
- * swapVideoSource 会把当前时间点写回，切换不跳位。
+ * 请求悬挂到客户端超时即进入 failed 并允许手动重试：服务端全量完整性校验 +
+ * 转码可能超过一分钟，不能无限停在 pending；若服务端其实已生成，重试会直接
+ * 命中产物，不会重复转码。超时只中止本次等待，服务端对已断开的搭车请求只退出
+ * 等待，不影响仍在等待的生成。
  *
  * 面板卸载 / 换视频 / 手动重试都会中止在途请求（开发模式双挂载与快速开关面板
- * 不再白白发请求；服务端对被中止的搭车请求只退出等待，不影响仍在等待的生成）。
- * 外部 URL / 本地预览地址没有对应 key，不发起请求，节点继续用原视频 scrub。
- * 请求失败只有两种：本组件中止（忽略），或真实网络失败（进入 failed，可重试）。
+ * 不再白白发请求）。外部 URL / 本地预览地址没有对应 key，不发起请求；
+ * 面板的 scrub 闸门要求代理就绪，因此这两类源仍不可拖动。
+ * 请求失败只有三种：本组件中止（忽略）、真实网络失败、等待超时（后两者进入
+ * failed，可重试）。
  */
 "use client";
 
 import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchVideoProxy, type MediaRequestError, readMediaError } from "@/features/canvas/api/file-api";
+import { fetchVideoProxy, type MediaRequestError, networkError, readMediaError } from "@/features/canvas/api/file-api";
 import { resolveMediaUrlString } from "@/lib/file-access";
 
 export type VideoProxyStatus = "pending" | "ready" | "failed";
@@ -44,6 +44,14 @@ const PENDING: VideoProxyState = { status: "pending", url: null, duration: null,
 const NO_PROXY: VideoProxyState = { status: "ready", url: null, duration: null, error: null };
 
 /**
+ * 客户端等待上限：按「用户愿意为一个面板等多久」设定，不是服务端预算的保证。
+ * 服务端最坏路径（源下载 + 重型池排队 + 完整性校验 60s + 重型池排队 + 代理转码
+ * 60s + 元数据探测）可以超过该值。超时与网络失败同态（failed + 可重试），
+ * 不能无限停在 pending：重试要么命中已发布产物，要么重新发起 / 加入在途生成。
+ */
+const PROXY_TIMEOUT_MS = 150_000;
+
+/**
  * 按引用值加载视频代理。换视频源或重试时旧结果立即失效（派生为 pending），
  * 避免旧源代理被新源沿用；retry 重新发起请求，markFailed 供消费方上报
  * 「代理可下载但浏览器解码不了」（无 error：重试同一份缓存产物不会成功）。
@@ -62,6 +70,18 @@ export function useVideoProxy(videoRef: string): VideoProxyState & {
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setSettled({
+        status: "failed",
+        url: null,
+        duration: null,
+        error: networkError(),
+        src: videoRef,
+        attempt,
+      });
+      controller.abort();
+    }, PROXY_TIMEOUT_MS);
     const videoKey = storageKeyOf(videoRef);
 
     const request: Promise<VideoProxyState | undefined> = videoKey
@@ -78,15 +98,11 @@ export function useVideoProxy(videoRef: string): VideoProxyState & {
             }
             // 响应里的 url 是逻辑托管 URL（`/api/files/_proxy/...`），必须经访问解析层
             // 换成最终地址（S3 为签名直连，字节不回流应用）；解析失败含一次重新描述，
-            // 仍失败按代理失败处理——面板回退原视频 scrub，不把必然 401/403 的地址交给元素
+            // 仍失败按代理失败处理——面板保持禁用（不退回原视频长 GOP scrub），
+            // 也不把必然 401/403 的地址交给元素
             const proxyUrl = await resolveMediaUrlString(json.data.url).catch(() => null);
             if (!proxyUrl) {
-              return {
-                status: "failed",
-                url: null,
-                duration: null,
-                error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() },
-              };
+              return { status: "failed", url: null, duration: null, error: networkError() };
             }
             return {
               status: "ready",
@@ -97,21 +113,19 @@ export function useVideoProxy(videoRef: string): VideoProxyState & {
           })
           .catch((): VideoProxyState | undefined => {
             if (controller.signal.aborted) return undefined;
-            return {
-              status: "failed",
-              url: null,
-              duration: null,
-              error: { code: "network_error", retryAfterSeconds: null, receivedAt: Date.now() },
-            };
+            return { status: "failed", url: null, duration: null, error: networkError() };
           })
       : Promise.resolve(NO_PROXY);
 
     void request.then((outcome) => {
-      if (cancelled || outcome === undefined) return;
+      clearTimeout(timer);
+      // 已超时/卸载后迟到的响应不得把 failed 翻回 ready：请求已中止，结论已定
+      if (cancelled || controller.signal.aborted || outcome === undefined) return;
       setSettled({ ...outcome, src: videoRef, attempt });
     });
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       controller.abort();
     };
   }, [videoRef, attempt]);

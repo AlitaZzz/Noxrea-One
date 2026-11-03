@@ -49,7 +49,12 @@ vi.mock("@server/core/ratelimit", async () => {
   };
 });
 
-import { createMediaEditRoute, type MediaEditContext } from "@server/http/routes/media-edit";
+import {
+  createMediaEditRoute,
+  type MediaEditContext,
+  type MediaEditRouteOptions,
+} from "@server/http/routes/media-edit";
+import { TimeoutError } from "@server/core/abort";
 import { SETTING_DEFS } from "@server/core/settings/registry";
 import { initStorageBackend } from "@server/services/storage/service";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
@@ -66,11 +71,13 @@ const contentKey = (userId: number, hash = HASH) => `${userId}/${hash.slice(0, 2
 const schema = z.object({ video_key: z.string().min(1) });
 
 type Ctx = MediaEditContext<{ video_key: string }>;
+type TestPrecheck = NonNullable<MediaEditRouteOptions<{ video_key: string }>["precheck"]>;
 
 function buildApp(
   run: (ctx: Ctx) => Promise<Response>,
   mapError?: (err: unknown) => Response | undefined,
   options: { persistsFileObject?: boolean } = {},
+  precheck?: TestPrecheck,
 ) {
   const app = new Hono();
   app.post(
@@ -82,6 +89,7 @@ function buildApp(
       failureCode: "clip.extract_failed",
       ...(mapError ? { mapError } : {}),
       ...options,
+      ...(precheck ? { precheck } : {}),
       run,
     }),
   );
@@ -202,6 +210,47 @@ describe("createMediaEditRoute 前置链路", () => {
   });
 });
 
+describe("createMediaEditRoute 租约前产物预检查", () => {
+  const PRECHECK_USER = 7;
+
+  beforeEach(async () => {
+    mocks.authenticate.mockResolvedValue({ user: { id: PRECHECK_USER } });
+    await writeSource(PRECHECK_USER);
+  });
+
+  it("预检查命中时在源租约前直接响应，run 不执行", async () => {
+    const precheck = vi.fn(async ({ c, sourceKey }: Parameters<TestPrecheck>[0]) =>
+      c.json({ sourceKey, early: true }),
+    );
+    const run = vi.fn(async ({ c }: Ctx) => c.json({ ran: true }));
+    const app = buildApp(run, undefined, {}, precheck);
+
+    const res = await post(app, { video_key: contentKey(PRECHECK_USER) });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ sourceKey: contentKey(PRECHECK_USER), early: true });
+    expect(precheck).toHaveBeenCalledWith(expect.objectContaining({
+      sourceKey: contentKey(PRECHECK_USER),
+    }));
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("预检查未命中时继续租约并执行 run", async () => {
+    const precheck = vi.fn(async () => null);
+    const run = vi.fn(async ({ c, sourceInput }: Ctx) => c.json({ sourceInput }));
+    const app = buildApp(run, undefined, {}, precheck);
+
+    const res = await post(app, { video_key: contentKey(PRECHECK_USER) });
+
+    expect(res.status).toBe(200);
+    expect(precheck).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(((await res.json()) as { sourceInput: string }).sourceInput).toBe(
+      path.resolve(root, contentKey(PRECHECK_USER)),
+    );
+  });
+});
+
 describe("createMediaEditRoute 请求次数限流（specs/media-processing-concurrency.md 规则 5）", () => {
   // 独立用户与源文件：与前面用例的 user 3 共享同一限流键会互相消耗额度，
   // 源键归属也必须与请求者一致（否则 403 先于限流触发）
@@ -289,7 +338,11 @@ describe("createMediaEditRoute 错误映射", () => {
   const cases: Array<[Error, number, string]> = [
     [Object.assign(new Error("aborted"), { name: "AbortError" }), 499, "media.cancelled"],
     [new Error("spawn ffmpeg ENOENT"), 500, "media.ffmpeg_missing"],
-    [new Error("ffmpeg timed out after 60s"), 504, "media.timeout"],
+    [new TimeoutError("ffmpeg timed out after 60s"), 504, "media.timeout"],
+    // S3 SDK 的 socket/connection 超时是普通 Error + name=TimeoutError，不是本模块的类
+    [Object.assign(new Error("@smithy/node-http-handler - the request socket timed out after 30000 ms"), { name: "TimeoutError" }), 504, "media.timeout"],
+    // 只认类型/name，不嗅探消息：未归类的 "timed out" 文本不得改变状态映射
+    [new Error("socket timed out (unclassified)"), 500, "clip.extract_failed"],
     [new Error("boom"), 500, "clip.extract_failed"],
     [new MediaPoolBusyError("ffmpeg_heavy", "global", "queue_full"), 503, "media.busy"],
     [new MediaPoolBusyError("ffmpeg_light", "global", "wait_timeout"), 503, "media.busy"],

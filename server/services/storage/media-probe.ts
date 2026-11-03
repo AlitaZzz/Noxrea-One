@@ -8,6 +8,7 @@ import { mediaSourceInput, resolveMediaSource, type MediaSource } from "./media-
 import { isVideoExt } from "./formats";
 import { extOfName } from "./mime";
 import { probeFfmpeg, probeFfmpegDecode } from "./ffmpeg";
+import { setBounded } from "@server/core/bounded-cache";
 import { runSingleFlight } from "@server/core/single-flight";
 import { MediaPoolBusyError } from "./media-pool";
 import { logEvent } from "@server/core/logger/utils";
@@ -88,7 +89,8 @@ export async function probePersistedMediaMeta(
       return dims ? { ...empty, width: dims.width, height: dims.height } : empty;
     }
     if (isVideo) {
-      const meta = await probeVideoMetaCached(input);
+      // 以存储键缓存：S3 预签名 URL 随签名窗口变化，不能作为稳定身份
+      const meta = await probeVideoMetaCached(input, storageKey);
       return {
         width: meta?.width ?? null,
         height: meta?.height ?? null,
@@ -140,14 +142,16 @@ export interface VideoMeta {
  * 时长用于雪碧图推算采样间隔，拿不到就无法把格子映射到时间轴。
  * 拿不到就返回 null，由调用方兜底。
  */
-export async function probeVideoMeta(videoPath: string): Promise<VideoMeta | null> {
+export async function probeVideoMeta(videoPath: string, signal?: AbortSignal): Promise<VideoMeta | null> {
   // 只给 -i 不给输出文件：ffmpeg 会带错误码退出，但流信息照常打到 stderr
-  const { stderr, spawnFailed } = await probeFfmpeg(
+  const { stderr, killed, spawnFailed } = await probeFfmpeg(
     ["-i", videoPath],
     FFMPEG_PROBE_TIMEOUT_MS,
-    { stage: "video_probe" }
+    { stage: "video_probe", signal }
   );
-  if (spawnFailed) return null;
+  // 超时被杀时 stderr 只覆盖到进程被杀前：可能已有视频行却缺 Duration，
+  // 按完整结果缓存会把一次瞬时超时固化成永久的半份元数据
+  if (killed || spawnFailed) return null;
 
   const line = stderr
     .split("\n")
@@ -174,23 +178,60 @@ export async function probeVideoMeta(videoPath: string): Promise<VideoMeta | nul
  * 探测结果缓存。
  *
  * 帧序列面板会同时请求雪碧图与预览代理，两者都要同一次探测结果；各跑一次
- * ffmpeg 只是白白多 spawn 一个进程。这里按路径缓存，命中直接返回。
- * 存储键由内容哈希派生（同一路径的文件内容不会变），因此不存在陈旧问题；
- * 键为输入串：local 为稳定存储路径；S3 预签名 URL 随签名窗口变化，缓存命中率下降但结果仍正确。
+ * ffmpeg 只是白白多 spawn 一个进程。缓存键由调用方给出：local 为稳定存储路径；
+ * S3 租约的临时下载路径每次请求都不同，必须传稳定的源存储键，否则同一视频在
+ * 每次请求都会重新探测（内容键内容不变，不存在陈旧问题）。
+ * 负结果只保留短 TTL：内容键下的瞬时探测失败不应在整个进程生命周期内一直命中。
  * 条目数上限只是防止长跑进程下 Map 无界增长。
  */
-const metaCache = new Map<string, VideoMeta | null>();
+const META_NEGATIVE_TTL_MS = 60_000;
+interface MetaCacheEntry {
+  meta: VideoMeta | null;
+  at: number;
+}
+const metaCache = new Map<string, MetaCacheEntry>();
 /** 缓存条目上限：超出后整体清空，宁可重新探测也不让 Map 无限增长 */
 const META_CACHE_MAX = 512;
 
-export function probeVideoMetaCached(videoPath: string): Promise<VideoMeta | null> {
-  const cached = metaCache.get(videoPath);
-  if (cached !== undefined) return Promise.resolve(cached);
+/** 条目是否仍可用：正结果永久有效，负结果只在短 TTL 内有效 */
+function isUsable(entry: MetaCacheEntry): boolean {
+  return entry.meta !== null || Date.now() - entry.at < META_NEGATIVE_TTL_MS;
+}
 
-  return probeVideoMeta(videoPath).then((meta) => {
-    if (metaCache.size >= META_CACHE_MAX) metaCache.clear();
-    metaCache.set(videoPath, meta);
-    return meta;
+/** 读取已缓存元数据（不触发探测）；未缓存或负缓存已过期返回 null */
+export function peekVideoMetaCached(cacheKey: string): VideoMeta | null {
+  const cached = metaCache.get(cacheKey);
+  if (!cached) return null;
+  if (isUsable(cached)) return cached.meta;
+  metaCache.delete(cacheKey);
+  return null;
+}
+
+/**
+ * 按稳定内容键缓存视频元数据。videoPath 是本次请求可用的输入（本地路径 /
+ * S3 租约临时路径 / 预签名 URL），cacheKey 是内容身份（源存储键）。两者必须
+ * 分开传入：S3 输入每次请求都不同，用输入串当缓存键等于永不命中。
+ * signal 为本次等待的取消信号：只退出等待，全部等待者都取消才中止探测。
+ */
+export function probeVideoMetaCached(
+  videoPath: string,
+  cacheKey: string,
+  signal?: AbortSignal,
+): Promise<VideoMeta | null> {
+  const cached = metaCache.get(cacheKey);
+  if (cached && isUsable(cached)) return Promise.resolve(cached.meta);
+  if (cached) metaCache.delete(cacheKey);
+
+  // 与完整性探测同口径：同一内容键的并发首次问询共用一次 ffprobe。否则雪碧图与
+  // 代理同时首开各起一次探测，晚到的负结果还会把已缓存的正结果盖回 60s。
+  return runSingleFlight({
+    key: `meta|${cacheKey}`,
+    signal,
+    generate: async (genSignal) => {
+      const meta = await probeVideoMeta(videoPath, genSignal);
+      setBounded(metaCache, cacheKey, { meta, at: Date.now() }, META_CACHE_MAX);
+      return meta;
+    },
   });
 }
 
@@ -205,10 +246,20 @@ export interface VideoIntegrity {
 }
 
 /**
- * 完整性校验结果缓存。雪碧图与代理两条路由都可能问询，同一次全量解码的结果
- * 按路径共享；条目上限沿用 META_CACHE_MAX 的整体清空策略。
+ * 完整性校验结果缓存。雪碧图与代理两条路由都可能问询；键由稳定内容键与容器
+ * 声明时长共同组成——S3 租约的临时路径每次请求不同，不能作为身份；声明时长
+ * 改变会改变截断判定，也必须参与键。条目上限沿用 META_CACHE_MAX 的整体清空策略。
  */
 const integrityCache = new Map<string, VideoIntegrity>();
+
+function integrityCacheKey(cacheKey: string, declaredDuration: number): string {
+  return `${cacheKey}|${declaredDuration}`;
+}
+
+/** 读取已缓存的完整性结论（不触发解码）；未缓存返回 null */
+export function peekVideoIntegrityCached(cacheKey: string, declaredDuration: number): VideoIntegrity | null {
+  return integrityCache.get(integrityCacheKey(cacheKey, declaredDuration)) ?? null;
+}
 
 /**
  * 校验视频实际可解码时长（spawn ffmpeg 全量解码到 null）。
@@ -227,21 +278,24 @@ const integrityCache = new Map<string, VideoIntegrity>();
 export async function probeVideoIntegrity(
   videoPath: string,
   declaredDuration: number,
-  { owner, timeoutMs = FFMPEG_INTEGRITY_TIMEOUT_MS, signal }: {
+  { owner, timeoutMs = FFMPEG_INTEGRITY_TIMEOUT_MS, signal, cacheKey }: {
     owner: number;
     timeoutMs?: number;
     signal?: AbortSignal;
+    /** 稳定内容键；S3 租约临时路径每次请求不同，不能沿用 videoPath */
+    cacheKey: string;
   },
 ): Promise<VideoIntegrity> {
-  const cached = integrityCache.get(videoPath);
+  const cacheId = integrityCacheKey(cacheKey, declaredDuration);
+  const cached = integrityCache.get(cacheId);
   if (cached) return cached;
 
   // 同一视频的并发首次问询（雪碧图 / 上传体检）共用一次全量解码；
   // 超时预算并入键：短预算被杀不写缓存，不能与全预算的结果互相复用
   return runSingleFlight({
-    key: `integrity|${videoPath}|${timeoutMs}`,
+    key: `integrity|${cacheId}|${timeoutMs}`,
     signal,
-    generate: (genSignal) => decodeIntegrity(videoPath, declaredDuration, timeoutMs, owner, genSignal),
+    generate: (genSignal) => decodeIntegrity(videoPath, declaredDuration, timeoutMs, owner, genSignal, cacheId),
   });
 }
 
@@ -251,6 +305,7 @@ async function decodeIntegrity(
   timeoutMs: number,
   owner: number,
   signal: AbortSignal,
+  cacheId: string,
 ): Promise<VideoIntegrity> {
   // 只要视频流：截断影响的是帧数据，音轨解码对判定没有意义还拖慢速度
   const { stderr, killed, spawnFailed } = await probeFfmpegDecode(
@@ -265,8 +320,7 @@ async function decodeIntegrity(
   if (killed || spawnFailed) {
     const undecidable: VideoIntegrity = { decodableDuration: null, truncated: false };
     if (!killed || timeoutMs >= FFMPEG_INTEGRITY_TIMEOUT_MS) {
-      if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
-      integrityCache.set(videoPath, undecidable);
+      setBounded(integrityCache, cacheId, undecidable, META_CACHE_MAX);
     }
     return undecidable;
   }
@@ -286,8 +340,7 @@ async function decodeIntegrity(
     return { decodableDuration: decodable, truncated };
   })();
 
-  if (integrityCache.size >= META_CACHE_MAX) integrityCache.clear();
-  integrityCache.set(videoPath, result);
+  setBounded(integrityCache, cacheId, result, META_CACHE_MAX);
   return result;
 }
 
@@ -312,9 +365,13 @@ export async function probeUploadVideo(storageKey: string, owner: number): Promi
     // ffmpeg 直接以源为输入（local 后端给存储路径，S3 后端给预签名 GET URL）
     const source = await resolveMediaSource(storageKey);
     const input = mediaSourceInput(source);
-    const meta = await probeVideoMetaCached(input);
+    const meta = await probeVideoMetaCached(input, storageKey);
     if (!meta?.duration) return undefined;
-    const integrity = await probeVideoIntegrity(input, meta.duration, { timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS, owner });
+    const integrity = await probeVideoIntegrity(input, meta.duration, {
+      timeoutMs: UPLOAD_VIDEO_PROBE_TIMEOUT_MS,
+      owner,
+      cacheKey: storageKey,
+    });
     if (!integrity.truncated || !integrity.decodableDuration) return undefined;
     const warning = { declared: meta.duration, decodable: integrity.decodableDuration };
     logEvent("media", { stage: "upload_truncated", video: storageKey, ...warning });

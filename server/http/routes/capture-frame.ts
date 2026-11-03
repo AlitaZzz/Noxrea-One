@@ -30,10 +30,11 @@ router.post(
     failureCode: "capture_frame.capture_failed",
     // 单帧抽帧属短操作（规则 8）：经源解析直接取输入，S3 下 ffmpeg 直接消费预签名 URL，不整片下载
     sourceDelivery: "direct",
-    async run({ c, data, sourceInput, userId, signal, tmpDir }) {
+    async run({ c, data, sourceKey, sourceInput, userId, signal, tmpDir }) {
       // 用 UUID 而非 Date.now()：并发抽帧会撞名，两个 ffmpeg 同时写同一路径会导致内容交错
       const tmpFramePath = path.join(await tmpDir(), `frame_${randomUUID()}.jpg`);
-      const time = await captureVideoFrame(sourceInput, tmpFramePath, data.selection, signal);
+      // sourceInput 在 S3 direct 模式下是每次请求都不同的预签名 URL，末帧缓存须用源键
+      const time = await captureVideoFrame(sourceInput, tmpFramePath, data.selection, sourceKey, signal);
       throwIfAborted(signal);
       const dimensions = await probeImageMeta(tmpFramePath);
       if (!dimensions) throw new Error("Captured frame dimensions unavailable");
