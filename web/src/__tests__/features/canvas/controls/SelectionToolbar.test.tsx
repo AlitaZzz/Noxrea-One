@@ -281,7 +281,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("centers the toolbar 12px above the selection", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 400, y: 300, width: 200, height: 100 },
+        anchorBounds: { x: 400, y: 300, width: 200, height: 100 },
+        visibleBounds: { x: 400, y: 300, width: 200, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
@@ -292,7 +293,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("moves below the selection when the top edge lacks room", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 400, y: 10, width: 200, height: 100 },
+        anchorBounds: { x: 400, y: 10, width: 200, height: 100 },
+        visibleBounds: { x: 400, y: 10, width: 200, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
@@ -303,7 +305,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("clamps inside the viewport when neither side fits", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 400, y: 20, width: 200, height: 160 },
+        anchorBounds: { x: 400, y: 20, width: 200, height: 160 },
+        visibleBounds: { x: 400, y: 20, width: 200, height: 160 },
         viewport,
         viewportSize: { width: 1000, height: 200 },
         toolbarSize,
@@ -314,7 +317,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("keeps 8px horizontal clearance at both viewport edges", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 0, y: 300, width: 100, height: 100 },
+        anchorBounds: { x: 0, y: 300, width: 100, height: 100 },
+        visibleBounds: { x: 0, y: 300, width: 100, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
@@ -322,7 +326,8 @@ describe("computeSelectionToolbarPlacement", () => {
     ).toBe(8);
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 900, y: 300, width: 100, height: 100 },
+        anchorBounds: { x: 900, y: 300, width: 100, height: 100 },
+        visibleBounds: { x: 900, y: 300, width: 100, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
@@ -333,7 +338,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("projects flow coordinates through the viewport transform", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 200, y: 200, width: 400, height: 200 },
+        anchorBounds: { x: 200, y: 200, width: 400, height: 200 },
+        visibleBounds: { x: 200, y: 200, width: 400, height: 200 },
         viewport: { x: 100, y: 100, zoom: 0.5 },
         viewportSize,
         toolbarSize,
@@ -344,7 +350,8 @@ describe("computeSelectionToolbarPlacement", () => {
   it("returns null when the selection is fully outside the viewport", () => {
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 2000, y: 0, width: 200, height: 100 },
+        anchorBounds: { x: 2000, y: 0, width: 200, height: 100 },
+        visibleBounds: { x: 2000, y: 0, width: 200, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
@@ -352,11 +359,38 @@ describe("computeSelectionToolbarPlacement", () => {
     ).toBeNull();
     expect(
       computeSelectionToolbarPlacement({
-        bounds: { x: 0, y: -200, width: 200, height: 100 },
+        anchorBounds: { x: 0, y: -200, width: 200, height: 100 },
+        visibleBounds: { x: 0, y: -200, width: 200, height: 100 },
         viewport,
         viewportSize,
         toolbarSize,
       }),
     ).toBeNull();
+  });
+
+  it("hides the toolbar when only the anchor bounds still intersect the viewport", () => {
+    // 选区并集恰好落在视口下方之外；定位锚点因外扩 40px 与顶部标题带仍与视口相交。
+    // 若可见性误用锚点，工具条会浮在视口底部边缘外。
+    expect(
+      computeSelectionToolbarPlacement({
+        anchorBounds: { x: 60, y: 732, width: 280, height: 208 },
+        visibleBounds: { x: 100, y: 800, width: 200, height: 100 },
+        viewport,
+        viewportSize,
+        toolbarSize,
+      }),
+    ).toBeNull();
+  });
+
+  it("positions from the anchor bounds while visibility comes from the selection bbox", () => {
+    expect(
+      computeSelectionToolbarPlacement({
+        anchorBounds: { x: 360, y: 232, width: 280, height: 208 },
+        visibleBounds: { x: 400, y: 300, width: 200, height: 100 },
+        viewport,
+        viewportSize,
+        toolbarSize,
+      }),
+    ).toEqual({ left: 380, top: 170 });
   });
 });

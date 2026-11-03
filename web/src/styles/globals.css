@@ -281,6 +281,29 @@
 .react-flow__node[data-marquee-hit]:not(.react-flow__node-group-node) {
   z-index: 1000 !important;
 }
+/* 激活清空延后到首帧之后（marquee-session 的 scheduleActivationClear）：窗口期内
+   store 仍是上一次的选中态。手势期间描边由预览接管，旧选中描边与旧多选外框必须
+   先隐藏，否则会与预览叠加、松手时闪断。:not([data-marquee-hit]) 让已被预览命中
+   的旧选中节点继续显示预览描边。
+   旧选中的关联连线同样由 store 派生强调（DeletableEdge 的 isHighlighted 与显式
+   选中的边）：压回常态描边并隐藏流光层，否则旧连线强调会在预览期间单独残留。
+   data-marquee-active 在提交帧绘制前移除（syncRenderedNodes 的 useLayoutEffect），
+   提交结果与预览高亮不受影响。 */
+.react-flow[data-marquee-active] .react-flow__node.selected:not([data-marquee-hit]) .node-body {
+  /* 只回落颜色：宽度/样式沿用选中态的 1px solid，与 .node-body 常态声明一致 */
+  outline-color: var(--border);
+  box-shadow: none;
+}
+.react-flow[data-marquee-active] .react-flow__nodesselection-rect {
+  display: none;
+}
+/* 2 为 DeletableEdge 的常态描边宽度（强调态 2.5）；!important 用于压过组件内联样式 */
+.react-flow[data-marquee-active] .react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+.react-flow[data-marquee-active] .canvas-flow-layer {
+  display: none;
+}
 .node-body.node-drag-over {
   outline: 2px solid var(--ring);
 }
@@ -562,7 +585,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    拖线（connecting）保留全后代规则：拖线中目标 handle 的显示依赖节点 :hover
    （idle 常显规则在该态被抑制），覆盖层会吞掉 hover，导致目标轨道不可见。
    门控属性用 data-connecting 而不是 data-interaction——后者在选中态切换
-   （idle ↔ box-selecting）时同样变化，全后代规则会因此让整棵画布子树重算
+   （idle ↔ box-selected）时同样变化，全后代规则会因此让整棵画布子树重算
    光标样式（同上文 29.8ms 的同一机制）；data-connecting 只在进入/退出拖线时
    变化，单击与框选路径不再命中。 */
 .canvas-gesture-cursor {
@@ -622,7 +645,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
    沿用 hover 规则会让左右轨道全程跟随节点晃动；拖动期本就不能起连线。
    必须排在上面所有「显示」规则之后：与触屏规则同权重，靠源序覆盖。
    只作用于节点 DOM 内的轨道——外框批量轨道（ViewportPortal 内）不在节点
-   DOM 里，由下方「批量连线轨道」的常显规则同样排除拖动态（同一开关） */
+   DOM 里，由下方「批量连线轨道」的常显规则同样排除拖动态与框选手势（同一开关） */
 .react-flow[data-interaction="dragging-nodes"] .react-flow__node .react-flow__handle {
   opacity: 0;
   pointer-events: none;
@@ -630,8 +653,9 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 /* 批量连线轨道（仅框选外框，ViewPortal 内渲染）：与节点轨道同一套
    「条带 + 圆点」两段式架构（.connection-rail / .connection-rail-dot），
    仅两处例外——外框不是节点，没有 hover/选中态可依托，条带常显
-   （拖动节点中除外：随节点轨道一起隐藏，回落到 .connection-rail 的
-   默认隐藏态；2026-10-29 用户确认「一起隐藏」）；
+   （拖动节点与框选手势中除外：随节点轨道一起隐藏，回落到 .connection-rail
+   的默认隐藏态；拖动中隐藏由 2026-10-29 用户确认「一起隐藏」，框选中隐藏
+   则因激活清空延后、旧外框仍在，常显会与组轨道及预览描边的显隐不一致）；
    ViewPortal 内无定位上下文，min(100%, 80px) 的百分比参照失效，
    条带高取常量 RAIL_WIDTH（正方形命中区；外框高恒大于 80px——外框
    高 = bbox 高 + 80px 选择框外扩，无需按外框夹窄）。
@@ -640,7 +664,7 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 .react-flow__handle.connection-rail.batch-connect-handle {
   height: var(--rail-width, 80px) !important;
 }
-.react-flow:not([data-interaction="dragging-nodes"]) .react-flow__handle.batch-connect-handle {
+.react-flow:not([data-interaction="dragging-nodes"]):not([data-interaction="box-selecting"]) .react-flow__handle.batch-connect-handle {
   opacity: 1 !important;
   pointer-events: auto;
 }

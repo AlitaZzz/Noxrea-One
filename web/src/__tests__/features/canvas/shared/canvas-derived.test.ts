@@ -52,7 +52,7 @@ describe("canvas-derived", () => {
       hasGroup: true,
       bbox: { x: 10, y: 20, width: 300, height: 200 },
       frameVisible: true,
-      // 工具条锚点四边外扩 40px，顶部再加标题带 28px
+      // 工具条锚点：并集四边外扩 40px，顶部再加标题带 28px
       containerBbox: { x: -30, y: -48, width: 380, height: 308 },
     });
     // 批量连线的选区外框只统计非组节点，不覆盖这个场景

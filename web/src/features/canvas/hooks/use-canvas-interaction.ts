@@ -22,7 +22,7 @@ import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
  *
  * `data-interaction` 描述当前交互状态；`data-connecting` 只在拖线期间存在，
  * 供全后代光标规则门控——若直接复用 `data-interaction="connecting"`，选中态
- * 切换（idle ↔ box-selecting）也会改变根属性，使整棵画布子树重算光标样式。
+ * 切换（idle ↔ box-selected）也会改变根属性，使整棵画布子树重算光标样式。
  */
 export function canvasRootInteractionAttrs(mode: CanvasInteraction["mode"]) {
   return {

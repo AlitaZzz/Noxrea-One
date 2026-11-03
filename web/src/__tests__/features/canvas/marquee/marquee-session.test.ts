@@ -58,6 +58,12 @@ const PANE_BOUNDS = {
 
 const sessions: MarqueeSession[] = [];
 
+/** 激活清空嵌在第二层 rAF 中：推进两帧后才落地 */
+function flushActivationClear(raf: ReturnType<typeof stubRaf>): void {
+  raf.flush();
+  raf.flush();
+}
+
 interface HarnessOptions {
   nodes: AnyNode[];
   edges?: Edge[];
@@ -327,7 +333,7 @@ describe("MarqueeSession", () => {
     // 空白区框选：起止矩形不命中任何节点
     harness.press({ x: 200, y: 200 });
     harness.move({ x: 210, y: 210 });
-    raf.flush();
+    flushActivationClear(raf);
 
     expect(harness.marquee.dataset.active).toBe("true");
     expect(harness.setNodes).not.toHaveBeenCalled();
@@ -342,7 +348,7 @@ describe("MarqueeSession", () => {
     expect(harness.setNodesSelectionActive).not.toHaveBeenCalled();
   });
 
-  it("激活清空已提交选中，帧内只写预览，松手单次提交并等待渲染层释放", () => {
+  it("激活延后清空已提交选中，帧内只写预览，松手单次提交并等待渲染层释放", () => {
     const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true }), marqueeBox("b", 400, 0)],
@@ -353,19 +359,28 @@ describe("MarqueeSession", () => {
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 150, y: 150 });
 
-    // 激活：一次清空节点/边选中，进入框选交互态，不压历史
-    expect(harness.setNodes).toHaveBeenCalledTimes(1);
-    const cleared = harness.setNodes.mock.calls[0][0] as AnyNode[];
-    expect(cleared.every((item) => !item.selected)).toBe(true);
-    expect(harness.setEdges).toHaveBeenCalledTimes(1);
-    expect(harness.setEdges.mock.calls[0][1]).toEqual({ skipHistory: true });
+    // 激活任务内只写选框与预览、进入框选交互态；清空 store 延后到首帧之后
+    expect(harness.setNodes).not.toHaveBeenCalled();
+    expect(harness.setEdges).not.toHaveBeenCalled();
     expect(harness.dispatchInteraction).toHaveBeenCalledWith("selection-start");
-    expect(harness.getNodesSelectionActive()).toBe(false);
     expect(harness.marquee.dataset.active).toBe("true");
     expect(harness.marquee.style.width).toBe("100px");
     expect(harness.marquee.style.transform).toBe("translate(50px, 50px)");
     expect(harness.wrappers.get("a")?.hasAttribute("data-marquee-hit")).toBe(true);
     expect(harness.wrappers.get("b")?.hasAttribute("data-marquee-hit")).toBe(false);
+
+    // 首帧只推进预览；清空落在首帧绘制之后（第二层 rAF）
+    raf.flush();
+    expect(harness.setNodes).not.toHaveBeenCalled();
+    raf.flush();
+
+    // 一次清空节点/边选中与外框，不压历史
+    expect(harness.setNodes).toHaveBeenCalledTimes(1);
+    const cleared = harness.setNodes.mock.calls[0][0] as AnyNode[];
+    expect(cleared.every((item) => !item.selected)).toBe(true);
+    expect(harness.setEdges).toHaveBeenCalledTimes(1);
+    expect(harness.setEdges.mock.calls[0][1]).toEqual({ skipHistory: true });
+    expect(harness.getNodesSelectionActive()).toBe(false);
 
     // 预览帧扩大命中：只写 DOM，不再写 store
     harness.move({ x: 500, y: 500 });
@@ -400,6 +415,59 @@ describe("MarqueeSession", () => {
 
     expect(harness.wrappers.get("a")?.hasAttribute("data-marquee-hit")).toBe(false);
     expect(harness.marquee.dataset.active).toBeUndefined();
+  });
+
+  it("快速松手早于延后清空：撤销清空，提交结果不被覆盖", () => {
+    const raf = stubRaf();
+    // 初始选中 b、未激活外框：提交会把选中换成 a 并激活外框，
+    // 若延后清空没被撤销，这两项都会被清空写入覆盖
+    const harness = createHarness({
+      nodes: [marqueeBox("a", 0, 0), marqueeBox("b", 400, 0, { selected: true })],
+    });
+
+    harness.press({ x: 50, y: 50 });
+    harness.move({ x: 150, y: 150 });
+    // 首帧前松手：延后清空尚未落地，必须随提交一起撤销
+    harness.release({ x: 150, y: 150 });
+    flushActivationClear(raf);
+
+    // 只发生一次节点写入（提交），延后帧没有再把提交结果清掉
+    expect(harness.setNodes).toHaveBeenCalledTimes(1);
+    expect(harness.getNodes().find((item) => item.id === "a")?.selected).toBe(true);
+    expect(harness.getNodes().find((item) => item.id === "b")?.selected).toBeFalsy();
+    expect(harness.setNodesSelectionActive).toHaveBeenCalledTimes(1);
+    expect(harness.getNodesSelectionActive()).toBe(true);
+  });
+
+  it("取消早于延后清空：恢复快照后延后帧不再清空", () => {
+    const raf = stubRaf();
+    const harness = createHarness({
+      nodes: [marqueeBox("a", 0, 0, { selected: true })],
+      nodesSelectionActive: true,
+    });
+
+    harness.press({ x: 50, y: 50 });
+    harness.move({ x: 150, y: 150 });
+    // 首帧前取消：恢复快照后必须撤销延后清空，否则旧帧会把恢复结果再清一次
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    flushActivationClear(raf);
+
+    expect(harness.getNodes().find((item) => item.id === "a")?.selected).toBe(true);
+    expect(harness.getNodesSelectionActive()).toBe(true);
+  });
+
+  it("卸载早于延后清空：延后帧不再写 store", () => {
+    const raf = stubRaf();
+    const harness = createHarness({ nodes: [marqueeBox("a", 0, 0, { selected: true })] });
+
+    harness.press({ x: 50, y: 50 });
+    harness.move({ x: 150, y: 150 });
+    harness.session.dispose();
+    flushActivationClear(raf);
+
+    expect(harness.setNodes).not.toHaveBeenCalled();
+    expect(harness.setEdges).not.toHaveBeenCalled();
+    expect(harness.setNodesSelectionActive).not.toHaveBeenCalled();
   });
 
   it("视口与指针未变化时不重复写选框与命中属性（验收 2）", () => {
@@ -475,7 +543,7 @@ describe("MarqueeSession", () => {
   });
 
   it("Esc 取消恢复手势前选区与聚合外框状态，且后续 pane click 被吞掉", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       edges: [edge("e1", "a", "b", true)],
@@ -486,6 +554,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     expect(harness.getNodes().every((item) => item.selected !== true)).toBe(true);
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -515,7 +584,7 @@ describe("MarqueeSession", () => {
   });
 
   it("Esc 取消先恢复快照，全局 Escape 仍照常清空（Spec 规则 9.4）", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({ nodes: [marqueeBox("a", 0, 0, { selected: true })] });
     // 模拟 use-canvas-keyboard：冒泡阶段未见 defaultPrevented 即清空选区
     const globalEscape = (event: KeyboardEvent) => {
@@ -527,6 +596,7 @@ describe("MarqueeSession", () => {
     try {
       harness.press({ x: 50, y: 50 });
       harness.move({ x: 500, y: 500 });
+      flushActivationClear(raf);
       const escape = new KeyboardEvent("keydown", {
         key: "Escape",
         bubbles: true,
@@ -548,7 +618,7 @@ describe("MarqueeSession", () => {
   });
 
   it("pointercancel 取消手势并恢复选区", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -556,6 +626,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     window.dispatchEvent(pointerEvent("pointercancel", { x: 500, y: 500 }));
 
     expect(harness.getNodes().find((item) => item.id === "a")?.selected).toBe(true);
@@ -565,7 +636,7 @@ describe("MarqueeSession", () => {
   });
 
   it("第二指针按下取消并恢复选区", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -573,6 +644,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     expect(harness.getNodes().every((item) => item.selected !== true)).toBe(true);
 
     // 不同 pointerId 的按下（触屏/手写笔第二指针）：取消当前手势
@@ -585,7 +657,7 @@ describe("MarqueeSession", () => {
   });
 
   it("画布外按下第二指针同样取消手势", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -593,6 +665,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     expect(harness.getNodes().every((item) => item.selected !== true)).toBe(true);
 
     // 第二根手指可能落在画布外（侧栏、工具条）：仍按规则 9.1 取消
@@ -607,7 +680,7 @@ describe("MarqueeSession", () => {
   });
 
   it("手势中失去按键（窗口外松开）取消并恢复选区", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -615,6 +688,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     expect(harness.getNodes().every((item) => item.selected !== true)).toBe(true);
 
     harness.move({ x: 510, y: 500, buttons: 0 });
@@ -626,7 +700,7 @@ describe("MarqueeSession", () => {
   });
 
   it("松手前项目已切换：不把旧项目选区写入新项目", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -634,6 +708,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     const writesAfterActivation = harness.setNodes.mock.calls.length;
 
     harness.setProjectId("p2");
@@ -647,7 +722,7 @@ describe("MarqueeSession", () => {
   });
 
   it("丢失指针捕获取消手势并恢复选区", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -655,6 +730,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     harness.pane.dispatchEvent(new Event("lostpointercapture"));
 
     expect(harness.getNodes().find((item) => item.id === "a")?.selected).toBe(true);
@@ -698,7 +774,7 @@ describe("MarqueeSession", () => {
   });
 
   it("右键菜单弹出时取消手势并恢复选区", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -706,6 +782,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     expect(harness.getNodes().find((item) => item.id === "a")?.selected).toBeFalsy();
 
     window.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
@@ -722,13 +799,14 @@ describe("MarqueeSession", () => {
   });
 
   it("窗口失焦取消会话", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
     });
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     window.dispatchEvent(new Event("blur"));
 
     expect(harness.marquee.dataset.active).toBeUndefined();
@@ -737,7 +815,7 @@ describe("MarqueeSession", () => {
   });
 
   it("项目切换后取消但不把旧选区恢复到新项目", () => {
-    stubRaf();
+    const raf = stubRaf();
     const harness = createHarness({
       nodes: [marqueeBox("a", 0, 0, { selected: true })],
       nodesSelectionActive: true,
@@ -745,6 +823,7 @@ describe("MarqueeSession", () => {
 
     harness.press({ x: 50, y: 50 });
     harness.move({ x: 500, y: 500 });
+    flushActivationClear(raf);
     const callsBeforeSwitch = harness.setNodes.mock.calls.length;
 
     harness.setProjectId("p2");

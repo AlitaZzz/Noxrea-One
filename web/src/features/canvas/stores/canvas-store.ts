@@ -300,6 +300,15 @@ export const NODE_UI_STATE_KEYS = [
 
 type NodeUiStateKey = (typeof NODE_UI_STATE_KEYS)[number];
 
+/**
+ * 媒体编辑面板宿主键（NODE_UI_STATE_KEYS 子集）。
+ * 文本编辑与多选展开不参与画布键盘让权：文本编辑态 Ctrl+Z 必须路由到画布级撤销，
+ * 多选展开不是编辑浮层。画布让权与右键菜单 disabled 派生共用此清单。
+ */
+export const MEDIA_EDITOR_NODE_ID_KEYS = NODE_UI_STATE_KEYS.filter(
+  (key) => key !== "editingTextNodeId" && key !== "multiExpandedNodeId",
+);
+
 // ── 画布交互状态机（瞬态；真相源在 store，节点组件可按需读取）──
 // 把「画布当前处于哪种交互」建模为一组互斥状态：状态互斥、不存在未定义组合，
 // 与交互相关的 UI 可见性（handle、节点工具栏、生成面板、光标）全部从状态派生。

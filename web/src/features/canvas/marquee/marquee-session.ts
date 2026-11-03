@@ -103,6 +103,8 @@ export class MarqueeSession {
   private previewedIds: ReadonlySet<string> = EMPTY_SELECTION;
   private snapshot: GestureSnapshot | null = null;
   private rafId: number | null = null;
+  /** 激活清空的延后帧：外层 rAF 之后嵌一层，使清空落在首帧绘制之后。 */
+  private clearRafId: number | null = null;
   private lastFrameKey: string | null = null;
   private panInFlight = false;
 
@@ -330,8 +332,9 @@ export class MarqueeSession {
     if (flowRootEl) flowRootEl.dataset.marqueeActive = "true";
     this.observePaneResize();
 
-    // 清空已提交选中：依赖选中的面板/工具条按现有行为关闭，视觉交给预览
-    this.writeSelection(() => false, () => false, false);
+    // 清空已提交选中：依赖选中的面板/工具条按现有行为关闭，视觉交给预览。
+    // 清空本身延后到首帧之后，避免选中写入的重渲染与首帧叠加（见 scheduleActivationClear）
+    this.scheduleActivationClear();
 
     this.deps.dispatchInteraction("selection-start");
     this.armClickSuppression();
@@ -350,6 +353,9 @@ export class MarqueeSession {
     if (this.phase === "idle") return;
     const wasActive = this.phase === "active";
     const snapshot = this.snapshot;
+    // 先撤销未落地的激活清空，再恢复快照：顺序与规则 3.2 一致，不依赖
+    // resetGesture 的清理时机；否则延后帧可能在恢复之后再次清空
+    this.cancelActivationClear();
     this.stopPointerSession();
 
     // 恢复 → 清理预览 → 回到 idle：先撤下预览属性再让界面按恢复后的选区渲染
@@ -368,6 +374,8 @@ export class MarqueeSession {
       this.cancel();
       return;
     }
+    // 延后的激活清空若尚未落地必须撤销：否则会在提交之后把新选区清掉
+    this.cancelActivationClear();
     this.stopPointerSession();
 
     // 以当前节点集合过滤预览命中，并同时应用 selectable：
@@ -470,6 +478,33 @@ export class MarqueeSession {
     if (this.rafId === null) return;
     cancelAnimationFrame(this.rafId);
     this.rafId = null;
+  }
+
+  /**
+   * 把激活清空延后到首帧绘制之后。
+   * 激活任务已经包含选框/预览的 DOM 写入与 selection-start 派发（关闭依赖选中的
+   * 面板与工具条）；若同一任务里再清空 store，选中写入触发的整树重渲染会与首帧
+   * 叠加成一次长任务，手势第一帧就被推迟。rAF 回调在绘制前执行，因此再嵌一层
+   * rAF，让清空落在首帧绘制完成之后。
+   */
+  private scheduleActivationClear(): void {
+    if (this.clearRafId !== null) return;
+    this.clearRafId = requestAnimationFrame(() => {
+      this.clearRafId = requestAnimationFrame(() => {
+        this.clearRafId = null;
+        // 取消/提交/卸载都会撤销尚未触发的帧；仍以 phase 兜底，避免会话已结束
+        // 或已进入下一次手势时写入旧清空
+        if (this.phase !== "active") return;
+        this.writeSelection(() => false, () => false, false);
+      });
+    });
+  }
+
+  /** 撤销尚未落地的激活清空：提交、取消与卸载都必须先调用，避免覆盖后续选区写入。 */
+  private cancelActivationClear(): void {
+    if (this.clearRafId === null) return;
+    cancelAnimationFrame(this.clearRafId);
+    this.clearRafId = null;
   }
 
   /** 读取视口并校验 zoom；非法视口（非有限或 ≤ 0）返回 null，由调用方按各自语义退出。 */
@@ -597,6 +632,7 @@ export class MarqueeSession {
 
   /** 清理手势的全部瞬态状态与 DOM 预览：冻结索引、命中属性、选框、快照与基线。 */
   private resetGesture(): void {
+    this.cancelActivationClear();
     this.cancelFrame();
     this.disconnectPaneResize();
     this.paneBounds = null;

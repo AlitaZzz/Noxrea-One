@@ -9,11 +9,11 @@ import type { Edge } from "@xyflow/react";
 
 import { NODE_TYPE_ORDER } from "@/features/canvas/NodeTypeDisplayMeta";
 import type { AnyNode } from "@/features/canvas/types";
-import { GROUP_NODE_PADDING, NODE_TITLE_HEIGHT, RAIL_WIDTH } from "@/lib/constants";
+import { GROUP_NODE_PADDING, RAIL_WIDTH } from "@/lib/constants";
 
 import { edgeTouchesSelection } from "./edge-selection";
 import type { Rect } from "./geometry";
-import { buildNodeIndex, nodeAbsolutePosition } from "./group-bounds";
+import { buildNodeIndex, groupRectFromContent, nodeAbsolutePosition } from "./group-bounds";
 import { isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./node-size";
 
@@ -31,7 +31,7 @@ export interface SelectionFrame {
 export interface SelectionChromeBounds {
   count: number;
   hasGroup: boolean;
-  /** 选中节点的原始并集（flow 坐标） */
+  /** 选中节点的原始并集（flow 坐标）。工具条可见性按它与视口的交集判定。 */
   bbox: Rect;
   /**
    * 多选外框是否可见：≥2 个选中且不全是组节点。
@@ -39,16 +39,12 @@ export interface SelectionChromeBounds {
    */
   frameVisible: boolean;
   /**
-   * 工具条锚点：外框可见时为 bbox 四边向外扩 GROUP_NODE_PADDING（40px），
-   * 顶部再加标题带 NODE_TITLE_HEIGHT（28px）。工具条因此比可见框再高一个
-   * 标题高度，编组后组标题不会与工具条相撞；选中的全是组时外框隐藏，
-   * 锚点退化为 bbox（组节点自身已包含标题带 + 40px body 内边距）。
+   * 工具条锚点：按组框口径由选区并集派生（`groupRectFromContent`，与编组创建、
+   * 组内布局同一实现）。工具条因此比可见框再高一个标题带，编组后组标题不会与
+   * 工具条相撞；外框隐藏（全是组节点）时锚点等于 bbox。
    */
   containerBbox: Rect;
 }
-
-/** 工具条在可见框上方额外预留的标题带，避免编组后的组标题与工具条重叠。 */
-const SELECTION_TOOLBAR_TITLE_CLEARANCE = NODE_TITLE_HEIGHT;
 
 export interface OutlineGroup {
   type: string;
@@ -263,14 +259,7 @@ function computeSelectionChromeBounds(
     hasGroup,
     bbox,
     frameVisible,
-    containerBbox: frameVisible
-      ? {
-          x: bbox.x - GROUP_NODE_PADDING,
-          y: bbox.y - GROUP_NODE_PADDING - SELECTION_TOOLBAR_TITLE_CLEARANCE,
-          width: bbox.width + GROUP_NODE_PADDING * 2,
-          height: bbox.height + GROUP_NODE_PADDING * 2 + SELECTION_TOOLBAR_TITLE_CLEARANCE,
-        }
-      : bbox,
+    containerBbox: frameVisible ? groupRectFromContent(bbox) : bbox,
   };
 }
 

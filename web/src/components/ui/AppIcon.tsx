@@ -59,7 +59,6 @@ import {
   Search as LucideSearch,
   Square as LucideSquare,
   SquareDashed as LucideSquareDashed,
-  SquarePlus as LucideSquarePlus,
   Star as LucideStar,
   StepBack as LucideStepBack,
   StepForward as LucideStepForward,
@@ -248,7 +247,6 @@ const PictureOutlined = adaptIcon(LucideImage);
 const PlayCircleFilled = adaptIcon(LucideCirclePlay);
 const PlayCircleOutlined = adaptIcon(LucideCirclePlay);
 const PlusOutlined = adaptIcon(LucidePlus);
-const PlusSquareOutlined = adaptIcon(LucideSquarePlus);
 const RedoOutlined = adaptIcon(LucideRedo2);
 const ReloadOutlined = adaptIcon(LucideRefreshCw);
 const RightOutlined = adaptIcon(LucideChevronRight);
@@ -295,7 +293,7 @@ export {
   FolderOpenOutlined, FolderOutlined, FontSizeOutlined, FullscreenOutlined, Heading1, Heading2,
   Heading3, InfoCircleOutlined, Italic, LeftOutlined, List, ListOrdered, LockOutlined, Minus,
   MinusOutlined, PartitionOutlined, PauseCircleFilled, PauseOutlined, PictureOutlined,
-  PlayCircleFilled, PlayCircleOutlined, PlusOutlined, PlusSquareOutlined, Quote, RedoOutlined,
+  PlayCircleFilled, PlayCircleOutlined, PlusOutlined, Quote, RedoOutlined,
   ReloadOutlined, RightOutlined, RobotOutlined, RotateRightOutlined, ScissorOutlined,
   SearchOutlined, SelectOutlined, SnippetsOutlined, StarFilled, StarOutlined, StepBackwardOutlined,
   StepForwardOutlined, SwapOutlined, Type, UndoOutlined, UploadOutlined, UserOutlined,

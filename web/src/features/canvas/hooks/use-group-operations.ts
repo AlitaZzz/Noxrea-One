@@ -14,14 +14,18 @@
 import { useEffect } from "react";
 
 import { createGroupNode } from "@/features/canvas/node-defaults";
-import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/group-bounds";
+import {
+  buildNodeIndex,
+  groupRectFromContent,
+  nodeAbsolutePosition,
+} from "@/features/canvas/shared/group-bounds";
 import { arrangeGroup, type GroupLayoutMode } from "@/features/canvas/shared/group-layout";
 import { groupMembers, isGroupMember, isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
 import { measureNode } from "@/features/canvas/shared/node-size";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { EventNames, GROUP_NODE_PADDING, NODE_TITLE_HEIGHT } from "@/lib/constants";
+import { EventNames } from "@/lib/constants";
 
 // ============================================================
 // 归属变换纯函数（导出供单测）
@@ -107,18 +111,19 @@ export function useGroupOperations() {
         maxY = Math.max(maxY, abs.y + h);
       }
 
-      // 组节点 = 28px 标题带 + body；body 四边 40px。组框因此比成员并集
-      // 顶部多 28 + 40、底部多 40，成员绝对位置不变（编组只扩组框，不移动内容）。
-      const groupX = minX - GROUP_NODE_PADDING;
-      const groupY = minY - NODE_TITLE_HEIGHT - GROUP_NODE_PADDING;
-      const groupW = maxX - minX + GROUP_NODE_PADDING * 2;
-      const groupH = maxY - minY + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2;
+      // 组框口径与组内布局共用；成员绝对位置不变。
+      const groupRect = groupRectFromContent({
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+      });
 
       pushHistory(takeCanvasSnapshot());
 
       const groupNode = createGroupNode(
-        { x: groupX, y: groupY },
-        { width: groupW, height: groupH }
+        { x: groupRect.x, y: groupRect.y },
+        { width: groupRect.width, height: groupRect.height }
       );
 
       const store = useCanvasStore.getState();

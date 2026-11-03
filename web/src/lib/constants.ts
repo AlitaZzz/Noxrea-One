@@ -55,6 +55,8 @@ export const DIRECTOR_NODE_DEFAULT_HEIGHT = 400;
 
 // Group node
 export const GROUP_NODE_PADDING = 40;
+/** 组 body 顶部内缩：标题带 + body 内边距。编组创建、refit 与组内布局共用。 */
+export const GROUP_BODY_TOP_INSET = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING;
 export const GROUP_NODE_MIN_WIDTH = 200;
 export const GROUP_NODE_MIN_HEIGHT = 120;
 

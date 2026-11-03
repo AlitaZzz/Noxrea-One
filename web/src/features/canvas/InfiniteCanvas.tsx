@@ -87,7 +87,7 @@ import {
   getCanvasDerived,
   selectCanvasToolbarMode,
 } from "@/features/canvas/shared/canvas-derived";
-import { clearSelection } from "@/features/canvas/shared/canvas-edit-actions";
+import { clearSelection, selectMediaEditorNodeId } from "@/features/canvas/shared/canvas-edit-actions";
 import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import { buildConnectionPairs, buildFanInPairs, buildFanoutPairs, connectionWouldCreate } from "@/features/canvas/shared/connection-rules";
 import { genKindOfNode } from "@/features/canvas/shared/gen-settings-node";
@@ -272,6 +272,8 @@ export default function InfiniteCanvas() {
       }),
   );
 
+  // 渲染层采用新节点后释放预览与抑制属性。布局副作用在绘制前执行，
+  // data-marquee-active 的抑制延续到新选中落地这一帧，旧选中外框不会先闪一帧。
   useLayoutEffect(() => {
     marqueeSession.syncRenderedNodes();
   }, [renderedNodes, marqueeSession]);
@@ -380,8 +382,10 @@ export default function InfiniteCanvas() {
   }, [viewportSyncCount, setRfViewport]);
 
   // 编辑态（标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 图片打光 / 多视角 / 全景）激活的节点：生成面板必须让位，
-  // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）
-  const editingNodeId = annotatingNodeId ?? croppingNodeId ?? frameCaptureNodeId ?? clipCaptureNodeId ?? audioClipNodeId ?? lightingNodeId ?? angleEditorNodeId ?? panoramaNodeId;
+  // 否则同一节点会同时挂上下两个浮层（生成面板在下方，编辑条也在附近）。
+  // 清单由 selectMediaEditorNodeId 维护（派生自 NODE_UI_STATE_KEYS）；这里只需单值
+  // 投影，编辑浮层仍各自订阅对应字段（见上方 Canvas state）。
+  const editingNodeId = useCanvasStore(selectMediaEditorNodeId);
 
   // 单个被选中的生成节点 → 面板目标。类型 → 能力走 genKindOfNode（与面板宿主同一来源），
   // 这里只补各类型的资格规则；选择 / 让位规则三类共用一份，分开实现时文本分支曾漏掉编辑态让位。
@@ -1417,8 +1421,9 @@ export default function InfiniteCanvas() {
         )})}
 
         {/* 批量连线轨道（框选外框专用，右缘 = 输出方向）：≥2 个非组节点选中时，
-            条带锚在外框右缘正中、自此向右延伸，参与集 = 选中节点，常显（外框不是
-            节点，无显隐规则可依托）。条带高取常量 RAIL_WIDTH（外框恒高于 80px）。
+            条带锚在外框右缘正中、自此向右延伸，参与集 = 选中节点。外框不是节点，
+            无显隐规则可依托，由 CSS 常显；拖动节点与框选手势中随节点轨道一起隐藏。
+            条带高取常量 RAIL_WIDTH（外框恒高于 80px）。
             组节点的批量轨道由 GroupNode 内部的 GroupConnectRail 渲染 */}
         {selectionFrame && batchConnectAnchor && (
           <BatchConnectHandle

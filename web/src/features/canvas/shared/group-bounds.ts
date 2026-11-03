@@ -10,8 +10,8 @@
  *   isGroupMember / groupMembers（本模块只在几何计算中复用它们）。
  * - 组框「探出才扩、只扩不缩」refit：以当前组框为底，仅当成员矩形探出组框时
  *   才朝该侧扩张（并外扩 GROUP_NODE_PADDING）；组内成员（含贴边）不推动组框，
- *   用户手动放大的组框不被破坏。顶部扩张额外计入 NODE_TITLE_HEIGHT：组 wrapper
- *   的顶部 28px 是标题带，body 从标题带下方开始，因此成员落到 body 顶缘下方
+ *   用户手动放大的组框不被破坏。顶部扩张额外计入 GROUP_BODY_TOP_INSET：组 wrapper
+ *   顶部是标题带，body 从标题带下方开始，因此成员落到 body 顶缘下方
  *   40px 才是统一边距。拖拽中的自动扩框（expandParent）刻意不启用：
  *   一旦启用，成员拖到组边缘时组框实时扩大、成员中心永远落在扩大的组内，
  *   「拖出组」交互即失效；扩框只在归属变化的业务 refit 时发生。
@@ -20,12 +20,13 @@
  */
 import type { AnyNode } from "@/features/canvas/types";
 import {
+  GROUP_BODY_TOP_INSET,
   GROUP_NODE_MIN_HEIGHT,
   GROUP_NODE_MIN_WIDTH,
   GROUP_NODE_PADDING,
-  NODE_TITLE_HEIGHT,
 } from "@/lib/constants";
 
+import type { Rect } from "./geometry";
 import { groupMembers, isGroupMember, isGroupNode, memberParentId } from "./group-membership";
 import { measureNode } from "./node-size";
 
@@ -81,6 +82,21 @@ export function toAbsoluteNodes(nodes: AnyNode[]): AnyNode[] {
 // ============================================================
 
 /**
+ * 成员内容并集 → 组框矩形（绝对坐标）。
+ * 组框 = 标题带 + body：body 左右与底部各内缩 GROUP_NODE_PADDING，顶部内缩
+ * GROUP_BODY_TOP_INSET（标题带 + body 内边距）。编组创建与组内布局共用此口径，
+ * 成员绝对位置不变。
+ */
+export function groupRectFromContent(content: Rect): Rect {
+  return {
+    x: content.x - GROUP_NODE_PADDING,
+    y: content.y - GROUP_BODY_TOP_INSET,
+    width: content.width + GROUP_NODE_PADDING * 2,
+    height: content.height + GROUP_BODY_TOP_INSET + GROUP_NODE_PADDING,
+  };
+}
+
+/**
  * 成员归属变化后重算组框矩形（相对空间），无需变化时返回 null。
  * 规则「探出才扩、只扩不缩」：以组自身矩形为底，仅当成员矩形真正探出组框时
  * 才朝该侧扩张（并外扩 GROUP_NODE_PADDING）；完全在框内的成员（含贴边）不
@@ -106,7 +122,7 @@ export function computeFittedGroupRect(
       relX = Math.min(relX, m.position.x - GROUP_NODE_PADDING);
     }
     if (m.position.y < 0) {
-      relY = Math.min(relY, m.position.y - NODE_TITLE_HEIGHT - GROUP_NODE_PADDING);
+      relY = Math.min(relY, m.position.y - GROUP_BODY_TOP_INSET);
     }
     if (m.position.x + s.width > gSize.width) {
       relMaxX = Math.max(relMaxX, m.position.x + s.width + GROUP_NODE_PADDING);

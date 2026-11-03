@@ -18,10 +18,9 @@ import {
   GROUP_LAYOUT_GAP,
   GROUP_NODE_MIN_HEIGHT,
   GROUP_NODE_MIN_WIDTH,
-  GROUP_NODE_PADDING,
-  NODE_TITLE_HEIGHT,
 } from "@/lib/constants";
 
+import { groupRectFromContent } from "./group-bounds";
 import { collectLinks, type LayoutBox, packLayered } from "./layered-layout";
 import { measureNode } from "./node-size";
 import { sortBoxesByReading } from "./reading-order";
@@ -35,9 +34,6 @@ export interface GroupLayoutResult {
   width: number;
   height: number;
 }
-
-/** 布局原点：padding + 标题栏（成员不可压住组标题） */
-const LAYOUT_ORIGIN = { x: GROUP_NODE_PADDING, y: NODE_TITLE_HEIGHT + GROUP_NODE_PADDING };
 
 function toBoxes(members: AnyNode[]): LayoutBox[] {
   return members.map((m) => {
@@ -138,21 +134,25 @@ function toGroupLayout(
     return { positions: new Map(), width: GROUP_NODE_MIN_WIDTH, height: GROUP_NODE_MIN_HEIGHT };
   }
 
+  // 布局原点即组框原点：成员相对坐标 = 绝对位置 − 组框位置。
+  const groupRect = groupRectFromContent({
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  });
   const positions = new Map<string, { x: number; y: number }>();
   for (const [id, p] of placed) {
     positions.set(id, {
-      x: LAYOUT_ORIGIN.x + p.x - minX,
-      y: LAYOUT_ORIGIN.y + p.y - minY,
+      x: p.x - groupRect.x,
+      y: p.y - groupRect.y,
     });
   }
 
   return {
     positions,
-    width: Math.max(GROUP_NODE_MIN_WIDTH, maxX - minX + GROUP_NODE_PADDING * 2),
-    height: Math.max(
-      GROUP_NODE_MIN_HEIGHT,
-      maxY - minY + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2,
-    ),
+    width: Math.max(GROUP_NODE_MIN_WIDTH, groupRect.width),
+    height: Math.max(GROUP_NODE_MIN_HEIGHT, groupRect.height),
   };
 }
 

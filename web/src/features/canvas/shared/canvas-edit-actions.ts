@@ -22,7 +22,7 @@ import { applySelection, updateSelection } from "@/features/canvas/shared/select
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import type { CanvasState } from "@/features/canvas/stores/canvas-store";
 import { markDirtyImmediate, markDirtyUndo, pushHistoryThrottled, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
-import { NODE_UI_STATE_KEYS } from "@/features/canvas/stores/canvas-store";
+import { MEDIA_EDITOR_NODE_ID_KEYS, NODE_UI_STATE_KEYS } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode, MediaGenFields } from "@/features/canvas/types";
@@ -49,15 +49,25 @@ export function getSelectedEdgeIds(): string[] {
 }
 
 /**
- * 媒体编辑面板打开状态投影（纯函数）：标注 / 裁剪 / 选帧 / 片段截取 / 音频片段截取 / 打光 / 多视角 / 全景。
+ * 媒体编辑面板当前节点 id（无面板打开时为 null）：标注 / 裁剪 / 选帧 /
+ * 片段截取 / 音频片段截取 / 打光 / 多视角 / 全景。
  * 键盘作用域所有权：面板打开时画布整体让出键盘——RF 的选中节点方向键移动
  * （disableKeyboardA11y）与画布全局快捷键（use-canvas-keyboard）都以此为准，
  * 各编辑面板自己的按键监听不经过此判断、始终生效。
- * 供响应式订阅（右键菜单 disabled 派生）与命令式判断共用，清单勿在此处之外复制。
- * 注意：不含 editingTextNodeId（文本编辑态 Ctrl+Z 必须路由到画布级撤销）与 multiExpandedNodeId。
+ * 响应式订阅（画布让权、右键菜单 disabled 派生）与命令式判断共用此清单。
+ * 键集由 MEDIA_EDITOR_NODE_ID_KEYS 维护（NODE_UI_STATE_KEYS 去掉文本编辑与
+ * 多选展开：文本编辑态 Ctrl+Z 必须路由到画布级撤销，多选展开不是编辑浮层）。
  */
+export function selectMediaEditorNodeId(s: CanvasState): string | null {
+  for (const key of MEDIA_EDITOR_NODE_ID_KEYS) {
+    const nodeId = s[key];
+    if (nodeId) return nodeId;
+  }
+  return null;
+}
+
 export function isMediaEditorOpenState(s: CanvasState): boolean {
-  return !!(s.annotatingNodeId || s.croppingNodeId || s.frameCaptureNodeId || s.clipCaptureNodeId || s.audioClipNodeId || s.lightingNodeId || s.angleEditorNodeId || s.panoramaNodeId);
+  return selectMediaEditorNodeId(s) !== null;
 }
 
 export function isMediaEditorOpen(): boolean {

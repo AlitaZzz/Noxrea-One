@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 画布根光标门控属性回归：
- * `data-connecting` 只在拖线期间存在；选中态切换（idle ↔ box-selecting）
+ * `data-connecting` 只在拖线期间存在；选中态切换（idle ↔ box-selected）
  * 不得改变它，否则全后代光标规则会让整棵画布子树重算样式。
  *
  * 工具条可见性回归：框选提交（box-selected）后工具条必须出现，但生成面板

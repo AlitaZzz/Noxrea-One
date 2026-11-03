@@ -13,7 +13,7 @@
 "use client";
 
 import { Panel, useStore, useViewport } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -34,14 +34,14 @@ import type { Rect } from "@/features/canvas/shared/geometry";
 import { EventNames } from "@/lib/constants";
 
 /** 工具条与选区包围盒的固定视觉间距（屏幕像素） */
-export const SELECTION_TOOLBAR_GAP = 12;
+const SELECTION_TOOLBAR_GAP = 12;
 /** 工具条与画布视口边缘的最小留白 */
-export const SELECTION_TOOLBAR_VIEWPORT_EDGE = 8;
+const SELECTION_TOOLBAR_VIEWPORT_EDGE = 8;
 /**
  * 顶部安全内边距：左上项目工具条 = 30px 内边距 + 36px 卡片高度 + 8px 间距。
  * 工具条优先放在选区上方；上方落进这个区域时改放下方，避免遮住项目工具条。
  */
-export const SELECTION_TOOLBAR_TOP_INSET = 74;
+const SELECTION_TOOLBAR_TOP_INSET = 74;
 
 interface SelectionToolbarProps {
   count: number;
@@ -59,7 +59,7 @@ interface SelectionToolbarProps {
   onDelete: () => void;
 }
 
-export function SelectionToolbar({
+export const SelectionToolbar = memo(function SelectionToolbar({
   count,
   hasGroup,
   selectionKey,
@@ -122,10 +122,13 @@ export function SelectionToolbar({
       </DropdownMenu>
     </Card>
   );
-}
+});
 
-interface SelectionToolbarPlacementInput {
-  bounds: Rect;
+export interface SelectionToolbarPlacementInput {
+  /** 定位锚点：选区外框顶部再加标题带，工具条与组标题保持距离。 */
+  anchorBounds: Rect;
+  /** 选区原始并集：只按它与视口的交集决定工具条是否出现。 */
+  visibleBounds: Rect;
   viewport: { x: number; y: number; zoom: number };
   viewportSize: { width: number; height: number };
   toolbarSize: { width: number; height: number };
@@ -141,33 +144,41 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * 把选区可见容器外框投影到屏幕坐标并求工具条位置。
+ * 把选区投影到屏幕坐标并求工具条位置。
  *
+ * - 可见性只看 visibleBounds（选区节点并集）：节点完全离开视口即隐藏，
+ *   标题带与外框内边距都不算可见内容；
+ * - 位置以 anchorBounds 为基准（顶部多一条标题带），避免组标题与工具条相撞；
  * - 上方放得下（且不进入顶部安全区）优先放上方，否则放下方；
  * - 两边都放不下时钳制在视口内；
- * - 水平居中，左右各留至少 8px；
- * - 选区与视口完全无交集时返回 null（调用方隐藏工具条）。
+ * - 水平居中，左右各留至少 8px。
  *
  * 纯函数，坐标全部为画布容器内的屏幕像素；尺寸参数由 ResizeObserver 实测，
  * 因此工具条宽度变化后无需猜测文案宽度。
  */
 export function computeSelectionToolbarPlacement({
-  bounds,
+  anchorBounds,
+  visibleBounds,
   viewport,
   viewportSize,
   toolbarSize,
 }: SelectionToolbarPlacementInput): SelectionToolbarPlacement | null {
-  const screenLeft = bounds.x * viewport.zoom + viewport.x;
-  const screenTop = bounds.y * viewport.zoom + viewport.y;
-  const screenWidth = bounds.width * viewport.zoom;
-  const screenHeight = bounds.height * viewport.zoom;
+  const visibleLeft = visibleBounds.x * viewport.zoom + viewport.x;
+  const visibleTop = visibleBounds.y * viewport.zoom + viewport.y;
+  const visibleWidth = visibleBounds.width * viewport.zoom;
+  const visibleHeight = visibleBounds.height * viewport.zoom;
 
   const intersectsViewport =
-    screenLeft + screenWidth > 0 &&
-    screenTop + screenHeight > 0 &&
-    screenLeft < viewportSize.width &&
-    screenTop < viewportSize.height;
+    visibleLeft + visibleWidth > 0 &&
+    visibleTop + visibleHeight > 0 &&
+    visibleLeft < viewportSize.width &&
+    visibleTop < viewportSize.height;
   if (!intersectsViewport) return null;
+
+  const screenLeft = anchorBounds.x * viewport.zoom + viewport.x;
+  const screenTop = anchorBounds.y * viewport.zoom + viewport.y;
+  const screenWidth = anchorBounds.width * viewport.zoom;
+  const screenHeight = anchorBounds.height * viewport.zoom;
 
   const maxLeft = Math.max(
     SELECTION_TOOLBAR_VIEWPORT_EDGE,
@@ -229,20 +240,20 @@ export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbar
     return () => observer.disconnect();
   }, []);
 
-  // 锚定工具条容器框：普通多选为节点并集四边外扩 40px，顶部再加 28px
-  // 标题带，给编组后的组标题让位；全组选区外框隐藏，
-  // containerBbox 退化为组并集。
+  // 可见性按选区节点并集判定；定位锚点再向外扩 40px、顶部多留 28px 标题带，
+  // 给编组后的组标题让位。全组选区外框隐藏时锚点等于并集。
   const placement = useMemo(
     () =>
       toolbarSize
         ? computeSelectionToolbarPlacement({
-            bounds: bounds.containerBbox,
+            anchorBounds: bounds.containerBbox,
+            visibleBounds: bounds.bbox,
             viewport,
             viewportSize: { width: viewportWidth, height: viewportHeight },
             toolbarSize,
           })
         : null,
-    [bounds.containerBbox, viewport, viewportWidth, viewportHeight, toolbarSize],
+    [bounds.containerBbox, bounds.bbox, viewport, viewportWidth, viewportHeight, toolbarSize],
   );
 
   const handleGroup = useCallback(() => {
