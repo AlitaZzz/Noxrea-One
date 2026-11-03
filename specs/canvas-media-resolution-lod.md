@@ -238,6 +238,7 @@
 - `CanvasMediaLoadingProvider.tsx`：
   - 订阅 React Flow store 的 `transform[2]`，尾随 200 ms 结算缩放；初始值取 `getLiveViewport().zoom`。
   - 维护有效 DPR 与 DPR 变化监听；向子树提供 `{ settledZoom, dpr, zoomingOut }` 上下文。
+  - 上下文值必须保持引用稳定（`useMemo` 按三个值派生）：Provider 位于 `InfiniteCanvas` 子树内，选中写入会重渲染该子树；内联对象会让每个图片节点的 `useCanvasImageLod` 收到新 context 值，绕过 `memoCanvasNode` 全量重渲染（2026-11-03 修复，见 `canvas-marquee-gesture-session.md` 当前状态）。
   - `zoomingOut` 只在缩放方向变化时翻转（不逐帧更新），结算后归 `false`；用于启动/停止「未就绪图片降档评估」，不参与几何计算。
   - 实时 zoom 不放进 context（否则全树逐帧渲染）；`useCanvasImageLod` 在 `zoomingOut` 为真时通过 `useStoreApi().subscribe` 读取实时 transform，按自身几何评估，只有 `suspend` 布尔值变化才 `setState`。
   - 继续只承载图片调度器；不引入新的全局状态库。
@@ -455,3 +456,5 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 
 - 连续缩放跨档（0.6417 → 4.724 → 0.6417，ctrl+wheel 与普通 wheel 均可触发）期间 120 帧：p50 **16.7 ms**、p95 26.5 ms、max 32.4 ms，**0 帧 >50 ms**；换档全程骨架数为 0（规则「换档保留旧图、不闪骨架」成立）。空闲基线 p50 16.8 ms / p95 18.1 ms / max 32.6 ms。
 - 该项覆盖「帧间隔」在换档路径上的空白；**低缩放拖动**路径的帧间隔（2026-10-24 两项改动的对比项）仍未重测，现值仍以 2026-10-23 数据为准。
+
+- 2026-11-03：`CanvasMediaLoadingProvider` 的 viewport context 改为 `useMemo` 稳定身份（已提交 `247d6515`）。此前内联对象在每次 Provider 渲染时都是新身份，选中写入触发的 `InfiniteCanvas` 子树重渲染会向所有图片节点的 LOD hook 下发新 context，绕过 `memoCanvasNode` 全量重渲染；属框选手势增量的一部分（见 `canvas-marquee-gesture-session.md` 当前状态）。未验证：真实页面手感与生产构建 trace 复测。

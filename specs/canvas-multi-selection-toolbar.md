@@ -82,7 +82,7 @@
 ### 3.1 包含（Phase 1）
 
 - 新增聚合工具条组件与渲染层。
-- 新增“所有选中节点（含组）”的选区包围盒派生，并统一多选外框显隐与工具条锚点（`bbox` / `containerBbox` / `frameVisible`），区别于现有只服务批量连线的 `selectionFrame`。
+- 新增“所有选中节点（含组）”的选区包围盒派生，并统一多选外框显隐与工具条锚点（`bbox` / `frameVisible` / `containerBbox`），区别于现有只服务批量连线的 `selectionFrame`。
 - 聚合工具条显示规则：选中节点数 ≥2 且交互为 idle。
 - 工具条按钮：计数、编组 / 解组、创建副本、更多（复制 / 删除）。
 - 多选时抑制所有 per-node 通用工具条；媒体编辑面板等独立渲染路径不变。
@@ -177,7 +177,7 @@
    - `bbox`：选中节点的原始并集（flow 坐标），作为几何基准；
    - `frameVisible`：多选外框是否可见，等价于「≥2 个选中且不全是组节点」；画布的外框显隐直接消费该字段，不再单独扫描选区；
    - `containerBbox`：工具条锚点。`frameVisible` 为 true 时是 `bbox` 四边向外扩 `GROUP_NODE_PADDING`(40px)，顶部再加标题带 `NODE_TITLE_HEIGHT`(28px)，合计 68px；工具条因此比可见框再高一个标题高度，编组后组标题不会与工具条重叠；为 false（选中的全是组）时等于 `bbox`，因为组节点自身已包含标题带与 40px body 内边距，且外框被隐藏。
-2. 工具条在屏幕坐标中定位，锚定 `containerBbox`（可见外框 + 顶部标题带）：
+2. 工具条可见性按 `bbox` 与视口的交集判定（见 4.1-5），标题带与外框内边距不算可见内容；在屏幕坐标中定位时锚定 `containerBbox`（选区外框 + 顶部标题带）：
    - 优先放在容器框上方，水平居中；
    - 与 `containerBbox` 保持固定视觉间距 12px；对可见框而言，顶部实际让出 `12px + 28px × zoom`（标题带 28px×zoom + 间距 12px）；
    - 上方空间不足时放到下方；
@@ -245,7 +245,7 @@
   - 媒体编辑面板的独立 `RfNodeToolbar` 渲染块保持不变。
 - 工具条展示层接收 `selectionKey`，只作为「更多」菜单的 `key`：选区变化时菜单子树重挂载并关闭，展示层本身不重挂载，`aria-live` 计数节点保留。
 - 工具条层使用独立组件订阅视口，避免 `InfiniteCanvas` 因平移/缩放整体重渲染；锚点只在 idle 时参与跟随。
-- 使用 `useViewport()` 或等效的 viewport transform 把 `containerBbox` 从 flow 坐标投影到画布容器坐标；不把工具条放进随视口缩放的节点层。
+- 使用 `useViewport()` 或等效的 viewport transform 把 `containerBbox` 与 `bbox` 从 flow 坐标投影到画布容器坐标：前者用于定位，后者只用于判定与视口是否有交集；不把工具条放进随视口缩放的节点层。
 
 ### 5.3 复用现有动作
 
@@ -336,7 +336,7 @@
 4. **更多菜单**：Phase 1 只放“复制 / 删除”；下载延后，需独立 Spec。
 5. **混合选择规则**：选中项含任意组节点时只显示“解组”，不显示“编组”，避免现有 `onGroupNodes` 静默过滤组节点导致误操作。
 6. **组专属动作**：多选时不提供组颜色/组内布局入口；用户单击该组进入单选后使用组节点工具条。
-7. **间距与钳制**：工具条与 `containerBbox` 间距 12px；普通多选锚定节点并集四边外扩 40px，顶部再加标题带 28px；选中的全是组时锚定组并集；水平钳制时左右各留至少 8px。
+7. **间距与钳制**：工具条与 `containerBbox` 间距 12px；普通多选锚定节点并集四边外扩 40px，顶部再加标题带 28px；选中的全是组时锚定组并集；可见性只看 `bbox` 与视口的交集（标题带与外框内边距单独相交不显示，见 4.1-5）；水平钳制时左右各留至少 8px。
 8. **Phase 2 方向**：布局结果以选区包围盒中心为锚点整体平移；组节点作为原子盒子，组内相对坐标不变；智能布局只统计选区内部连线；大选区性能阈值在 Phase 2 Spec 中基于实测确定，不预先拍数字。
 9. **术语**：产品文案统一使用“编组”，不再使用“分组”；`common.group`、`node.group`、`node.groupWithCount`、`shortcuts.group`、`shortcuts.desc.group` 一并更新，避免工具条、组节点与快捷键面板叫法不一致。
 10. **统一边距**：编组、组内布局、框选外框统一为「标题带在 body 外 + body 四边 40px」；编组创建时组框向上多扩 28px，成员绝对位置不动；旧组执行一次组内布局后归一。该决策取代此前「顶部 12px、刻意不对称」的取舍。
@@ -345,7 +345,7 @@
 
 - 状态：已确认（2026-11-02；用户确认全部推荐方案、产品术语“编组”及统一边距决策）。
 - 已完成：现状与即梦对照调查；Phase 1 方案、按钮矩阵、边界与验收标准；第 8 节全部决策确认；术语统一为“编组”；统一边距决策确认。
-- Phase 1 实现（2026-11-02，工作区未提交）：
+- Phase 1 实现（2026-11-02 实现，2026-11-03 提交 `e6fc53ad`）：
   - `web/src/features/canvas/shared/canvas-derived.ts` 新增 `selectionChromeBounds`：全部选中节点（含组）的绝对包围盒、计数与是否含组，与 `selectionFrame` 并列且不改变其语义。
   - 新增 `web/src/features/canvas/controls/SelectionToolbar.tsx`：展示层负责按钮矩阵与「更多」菜单；容器层用 `Panel` 渲染在画布屏幕层，订阅视口做投影与钳制，`ResizeObserver` 实测工具条宽度。
   - `web/src/features/canvas/InfiniteCanvas.tsx` 在 ≥2 个选中节点、交互空闲且无编辑现场时渲染聚合工具条，并在多选时抑制 per-node 通用工具条；媒体编辑面板路径不变。
@@ -356,7 +356,7 @@
   - 组可见框对齐（2026-11-02，用户确认「框选减去标题高度」）：组标题保留在 body 之外；框选外框改为顶部 12px（40 − `NODE_TITLE_HEIGHT` 28）、左右/底部 40px，`containerBbox` 顶部同步为 12px（工具条标题让位见下条）。框选提交后立即编组时两框可见边缘重合，标题不进入组的填充/描边/选中环；`GroupNode` 的 body 结构不变（`flex-1`）。（该口径已被 2026-11-02「统一边距」决策取代，见下条）
   - 工具条标题让位（2026-11-02，用户确认「顶部和工具栏之间加上一个标题的高度」）：可见框保持顶部 12px；`containerBbox` 顶部改为 40px（可见框 12 + `NODE_TITLE_HEIGHT` 28），工具条相对可见框的顶部间距为 12px + 28px×zoom，编组后组标题不与工具条重叠；左右/底部仍为 40px。（该口径已被 2026-11-02「统一边距」决策取代：可见框改为四边 40px，`containerBbox` 顶部 68px；工具条相对可见框的间距仍为 12px + 28px×zoom）
   - 主行动作图标（2026-11-02，用户反馈「编组的图标没显示出来，还有创建副本的图标也没有显示」）：编组 / 解组 / 创建副本按钮由纯文字改为图标 + 文字；编组用 `GroupIcon`、解组用 `UngroupIcon`、创建副本用 `DuplicateIcon`，全部从 `components/ui/AppIcon` 出口获取；图标 `aria-hidden`，按钮可访问名称仍由文字提供。
-  - 创建副本图标统一（2026-11-02，用户提出「应该和右键菜单那个创建副本的图标一致」并确认采用 `DuplicateIcon`）：右键菜单的创建副本由 `PlusSquareOutlined`（方形加号）改为 `DuplicateIcon`（错位双层方框），与聚合工具条一致。选择 `DuplicateIcon` 的理由：双层方框是「复制 / 副本」的通用语义；方形加号更像「新建 / 添加」；右键菜单的「复制」已使用 `CopyOutlined`，两个动作需要保持图标区分。`PlusSquareOutlined` 在项目中仅此一处使用，改后从该文件移除导入。
+  - 创建副本图标统一（2026-11-02，用户提出「应该和右键菜单那个创建副本的图标一致」并确认采用 `DuplicateIcon`）：右键菜单的创建副本由 `PlusSquareOutlined`（方形加号）改为 `DuplicateIcon`（错位双层方框），与聚合工具条一致。选择 `DuplicateIcon` 的理由：双层方框是「复制 / 副本」的通用语义；方形加号更像「新建 / 添加」；右键菜单的「复制」已使用 `CopyOutlined`，两个动作需要保持图标区分。`PlusSquareOutlined` 在项目中仅此一处使用；2026-11-03 代码审查确认该导出已无调用方，连同 `LucideSquarePlus` 导入从 `AppIcon.tsx` 删除。
 - 统一边距（2026-11-02，用户确认「编组之后，里面的内容距离四周应该和布局之后一样，包括框选的时候」）：编组创建改为 `groupY = minY - NODE_TITLE_HEIGHT - GROUP_NODE_PADDING`、`groupH = unionH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2`；框选外框改为 `padding: 40px; margin: -40px`；`containerBbox` 顶部 = 可见框 40 + 标题带 28 = 68px，高度 = `bbox.height + 108`；`GroupConnectRail` 的轨道中心下移 `NODE_TITLE_HEIGHT / 2` 对齐 body；布局 `group-layout.ts` 已是目标口径，不改。该口径取代此前「顶部 12px」的取舍。
 - 已执行（2026-11-02，主行动作图标）：`SelectionToolbar.test.tsx` 16 用例通过（新增主行动作按钮均含 SVG 图标的回归用例）；右键菜单统一为 `DuplicateIcon` 后 `CanvasContextMenu.test.tsx` 3 用例通过；变更文件 ESLint 0 error；`tsc --noEmit`（server + web）通过。图标路径另行用 sharp 渲染 18px / 13px 两档确认可见（临时预览文件已删除），浏览器实机渲染仍待人工走查。
 - 已执行（2026-11-02，组可见框对齐 + 工具条标题让位）：web 全量测试 192 文件 / 1553 用例通过（单 worker，串行，标题让位前基线）；本次改动后定向回归 `canvas-derived.test.ts` 7 用例、`SelectionToolbar.test.tsx` 15 用例通过；变更文件 ESLint 0 error；`tsc --noEmit`（server + web）通过。`GroupNode.test.tsx` 1 用例在前一版通过，本次未改动组节点结构；编组图标替换仅经 ESLint / tsc 检查，无图标路径单测。
@@ -366,13 +366,21 @@
   - 环境限制：预览会话 API 返回 401（`/api/files/upload-limits`），主题切换无法持久化（`savePreference` 乐观更新后回滚）；明暗对比通过给 `.react-flow` 应用 `light` / `dark` colorMode 类并同步 `<html>` 主题类实测，验证后已恢复深色。
   - 未覆盖：真实鼠标中键平移（合成事件会破坏 d3-zoom 内部 `__zoom` 状态；已改为通过视口 transform 变化验证跟随与钳制）；原生 Tab 键遍历（仅验证 DOM 顺序、tabIndex 与可聚焦性）。
   - 观察项：聚合工具条焦点环沿用全局 `Button` 的 `focus-visible:ring-ring/50`，实测环色与卡片背景对比度深色 1.87:1 / 浅色 1.54:1，低于 WCAG 非文本 3:1；该样式为全项目 Button 现状，非本次改动引入。如需提升，应单独调整全局设计令牌。
-- 未完成：提交与推送（需用户明确确认）。
+- 未完成：推送（需用户明确确认）；Phase 1 已提交为 `e6fc53ad`。
 - 代码审查根因修复（2026-11-02，`/code-review` 未提交代码）：
   - refit 顶部扩张计入 `NODE_TITLE_HEIGHT`：成员探出组顶时组框上扩 `探出量 + 28 + 40`，修复 body 顶边距退化为 12px；`group-bounds.test.ts` 新增「只探出组顶」回归用例。
   - 聚合工具条展示层不再用 React key 重挂载：`selectionKey` 只作为「更多」菜单的 `key`，选区变化时菜单重挂载关闭，`aria-live` 计数节点保留；测试断言选区变化后计数 DOM 节点同一。
   - 工具条 `h-[50px]` + 单行不换行改为 `min-h-[50px]` + `flex-wrap`，容器按视口宽度设置 `maxWidth`；删除「视口窄时横向溢出」的已知边界。
   - 选区并集循环抽为 `unionBounds`；`multiSelect` 阈值抽为 `selectCanvasToolbarMode`，`InfiniteCanvas` 只消费模式结果。
   - 框选外框的 padding/填充改由 `RF_STYLE` 注入 `--group-node-padding` / `--selection-frame-bg`，与 `GROUP_NODE_PADDING`、`GROUP_COLORS.default.fill` 同源，删除 CSS/TS 双份字面量。
+- 代码审查根因修复（2026-11-03，`/code-review` 已提交代码 `e6fc53ad`，修复已提交 `247d6515`）：
+  - 统一组 body 顶部内缩：新增 `GROUP_BODY_TOP_INSET = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING`，编组创建、refit 与组内布局共用；编组创建与组内布局再共用 `groupRectFromContent`，删除重复的「标题带 + 内边距」推导。
+  - 聚合工具条可见性改按选区并集判定：`computeSelectionToolbarPlacement` 拆为 `visibleBounds`（`bbox`，交集判定）与 `anchorBounds`（`containerBbox`，定位），修复选区完全离开视口、但标题带或外框内边距仍与视口相交时工具条仍显示的问题。
+  - 编辑态清单收敛到 `selectMediaEditorNodeId`：`canvas-edit-actions.ts` 以单函数返回八个面板的当前节点 id，`InfiniteCanvas` 改为单值订阅，删除重复的 `??` 链。
+  - `SelectionToolbar` 用 `memo` 包裹，视口帧只重算定位，不重渲染按钮子树；删除无外部引用的常量与类型导出。
+  - 删除已无调用方的 `PlusSquareOutlined` 图标导出及其 `LucideSquarePlus` 导入；修正 `idle ↔ box-selecting` 三处过时注释为 `box-selected`。
+  - 回归：`canvas-derived.test.ts` 更新 `containerBbox` 断言；`SelectionToolbar.test.tsx` 改为 `anchorBounds` + `visibleBounds`，新增「仅锚点与视口相交时隐藏」与「定位取锚点、可见性取选区并集」两条用例。
+- 已执行（2026-11-03，代码审查根因修复）：定向回归 3 文件 / 32 用例通过（`canvas-derived` 8、`SelectionToolbar` 19、`use-canvas-interaction` 5）；canvas 全量 100 文件 / 942 用例通过（单 worker，串行）；变更文件 ESLint 0 error；web `tsc --noEmit` 通过。浏览器实机走查未在本次修复后重跑。
 - Phase 2 设计与确认未开始。
 
 ## 10. 后续阶段（不在本次范围）

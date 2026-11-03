@@ -148,9 +148,9 @@
 
 ### 4.6 组框尺寸与原点
 
-4.6.1 布局原点 `LAYOUT_ORIGIN = { x: GROUP_NODE_PADDING, y: NODE_TITLE_HEIGHT + GROUP_NODE_PADDING }` = `(40, 68)`，保持不变（成员不可压住组标题栏）。
+4.6.1 布局原点即组框原点：内容并集左上角左移 `GROUP_NODE_PADDING`(40px)、上移 `GROUP_BODY_TOP_INSET`(68px)，与原 `LAYOUT_ORIGIN = (40, 68)` 口径等价，保持不变（成员不可压住组标题栏）。
 
-4.6.2 成员最终位置 = `LAYOUT_ORIGIN + 内容坐标`（组内相对坐标）。
+4.6.2 成员最终位置 = 绝对内容坐标 − 组框原点（组内相对坐标）。
 
 4.6.3 组框尺寸：
 
@@ -213,7 +213,7 @@
   - `positions` 为组内相对坐标；`width` / `height` 为组框尺寸。
   - 盒子类型复用 `LayoutBox`；组内边经 `collectLinks` 过滤（4.5.1）。
 - `web/src/features/canvas/shared/tidy-layout.ts`：`sortByReading` 改为委托 `sortBoxesByReading`，删除本地实现与 `MIN_BAND_HEIGHT`（排序行为与输出不变）；`packRows` 的行内 y 由行顶改为行内居中（4.9）；`packWithDagre` 删除，分层模式改调 `packLayered` 并只保留块级边映射 `blockLinks`；`measureNode` / `Size` 迁出到 `node-size.ts`。
-- `web/src/features/canvas/hooks/use-group-operations.ts`：删除 `applyGridLayout` / `applyHorizontalLayout` / `applyVerticalLayout` / `measureMembers`，`LAYOUT_ORIGIN` 随算法迁入 `group-layout.ts`（4.6.1）；`onNodeAction` 改为读 store 的 `edges` 后调用 `arrangeGroup`；`mode` 联合类型扩展为 `GroupLayoutMode`。
+- `web/src/features/canvas/hooks/use-group-operations.ts`：删除 `applyGridLayout` / `applyHorizontalLayout` / `applyVerticalLayout` / `measureMembers`，组框矩形与布局原点由 `group-bounds.ts` 的 `groupRectFromContent` 统一派生（编组创建与组内布局同口径，4.6.1）；`onNodeAction` 改为读 store 的 `edges` 后调用 `arrangeGroup`；`mode` 联合类型扩展为 `GroupLayoutMode`。
 - `web/src/features/canvas/nodes/NodeToolbar.tsx`：布局下拉新增「智能布局」项（首位）与图标；选中布局项时本次关闭不播放退出动画（4.6.7）。
 - `web/src/components/ui/dropdown-menu.tsx`：`DropdownMenuContent` 新增 `closeAnimation`（默认 `true`）；调用方按动作语义关闭退出动画，避免浮层在触发器几何变更后继续存活。
 - `web/src/lib/i18n/zh-CN.json` / `en-US.json`：新增 `node.smartLayout`（中「智能布局」/ 英「Smart Layout」）。
@@ -315,7 +315,7 @@
   - 未验证：即梦在真实画布上的运行时行为（登录墙，仅静态分析与原函数执行）；即梦组内 flow 对孤立成员的具体摆放分支未逐路径确认，本 Spec 的尾列策略为自有设计（沿用本仓库 `packWithDagre` 的 tail 策略），不以即梦为依据。
 - 2026-11-01：按已确认 Spec 完成实现。状态保持「已确认」——验收项 9（浏览器手工走查）待用户确认，代码尚未提交。落地内容：
   - 新增 `shared/reading-order.ts`（读序唯一实现）与 `shared/group-layout.ts`（宫格 / 水平 / 垂直 / 智能四种模式纯函数）；`tidy-layout.ts` 改为复用读序实现。
-  - `constants.ts` 新增 `GROUP_LAYOUT_GAP = 60`、`GROUP_LAYOUT_COLUMN_GAP = 120`；`LAYOUT_ORIGIN` 随算法迁入 `group-layout.ts`。
+  - `constants.ts` 新增 `GROUP_LAYOUT_GAP = 60`、`GROUP_LAYOUT_COLUMN_GAP = 120`；布局原点随算法迁入 `group-layout.ts`。
   - `use-group-operations.ts` 删除原三算法与 `measureMembers`，改为调用 `arrangeGroup(members, edges, mode)`，`mode` 缺省 `grid`。
   - `tidy-layout.ts` 的 `packRows` 改为两遍落位：先切行，再按行高做行内垂直居中（规则 4.9）。
   - 新增 `SmartLayoutIcon`、`node.smartLayout` 文案，组下拉首位为智能布局。
@@ -345,3 +345,4 @@
   - 测试：新增 `layout-idempotence.test.ts`（固定形状 + 300 组随机拓扑 × 四模式 × 连续三次一致）；`reading-order.test.ts` 补中线分带用例；`DropdownMenu.test.tsx` 覆盖 `closeAnimation` 的默认 / 禁用类输出；`NodeToolbar.test.tsx` 覆盖四项布局动作派发与菜单关闭。修复前随机拓扑 300 组 × 四模式有 5 组失败，修复后 0 组；canvas 套件 94 文件 / 870 项、`DropdownMenu.test.tsx` 13 项、`NodeToolbar.test.tsx` 11 项全部通过；`tsc --noEmit` 与改动文件 ESLint 通过。
   - 待用户走查：验收 11（菜单与组框尺寸变更同帧消失、无闪跳）与布局菜单关闭观感；验收 9 的其余项。
 - 2026-11-02：用户确认验收完成（含浏览器走查），状态更新为「已实现」。实现代码随 `17cd1e08` 提交（仅本地，未推送）。
+- 2026-11-03：组框矩形口径收敛，已提交 `247d6515`。`group-bounds.ts` 新增 `groupRectFromContent`：成员内容并集 → 组框矩形，body 左右/底部内缩 `GROUP_NODE_PADDING`、顶部内缩 `GROUP_BODY_TOP_INSET`（标题带 + body 内边距）；编组创建（`use-group-operations`）与组内布局（`group-layout`）改为共用此函数，`group-layout` 删除本地 `LAYOUT_ORIGIN` 与重复的宽高计算。行为不变（`GROUP_BODY_TOP_INSET = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING`，与原 `(40, 68)` 口径一致）；`computeFittedGroupRect` 的顶部扩张同步改用同一常量。单测 `group-layout.test.ts`、`layout-idempotence.test.ts`、`use-group-operations.test.ts` 通过。
