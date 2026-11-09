@@ -18,14 +18,20 @@ const eslintConfig = defineConfig([
     },
     settings: {
       // ── 架构分层元素类型（eslint-plugin-boundaries）──────────────────
-      // 按目录/文件名划分架构层级，作为 allowed-modules 规则的判定依据。
+      // 按目录/文件名划分架构层级，作为依赖矩阵的判定依据。
+      // 跨模块“只能走 index.ts”无法由该插件表达，由
+      // `src/__tests__/architecture/module-boundaries.test.ts` 统一执行。
       "boundaries/elements": [
         { type: "app", pattern: "app" },
-        { type: "feature", pattern: "features" },
-        { type: "ui", pattern: "components/ui" },
-        { type: "store", pattern: "**/stores/*" },
-        // lib 必须在元素表里声明：否则 policies 中引用 { type: "lib" } 的策略全部静默失效。
-        { type: "lib", pattern: "lib" },
+        { type: "app", pattern: "providers" },
+        { type: "app", pattern: "components/layout" },
+        { type: "feature", pattern: "features/*", capture: ["featureName"] },
+        { type: "entity", pattern: "entities/*", capture: ["entityName"] },
+        { type: "shared-ui", pattern: "components/ui" },
+        { type: "shared-ui", pattern: "components/media" },
+        { type: "shared-ui", pattern: "components/model" },
+        { type: "shared-lib", pattern: "lib" },
+        { type: "shared-types", pattern: "types" },
       ],
       // 排除测试文件，避免测试中的跨层 mock 产生误报。
       "boundaries/ignore": ["**/*.test.ts", "**/*.test.tsx"],
@@ -62,56 +68,55 @@ const eslintConfig = defineConfig([
       // react-hooks v6 规则保持 error 级别，违规逐项修复（见各文件清理），不降级。
 
       // ── 架构分层约束（eslint-plugin-boundaries）──────────────────────
-      // dependencies 规则：默认禁止一切跨层依赖，仅放开白名单策略。
-      // 上层可依赖下层，禁止反向（如 lib 禁止依赖 feature/ui/app）。
-      // 存量违规已清零，故提级为 error：新增跨层依赖无法合入。
+      // app → features → entities → shared；默认禁止一切跨层依赖。
+      // feature 之间的隔离与“只允许公共入口”由架构测试负责（插件无法按 capture 判定同名内部）。
       "boundaries/dependencies": [
         "error",
         {
           default: "disallow",
-          // v6 起 allow/disallow 必须用 from/to 包装，裸元素选择器会被忽略（此前 5 条策略全部静默失效）。
+          // v6 起 allow/disallow 必须用 from/to 包装，裸元素选择器会被忽略。
           policies: [
-            // app 可依赖一切
+            // app 可组合所有下层模块
             {
               from: { element: { type: "app" } },
               allow: [
                 { to: { element: { type: "app" } } },
                 { to: { element: { type: "feature" } } },
-                { to: { element: { type: "ui" } } },
-                { to: { element: { type: "lib" } } },
-                { to: { element: { type: "store" } } },
+                { to: { element: { type: "entity" } } },
+                { to: { element: { type: "shared-ui" } } },
+                { to: { element: { type: "shared-lib" } } },
+                { to: { element: { type: "shared-types" } } },
               ],
             },
-            // feature 可依赖 ui / lib / store，禁止依赖 app
+            // feature 只能向下依赖 entity / shared
             {
               from: { element: { type: "feature" } },
               allow: [
-                { to: { element: { type: "ui" } } },
-                { to: { element: { type: "lib" } } },
-                { to: { element: { type: "store" } } },
                 { to: { element: { type: "feature" } } },
+                { to: { element: { type: "entity" } } },
+                { to: { element: { type: "shared-ui" } } },
+                { to: { element: { type: "shared-lib" } } },
+                { to: { element: { type: "shared-types" } } },
               ],
             },
-            // ui 仅可依赖 lib，禁止依赖 feature / app
+            // entity 只能依赖 entity（公共 API）与 shared
             {
-              from: { element: { type: "ui" } },
+              from: { element: { type: "entity" } },
               allow: [
-                { to: { element: { type: "lib" } } },
-                { to: { element: { type: "ui" } } },
+                { to: { element: { type: "entity" } } },
+                { to: { element: { type: "shared-ui" } } },
+                { to: { element: { type: "shared-lib" } } },
+                { to: { element: { type: "shared-types" } } },
               ],
             },
-            // store 仅可依赖 lib
+            // shared 只能依赖 shared
             {
-              from: { element: { type: "store" } },
+              from: { element: { type: ["shared-ui", "shared-lib", "shared-types"] } },
               allow: [
-                { to: { element: { type: "lib" } } },
-                { to: { element: { type: "store" } } },
+                { to: { element: { type: "shared-ui" } } },
+                { to: { element: { type: "shared-lib" } } },
+                { to: { element: { type: "shared-types" } } },
               ],
-            },
-            // lib 为最底层，禁止依赖任何上层
-            {
-              from: { element: { type: "lib" } },
-              allow: [{ to: { element: { type: "lib" } } }],
             },
           ],
         },
@@ -132,9 +137,10 @@ const eslintConfig = defineConfig([
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: [
-      "src/features/assets/store.ts",
-      "src/features/auth/store.ts",
-      "src/features/project/store.ts",
+      "src/entities/asset/store.ts",
+      "src/entities/asset/upload.ts",
+      "src/entities/user/store.ts",
+      "src/entities/project/store.ts",
       "src/lib/model-store.ts",
       "src/lib/utils/download.ts",
       "src/features/canvas/upload/upload-pipeline.ts",
@@ -159,7 +165,7 @@ const eslintConfig = defineConfig([
   },
   // 具体第三方 UI 实现及类型只允许在 UI 基础层出现，通知入口也属于 UI 适配。
   {
-    files: ["src/features/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
+    files: ["src/features/**/*.{ts,tsx}", "src/entities/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/providers/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
         "error",

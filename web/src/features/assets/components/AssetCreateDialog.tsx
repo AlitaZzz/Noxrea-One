@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { CloseOutlined, PictureOutlined, PlayCircleOutlined, PlusOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
 import { AssetsIcon } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
@@ -20,14 +21,17 @@ import { CircularProgress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TreeSelect } from "@/components/ui/tree-select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { ASSET_NAME_MAX_LENGTH } from "@/features/assets/api";
+import {
+  type AddAssetsBatchResult,
+  ASSET_NAME_MAX_LENGTH,
+  type AssetFolder,
+  type AssetType,
+  type CreateAssetInput,
+  uploadMany,
+} from "@/entities/asset";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
-import type { AddAssetsBatchResult } from "@/features/assets/store";
-import type { AssetFolder, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { runMediaUpload } from "@/features/canvas/upload";
-import { expandAccept } from "@/features/canvas/upload/pick-files";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
+import { expandAccept } from "@/lib/upload-formats";
 import { kindOfBlob, loadUploadLimits, type UploadLimits } from "@/lib/upload-formats";
 import { isOffline } from "@/lib/utils/upload";
 
@@ -130,7 +134,7 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     return () => { cancelled = true; };
   }, [open]);
 
-  // ---- 上传：统一走画布上传管道（raw sink，复用并发 / 重试 / 离线判定 / 错误分类）----
+  // ---- 上传：统一走资产实体上传（复用并发 / 重试 / 离线判定 / 错误分类）----
   const pendingRef = useRef(0);
   const resolveAllRef = useRef<() => void>(() => {});
   const allDoneRef = useRef<Promise<void>>(Promise.resolve());
@@ -176,19 +180,6 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     // 立即渲染卡片
     setFiles((prev) => [...prev, ...entries]);
 
-    // 不支持的类型直接标红，不送管道（整批不支持时管道会弹全局提示，语义不符）
-    const uploadable = entries.filter((e) => kindOfBlob(e.file, e.file.name) !== null);
-    const supported = new Set(uploadable);
-    for (const e of entries) {
-      if (!supported.has(e)) {
-        updateFile(e.id, {
-          status: "error",
-          errorMessage: t("error.upload.unsupported_type"),
-        });
-      }
-    }
-    if (uploadable.length === 0) return;
-
     // 记录本批上传，供 waitAllDone 等待
     const wasIdle = pendingRef.current === 0;
     if (wasIdle) {
@@ -196,39 +187,37 @@ export default function AssetCreateDialog({ open, onClose, onCreate, folders, de
     }
     pendingRef.current += 1;
 
-    // 上传交给管道（raw sink：只上传拿存储 key，不碰画布；silent 由本组件自行标红/标失败）
-    const { settled } = await runMediaUpload({
-      items: uploadable.map((e) => ({ blob: e.file, filename: e.file.name })),
-      sink: { kind: "raw" },
-      source: "upload",
-      silent: true,
-      onProgress: (index, progress) => {
-        // 哈希阶段不动环形进度（保持 0），传输阶段才推进百分比
-        if (progress.phase === "uploading") {
-          updateFile(uploadable[index].id, { status: "uploading", uploadProgress: progress.pct });
-        }
-      },
-    });
+    try {
+      // 实体上传：逐项结算（不支持 / 离线 / 超限不发请求），默认不弹全局消息
+      const { outcomes } = await uploadMany(
+        entries.map((e) => ({ blob: e.file, filename: e.file.name })),
+        {
+          source: "upload",
+          onProgress: (index, progress) => {
+            // 哈希阶段不动环形进度（保持 0），传输阶段才推进百分比
+            if (progress.phase === "uploading") {
+              updateFile(entries[index].id, { status: "uploading", uploadProgress: progress.pct });
+            }
+          },
+        },
+      );
 
-    settled
-      .then(async ({ results, errors }) => {
-        for (let i = 0; i < uploadable.length; i++) {
-          const entry = uploadable[i];
-          const result = results[i];
-          if (!result?.key) {
-            updateFile(entry.id, {
-              status: "error",
-              errorMessage: errors[i]?.message ?? t("file.uploadFailed"),
-            });
-            continue;
-          }
-          updateFile(entry.id, { key: result.key, status: "done", uploadProgress: 100 });
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const outcome = outcomes[i];
+        if (!outcome.result?.key) {
+          updateFile(entry.id, {
+            status: "error",
+            errorMessage: outcome.error?.message ?? t("file.uploadFailed"),
+          });
+          continue;
         }
-      })
-      .finally(() => {
-        pendingRef.current -= 1;
-        if (pendingRef.current === 0) resolveAllRef.current();
-      });
+        updateFile(entry.id, { key: outcome.result.key, status: "done", uploadProgress: 100 });
+      }
+    } finally {
+      pendingRef.current -= 1;
+      if (pendingRef.current === 0) resolveAllRef.current();
+    }
   }, [updateFile, message, t, trackUrl]);
 
   const removeFile = useCallback((id: string) => {

@@ -2,13 +2,13 @@
  * 资产与文件夹路由。
  * 处理资产、文件夹的查询、创建、更新与批量操作，所有写操作返回最新计数快照。
  */
+import { ASSET_BATCH_LIMIT } from "@noxrea/shared/asset";
 import { Hono } from "hono";
 import { z } from "zod";
 import { ASSET_ITEMS_USER_SCOPE_FILE_KEY } from "@server/core/database/constraint-names";
 import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import {
-  ASSET_BATCH_LIMIT,
   folderCreateSchema,
   folderUpdateSchema,
   assetCreateSchema,

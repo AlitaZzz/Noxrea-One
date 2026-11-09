@@ -292,7 +292,7 @@ function assertProbeSuccess(
   }
 }
 
-interface FfprobeScanOptions extends FfmpegRunOptions {
+export interface FfprobeScanOptions extends FfmpegRunOptions {
   section: "packets" | "frames";
   onEntry: (value: unknown) => void;
   /**

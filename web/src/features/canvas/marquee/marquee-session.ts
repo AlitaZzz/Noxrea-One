@@ -7,7 +7,7 @@
  * 恰好提交一次（边跳过历史），待渲染层采用新节点后释放预览属性。
  *
  * 规则与边界见 specs/canvas-marquee-gesture-session.md。
- * 非 React 模块：由 `InfiniteCanvas` 持有并注入 store / React Flow 访问器。
+ * 非 React 模块：由 `CanvasSurface` 持有并注入 store / React Flow 访问器。
  * DOM 契约依赖本仓库固定的 React Flow 12.12 受控模式（`.react-flow__pane`、
  * `.react-flow__node[data-id]`），升级 React Flow 必须重新验证。
  */

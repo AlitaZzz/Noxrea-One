@@ -22,11 +22,15 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/api/client", () => ({ api: mocks.api, ApiError: mocks.ApiError }));
 
 import { peekMediaAccess, type ResolvedMediaUrl } from "@/lib/file-access";
+import { storeIfNewer } from "@/lib/file-access/cache";
 import { resetProactiveRefresh } from "@/lib/file-access/proactive";
+import { cacheKeyOf } from "@/lib/file-access/protocol";
+import { currentScope } from "@/lib/file-access/state";
 import { captureSession, changeSession } from "@/lib/session-lifecycle";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
 const KEY = makeStorageKey("hook-signed", ".png");
+const OTHER_KEY = makeStorageKey("hook-other", ".png");
 
 /** 测试侧收窄：生产侧只暴露带寿命字段的 `peekMediaAccess` */
 function peekMediaUrl(value: string | null | undefined): ResolvedMediaUrl | null {
@@ -97,6 +101,22 @@ describe("useFileAccessUrl", () => {
   it("空值返回 undefined 且不发请求", () => {
     const { result } = renderHook(() => useFileAccessUrl(undefined));
     expect(result.current.url).toBeUndefined();
+    expect(mocks.api).not.toHaveBeenCalled();
+  });
+
+  it("纯客户端挂载：缓存已命中时首帧直接出图，不等待 effect", () => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    storeIfNewer(cacheKeyOf(currentScope(), { key: KEY }), 1, {
+      url: "https://signed/prewarmed",
+      delivery: "signed",
+      expiresAt,
+      refreshAt: expiresAt - 600,
+    });
+
+    const { result } = renderHook(() => useFileAccessUrl(KEY));
+    // renderHook 返回即首次渲染完成；此处不得为 undefined（否则纯客户端路径会闪骨架）
+    expect(result.current.url).toBe("https://signed/prewarmed");
+    expect(result.current.delivery).toBe("signed");
     expect(mocks.api).not.toHaveBeenCalled();
   });
 
@@ -246,6 +266,61 @@ describe("useFileAccessUrl", () => {
       // 不打断已挂载元素：展示地址保持旧值，缓存已换成新地址
       expect(result.current.url).toBe("https://signed/old");
       expect(peekMediaUrl(KEY)).toEqual({ url: "https://signed/new", delivery: "signed" });
+    });
+
+    it("缓存命中挂载：后台刷新只更新缓存，不替换已展示地址（规则 3.8）", async () => {
+      fakeClock();
+      storeIfNewer(cacheKeyOf(currentScope(), { key: KEY }), 1, {
+        url: "https://signed/old",
+        delivery: "signed",
+        expiresAt: EXPIRES,
+        refreshAt: REFRESH,
+      });
+      const { result, rerender } = renderHook(() => useFileAccessUrl(KEY));
+      // 纯客户端挂载直接命中缓存；不冻结展示值的话，到点换缓存会让已挂载元素换 src
+      expect(result.current.url).toBe("https://signed/old");
+      expect(mocks.api).not.toHaveBeenCalled();
+
+      mocks.api.mockResolvedValueOnce(signedBatch("https://signed/new", NEXT_EXPIRES, NEXT_REFRESH));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(REFRESH_DELAY_MS);
+        await settle();
+      });
+      expect(mocks.api).toHaveBeenCalledTimes(1);
+      // 全局通知与任意父级重渲染都不得替换已展示地址
+      act(() => rerender());
+      expect(result.current.url).toBe("https://signed/old");
+      expect(peekMediaUrl(KEY)).toEqual({ url: "https://signed/new", delivery: "signed" });
+    });
+
+    it("无关媒体的缓存写入不重渲染已挂载的 Hook", () => {
+      fakeClock();
+      storeIfNewer(cacheKeyOf(currentScope(), { key: KEY }), 1, {
+        url: "https://signed/stable",
+        delivery: "signed",
+        expiresAt: EXPIRES,
+        refreshAt: REFRESH,
+      });
+      let renders = 0;
+      const { result } = renderHook(() => {
+        renders += 1;
+        return useFileAccessUrl(KEY);
+      });
+      expect(result.current.url).toBe("https://signed/stable");
+      const before = renders;
+
+      // 无关 key 的写入会广播全局变更信号；本 Hook 的按源冻结快照引用不变，
+      // React 重查快照后必须放弃这次更新
+      act(() => {
+        storeIfNewer(cacheKeyOf(currentScope(), { key: OTHER_KEY }), 1, {
+          url: "https://signed/other",
+          delivery: "signed",
+          expiresAt: EXPIRES,
+          refreshAt: REFRESH,
+        });
+      });
+      expect(renders).toBe(before);
+      expect(result.current.url).toBe("https://signed/stable");
     });
 
     it("元素失败时优先使用后台刷新的新鲜地址，不再发描述请求", async () => {
@@ -508,5 +583,58 @@ describe("useFileAccessUrl", () => {
     act(() => changeSession());
     await waitFor(() => expect(result.current.url).toBe("https://signed/user-b"));
     expect(mocks.api).toHaveBeenCalledTimes(2);
+  });
+
+  it("换源到未解析媒体再换回：旧源的冻结不残留，重新读取缓存（Spec 2.1）", async () => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const store = (url: string, seq: number) => storeIfNewer(
+      cacheKeyOf(currentScope(), { key: KEY }),
+      seq,
+      { url, delivery: "signed", expiresAt, refreshAt: expiresAt - 600 },
+    );
+    store("https://signed/a1", 1);
+    // 中间源不结算：它没有可冻结的结果，旧源的 pin 不能借机存活。
+    // 用随会话中止的挂起请求，避免永久占用批次席位（并发上限 2）
+    hangUntilSessionChange();
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: string }) => useFileAccessUrl(value),
+      { initialProps: { value: KEY } },
+    );
+    expect(result.current.url).toBe("https://signed/a1");
+
+    // 来源未变：缓存更新不替换已展示地址（规则 3.8）
+    act(() => { store("https://signed/a2", 2); });
+    expect(result.current.url).toBe("https://signed/a1");
+
+    rerender({ value: OTHER_KEY });
+    await act(async () => { await settleMicrotasks(); });
+    expect(result.current.url).toBeUndefined();
+
+    rerender({ value: KEY });
+    // 换回来时重新读取来源：拿到 a2，而不是复用换源前的 a1
+    expect(result.current.url).toBe("https://signed/a2");
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+  });
+
+  it("缓存命中挂载：账号切换立即释放冻结，不等待新描述返回", async () => {
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    storeIfNewer(cacheKeyOf(currentScope(), { key: KEY }), 1, {
+      url: "https://signed/user-a",
+      delivery: "signed",
+      expiresAt,
+      refreshAt: expiresAt - 600,
+    });
+    mocks.api.mockResolvedValueOnce(signedBatch("https://signed/user-b"));
+    const { result } = renderHook(() => useFileAccessUrl(KEY));
+    expect(result.current.url).toBe("https://signed/user-a");
+    expect(mocks.api).not.toHaveBeenCalled();
+
+    act(() => changeSession("user-b"));
+    // 新描述尚未返回：旧账号的签名地址必须已经清空
+    expect(result.current.url).toBeUndefined();
+
+    await waitFor(() => expect(result.current.url).toBe("https://signed/user-b"));
+    expect(mocks.api).toHaveBeenCalledTimes(1);
   });
 });

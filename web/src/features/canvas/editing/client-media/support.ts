@@ -3,6 +3,7 @@
  * 裁剪矩形钳位已下沉 @noxrea/shared/crop-rect（前后端单一实现）。
  * 不依赖浏览器 API，可在 Node 测试环境中单测。
  */
+import { clamp01 } from "@/lib/utils/number";
 
 /**
  * 探测失败的负缓存（会话级，模块生命周期）：键为「探测档位 + 源 URL」。档位
@@ -64,7 +65,7 @@ export function resolveVideoBitrate(
     return undefined;
   }
   // 比例非有限（异常输入）时按整幅处理：保留源码率上限信息，不做缩放
-  const ratio = Number.isFinite(pixelRatio) ? Math.min(1, Math.max(0, pixelRatio)) : 1;
+  const ratio = Number.isFinite(pixelRatio) ? clamp01(pixelRatio) : 1;
   const cap = Math.round(sourceBitrate);
   // 上限取整后为 0（亚 0.5bps 的病态源）：源码率已无可用信息，交由编码器自决
   if (cap === 0) return undefined;

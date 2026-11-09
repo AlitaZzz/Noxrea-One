@@ -2,11 +2,13 @@
  * 统一上传管道的类型定义。
  *
  * 画布上所有「素材上云」入口（拖入画布、节点内替换、生成面板参考区、
- * 裁剪 / 宫格切分 / 标注等加工产物、全景截图、导演截图、资产库上传）
+ * 裁剪 / 宫格切分 / 标注等加工产物、全景截图、导演截图）
  * 共用同一条管道：调用方只描述「待上传数据」与「落库策略（sink）」，
  * 管道负责探测尺寸、建占位、并发上传、进度回写、成功落库与失败回滚。
+ *
+ * 不落画布的「Blob → 远程引用」上传（资产库、头像）属于 `entities/asset`。
  */
-import type { UploadErrorInfo, UploadProgressValue, UploadResult } from "@/lib/utils/upload";
+import type { UploadErrorInfo, UploadResult } from "@/lib/utils/upload";
 
 /** 媒体类型：决定创建哪种画布节点 */
 export type MediaKind = "image" | "video" | "audio";
@@ -59,9 +61,7 @@ export type UploadSink =
   /** 原地替换已有节点的内容（节点内上传） */
   | { kind: "replace-node"; nodeId: string; clearFields?: readonly string[] }
   /** 从已有节点加工派生的新节点（裁剪 / 宫格 / 标注 / 截图 / 翻转） */
-  | { kind: "derived-node"; sourceId: string; connect?: boolean }
-  /** 只上传拿 URL，不碰画布（资产库、头像） */
-  | { kind: "raw" };
+  | { kind: "derived-node"; sourceId: string; connect?: boolean };
 
 export interface UploadPlan {
   items: UploadItem[];
@@ -70,8 +70,6 @@ export interface UploadPlan {
   source?: "upload" | "derived";
   /** 为 true 时管道不弹任何提示，由调用方自行处理 */
   silent?: boolean;
-  /** 单文件进度回调（index 对应 plan.items 下标；进度值含阶段，见 UploadProgressValue） */
-  onProgress?: (index: number, progress: UploadProgressValue) => void;
 }
 
 export interface UploadSummary {
@@ -86,7 +84,7 @@ export interface UploadSummary {
 }
 
 export interface UploadHandle {
-  /** 立即上画布的占位节点 ID（乐观 UI）；raw sink 为空数组 */
+  /** 立即上画布的占位节点 ID（乐观 UI） */
   nodeIds: string[];
   /** 全部上传结束后的汇总 */
   settled: Promise<UploadSummary>;

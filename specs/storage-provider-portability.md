@@ -152,11 +152,11 @@
 ### 服务端
 
 - [server/core/settings/registry.ts](../server/core/settings/registry.ts)：新增 `storage.s3.provider`（enum），删除 `storage.s3.path_style`。
-- 新增 `server/services/storage/providers.ts`：profile → 寻址风格 + 探测项 + 能力基线的唯一来源。
+- 新增 `server/services/storage/providers.ts`：profile → 寻址风格 + 探测项 + 能力基线的唯一来源，并声明 / 导出能力记录类型 `StorageCapabilities`（规则 4.1）；`core/metrics` 只消费扁平化的 `StorageProbeMetrics`，不拥有该领域记录。
 - [server/services/storage/backends/s3.ts](../server/services/storage/backends/s3.ts)：构造 `S3Client` 时固定校验和策略与 `forcePathStyle`；`probe()` 由 `void` 改为返回能力摘要；`presignGet` 按能力位决定是否带 `response-*`。
 - [server/services/storage/backend.ts](../server/services/storage/backend.ts)：`probe` 契约由「成功/抛错」扩展为「成功/抛错 + 能力摘要」。
 - [server/services/storage/service.ts](../server/services/storage/service.ts)：装配时读 profile，持有探测结果，向 HTTP 层暴露只读摘要。
-- [server/core/bootstrap.ts](../server/core/bootstrap.ts)：输出探测摘要日志；启动失败信息包含两种寻址的尝试结果。
+- [server/bootstrap.ts](../server/bootstrap.ts)：输出探测摘要日志；启动失败信息包含两种寻址的尝试结果。
 - [server/http/app.ts](../server/http/app.ts)：健康检查附带能力摘要。
 
 ### 前端

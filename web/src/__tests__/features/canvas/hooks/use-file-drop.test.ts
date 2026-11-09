@@ -1,241 +1,185 @@
 /**
- * 文件拖放 hook 核心逻辑测试。
+ * useFileDrop 生产 hook 的路由测试。
  *
- * 覆盖：单文件/多文件/视频/混合/部分失败。
+ * 只验证 hook 自身的落点判定与分流（文件 → 上传管道、资产 → 回调、参考拖拽忽略、
+ * 空列表 / 忽略目标不触发）；文件 → 节点的网格排布由 create-nodes-from-files 的
+ * 单元测试覆盖，避免在此复制生产实现。
  */
+// @vitest-environment jsdom
 
-import { beforeEach,describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import type { DragEvent } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type MockNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; style?: Record<string, unknown> };
+import { ASSET_DRAG_TYPE } from "@/entities/asset";
+import { useFileDrop } from "@/features/canvas/hooks/use-file-drop";
 
-/** handleDrop 的核心逻辑（去 DOM/上传依赖后的纯函数版本） */
-async function handleFileDrop(
-  files: File[],
-  screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
-  clientX: number,
-  clientY: number,
-  pushHistory: (snapshot: Record<string, unknown>) => void,
-  takeCanvasSnapshot: () => Record<string, unknown>,
-  createImageNode: (pos: { x: number; y: number }, src: string) => MockNode,
-  createVideoNode: (pos: { x: number; y: number }, src: string) => MockNode,
-  applyThumbnailSettings: (node: MockNode, w: number, h: number, label: string) => MockNode,
-  addNodes: (nodes: MockNode[]) => void,
-  uploadFile: (file: File) => Promise<{ url: string } | null>,
-  loadMediaDim: (url: string, isVideo: boolean) => Promise<{ w: number; h: number }>,
-): Promise<{ created: number; total: number }> {
-  if (files.length === 0) return { created: 0, total: 0 };
+const mocks = vi.hoisted(() => ({
+  createNodesFromFiles: vi.fn(),
+}));
 
-  const pos = screenToFlowPosition({ x: clientX, y: clientY });
+vi.mock("@/features/canvas/upload", () => ({
+  createNodesFromFiles: (...args: unknown[]) => mocks.createNodesFromFiles(...args),
+}));
 
-  const results = await Promise.allSettled(
-    files.map(async (file, index) => {
-      const col = index % 4;
-      const row = Math.floor(index / 4);
+type DataTransferLike = {
+  types: string[];
+  files: File[];
+  dropEffect: string;
+  getData: (type: string) => string;
+};
 
-      if (file.type.startsWith("image/")) {
-        const uploadResult = await uploadFile(file);
-        if (!uploadResult?.url) return null;
-        const dims = await loadMediaDim(uploadResult.url, false);
-        if (!dims.w || !dims.h) return null;
-        const displayW = Math.round(dims.w * (dims.w > dims.h ? 360/dims.w : 360/dims.h));
-        const displayH = Math.round(dims.h * (dims.w > dims.h ? 360/dims.w : 360/dims.h));
-        const node = createImageNode(
-          { x: pos.x + col * (displayW + 30), y: pos.y + row * (displayH + 24 + 30) },
-          uploadResult.url,
-        );
-        applyThumbnailSettings(node, dims.w, dims.h, file.name);
-        return node;
-      } else if (file.type.startsWith("video/")) {
-        const uploadResult = await uploadFile(file);
-        if (!uploadResult?.url) return null;
-        const dims = await loadMediaDim(uploadResult.url, true);
-        const nw = dims.w || 1280;
-        const nh = dims.h || 720;
-        const displayW = Math.round(nw * (nw > nh ? 360/nw : 360/nh));
-        const displayH = Math.round(nh * (nw > nh ? 360/nw : 360/nh));
-        const node = createVideoNode(
-          { x: pos.x + col * (displayW + 30), y: pos.y + row * (displayH + 24 + 30) },
-          uploadResult.url,
-        );
-        applyThumbnailSettings(node, nw, nh, file.name);
-        return node;
-      }
-      return null;
-    }),
-  );
-
-  const createdNodes = results
-    .filter((r) => r.status === "fulfilled" && r.value !== null)
-    .map((r) => (r as PromiseFulfilledResult<MockNode>).value);
-
-  if (createdNodes.length > 0) {
-    pushHistory(takeCanvasSnapshot());
-    addNodes(createdNodes);
-  }
-  return { created: createdNodes.length, total: files.length };
+function makeDataTransfer(opts: {
+  types?: string[];
+  files?: File[];
+  data?: Record<string, string>;
+} = {}): DataTransferLike {
+  return {
+    types: opts.types ?? [],
+    files: opts.files ?? [],
+    dropEffect: "none",
+    getData: (type) => opts.data?.[type] ?? "",
+  };
 }
 
-describe("handleFileDrop", () => {
-  const screenToFlowPosition = vi.fn((pos) => pos);
-  const pushHistory = vi.fn();
-  const takeCanvasSnapshot = vi.fn(() => ({}));
-  const createImageNode = vi.fn((pos, src) => ({
-    id: "img-" + Date.now(), type: "image-node", position: pos, data: { src },
-  }));
-  const createVideoNode = vi.fn((pos, src) => ({
-    id: "vid-" + Date.now(), type: "video-node", position: pos, data: { src },
-  }));
-  const applyThumbnailSettings = vi.fn((node) => node);
-  const addNodes = vi.fn();
-  const uploadFile = vi.fn();
-  const loadMediaDim = vi.fn();
+function makeEvent(
+  dataTransfer: DataTransferLike | null,
+  target: EventTarget | null = null,
+  clientX = 120,
+  clientY = 80,
+): DragEvent {
+  return {
+    preventDefault: vi.fn(),
+    target: target ?? { closest: () => null },
+    dataTransfer,
+    clientX,
+    clientY,
+  } as unknown as DragEvent;
+}
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+function file(name: string, type: string): File {
+  return new File(["x"], name, { type });
+}
 
-  // ── 单文件 ──
-
-  it("单图片文件上传成功", async () => {
-    uploadFile.mockResolvedValue({ url: "/api/files/1/ab/img.png" });
-    loadMediaDim.mockResolvedValue({ w: 800, h: 600 });
-    const files = [new File(["fake"], "photo.png", { type: "image/png" })];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 100, 200,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(1);
-    expect(addNodes).toHaveBeenCalledWith([expect.objectContaining({ type: "image-node" })]);
-  });
-
-  it("视频文件创建 VideoNode", async () => {
-    uploadFile.mockResolvedValue({ url: "/api/files/1/ab/vid.mp4" });
-    loadMediaDim.mockResolvedValue({ w: 1920, h: 1080 });
-    const files = [new File(["fake"], "movie.mp4", { type: "video/mp4" })];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 100, 200,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(1);
-    expect(createVideoNode).toHaveBeenCalled();
-    expect(createImageNode).not.toHaveBeenCalled();
-    expect(addNodes).toHaveBeenCalledTimes(1);
-  });
-
-  it("非图片非视频文件被忽略", async () => {
-    const files = [new File(["fake"], "doc.pdf", { type: "application/pdf" })];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(0);
-    expect(addNodes).not.toHaveBeenCalled();
-  });
-
-  it("空文件列表不处理", async () => {
-    const result = await handleFileDrop(
-      [], screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(0);
-    expect(screenToFlowPosition).not.toHaveBeenCalled();
-  });
-
-  // ── 多文件 ──
-
-  it("多图片网格排列", async () => {
-    uploadFile.mockResolvedValue({ url: "/api/files/1/ab/img.png" });
-    loadMediaDim.mockResolvedValue({ w: 400, h: 300 });
-    const files = [
-      new File(["f1"], "a.png", { type: "image/png" }),
-      new File(["f2"], "b.png", { type: "image/png" }),
-      new File(["f3"], "c.png", { type: "image/png" }),
-    ];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(3);
-    expect(addNodes).toHaveBeenCalledTimes(1);
-    // 验证网格位置：第 0 个在原点，第 1 个水平偏移 (displayW + 30)
-    const nodes = addNodes.mock.calls[0][0];
-    expect(nodes[0].position.x).toBe(0);
-    expect(nodes[0].position.y).toBe(0);
-    // displayW = round(400 * 360/400) = 360, displayH = round(300 * 360/400) = 270
-    expect(nodes[1].position.x).toBe(360 + 30);
-    expect(nodes[1].position.y).toBe(0);
-    expect(nodes[2].position.x).toBe((360 + 30) * 2);
-    expect(nodes[2].position.y).toBe(0);
-  });
-
-  it("混合图片和视频各自创建正确类型", async () => {
-    uploadFile.mockResolvedValue({ url: "/api/files/1/ab/file" });
-    loadMediaDim.mockResolvedValue({ w: 640, h: 480 });
-    const files = [
-      new File(["f1"], "img.png", { type: "image/png" }),
-      new File(["f2"], "vid.mp4", { type: "video/mp4" }),
-    ];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(2);
-    expect(createImageNode).toHaveBeenCalledTimes(1);
-    expect(createVideoNode).toHaveBeenCalledTimes(1);
-  });
-
-  // ── 部分失败 ──
-
-  it("部分上传失败——成功的不受影响", async () => {
-    uploadFile
-      .mockResolvedValueOnce({ url: "/api/files/1/ok.png" })
-      .mockRejectedValueOnce(new Error("network error"))
-      .mockResolvedValueOnce({ url: "/api/files/1/ok2.png" });
-    loadMediaDim.mockResolvedValue({ w: 200, h: 200 });
-    const files = [
-      new File(["f1"], "a.png", { type: "image/png" }),
-      new File(["f2"], "b.png", { type: "image/png" }),
-      new File(["f3"], "c.png", { type: "image/png" }),
-    ];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(2);
-    expect(addNodes).toHaveBeenCalledTimes(1);
-    expect(addNodes.mock.calls[0][0].length).toBe(2);
-  });
-
-  it("全部失败时不调用 addNodes", async () => {
-    uploadFile.mockRejectedValue(new Error("network error"));
-    loadMediaDim.mockResolvedValue({ w: 100, h: 100 });
-    const files = [
-      new File(["f1"], "a.png", { type: "image/png" }),
-      new File(["f2"], "b.png", { type: "image/png" }),
-    ];
-    const result = await handleFileDrop(
-      files, screenToFlowPosition, 0, 0,
-      pushHistory, takeCanvasSnapshot, createImageNode, createVideoNode,
-      applyThumbnailSettings, addNodes, uploadFile, loadMediaDim,
-    );
-    expect(result.created).toBe(0);
-    expect(addNodes).not.toHaveBeenCalled();
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.createNodesFromFiles.mockResolvedValue(undefined);
 });
 
-describe("handleDragOver", () => {
-  it("阻止默认行为并设置 dropEffect", () => {
-    const e: { preventDefault: ReturnType<typeof vi.fn>; dataTransfer: { dropEffect: string } } = { preventDefault: vi.fn(), dataTransfer: { dropEffect: "" } };
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-    expect(e.preventDefault).toHaveBeenCalled();
-    expect(e.dataTransfer.dropEffect).toBe("copy");
+describe("useFileDrop（生产 hook）", () => {
+  it("拖入文件：按落点交给 createNodesFromFiles，不走资产回调", async () => {
+    const screenToFlowPosition = vi.fn(() => ({ x: 10, y: 20 }));
+    const onAssetDrop = vi.fn();
+    const { result } = renderHook(() => useFileDrop(screenToFlowPosition, undefined, undefined, onAssetDrop));
+
+    const files = [file("a.png", "image/png"), file("b.mp4", "video/mp4")];
+    await act(async () => {
+      await result.current.handleDrop(makeEvent(makeDataTransfer({ types: ["Files"], files })));
+    });
+
+    expect(screenToFlowPosition).toHaveBeenCalledWith({ x: 120, y: 80 });
+    expect(mocks.createNodesFromFiles).toHaveBeenCalledWith(files, { x: 10, y: 20 });
+    expect(onAssetDrop).not.toHaveBeenCalled();
+  });
+
+  it("拖入资产：解析 ASSET_DRAG_TYPE 后调用 onAssetDrop，不触发上传", async () => {
+    const pos = { x: 30, y: 40 };
+    const screenToFlowPosition = vi.fn(() => pos);
+    const onAssetDrop = vi.fn();
+    const { result } = renderHook(() => useFileDrop(screenToFlowPosition, undefined, undefined, onAssetDrop));
+
+    const asset = { id: "asset-1", fileKey: "user/1/a.png" };
+    await act(async () => {
+      await result.current.handleDrop(
+        makeEvent(makeDataTransfer({ types: [ASSET_DRAG_TYPE], data: { [ASSET_DRAG_TYPE]: JSON.stringify(asset) } })),
+      );
+    });
+
+    expect(onAssetDrop).toHaveBeenCalledWith(asset, pos);
+    expect(mocks.createNodesFromFiles).not.toHaveBeenCalled();
+  });
+
+  it("资产数据损坏 / 缺少回调：静默丢弃，不抛错也不上传", async () => {
+    const { result: withoutHandler } = renderHook(() => useFileDrop((p) => p));
+    await act(async () => {
+      await withoutHandler.current.handleDrop(
+        makeEvent(makeDataTransfer({ types: [ASSET_DRAG_TYPE], data: { [ASSET_DRAG_TYPE]: "{bad" } })),
+      );
+    });
+    expect(mocks.createNodesFromFiles).not.toHaveBeenCalled();
+
+    const onAssetDrop = vi.fn();
+    const { result } = renderHook(() => useFileDrop((p) => p, undefined, undefined, onAssetDrop));
+    await act(async () => {
+      await result.current.handleDrop(
+        makeEvent(makeDataTransfer({ types: [ASSET_DRAG_TYPE], data: { [ASSET_DRAG_TYPE]: "{bad" } })),
+      );
+    });
+    expect(onAssetDrop).not.toHaveBeenCalled();
+    expect(mocks.createNodesFromFiles).not.toHaveBeenCalled();
+  });
+
+  it("参考区缩略图拖拽、空文件列表：不触发上传", async () => {
+    const { result } = renderHook(() => useFileDrop((p) => p));
+
+    await act(async () => {
+      await result.current.handleDrop(
+        makeEvent(makeDataTransfer({ types: ["application/x-ref-image"] })),
+      );
+    });
+    await act(async () => {
+      await result.current.handleDrop(makeEvent(makeDataTransfer({ types: ["Files"], files: [] })));
+    });
+
+    expect(mocks.createNodesFromFiles).not.toHaveBeenCalled();
+  });
+
+  it("忽略目标（资产弹窗 / 抽屉）：drop 与 dragover 都不处理", async () => {
+    const blocked = { closest: () => ({}) } as unknown as HTMLElement;
+    const { result } = renderHook(() => useFileDrop((p) => p, (target) => target === blocked));
+
+    await act(async () => {
+      await result.current.handleDrop(makeEvent(makeDataTransfer({ types: ["Files"], files: [file("a.png", "image/png")] }), blocked));
+    });
+    expect(mocks.createNodesFromFiles).not.toHaveBeenCalled();
+
+    const over = makeEvent(makeDataTransfer({ types: ["Files"], files: [file("a.png", "image/png")] }), blocked);
+    act(() => { result.current.handleDragOver(over); });
+    expect(over.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("dragover 分流：文件接受并显示遮罩，资产接受，参考 / 非文件拒绝但不显示遮罩", () => {
+    const { result } = renderHook(() => useFileDrop((p) => p));
+
+    const filesOver = makeEvent(makeDataTransfer({ types: ["Files"] }));
+    act(() => { result.current.handleDragOver(filesOver); });
+    expect(filesOver.preventDefault).toHaveBeenCalled();
+    expect(filesOver.dataTransfer!.dropEffect).toBe("copy");
+    expect(result.current.isFileDragging).toBe(true);
+
+    const assetOver = makeEvent(makeDataTransfer({ types: [ASSET_DRAG_TYPE] }));
+    act(() => { result.current.handleDragOver(assetOver); });
+    expect(assetOver.dataTransfer!.dropEffect).toBe("copy");
+
+    const refOver = makeEvent(makeDataTransfer({ types: ["application/x-ref-video"] }));
+    act(() => { result.current.handleDragOver(refOver); });
+    expect(refOver.preventDefault).toHaveBeenCalled();
+    expect(refOver.dataTransfer!.dropEffect).toBe("none");
+  });
+
+  it("dragstart 只拦截浏览器原生拖拽，放行参考拖拽与资产拖拽", () => {
+    const { result } = renderHook(() => useFileDrop((p) => p));
+
+    const native = makeEvent(makeDataTransfer({ types: ["text/plain"] }));
+    act(() => { result.current.handleDragStart(native); });
+    expect(native.preventDefault).toHaveBeenCalled();
+
+    const ref = makeEvent(makeDataTransfer({ types: ["application/x-ref-audio"] }));
+    act(() => { result.current.handleDragStart(ref); });
+    expect(ref.preventDefault).not.toHaveBeenCalled();
+
+    const asset = makeEvent(makeDataTransfer({ types: [ASSET_DRAG_TYPE] }));
+    act(() => { result.current.handleDragStart(asset); });
+    expect(asset.preventDefault).not.toHaveBeenCalled();
   });
 });

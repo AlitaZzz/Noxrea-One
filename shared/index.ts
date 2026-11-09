@@ -34,3 +34,11 @@ export const TASK_STATUSES = taskStatusSchema.options;
 
 /** 终态子集：终态判断、事件广播与对账接口的共同契约 */
 export const TASK_TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
+
+/** 终态类型：由终态子集派生；crud 与 services 共用，避免任一侧自行维护字面量 */
+export type TerminalTaskStatus = (typeof TASK_TERMINAL_STATUSES)[number];
+
+/** 终态判断的单一谓词：server 路由 / worker 与 web SSE 共用同一实现 */
+export function isTerminalTaskStatus(status: string): status is TerminalTaskStatus {
+  return (TASK_TERMINAL_STATUSES as readonly string[]).includes(status);
+}

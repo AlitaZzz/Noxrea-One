@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@server/services/gateway/router", () => ({ routeGenerate: mocks.routeGenerate }));
-vi.mock("@server/crud/task", () => ({
+vi.mock("@server/services/tasks/terminal", () => ({
   safeCompleteTask: mocks.safeCompleteTask,
   safeFailTask: mocks.safeFailTask,
 }));
@@ -143,7 +143,7 @@ describe("executeSubmissionPhase", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultText: "hello" },
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
     expect(mocks.finalizeGeneratedResult).not.toHaveBeenCalled();
   });
@@ -189,7 +189,7 @@ describe("executeSubmissionPhase", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       { error: "quota exceeded", errorCode: "generation.upstream_no_result" },
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 
@@ -235,7 +235,7 @@ describe("executeSubmissionPhase", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ errorCode: "generation.missing_provider_id" }),
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 

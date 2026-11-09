@@ -7,189 +7,47 @@
 
 "use client";
 
-import type { FrameSelection } from "@noxrea/shared";
-import { type CropRectPx } from "@noxrea/shared/crop-rect";
-import { storageKeyOf } from "@noxrea/shared/url";
 import { type NodeProps } from "@xyflow/react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { IDLE_PLAYBACK, type PlaybackMirror } from "@/components/media/media-playback";
 import {
-  PauseIcon,
-  PlayIcon,
   ReloadOutlined,
   UploadOutlined,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
-import { VolumeMuteIcon } from "@/components/ui/AppIcon";
-import { VolumeUpIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { useAssetsStore } from "@/features/assets/store";
-import {
-  captureFrame as captureFrameApi,
-  cropVideo as cropVideoApi,
-  detachAudio as detachAudioApi,
-  type DetachAudioResult,
-  extractClip as extractClipApi,
-  readCapturedFrame,
-  readDetachAudioResult,
-  readEditResultKey,
-} from "@/features/canvas/api/file-api";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
-import {
-  tryClipOnClient,
-  tryCropOnClient,
-  tryDetachAudioOnClient,
-} from "@/features/canvas/editing/client-media/client-video";
-import { resolveBusyLabelKey, useMediaEditTask } from "@/features/canvas/editing/use-media-edit-task";
+import { resolveBusyLabelKey } from "@/features/canvas/editing/use-media-edit-task";
 import VideoCropPanel from "@/features/canvas/editing/VideoCropPanel";
 import { useCanvasVideo } from "@/features/canvas/hooks/use-canvas-video";
-import { createEdge } from "@/features/canvas/node-defaults";
 import CanvasImage from "@/features/canvas/shared/CanvasImage";
 import { acceptsInput } from "@/features/canvas/shared/connection-rules";
 import LimeRing from "@/features/canvas/shared/LimeRing";
-import { IDLE_PLAYBACK, type PlaybackMirror } from "@/features/canvas/shared/media-playback";
 import MediaPreviewOverlay from "@/features/canvas/shared/MediaPreviewOverlay";
 import { notifyActionFailed } from "@/features/canvas/shared/notify";
 import { registerVideoElement } from "@/features/canvas/shared/video-playback-registry";
-import { markDirtyImmediate, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { VideoNode as VideoNodeType, VideoNodeData } from "@/features/canvas/types";
-import {
-  createAudioNodeFromRef,
-  createImageNodeFromRef,
-  createVideoNodeFromRef,
-  DERIVED_BASE_GAP_Y,
-  useNodeUpload,
-} from "@/features/canvas/upload";
 import { useUploadProgress } from "@/features/canvas/upload/upload-progress-store";
-import { DEFAULT_NODE_HEIGHT, EventNames, isGenerating, NODE_TYPE } from "@/lib/constants";
+import { isGenerating, NODE_TYPE } from "@/lib/constants";
 import { fileRefUrl, withManagedFileWidth } from "@/lib/file-url";
 import { useElementMirror } from "@/lib/use-element-mirror";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
-import { downloadManagedFile } from "@/lib/utils/download";
-import { formatBytes, formatTime } from "@/lib/utils/format";
+import { formatBytes } from "@/lib/utils/format";
 import { AUDIO_DECISION_MIN_TIME, detectAudioTrack, mediaAspect } from "@/lib/utils/media-utils";
+import { clamp01 } from "@/lib/utils/number";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import BusyOverlay from "./BusyOverlay";
 import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
-
-interface VideoControlsProps {
-  /** 当前会话视频元素（元素身份变化时监听器随之重挂，重试重挂后控件照常工作） */
-  video: HTMLVideoElement | null;
-  /** 命令式写入通道（seekTo 改 currentTime）；与 video 指向同一元素 */
-  videoRef: { current: HTMLVideoElement | null };
-  visible: boolean;
-  panelOpen: boolean;
-  playing: boolean;
-  volume: number;
-  hasAudio: boolean;
-  togglePlay: () => void;
-  toggleMute: () => void;
-  applyVolume: (value: number) => void;
-}
-
-const VideoControls = memo(function VideoControls({
-  video,
-  videoRef,
-  visible,
-  panelOpen,
-  playing,
-  volume,
-  hasAudio,
-  togglePlay,
-  toggleMute,
-  applyVolume,
-}: VideoControlsProps) {
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    if (!video) return;
-    const sync = () => setProgress(video.currentTime || 0);
-    const syncDuration = () => {
-      setDuration(Number.isFinite(video.duration) ? video.duration : 0);
-      sync();
-    };
-    syncDuration();
-    video.addEventListener("timeupdate", sync);
-    video.addEventListener("seeked", sync);
-    video.addEventListener("loadedmetadata", syncDuration);
-    return () => {
-      video.removeEventListener("timeupdate", sync);
-      video.removeEventListener("seeked", sync);
-      video.removeEventListener("loadedmetadata", syncDuration);
-    };
-  }, [video]);
-
-  const seekTo = useCallback((value: number) => {
-    const video = videoRef.current;
-    if (!video || !duration) return;
-    const time = Math.max(0, Math.min(duration, value));
-    video.currentTime = time;
-    setProgress(time);
-  }, [duration, videoRef]);
-
-  return (
-    <div className={`nodrag absolute bottom-4 left-0 right-0 z-10 flex flex-col gap-2 px-2 video-controls-bar ${visible || panelOpen ? "opacity-100" : "opacity-0 group-hover/body:opacity-100"} transition-opacity`}>
-      <Slider
-        min={0}
-        max={duration || 1}
-        step={0.01}
-        value={[Math.min(progress, duration || 1)]}
-        disabled={!duration}
-        aria-label="Video progress"
-        className="h-3 w-full"
-        onPointerDown={(event) => event.stopPropagation()}
-        onValueChange={([value]) => seekTo(value)}
-      />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="video-control-btn shrink-0 text-white hover:text-white/80"
-            onClick={(event) => { event.stopPropagation(); togglePlay(); }}
-            aria-label={playing ? "pause" : "play"}
-          >
-            {playing ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
-          </Button>
-          <span className="text-sm text-white flex-shrink-0 tabular-nums">
-            {formatTime(progress)} / {formatTime(duration)}
-          </span>
-        </div>
-        {hasAudio && <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="video-control-btn shrink-0 text-white hover:text-white/80"
-            onClick={(event) => { event.stopPropagation(); toggleMute(); }}
-            aria-label={volume === 0 ? "unmute" : "mute"}
-          >
-            {volume === 0 ? <VolumeMuteIcon className="text-xl" /> : <VolumeUpIcon className="text-xl" />}
-          </Button>
-          <Slider
-            min={0}
-            max={1}
-            step={0.01}
-            value={[volume]}
-            aria-label="Volume"
-            className="h-3 w-20"
-            onPointerDown={(event) => event.stopPropagation()}
-            onValueChange={([value]) => applyVolume(value)}
-          />
-        </div>}
-      </div>
-    </div>
-  );
-});
+import { useVideoNodeActions } from "./video/use-video-node-actions";
+import VideoControls from "./video/VideoControls";
 
 function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
   const { t } = useTranslation();
@@ -218,13 +76,20 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
     reloadToken: accessReloadToken,
   } = useFileAccessUrl(logicalSrc);
   const loadingSrc = accessSrc ?? "";
-  // 本地处理忙状态：抽帧 / 分离音频 / 片段截取 / 画面裁剪互斥共用（同一节点
-  // 同一时刻只跑一个）。busy 形状与任务编排（守卫 / 取消 / 客户端失败切服务端
-  // 兜底）统一由 useMediaEditTask 提供（specs/client-video-editing.md 降级契约）
-  const { busy, runEditTask, cancelActive, expectSource } = useMediaEditTask(id);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const openPreview = useCallback(() => setPreviewOpen(true), []);
+  const { busy, commitHasAudio, handleUpload } = useVideoNodeActions({
+    id,
+    src,
+    label: data.label,
+    naturalWidth: data.naturalWidth,
+    naturalHeight: data.naturalHeight,
+    hasAudio: data.hasAudio,
+    videoRef,
+    onPreview: openPreview,
+  });
   // 元素重挂纪元（失败重试）：与签名重挂令牌、源地址一起构成元素的真实身份。
   // 播放镜像必须按元素身份记账而不是只按源地址——签名重描述成功后地址可能不变、
   // 只有令牌 +1，元素已换成新实例（暂停在 0），旧镜像会停在「暂停」或残留播放态
@@ -374,7 +239,7 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
   /** 同步音量到 video 元素，并把最终值绑回 state（拖动结束也会走 setVolume） */
   const applyVolume = useCallback((value: number) => {
     const v = videoRef.current;
-    const clamped = Math.max(0, Math.min(1, value));
+    const clamped = clamp01(value);
     if (v) v.volume = clamped;
     setVolume(clamped);
     setAutoplayMuted(false);
@@ -386,10 +251,6 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
     applyVolume(volume === 0 ? lastVolume || 0.5 : 0);
   }, [volume, lastVolume, applyVolume]);
 
-  // 换源替换 / 卸载：中止进行中的本地处理任务（抽帧请求 / 客户端管线）——
-  // 旧源的产物不得写入已换成新源的节点
-  useEffect(() => () => cancelActive(), [cancelActive, src]);
-
   /** 选帧 / 片段截取面板打开期间：hover 播放整体让位，
       不顶掉面板的循环预览与所选帧 */
   const capturingFrame = useCallback(() => {
@@ -398,7 +259,7 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
   }, [id]);
 
   // 连线 / 拖动进行中：hover 播放整体让位——拖线悬停或拖动节点时视频不该自行开播
-  // （交互状态机瞬态真相源在 store，节点组件与 InfiniteCanvas 共用同一状态）
+  // （交互状态机瞬态真相源在 store，节点组件与 CanvasSurface 共用同一状态）
   const interactionBusy =
     interaction.mode === "connecting" || interaction.mode === "dragging-nodes";
 
@@ -472,23 +333,6 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
   }, []);
 
   /**
-   * 回填音轨结论到节点数据。
-   * skipHistory：探测属于渲染副产物，不该占用撤销栈。
-   */
-  const commitHasAudio = useCallback(
-    (value: boolean) => {
-      if (data.hasAudio === value) return;
-      useCanvasStore.getState().updateNodeData(
-        id,
-        { hasAudio: value } as Partial<VideoNodeData>,
-        undefined,
-        { skipHistory: true },
-      );
-    },
-    [data.hasAudio, id],
-  );
-
-  /**
    * 浏览器能直接读出音轨时（Firefox 的 mozHasAudio、Safari 的 audioTracks）立即定论。
    *
    * 只采纳「有音轨」的确定结论：「无音轨」在 Chrome 上依赖播放后才可靠的解码计数，
@@ -545,336 +389,6 @@ function VideoNode({ id, data }: NodeProps<VideoNodeType>) {
     if (capturingFrame()) return;
     resolveAudioTrack();
   }, [resolveAudioTrack, capturingFrame, data.duration, data.naturalWidth, id]);
-
-  const captureFrame = useCallback(async (selection: FrameSelection) => {
-    const videoKey = storageKeyOf(src);
-    if (!videoKey) {
-      // 确认不自关契约的兜底：源已失效或不是存储 key（外部 URL）时抽帧无从
-      // 进行——关掉仍打开的帧截取面板，不留无响应的确认键（抽帧是只接受
-      // 存储 key 的服务端操作，不需要本地视频元素）
-      useCanvasStore.getState().setFrameCaptureNodeId(null);
-      return;
-    }
-    runEditTask({
-      kind: "capture",
-      // 抽帧被接受：关闭帧截取面板（面板不在确认时自关——busy 守卫拒绝时面板
-      // 保持打开、播放位置原样保留可重试，与截取面板的「确认不自关」契约一致）
-      onAccept: () => useCanvasStore.getState().setFrameCaptureNodeId(null),
-      // 纯服务端任务（无客户端管线）：不提供取消入口，但支持换源中止
-      serverTask: async ({ signal }) => {
-        const res = await captureFrameApi(videoKey, selection, signal);
-        return readCapturedFrame(res, signal, {
-          notification,
-          t,
-          errorKey: "error.capture_frame.capture_failed",
-          nodeId: id,
-        });
-      },
-      onSuccess: async (frame) => {
-        // 源已被替换：旧源的抽帧产物不再写入
-        if (!expectSource(src)) return;
-        const { width: nw, height: nh, time: capturedTime } = frame;
-        const label = `${data.label || t("common.frame")} #${Math.round(capturedTime * 10) / 10}s`;
-        // 投影只暴露持久化 key；响应 url 不进入节点构建
-        await createImageNodeFromRef(id, frame.key, nw, nh, label, useCanvasStore.getState(), { source: "derived" }, undefined, label);
-      },
-      errorKey: "error.capture_frame.capture_failed",
-      logLabel: "Frame capture failed:",
-    });
-  }, [src, data.label, id, t, notification, runEditTask, expectSource]);
-
-  /**
-   * 分离音频：优先走客户端管线（纯重封装，零解码，specs/client-video-editing.md），
-   * 探测不支持或管线失败自动回退服务端。两个产物都作为派生节点连回源节点。
-   *
-   * 连线策略：两个产物节点都直接连回原视频（原视频 → 静音视频、原视频 → 音频），
-   * 与宫格切分一致，不做链式挂接、也不迁移源节点的旧边。
-   *
-   * 历史栈：先用 write:false 仅构建两个节点，再一次 addNodes + setEdges 同批
-   * 写入——addNodes 压一条「分离前」快照，setEdges 被节流不重复压栈，
-   * 撤销一次即整体删除两个派生节点及其连线。
-   */
-  const handleDetachAudio = useCallback(async () => {
-    const videoKey = storageKeyOf(src);
-    if (!videoKey) return;
-    runEditTask({
-      kind: "detach",
-      // 客户端管线：用户取消静默复位；不支持（非 ISO-BMFF 容器 / 非 AAC 音轨 /
-      // 无音轨）/ 管线失败回退服务端；其余异常向上抛。
-      // 客户端产物补齐派生节点所需的 mime / ext，与服务端响应同形
-      clientTask: async ({ signal, onProgress }) => {
-        const result = await tryDetachAudioOnClient(videoKey, { signal, onProgress });
-        return {
-          audio: { ...result.audio, mime: "audio/mp4", ext: ".m4a" },
-          video: { ...result.video, mime: "video/mp4", ext: ".mp4" },
-        } satisfies DetachAudioResult;
-      },
-      serverTask: async ({ signal }) => {
-        const res = await detachAudioApi(videoKey, signal);
-        return readDetachAudioResult(res, signal, {
-          notification,
-          t,
-          errorKey: "detach.failed",
-          nodeId: id,
-          // 确认无音轨后同步禁用入口，避免用户反复点击撞同一个错误
-          onErrorCode: (code) => {
-            if (code === "detach_audio.no_audio_track") commitHasAudio(false);
-          },
-        });
-      },
-      onSuccess: async (detached) => {
-        // 源已被替换：旧源的派生产物不再写入（各编辑动作 onSuccess 同一守卫）
-        if (!expectSource(src)) return;
-        const { audio, video } = detached;
-        const v = videoRef.current;
-        const nw = v?.videoWidth || data.naturalWidth || 0;
-        const nh = v?.videoHeight || data.naturalHeight || 0;
-        const store = useCanvasStore.getState();
-
-        // 1. 仅构建两个节点（write:false 不写 store），随后同批写入
-        const mutedNode = createVideoNodeFromRef(
-          id,
-          video.key,
-          nw,
-          nh,
-          t("detach.mutedSuffix"),
-          store,
-          { source: "derived" },
-          undefined,
-          undefined,
-          { write: false },
-        );
-        // 音频节点排在静音视频正下方，避免同批产物重叠
-        const audioNode = createAudioNodeFromRef(
-          id,
-          audio.key,
-          t("detach.audioSuffix"),
-          store,
-          { source: "derived" },
-          {
-            x: mutedNode.position.x,
-            y:
-              mutedNode.position.y +
-              ((mutedNode.style?.height as number) || DEFAULT_NODE_HEIGHT) +
-              DERIVED_BASE_GAP_Y,
-          },
-          undefined,
-          { write: false },
-        );
-
-        // 2. 两个产物节点都直接连回原视频，节点与边同批写入：
-        //    批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
-        withHistoryBatch(() => {
-          store.addNodes([mutedNode, audioNode]);
-          store.setEdges([
-            ...store.edges,
-            createEdge(id, mutedNode.id),
-            createEdge(id, audioNode.id),
-          ]);
-        });
-
-        commitHasAudio(true);
-        markDirtyImmediate();
-      },
-      errorKey: "detach.failed",
-      logLabel: "Audio detach failed:",
-    });
-  }, [
-    src,
-    t,
-    commitHasAudio,
-    data.naturalWidth,
-    data.naturalHeight,
-    id,
-    notification,
-    runEditTask,
-    expectSource,
-  ]);
-
-  /** 节点内上传 / 替换：走统一上传管道（失败自动回滚并提示） */
-  const handleUpload = useNodeUpload(id, { accept: "video/*", clearFields: ["hasAudio"] });
-
-  /**
-   * 截取片段：优先走客户端管线（WebCodecs 硬件编码，specs/client-video-editing.md），
-   * 探测不支持或管线失败自动回退服务端；产物作为派生视频节点连回源节点。
-   *
-   * 历史栈策略与分离音频一致：write:false 仅构建节点，再一次 addNodes + setEdges
-   * 同批写入，撤销一次即整体删除。
-   */
-  const handleExtractClip = useCallback(async (start: number, end: number) => {
-    const videoKey = storageKeyOf(src);
-    if (!videoKey) return;
-    runEditTask({
-      kind: "clip",
-      // 退出截取模式：选区已被接受，面板随之卸载（与音频截取确认同一约定）
-      onAccept: () => useCanvasStore.getState().setClipCaptureNodeId(null),
-      // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-      // 产物投影为与服务端响应同形的存储 key（节点 src 持久化值域），onSuccess 单一形状消费
-      clientTask: async ({ signal, onProgress }) =>
-        (await tryClipOnClient(videoKey, { start, end }, { signal, onProgress })).key,
-      serverTask: async ({ signal }) => {
-        const res = await extractClipApi(videoKey, start, end, signal);
-        // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
-        return readEditResultKey(res, signal, {
-          notification,
-          t,
-          errorKey: "error.clip.extract_failed",
-          nodeId: id,
-        });
-      },
-      onSuccess: (key) => {
-        // 源已被替换：旧源的派生产物不再写入
-        if (!expectSource(src)) return;
-        const v = videoRef.current;
-        const nw = v?.videoWidth || data.naturalWidth || 0;
-        const nh = v?.videoHeight || data.naturalHeight || 0;
-        const store = useCanvasStore.getState();
-        const range = `${formatTime(start)}-${formatTime(end)}`;
-
-        const clipNode = createVideoNodeFromRef(
-          id,
-          key,
-          nw,
-          nh,
-          t("clip.suffix", { range }),
-          store,
-          { source: "derived" },
-          undefined,
-          undefined,
-          { write: false },
-        );
-
-        // 批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
-        withHistoryBatch(() => {
-          store.addNodes([clipNode]);
-          store.setEdges([...store.edges, createEdge(id, clipNode.id)]);
-        });
-
-        markDirtyImmediate();
-      },
-      errorKey: "error.clip.extract_failed",
-      logLabel: "Clip extraction failed:",
-    });
-  }, [src, t, data.naturalWidth, data.naturalHeight, id, notification, runEditTask, expectSource]);
-
-  /**
-   * 裁剪画面：优先走客户端管线（WebCodecs 硬件编码，specs/client-video-editing.md），
-   * 探测不支持或管线失败自动回退服务端；产物作为派生视频节点连回源节点
-   * （历史栈策略与片段截取一致）。
-   */
-  const handleCropVideoApply = useCallback(async (rect: CropRectPx) => {
-    const videoKey = storageKeyOf(src);
-    if (!videoKey) {
-      // 源已失效或不是存储 key（外部 URL）：裁剪无从进行，关掉仍打开的裁剪面板
-      // 而不是留一个无响应的确认键（croppingNodeId 的宿主校验兜底见 InfiniteCanvas）
-      useCanvasStore.getState().setCroppingNodeId(null);
-      return;
-    }
-    runEditTask({
-      kind: "crop",
-      // 裁剪被接受：关闭裁剪面板（面板不在确认时自关——busy 拒绝时面板保持
-      // 打开、选区原样保留可重试，与截取面板的「确认不自关」契约一致）
-      onAccept: () => useCanvasStore.getState().setCroppingNodeId(null),
-      // 客户端管线：用户取消静默复位；不支持 / 管线失败回退服务端；其余异常向上抛。
-      // 产物投影为与服务端响应同形的存储 key（裁剪尺寸取调用方 rect，与服务端路径一致）
-      clientTask: async ({ signal, onProgress }) =>
-        (await tryCropOnClient(videoKey, rect, { signal, onProgress })).key,
-      serverTask: async ({ signal }) => {
-        const res = await cropVideoApi(videoKey, rect, signal);
-        // 单产物响应只取持久化值域 key；url 是渲染期派生物，不得写入节点
-        return readEditResultKey(res, signal, {
-          notification,
-          t,
-          errorKey: "error.crop.failed",
-          nodeId: id,
-        });
-      },
-      onSuccess: (key) => {
-        // 源已被替换：旧源的派生产物不再写入
-        if (!expectSource(src)) return;
-        const store = useCanvasStore.getState();
-        const size = `${rect.width}×${rect.height}`;
-
-        const cropNode = createVideoNodeFromRef(
-          id,
-          key,
-          rect.width,
-          rect.height,
-          t("crop.suffix", { size }),
-          store,
-          { source: "derived" },
-          undefined,
-          undefined,
-          { write: false },
-        );
-
-        // 批量守卫合并为一条撤销（离散操作必定入栈，撤销一次即整体删除）
-        withHistoryBatch(() => {
-          store.addNodes([cropNode]);
-          store.setEdges([...store.edges, createEdge(id, cropNode.id)]);
-        });
-
-        markDirtyImmediate();
-      },
-      errorKey: "error.crop.failed",
-      logLabel: "Video crop failed:",
-    });
-  }, [src, t, id, notification, runEditTask, expectSource]);
-
-  const addAsset = useAssetsStore((s) => s.addAsset);
-
-  const handleDownload = useCallback(() => {
-    void downloadManagedFile(src, data.label);
-  }, [src, data.label]);
-
-  const handleSaveToAssets = useCallback(async () => {
-    if (!src) return;
-    const node = useCanvasStore.getState().nodes.find(n => n.id === id);
-    const d = node?.data as VideoNodeData | undefined;
-    // 缩略图不再在保存时生成：素材库读取时通过 fileKey?w= 由后端按需抽帧
-    await addAsset({
-      name: data.label || t("node.video"),
-      type: "other",
-      mediaType: "video",
-      fileKey: src,
-      sourceType: d?.source,
-      description: "",
-      prompt: d?.genSettings?.prompt ?? "",
-    });
-  }, [src, data.label, id, addAsset, t]);
-
-  // Listen for node action events from NodeToolbar
-  useEffect(() => {
-    function onNodeAction(e: Event) {
-      const detail = (e as CustomEvent).detail;
-      if (detail.nodeId !== id) return;
-      switch (detail.action) {
-        case "download": handleDownload(); break;
-        case "save-asset": handleSaveToAssets(); break;
-        case "preview-fullscreen": if (src) setPreviewOpen(true); break;
-        case "capture-frame": {
-          void captureFrame(detail.selection);
-          break;
-        }
-        case "detach-audio":
-          void handleDetachAudio();
-          break;
-        case "extract-clip":
-          void handleExtractClip(detail.start as number, detail.end as number);
-          break;
-        case "crop-video":
-          // 打开画面裁剪面板（复用 croppingNodeId，与图片裁剪互斥天然成立）；
-          // 编辑面板互斥由 store 的 setter 统一收口
-          if (src) useCanvasStore.getState().setCroppingNodeId(id);
-          break;
-        case "crop-video-apply":
-          void handleCropVideoApply(detail.rect as CropRectPx);
-          break;
-      }
-    }
-    window.addEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-    return () => window.removeEventListener(EventNames.CANVAS_NODE_ACTION, onNodeAction);
-  }, [id, src, handleDownload, handleSaveToAssets, captureFrame, handleDetachAudio, handleExtractClip, handleCropVideoApply]);
 
   // 换源后旧探测结论失效，清空以便重新判定。
   // 首次挂载必须跳过：结论已随画布持久化，清掉会逼着每个节点刷新时重新探测一次

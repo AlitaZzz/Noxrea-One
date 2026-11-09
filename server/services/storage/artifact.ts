@@ -39,7 +39,7 @@ export function recordArtifactHit(key: string): void {
   if (tier) metrics.derivedArtifact(tier, "hit");
 }
 
-interface EnsureArtifactOptions {
+export interface EnsureArtifactOptions {
   /** 派生产物存储键（`_cache`/`_posters`/`_sprite`/`_proxy` 之一），同时作为合并键 */
   key: string;
   /** 本次请求的取消信号：只退出等待，全部等待者都取消才会取消生成 */

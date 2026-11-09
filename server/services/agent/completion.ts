@@ -28,7 +28,7 @@ export async function resolveProvider(userId: number, providerId?: number, model
   return providers[0] ?? null;
 }
 
-type BuildResult =
+export type BuildResult =
   | { ok: true; url: string; method: string; headers: Record<string, string>; body: unknown; protocol: ProtocolService; providerName: string }
   | { ok: false; error: string; errorCode?: string };
 

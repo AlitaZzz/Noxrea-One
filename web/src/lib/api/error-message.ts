@@ -2,6 +2,8 @@
  * 服务端错误响应本地化。
  * 服务端以 { error, ctx } 返回结构化错误码，此处按 error 查 i18n 得到展示文案。
  */
+import { isRecord } from "@noxrea/shared/object";
+
 import i18n from "@/lib/i18n/config";
 
 /** 错误文案在 i18n 中的命名空间 */
@@ -15,11 +17,6 @@ export interface ApiErrorBody {
   ctx?: Record<string, string | number>;
   /** 请求 ID，对应服务端日志，报障时回传 */
   requestId?: string;
-}
-
-/** 判断值是否为对象类型（排除 null），用于响应体结构校验。 */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 /** 从响应体中提取错误部分，兼容网关返回的 HTML 等非 JSON 内容。 */

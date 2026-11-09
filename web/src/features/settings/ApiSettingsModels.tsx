@@ -10,6 +10,7 @@ import type { ComponentType } from "react";
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ModelIcon } from "@/components/model/ModelIcon";
 import {
   CheckOutlined,
   CloseOutlined,
@@ -32,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import { SearchInput } from "@/components/ui/input-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VirtualList } from "@/components/ui/VirtualList";
-import { ModelIcon } from "@/features/model/ModelIcon";
 import { NODE_TYPE, NODE_TYPE_COLOR } from "@/lib/constants";
 import { useModelStore } from "@/lib/model-store";
 import type { ModelCapability, ModelInfo, ModelProvider } from "@/lib/types/models";

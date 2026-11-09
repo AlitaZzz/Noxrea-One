@@ -224,7 +224,7 @@
    so the visible frame matches the group body (which also has that body padding);
    the group title is a separate 28px band above the body and stays outside the
    frame. The padding value is injected from the same constant via RF_STYLE in
-   InfiniteCanvas.tsx; containerBbox in shared/canvas-derived.ts uses the constant too. */
+   CanvasSurface.tsx; containerBbox in shared/canvas-derived.ts uses the constant too. */
 .react-flow__nodesselection-rect {
   box-sizing: content-box;
   padding: var(--group-node-padding);

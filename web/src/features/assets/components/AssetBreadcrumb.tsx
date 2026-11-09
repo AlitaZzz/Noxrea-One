@@ -3,7 +3,7 @@ import * as React from "react";
 import { Breadcrumb, BreadcrumbEllipsis, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { AssetFolder } from "@/features/assets/types";
+import type { AssetFolder } from "@/entities/asset";
 
 interface AssetBreadcrumbProps {
   rootLabel: string;

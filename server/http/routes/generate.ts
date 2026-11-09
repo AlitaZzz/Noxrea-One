@@ -5,8 +5,10 @@
 import { Hono } from "hono";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import { taskCreateSchema } from "@server/schemas/task";
-import { createTask, getTask, cancelTask, getTaskTerminalByIds, isTerminalTaskStatus, toTerminalState } from "@server/crud/task";
-import type { TerminalTaskState } from "@server/services/tasks/watcher";
+import { createTask, getTask, getTaskTerminalByIds } from "@server/crud/task";
+import { isTerminalTaskStatus } from "@noxrea/shared";
+import { cancelTask, toTerminalState } from "@server/services/tasks/terminal";
+import type { TerminalTaskState } from "@server/services/tasks/terminal-state";
 import { getProvider } from "@server/crud/model-config";
 import { getAllowedFields, normalizeCapability, hostFromBaseUrl, resolveMatchedHost } from "@server/services/model-config";
 import { taskWatcher } from "@server/services/tasks/watcher";

@@ -8,13 +8,12 @@
 
 import { useCallback, useEffect } from "react";
 
+import { accessFailedFallback, ResolvedImage, ResolvedVideo } from "@/components/media/ResolvedMedia";
+import VideoPlayer from "@/components/media/VideoPlayer";
 import { CloseOutlined, DownloadOutlined, LeftOutlined, RightOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { accessFailedFallback, ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 import { downloadManagedFile } from "@/lib/utils/download";
-
-import VideoPlayer from "./VideoPlayer";
 
 export interface PreviewItem {
   /** 引用值：存储 key 或外部 URL；展示/下载时派生为可访问 URL */

@@ -6,11 +6,12 @@
  */
 "use client";
 
+import { isTerminalTaskStatus } from "@noxrea/shared";
 import { createElement, useEffect, useRef } from "react";
 
 import TaskErrorDetail from "@/components/ui/TaskErrorDetail";
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
-import { generationApi, isTerminalTaskStatus, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
+import { generationApi, type TaskStatusEvent } from "@/features/canvas/api/generation-api";
 import { discardPreGenSnapshot, popPreGenSnapshot } from "@/features/canvas/panels/use-generation-submit";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";

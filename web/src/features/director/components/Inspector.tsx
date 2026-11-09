@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import * as THREE from "three";
 
+import { accessFailedFallback, ResolvedImage } from "@/components/media/ResolvedMedia";
 import { DeleteOutlined, RotateRightOutlined } from "@/components/ui/AppIcon";
 import { DirExpandIcon } from "@/components/ui/AppIcon";
 import { DirEyeIcon } from "@/components/ui/AppIcon";
@@ -27,16 +28,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { DirectorEntityMeta } from "@/entities/director";
 import { DirectorRuntime, useDirectorStore } from "@/features/director/director-store";
 import { CameraEntity } from "@/features/director/entities/camera";
 import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { POSE_PRESETS } from "@/features/director/entities/pose-presets";
 import { DIRECTOR_CHARACTER_COLOR, DIRECTOR_CHARACTER_HEX } from "@/features/director/theme";
-import type { DirectorEntityMeta } from "@/features/director/types";
 import { renderCameraThumbnail } from "@/features/director/util/camera-preview";
 import { worldBox } from "@/features/director/util/measure";
-import { accessFailedFallback, ResolvedImage } from "@/features/media/components/ResolvedMedia";
 
 import PoseSliders from "./PoseSliders";
 

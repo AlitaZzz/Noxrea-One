@@ -19,10 +19,10 @@
 import { Position } from "@xyflow/react";
 import { useCallback } from "react";
 
+import { useBatchConnect } from "@/features/canvas/controls/BatchConnectContext";
 import { groupMembers } from "@/features/canvas/shared/group-membership";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { NODE_TITLE_HEIGHT } from "@/lib/constants";
-import { useBatchConnect } from "@/providers/BatchConnectContext";
 
 import PendingConnectionPreview from "./PendingConnectionPreview";
 import { useBatchConnectDrag } from "./use-batch-connect-drag";

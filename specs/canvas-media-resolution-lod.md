@@ -238,7 +238,7 @@
 - `CanvasMediaLoadingProvider.tsx`：
   - 订阅 React Flow store 的 `transform[2]`，尾随 200 ms 结算缩放；初始值取 `getLiveViewport().zoom`。
   - 维护有效 DPR 与 DPR 变化监听；向子树提供 `{ settledZoom, dpr, zoomingOut }` 上下文。
-  - 上下文值必须保持引用稳定（`useMemo` 按三个值派生）：Provider 位于 `InfiniteCanvas` 子树内，选中写入会重渲染该子树；内联对象会让每个图片节点的 `useCanvasImageLod` 收到新 context 值，绕过 `memoCanvasNode` 全量重渲染（2026-11-03 修复，见 `canvas-marquee-gesture-session.md` 当前状态）。
+  - 上下文值必须保持引用稳定（`useMemo` 按三个值派生）：Provider 位于 `CanvasRoot` 子树内，选中写入会重渲染该子树；内联对象会让每个图片节点的 `useCanvasImageLod` 收到新 context 值，绕过 `memoCanvasNode` 全量重渲染（2026-11-03 修复，见 `canvas-marquee-gesture-session.md` 当前状态）。
   - `zoomingOut` 只在缩放方向变化时翻转（不逐帧更新），结算后归 `false`；用于启动/停止「未就绪图片降档评估」，不参与几何计算。
   - 实时 zoom 不放进 context（否则全树逐帧渲染）；`useCanvasImageLod` 在 `zoomingOut` 为真时通过 `useStoreApi().subscribe` 读取实时 transform，按自身几何评估，只有 `suspend` 布尔值变化才 `setState`。
   - 继续只承载图片调度器；不引入新的全局状态库。

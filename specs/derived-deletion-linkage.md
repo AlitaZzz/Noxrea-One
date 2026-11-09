@@ -5,6 +5,8 @@
 
 2026-10-23 随画布 LOD 实现更新 `_cache` 键形态：增加版本段（当前 `_cache/v2/{tier}/{源键}.webp`），删除联动只枚举当前版本；无版本旧键不参与解析/枚举/联动，由一次性迁移删除（[canvas-media-resolution-lod.md](canvas-media-resolution-lod.md) 规则 8.3）。档位从 8 档扩为 12 档（上限 2560），`_cache` 精准 list 次数随之由 8 次变为 12 次。
 
+2026-11-09 文档校正：背景与现状对 derived-keys.ts 的依赖描述与实现不符——除 `shared/url` 外，它还值导入 `shared/media-tiers`（版本与档位常量），并以类型导入引用 `@server/core/metrics` 的 `DerivedTier`；运行期不依赖其它服务端模块，`backend.ts` 的引用关系不变。技术影响中「`RESIZE_WIDTH_TIERS` 自 resize-cache.ts 迁入」亦已过时：档位与版本常量现由 `shared/media-tiers.ts` 单点提供。仅文档更正，无代码变更。
+
 ## 已确认决策（2026-10-18，用户按推荐项逐条确认）
 
 1. 枚举策略：**精准 shard list**（uniform 全前缀备选否决）。
@@ -26,7 +28,7 @@
   1. **staging 源的派生缓存**：会话路径 `?w=` 对 staging key 的缩放会产出 `_cache/v2/{tier}/staging/{userId}/{uuid}.webp`（specs/file-access-ownership.md 规则 3 认可的形态），海报档位派生同理可产出 `_posters/v{N}/staging/{userId}/{uuid}.webp`。staging key 被 `isStorageKey` 门控短路（无删除联动），staging 本体 24h 后被清扫，而这些派生条目既无联动也无 TTL——**永久孤儿**。backend.ts 现有注释称其「由 TTL 清扫兜底」与代码不符（失实注释，本 Spec 修正）。
   2. **版本升级孤儿**：`POSTER_VERSION` 升版后，旧版本 `_posters/v{旧N}/` 母版不再被任何路径命中且无 TTL——永久孤儿（低频事件：版本仅在代码变更时递增）。sprite/proxy 的版本孤儿已有 30 天 TTL 覆盖。
 - **枚举成本现状**：每次内容键 delete = 2 次全前缀 list（`_cache/`、`_posters/`）；S3 ListObjectsV2 每页 1000 键。GC 单批上限默认 500 对象/轮（`storage.gc_batch_size`）。local 后端 list 按首段收窄遍历根，深层前缀进一步收窄。
-- 缩放档位集合 `RESIZE_WIDTH_TIERS`（12 档）定义于 [shared/media-tiers.ts](../shared/media-tiers.ts) 并导出，前后端共用同一张表；derived-keys.ts 是四命名空间 key 格式知识单点（仅依赖 shared/url，无服务端内部依赖，可被 backend.ts 安全引用）。
+- 缩放档位集合 `RESIZE_WIDTH_TIERS`（12 档）定义于 [shared/media-tiers.ts](../shared/media-tiers.ts) 并导出，前后端共用同一张表；derived-keys.ts 是四命名空间 key 格式知识单点（值依赖 `shared/url` 与 `shared/media-tiers`，另仅有 `@server/core/metrics` 的类型导入 `DerivedTier`，运行期不依赖其它服务端内部模块，可被 backend.ts 安全引用）。
 
 ## 范围
 
@@ -56,7 +58,7 @@
 
 ## 技术影响
 
-- [derived-keys.ts](../server/services/storage/derived-keys.ts)：新增枚举面——`候选 shard 前缀构造（给定内容源 key）+ 四根后缀匹配器`，与既有构造/解析同址；`RESIZE_WIDTH_TIERS` 自 resize-cache.ts 迁入（cache key 段域知识，resize-cache 及其他引用方改改 import）。
+- [derived-keys.ts](../server/services/storage/derived-keys.ts)：新增枚举面——`候选 shard 前缀构造（给定内容源 key）+ 四根后缀匹配器`，与既有构造/解析同址；`RESIZE_WIDTH_TIERS` 与 `RESIZE_CACHE_VERSION` 现由 [shared/media-tiers.ts](../shared/media-tiers.ts) 单点提供（前后端共用；derived-keys、resize-cache 及其他引用方均从 shared 导入）。
 - [backend.ts](../server/services/storage/backend.ts)：`listDerivedArtifactKeys` 改为按 derived-keys 候选前缀执行精准 list + 后缀匹配；接口新增可选 `listCommonPrefixes(prefix): Promise<string[]>`（S3 以 ListObjectsV2 Delimiter 实现，local 以 readdir 一层目录实现；唯一消费方为 `_posters` 版本段发现）；失实注释修正（staging 源派生缓存兜底方式改为指向本 Spec TTL 规则）。local 后端 readdir 枚举错误口径统一（list / listCommonPrefixes 共用 readdirOrEmpty）：目录缺失为合法空集，其余错误上抛，与 S3 fail-fast 同口径。
 - [sweep.ts](../server/services/storage/sweep.ts)（新增）：按龄清扫共享力学单点——判龄（lastModifiedMs 缺失视为未到期）、gc_dry_run 只计不删、单条删除失败留痕续行；枚举失败上抛（阶段失败可见性归调用方），根间隔离粒度归策略侧。
 - [derived-cleanup.ts](../server/services/storage/derived-cleanup.ts)：派生侧策略——四根清单 + 统一 TTL（`storage.derived_ttl_hours`，默认 720 小时）+ gc_dry_run 护栏；单根枚举失败留痕不中断其余根，全部根尝试后聚合上抛（阶段失败经 GcCycleResult.derivedSweepError / CLI 退出码可见）；被 GC 周期调用（新增阶段挂接 [gc.ts](../server/services/storage/gc.ts) runGcCycle，独立成败）。

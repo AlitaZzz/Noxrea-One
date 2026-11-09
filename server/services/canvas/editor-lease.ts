@@ -7,7 +7,7 @@
  *
  * 编辑权以「租约令牌」（fencing token，进程内单调递增）签发：SSE 握手临界区内
  * 「先轮换令牌、后读权威快照」，快照与令牌一同下发；内容写入必须携带当前令牌
- * （isCurrentLease 由 crud 层校验）。被接管的旧持有者令牌随即失效——其在途保存
+ * （isCurrentLease 由 services/canvas/project-write 在写临界区内校验）。被接管的旧持有者令牌随即失效——其在途保存
  * 在服务端被结构性拒绝，不存在「迟到落库覆盖新快照」的 lost update 路径。
  * 令牌计数器为模块级全局单调、永不复位：房间被 sweep 后重建不会从 1 重计，
  * 旧租约令牌不可能与新生效的令牌碰撞。
@@ -32,12 +32,12 @@
  * 空置超过宽限的房间才释放记忆：此时原页面断线已久，内容大概率已旧，
  * 按「最后完成握手者取得编辑权」处理，落后由握手 / 保存撞 409 自愈。
  *
- * 单实例内存态即可满足当前部署（SQLite 单写，天然单实例）。未来多实例时
- * 只需把令牌计数 / 临界区换 Redis（INCR）、广播换 Redis pub/sub，
- * 本模块接口与调用方不变。
+ * 当前租约状态为单进程内存态，只在单实例部署下成立；多实例部署必须把令牌计数 /
+ * 临界区迁移到 Redis（INCR）或数据库，并把广播换成跨实例通道（如 Redis pub/sub）。
+ * 本模块接口与调用方保持不变。
  */
 
-type Emit = (event: string, data: unknown) => void;
+export type Emit = (event: string, data: unknown) => void;
 
 interface Connection {
   /** 页面实例 ID */
@@ -170,15 +170,10 @@ export function broadcastToOthers(projectId: string, excludeSid: string, event: 
   }
 }
 
-/** 该令牌是否为当前生效租约（房间不存在或令牌不匹配即失效，由 crud 在写临界区内调用） */
+/** 该令牌是否为当前生效租约（房间不存在或令牌不匹配即失效，由 services/canvas/project-write 在写临界区内调用） */
 export function isCurrentLease(projectId: string, token: unknown): boolean {
   const room = rooms.get(projectId);
   return room !== undefined && room.leaseToken === token;
-}
-
-/** 当前租约令牌（测试观察口：生产路径经 JoinResult 下发） */
-export function currentLeaseToken(projectId: string): number | null {
-  return rooms.get(projectId)?.leaseToken ?? null;
 }
 
 // ==================== 每项目写临界区 ====================

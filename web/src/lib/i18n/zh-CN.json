@@ -25,6 +25,7 @@
     "cancel": "取消",
     "confirm": "确认",
     "play": "播放",
+    "pause": "暂停",
     "stop": "停止",
     "close": "关闭",
     "save": "保存",
@@ -60,6 +61,10 @@
     "statusFailed": "失败"
   },
   "media": {
+    "mute": "静音",
+    "unmute": "取消静音",
+    "volume": "音量",
+    "videoProgress": "视频进度",
     "loadFailed": "视频加载失败",
     "previewLoadFailed": "预览加载失败",
     "previewPlayFailed": "试听失败，请稍后重试",
@@ -949,6 +954,7 @@
       "models_set_failed": "批量更新模型失败"
     },
     "project": {
+      "create_failed": "创建项目失败",
       "rename_failed": "重命名项目失败",
       "cover_failed": "设置封面失败",
       "delete_failed": "删除项目失败"

@@ -10,7 +10,7 @@
 import { hoursToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
 import { logger } from "@server/core/logger";
-import { DERIVED_ROOT_PREFIXES } from "./backend";
+import { DERIVED_ROOT_PREFIXES } from "./derived-keys";
 import { getStorageBackend } from "./service";
 import { sweepAgedPrefix } from "./sweep";
 

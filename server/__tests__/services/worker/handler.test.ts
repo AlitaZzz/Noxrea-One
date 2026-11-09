@@ -22,10 +22,10 @@ vi.mock("@server/crud/task", () => ({
   getTask: mocks.getTask,
   claimPendingTask: mocks.claimPendingTask,
   takeOverInterruptedTask: mocks.takeOverInterruptedTask,
-  safeFailTask: mocks.safeFailTask,
   stuckLeaseCutoff: mocks.stuckLeaseCutoff,
-  isTerminalTaskStatus: (status: string) =>
-    status === "completed" || status === "failed" || status === "cancelled",
+}));
+vi.mock("@server/services/tasks/terminal", () => ({
+  safeFailTask: mocks.safeFailTask,
 }));
 vi.mock("@server/core/settings", () => ({ getSetting: mocks.getSetting }));
 vi.mock("@server/services/worker/executor", () => ({
@@ -156,7 +156,7 @@ describe("processTaskJob", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ errorCode: "generation.submission_uncertain" }),
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 
@@ -183,7 +183,7 @@ describe("processTaskJob", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ errorCode: "generation.interrupted_retry_exhausted" }),
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 

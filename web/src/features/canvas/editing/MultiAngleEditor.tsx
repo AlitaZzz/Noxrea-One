@@ -9,6 +9,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MediaAccessError } from "@/components/media/MediaAccessError";
 import { CloseOutlined, MultiAngleIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -22,7 +23,6 @@ import { getPromptTemplate } from "@/features/canvas/api/canvas-api";
 import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { spawnPromptDerivedNode } from "@/features/canvas/upload";
-import { MediaAccessError } from "@/features/media/components/MediaAccessError";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
 import OrbitScene3D, { type OrbitViewMode } from "./OrbitScene3D";

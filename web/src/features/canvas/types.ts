@@ -1,25 +1,17 @@
 /**
  * 画布类型定义（纯类型）。
- * 合并了画布基础类型（连线别名、视口）与节点数据类型
- * （任务绑定、生成参数、各节点 data 结构、判别联合 AnyNode）。
+ * 只承载 feature 内部的节点数据类型（生成参数、各节点 data 结构、判别联合 AnyNode）；
+ * 画布基础类型（视口 / 任务绑定 / 上传状态）的归属是 `@/lib/types/canvas`，
+ * 需要时直接从那里导入，不在本文件转出。
  *
  * 运行时常量（NODE_TYPE、UPLOAD_KEY 等）在 lib/constants.ts。
  */
 import type { Edge, Node } from "@xyflow/react";
 
-import type { SceneState } from "@/features/director/types";
+import type { DirectorStateData } from "@/entities/director";
+import type { ProjectSummary } from "@/entities/project";
 import type { NODE_TYPE } from "@/lib/constants";
-import type { TaskBinding, UploadState } from "@/lib/types/canvas";
-
-// 画布基础类型（视口 / 任务绑定 / 上传状态）下沉至 lib/types/canvas，
-// 使 lib/constants.ts 等底层模块可以引用而不反向依赖 feature 层。
-// 此处统一转出，保证上层 "@/features/canvas/types" 的既有导入路径不变。
-export type {
-  TaskBinding,
-  TaskStatus,
-  UploadState,
-  ViewportState,
-} from "@/lib/types/canvas";
+import type { TaskBinding, UploadState, ViewportState } from "@/lib/types/canvas";
 
 // ============================================================
 // Canvas 基础类型（画布状态、节点类型枚举）
@@ -187,48 +179,6 @@ export type GroupNodeData = {
 // Director 节点 data
 // ============================================================
 
-export interface DirectorEntityState {
-  id: string;
-  type: "character" | "prop" | "camera" | "crowd";
-  name: string;
-  visible: boolean;
-  pos: [number, number, number];
-  rot: [number, number, number, number];
-  scale: [number, number, number];
-  // Character
-  bodyType?: string;
-  color?: string;
-  srcUrl?: string;
-  pose?: { mode: "preset" | "manual"; preset?: string | null; values?: Record<string, number> };
-  // Prop
-  kind?: string;
-  // Camera
-  fov?: number;
-  roll?: number;
-  // Crowd
-  rows?: number;
-  cols?: number;
-  spacing?: number;
-  members?: Omit<DirectorEntityState, "rows" | "cols" | "spacing" | "members">[];
-}
-
-export interface DirectorStateData {
-  entities: DirectorEntityState[];
-  sceneState: Partial<SceneState>;
-  ratio: string;
-  cameraView: boolean;
-  transformMode: string;
-  /** 快照引用值与节点 src 同值域：存储 key 或外部 URL；展示时派生访问 URL */
-  shots: Array<{
-    id: string;
-    ref: string;
-    name: string;
-    cameraId: string;
-    createdAt: number;
-    selected?: boolean;
-  }>;
-}
-
 export type DirectorNodeData = {
   label: string;
   /** 节点创建时间戳（ms），资源管理器等列表展示用 */
@@ -248,3 +198,59 @@ export type DirectorNode = Node<DirectorNodeData, typeof NODE_TYPE.DIRECTOR>;
 export type GroupNode = Node<GroupNodeData, typeof NODE_TYPE.GROUP>;
 
 export type AnyNode = TextNode | ImageNode | VideoNode | AudioNode | DirectorNode | GroupNode;
+
+// ============================================================
+// 画布文档（项目内容与编辑会话）
+// ============================================================
+
+/**
+ * 单项目全量投影：项目摘要 + 画布内容。
+ * 唯一来源是 SSE 握手首帧下发的服务端快照（useCanvasSession 采纳）；
+ * 项目列表（`entities/project`）不持有内容。
+ */
+export interface CanvasProject extends ProjectSummary {
+  viewport: ViewportState;
+  minimapVisible?: boolean;
+  snapEnabled?: boolean;
+  agentModel?: string;
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+}
+
+/**
+ * 提交服务端的画布内容快照。
+ * 与 CanvasProject 的区别：不含服务端拥有的元数据（id/name/revision/updatedAt），
+ * 只包含画布自身状态。
+ */
+export interface CanvasData {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+  viewport: ViewportState;
+  minimapVisible: boolean;
+  snapEnabled: boolean;
+  agentModel?: string;
+}
+
+export interface CanvasDataDelta {
+  nodes: { upsert: AnyNode[]; delete: string[] };
+  edges: { upsert: AnyEdge[]; delete: string[] };
+  viewport?: ViewportState;
+  minimapVisible?: boolean;
+  snapEnabled?: boolean;
+  agentModel?: string | null;
+}
+
+/** undo/redo 历史快照。 */
+export interface HistorySnapshot {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+  viewport: ViewportState;
+  minimapVisible: boolean;
+  snapEnabled: boolean;
+}
+
+/** 画布内复制/粘贴的节点与连线集合。 */
+export interface ClipboardData {
+  nodes: AnyNode[];
+  edges: AnyEdge[];
+}

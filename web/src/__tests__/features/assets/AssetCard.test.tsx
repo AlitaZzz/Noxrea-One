@@ -22,8 +22,8 @@ vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-a
 vi.mock("@/lib/file-access", () => ({ resolveMediaUrlString: mocks.resolve }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { AssetItem } from "@/entities/asset";
 import AssetCard from "@/features/assets/components/AssetCard";
-import type { AssetItem } from "@/features/assets/types";
 
 const ASSET: AssetItem = {
   id: "asset-audio-1",

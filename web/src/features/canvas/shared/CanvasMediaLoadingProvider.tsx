@@ -70,8 +70,8 @@ export default function CanvasMediaLoadingProvider({ children }: { children: Rea
   const [zoomingOut, setZoomingOut] = useState(false);
   // SSR 快照固定 1（无 window），客户端用真实 DPR：外部源订阅避免 effect 内 setState 级联渲染
   const dpr = useSyncExternalStore(subscribeDpr, effectiveDpr, () => MIN_DPR);
-  // 值身份必须随三个值稳定：Provider 位于 InfiniteCanvas 子树内，选中写入会重渲染该子树；
-  // 内联对象会让每个图片节点的 LOD hook 收到新 context 值，绕过 memoCanvasNode 全量重渲染。
+  // 值身份必须随三个值稳定：画布子树在选中写入时会重渲染，内联对象会让每个图片节点
+  // 的 LOD hook 收到新 context 值，绕过 memoCanvasNode 全量重渲染。
   const viewport = useMemo(() => ({ settledZoom, dpr, zoomingOut }), [settledZoom, dpr, zoomingOut]);
 
   useEffect(() => {

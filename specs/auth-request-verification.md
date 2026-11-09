@@ -39,9 +39,9 @@
 - 鉴权中间件（[server/http/middleware/auth.ts:92-122](../server/http/middleware/auth.ts)）：`decodeAccessToken`（验签 + 过期）→ `prisma.user.findUnique({ where: { id } })` → `!dbUser || !dbUser.isActive` → `401 auth.user_inactive` → `payload.ver !== dbUser.tokenVersion` → `401 auth.token_invalid`。**每个已鉴权请求一次数据库主键查询**。
 - 该中间件是唯一鉴权入口：`authenticateRequest` 被各路由、上传中间件、文件读鉴权直接调用（没有全局鉴权中间件，不存在第二条路径）。
 - `AuthUser` 当前声明 6 个字段（`id` / `username` / `avatarKey` / `theme` / `language` / `isActive`），但**全部调用点只读取 `.id`**（全仓 62 处 `auth.user.*` 均为 `.id`；画像字段由 `/api/auth/me` 的 `getUserById` + `toPublicUser` 提供）。
-- `tokenVersion` 的唯一写点是 [crud/user.ts:93-98](../server/crud/user.ts) 的 `setUserPassword`（`{ increment: 1 }`）；`updateUser` 的白名单含 `isActive`，但**当前没有任何调用方写入它**；用户删除目前不存在。用户行的写点仅有 `touchLastLogin`（`lastLoginAt`，不影响账号状态）与上述两处。
+- `tokenVersion` 的唯一写点是 [crud/user.ts:87-96](../server/crud/user.ts) 的 `updateUserPasswordTx(tx, id, hashedPassword)`（`{ increment: 1 }`），快照失效由 [services/user/change-password.ts](../server/services/user/change-password.ts) 在事务提交成功后编排；字段更新走 [crud/user.ts:99-105](../server/crud/user.ts) 的 `updateUserFieldsTx`，白名单含 `isActive`，但**当前没有任何 HTTP 调用方写入它**；用户删除目前不存在。用户行的写点仅有 `touchLastLogin`（`lastLoginAt`，不影响账号状态）与上述两处。
 - 用户行的数据访问唯一入口是 `server/crud/user.ts`（全仓无其他 `prisma.user.update*` / `delete*` 调用）。
-- Redis 现状：`ioredis ^6`；任务队列（[queue.ts](../server/services/worker/queue.ts)）用 `maxRetriesPerRequest: null` 的阻塞语义连接；限流（[redis-store.ts](../server/core/ratelimit/redis-store.ts)）用请求路径策略（`enableOfflineQueue: false`、`commandTimeout 2000`、`connectTimeout 3000`、连接错误按间隔去重）。bootstrap 在 Redis 不可达时启动失败（规则见 [bootstrap.ts:35-43](../server/core/bootstrap.ts)）。
+- Redis 现状：`ioredis ^6`；任务队列（[queue.ts](../server/services/worker/queue.ts)）用 `maxRetriesPerRequest: null` 的阻塞语义连接；限流（[redis-store.ts](../server/core/ratelimit/redis-store.ts)）用请求路径策略（`enableOfflineQueue: false`、`commandTimeout 2000`、`connectTimeout 3000`、连接错误按间隔去重）。bootstrap 在 Redis 不可达时启动失败（规则见 [bootstrap.ts:38-49](../server/bootstrap.ts)）。
 - 批量描述（[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 2.8）把每屏 90 图从 90 次鉴权降为 1–2 次；但每次其余请求（保存画布、轮询、资产列表）仍各带一次用户查询。
 
 ## 规则
@@ -90,15 +90,15 @@
 
 ### 4. 失效
 
-4.1 失效点唯一：用户行的写路径（`server/crud/user.ts`）。在**事务提交成功后**执行失效，不在事务内（事务回滚时缓存已删会造成无谓回源，虽然正确）。
+4.1 失效接线只存在于用户行的业务写用例（`services/user/change-password.ts`、`services/user/update-profile.ts`）；`server/crud/user.ts` 只保留单表写入原语，不感知快照。`changePassword` 的同事务编排与失效时机以 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属）为准，本 Spec 不复制正文。
 
-4.2 需要失效的写：`setUserPassword`（`tokenVersion` 递增）、`updateUser`（写入包含 `isActive` 时）；未来的用户删除或「所有设备退出」若落地，必须同时接入（规则 4.5）。
+4.2 需要失效的写：`updateUserPasswordTx`（`tokenVersion` 递增，由 `changePassword` 接线）、`updateUser`（写入包含 `isActive` 时）。`changePassword` 的画像+密码同事务语义见 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属）。未来的用户删除或「所有设备退出」若落地，必须同时接入（规则 4.5）。
 
 4.3 不需要失效的写：`touchLastLogin`（`lastLoginAt` 与鉴权判定无关），避免每次登录都清一次快照。
 
 4.4 失效方式：`SET 键 新值 EX 60`（写入权威新值，正常情况一次往返）；写入失败则退化为 `DEL 键`，仍失败则记录错误与指标——此时陈旧上界为 TTL（60 秒），且要求「写时 Redis 不可用但读时可用」这一组合，属已记录的边界。写路径的三种结果在读路径之外单独取值（`invalidated` / `invalidated_fallback` / `invalidate_error`）：与读路径共用 `error` 会让写路径失败在指标上不可见，而它正是陈旧上界的唯一来源。无 Redis 连接时不记写路径结果——什么都没尝试，下一次读取自会记 `db_fallback`，在此补记会让回源比例虚高。
 
-4.5 结构性保证：`server/crud/user.ts` 是用户行的唯一数据访问入口（已核实）。规则写入该模块的注释与 Spec；新增写点时同一函数内完成失效。回归测试覆盖 4.2 的每个写点都触发失效。
+4.5 结构性保证：`server/crud/user.ts` 是用户行的唯一数据访问入口（已核实），只保留单表写入原语，不感知快照；新增写点的失效接线由对应的 `services/user` 用例在事务提交后完成（规则 4.1 / 4.2；编排见 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属））。回归测试覆盖 4.2 的每个写点都触发失效。
 
 ### 5. Redis 连接
 
@@ -121,7 +121,7 @@
 
 6.3 多实例时钟不参与本机制（不依赖过期时间做判定，只用 TTL 做过期）。
 
-6.4 已签发的预签名 URL 不受吊销影响（能力凭据边界，见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 4.5）。
+6.4 已签发的预签名 URL 不受吊销影响（能力凭据边界，见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 4.5（泄漏边界））。
 
 ## 技术影响
 
@@ -130,7 +130,8 @@
 - 新增 `server/core/redis/`（连接工厂 + 生命周期），`server/core/ratelimit/redis-store.ts` 改用它。
 - 新增 `server/core/auth/snapshot.ts`：`readAuthSnapshot(userId)` / `invalidateAuthSnapshot(user)` / 常量。
 - [server/http/middleware/auth.ts](../server/http/middleware/auth.ts)：改为走快照；`AuthUser` 收缩为 `{ id }`；删除 `toAuthUser`。
-- [server/crud/user.ts](../server/crud/user.ts)：`setUserPassword` / `updateUser`（含 `isActive`）提交后失效；`touchLastLogin` 不动。
+- [server/crud/user.ts](../server/crud/user.ts)：`updateUserPasswordTx` / `updateUserFieldsTx` 单表写入原语，不感知快照；`touchLastLogin` 不动。
+- 新增 `server/services/user/change-password.ts` / `server/services/user/update-profile.ts`：写入成功后按规则 4.2 失效；`change-password` 的事务编排见 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属），`update-profile` 仅在 `isActive` 出现时失效。
 - [server/http/middleware/upload.ts](../server/http/middleware/upload.ts)：`UploadEnv` 类型随 `AuthUser` 收缩。
 - `server/__tests__`：鉴权中间件与上传中间件相关用例按新语义调整（不再断言画像字段）。
 
@@ -163,13 +164,13 @@
 ### 静态检查与测试
 
 - 稳态零查询：连续两次请求同一已登录用户，数据库用户查询次数为 1（首次 miss）与 0（第二次命中）；快照 TTL 到期后再次回源一次。
-- 吊销即时性：`setUserPassword` 之后，用旧 `ver` 的 token 请求 → 401（不等待 TTL）；用重签后的 token → 200。
+- 吊销即时性：`changePassword`（`updateUserPasswordTx` 递增 `tokenVersion`）之后，用旧 `ver` 的 token 请求 → 401（不等待 TTL）；用重签后的 token → 200。
 - 禁用即时性：写入 `isActive: false` 后，下一个请求 → 401 `auth.user_inactive`。
 - 跨实例语义：失效后清空进程内状态再请求 → 回源数据库并得到新状态（模拟另一实例）。
 - `SET NX` 竞争：模拟「回源期间写路径已写入新值」，断言读路径返回键内的新值而不是自己查到的旧值。
 - 键消失不复活：模拟「NX 失败后回读为空」（错过竞争或 TTL 到期），断言读路径不回填键——只发生 NX 那一次 SET。
 - 脏值不盲写：模拟「键仍在但内容不可解析」，断言读路径同样不写回（没有第二次 SET），后续请求照常回源。
-- 失效接线：`setUserPassword` 与「`updateUser` 写入 `isActive`」都在提交后调用 `invalidateAuthSnapshot`，用 `invocationCallOrder` 断言失效发生在事务提交之后（规则 4.5）；指标取值本身由 `snapshot.test.ts` 覆盖。
+- 失效接线：`changePassword` 与「`updateUser` 写入 `isActive`」都在提交后调用 `invalidateAuthSnapshot`，用 `invocationCallOrder` 断言失效发生在写入之后（规则 4.5），由 `services/user/change-password.test.ts` 与 `services/user/update-profile.test.ts` 覆盖；指标取值本身由 `snapshot.test.ts` 覆盖。
 - 并发 miss 单飞：同一冷用户 10 个并发请求 → 数据库查询恰好 1 次。
 - 无负缓存：不存在用户的重复请求不写入任何键。
 - Redis 未初始化 / 命令失败：请求成功且鉴权结果与查库一致；错误指标 +1。
@@ -213,9 +214,19 @@
 复审修复（2026-10-26；代码同批随 `1bff028d` 提交）：
 
 - **输掉 NX 之后仍写一次**：规则 2.2 原只写四步，实现里「NX 失败 → 回读」之后还有一步无条件 `SET`（后改为仅对脏值 `SET ... XX`）。两次修法的共同缺陷是一样的：**读路径输掉竞争后仍可能写回**。回读为空时会把「查库那一刻的旧值」重建；回读为脏值时 `XX` 也是一次无 CAS 的盲写，可能落在并发写路径刚提交的新值上。最终修复：NX 失败后读路径**完全不写回**，脏值期间每请求回源一次作为有界代价；规则 2.2 第 4 步与 2.3 按此改述，验收补「键消失不复活」「脏值不盲写」两条。
-- **失效接线无回归覆盖**：规则 4.5 要求「回归测试覆盖 4.2 的每个写点都触发失效」，但此前没有任何用例约束 `setUserPassword` / `updateUser` 的接线。新增 `crud/user-auth-snapshot.test.ts`（5 用例，mock 快照模块与数据库客户端）：改密后以提交结果失效、写入 `isActive` 后失效、只改画像字段不失效、提交失败（含事务回滚）不失效，并用调用顺序断言失效发生在提交之后。
+- **失效接线无回归覆盖**：规则 4.5 要求「回归测试覆盖 4.2 的每个写点都触发失效」，但此前没有任何用例约束 `setUserPassword` / `updateUser` 的接线。新增 `crud/user-auth-snapshot.test.ts`（5 用例，mock 快照模块与数据库客户端）：改密后以提交结果失效、写入 `isActive` 后失效、只改画像字段不失效、提交失败（含事务回滚）不失效，并用调用顺序断言失效发生在提交之后。（2026-11-05 crud/service 分层调整后，该用例随写点拆分迁移为 `services/user/change-password.test.ts` 与 `services/user/update-profile.test.ts`，原文件已删除。）
 - 修复后 server 全量：102 个文件（99 通过 / 3 个集成用例需外部服务而跳过）、1152 个用例（1138 通过 / 14 跳过），`typecheck` 与 `lint` 串行通过。
 
 （`updateUser` 的 `isActive` 分支目前仍无 HTTP 调用方——`updateMeSchema` 是 `.strict()` 且不含该字段；该字段按规则 4.2 保留为管理端写点的接线，接线本身现由上述用例锁定。）
 
 尚未执行：「实机走查」中的两实例改密、运行期停 Redis 故障注入，需部署环境配合。状态已由用户于 2026-10-26 设为「已确认」；「已实现」待上述两项实机走查通过并经用户验收后设置。
+
+分层调整（2026-11-05，工作区未提交）：密码写原语由 `crud/user.setUserPassword` 更名为 `updateUserPasswordTx(tx, id, hashedPassword)`，且不再直接调用 `invalidateAuthSnapshot`；失效接线移入 `services/user/change-password.ts` 与 `services/user/update-profile.ts`（crud/service 边界见 `specs/server-crud-service-boundary.md` 第 3 节「用户更新用例上移」）。
+
+原子性修复（2026-11-05，工作区未提交）：`changePassword` 的事务编排、旧密码校验与哈希时序见 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属）；认证侧保持「头像引用非法时返回 422 且不产生任何写入；cookie 仅在事务提交并重新读取用户后重签」。回归用例见 `services/user/change-password.test.ts`（规则 3.1 的同事务编排）与 `http/routes/auth.test.ts`（头像失败不落库、失败不重签 cookie）。
+
+规则 4.1 / 4.2、技术影响与验收接线已按新归属更新；快照行为本身未变。状态保持「已确认」，待同批提交并完成原「实机走查」后由用户验收设置「已实现」。
+
+2026-11-08 引用收口（仅文档）：规则 4.1 / 4.2 中 `changePassword` 的同事务编排与失效时机改为引用 `specs/server-crud-service-boundary.md` 规则 3.1（changePassword 同事务与快照失效归属），本 Spec 只保留需要失效的写清单与鉴权专属规则；规则语义未变。状态保持「已确认」。
+
+2026-11-09 六轮评审修复（仅文档）：`changePassword` 的事务编排、旧密码校验与哈希时序统一引用 [server-crud-service-boundary.md](server-crud-service-boundary.md) 规则 3.1（changePassword 同事务与快照失效归属），技术影响与原子性记录中不再复制；规则 4.5 明确 `crud/user` 只保留单表写入原语、失效由 `services/user` 用例在事务提交后接线；`storage-signed-direct-delivery.md` 规则 4.5 引用补齐标题「泄漏边界」。保留认证侧头像 422 与 cookie 重签行为。规则语义未变，状态保持「已确认」。

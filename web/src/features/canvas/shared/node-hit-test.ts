@@ -2,7 +2,7 @@
  * 画布坐标点的节点命中测试：返回包含该点的最上层节点。
  *
  * 供拖拽连线的实时反馈（ConnectionFlowLine / use-batch-connect-drag 的倾斜/毛玻璃）
- * 与松手落点判定（InfiniteCanvas.handleConnectEnd）共用同一口径，确保
+ * 与松手落点判定（use-canvas-connections 的 handleConnectEnd）共用同一口径，确保
  * 「拖拽中看到的反馈」与「松手后的实际结果」一致。
  *
  * 组内成员 position 是组内相对坐标：几何判定统一在绝对坐标空间进行，

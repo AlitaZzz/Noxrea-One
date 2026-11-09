@@ -9,14 +9,16 @@ import {
   getProjects,
   createProject,
   getProject,
-  updateProject,
-  updateProjectDelta,
   deleteProject,
   projectExists,
+} from "@server/crud/canvas";
+import {
+  updateProject,
+  updateProjectDelta,
   CanvasRevisionConflictError,
   CanvasLeaseLostError,
   CanvasCoverKeyError,
-} from "@server/crud/canvas";
+} from "@server/services/canvas/project-write";
 import { ok, failCode } from "@server/core/response";
 import { isValidId } from "@server/utils/id";
 import { loadJson } from "@server/services/json-loader";
@@ -130,10 +132,7 @@ router.post("/api/canvas/projects", async (c) => {
     return failCode(422, "common.invalid_request");
   }
 
-  const project = await createProject(auth.user.id, {
-    name: parsed.data.name,
-    canvasData: parsed.data.canvasData,
-  });
+  const project = await createProject(auth.user.id, { name: parsed.data.name });
 
   return c.json(ok(project));
 });

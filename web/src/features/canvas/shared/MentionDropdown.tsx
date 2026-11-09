@@ -8,10 +8,10 @@
 import { memo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage, ResolvedVideo } from "@/components/media/ResolvedMedia";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverAnchorPortal, PopoverContent } from "@/components/ui/popover";
-import { ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 
 import { type ReferenceItem, refLabelKey, refThumbnailUrl } from "./reference";
 

@@ -5,7 +5,19 @@
 import { Hono } from "hono";
 import { authenticateRequest, setAuthCookie } from "@server/http/middleware/auth";
 import { loginRequestSchema, registerRequestSchema, updateMeSchema } from "@server/schemas/auth";
-import { getUserByUsername, getUserById, updateUser, createUser, isUsernameTakenError, setUserPassword, touchLastLogin, toPublicUser, UserAvatarKeyError } from "@server/crud/user";
+import {
+  getUserByUsername,
+  getUserById,
+  createUser,
+  isUsernameTakenError,
+  touchLastLogin,
+  toPublicUser,
+} from "@server/crud/user";
+import { changePassword } from "@server/services/user/change-password";
+import {
+  updateUser,
+  UserAvatarKeyError,
+} from "@server/services/user/update-profile";
 import type { User } from "@server/core/database/generated/client";
 import { createAccessToken, hashPassword, verifyPassword } from "@server/core/auth";
 import { getStorageSummary } from "@server/services/storage/quota";
@@ -159,43 +171,45 @@ router.put("/api/auth/me", async (c) => {
     return failCode(422, "common.invalid_request");
   }
 
-  // password/oldPassword 由下方分支单独处理；画像字段在 updateUser 白名单过滤后落库
-  let passwordChanged = false;
-  if (parsed.data.password !== undefined) {
+  // 资料字段取 schema 的剩余键（password/oldPassword 不入此通道）；
+  // service 层仍按白名单 fail-closed 兜底，新增字段只需改 schema 与 service。
+  const { password, oldPassword: requestedOldPassword, ...profile } = parsed.data;
+
+  // 旧密码校验必须先于任何写入：校验失败时资料字段也不得落库
+  let hashedPassword: string | undefined;
+  if (password !== undefined) {
     const user = await getUserById(auth.user.id);
     if (!user) return failCode(404, "auth.user_not_found");
 
-    const oldPassword = parsed.data.oldPassword ?? parsed.data.password;
+    const oldPassword = requestedOldPassword ?? password;
     const valid = await verifyPassword(oldPassword, user.hashedPassword);
     if (!valid) {
       return failCode(400, "auth.current_password_incorrect");
     }
 
-    // 写入新哈希并递增凭据版本号（旧 JWT 全部失效）。此前只校验不落库，
-    // 改密码实际是空操作却提示成功。随后轮换当前会话：用新版本号重签，
-    // 否则本次修改会把自己的 token 也作废、被 401 拦截器踢回登录页
-    const hashed = await hashPassword(parsed.data.password);
-    await setUserPassword(auth.user.id, hashed);
-    passwordChanged = true;
+    // 写入新哈希并递增凭据版本号（旧 JWT 全部失效）。随后轮换当前会话：
+    // 用新版本号重签，否则本次修改会把自己的 token 也作废、被 401 拦截器踢回登录页
+    hashedPassword = await hashPassword(password);
   }
 
-  // 画像字段显式透传（password/oldPassword 不入此通道）；crud 层 fail-closed 兜底
-  // 与资产/封面错误映射同风格（schema refine 已拦，此处为纵深防线）
+  // 画像与密码在同一事务内提交：头像校验失败时密码不会被单独写入，会话也不会被失效
+  // 却返回错误。错误映射与资产/封面同风格（schema refine 已拦，此处为纵深防线）
   try {
-    await updateUser(auth.user.id, {
-      avatarKey: parsed.data.avatarKey,
-      theme: parsed.data.theme,
-      language: parsed.data.language,
-    });
+    if (hashedPassword !== undefined) {
+      await changePassword(auth.user.id, hashedPassword, profile);
+    } else {
+      await updateUser(auth.user.id, profile);
+    }
   } catch (err) {
     if (err instanceof UserAvatarKeyError) return failCode(422, "common.invalid_request");
     throw err;
   }
+
   // 密码分支已改库，重新取一遍保证返回值与 cookie 中版本号一致
   const fresh = await getUserById(auth.user.id);
   if (!fresh) return failCode(404, "auth.user_not_found");
 
-  if (passwordChanged) {
+  if (hashedPassword !== undefined) {
     const token = await createAccessToken(fresh.id, fresh.username, fresh.tokenVersion);
     setAuthCookie(c, token);
   }

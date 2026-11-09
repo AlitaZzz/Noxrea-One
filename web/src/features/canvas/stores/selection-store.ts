@@ -4,7 +4,7 @@
 import { create } from "zustand";
 
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
-import type { ClipboardData } from "@/features/project/types";
+import type { ClipboardData } from "@/features/canvas/types";
 
 interface SelectionState {
   clipboard: ClipboardData | null;

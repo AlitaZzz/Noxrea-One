@@ -155,7 +155,7 @@ export function useBatchConnectDrag({
         onConnect(buildPairs(participants, hit));
       } else if (!hit) {
         // 空白处弹创建菜单（命中参与节点 = 拖回参与集，视为取消）。
-        // 菜单期间的束线预览由 InfiniteCanvas 按 sourceNodeIds 逐节点渲染
+        // 菜单期间的束线预览由 CanvasOverlays 按 sourceNodeIds 逐节点渲染
         onConnectToBlank(participantIds, to, { x: ev.clientX, y: ev.clientY }, direction);
       }
     };

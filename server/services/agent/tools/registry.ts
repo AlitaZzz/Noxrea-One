@@ -28,7 +28,7 @@ export interface AgentToolDefinition {
   promoteTextToContent?: boolean;
 }
 
-class ToolRegistry {
+export class ToolRegistry {
   private defs = new Map<string, AgentToolDefinition>();
 
   /** 注册一个工具，重复注册同名会抛错（便于尽早发现冲突） */

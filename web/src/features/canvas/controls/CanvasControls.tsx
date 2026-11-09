@@ -36,8 +36,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAuthStore } from "@/features/auth/store";
-import { useCurrentUser } from "@/features/auth/UserContext";
+import { savePreference, useCurrentUser } from "@/entities/user";
+import { useCanvasPorts } from "@/features/canvas/root/CanvasPortsContext";
+import { useCanvasShell } from "@/features/canvas/root/CanvasShellContext";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { MAX_ZOOM,MIN_ZOOM } from "@/lib/constants";
 import { modKey } from "@/lib/platform";
@@ -47,7 +48,7 @@ function LanguageToggle() {
   const lang = i18n.language;
   const toggle = () => {
     const next = lang === "zh" ? "en" : "zh";
-    useAuthStore.getState().savePreference("language", next);
+    void savePreference("language", next);
   };
   return (
     <Tooltip><TooltipTrigger asChild>
@@ -71,7 +72,7 @@ function ThemeToggle() {
   const toggle = (pressed: boolean) => {
     const next = pressed ? "dark" : "light";
     if (next !== (isDark ? "dark" : "light")) {
-      void useAuthStore.getState().savePreference("theme", next);
+      void savePreference("theme", next);
     }
   };
 
@@ -92,16 +93,11 @@ function ThemeToggle() {
   );
 }
 
-interface Props {
-  onOpenSettings?: () => void;
-  onOpenAssets?: () => void;
-  onOpenCanvasExplorer?: () => void;
-  canvasExplorerOpen?: boolean;
-}
-
-function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, canvasExplorerOpen }: Props) {
+function CanvasControls() {
   const { zoomIn, zoomOut, zoomTo, fitView } = useReactFlow();
   const { t } = useTranslation();
+  const { onOpenSettings, onOpenAssets } = useCanvasPorts();
+  const { explorerOpen, toggleExplorer } = useCanvasShell();
 
   const viewport = useViewport();
   const minimapVisible = useCanvasStore((s) => s.minimapVisible);
@@ -141,9 +137,9 @@ function CanvasControls({ onOpenSettings, onOpenAssets, onOpenCanvasExplorer, ca
         <Toggle
           size="sm"
           variant="default"
-          pressed={canvasExplorerOpen}
+          pressed={explorerOpen}
           onPressedChange={(pressed) => {
-            if (pressed !== canvasExplorerOpen) onOpenCanvasExplorer?.();
+            if (pressed !== explorerOpen) toggleExplorer();
           }}
         >
           <PanelIcon />

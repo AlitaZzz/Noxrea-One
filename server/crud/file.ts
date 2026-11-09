@@ -4,6 +4,7 @@
  */
 import { prisma } from "@server/core/database/client";
 import { Prisma } from "@server/core/database/generated/client";
+import type { DbTx } from "@server/core/database/transaction";
 
 // FileObject upsert（去重：hash 碰撞时更新）
 export async function upsertFileObject(data: {
@@ -57,8 +58,8 @@ export async function upsertFileObject(data: {
  * 按账本差值调整文件引用聚合计数。
  * 正数递增，负数递减；归零时保留记录，交由后续 GC 流程统一判断。
  */
-export async function adjustFileRefCount(
-  tx: Prisma.TransactionClient,
+export async function adjustFileRefCountTx(
+  tx: DbTx,
   userId: number,
   hash: string,
   delta: number,
@@ -96,4 +97,13 @@ export async function adjustFileRefCount(
     }
     throw error;
   }
+}
+
+/** 事务内查询用户是否持有该内容对象；供业务用例做引用接受边界的“存在性”校验。 */
+export async function hasFileObjectTx(tx: DbTx, userId: number, hash: string): Promise<boolean> {
+  const object = await tx.fileObject.findUnique({
+    where: { userId_hash: { userId, hash } },
+    select: { hash: true },
+  });
+  return object !== null;
 }

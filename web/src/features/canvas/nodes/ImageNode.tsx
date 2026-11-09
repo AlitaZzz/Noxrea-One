@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssetsStore } from "@/features/assets/store";
+import { addAsset } from "@/entities/asset";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import AnnotationPanel from "@/features/canvas/editing/AnnotationPanel";
 import CropPanel from "@/features/canvas/editing/CropPanel";
@@ -200,8 +200,6 @@ function ImageNode({ id, data }: NodeProps<ImageNodeType>) {
     setExpanded(!expanded);
   }, [expanded, setExpanded]);
 
-  const addAsset = useAssetsStore((s) => s.addAsset);
-
   const handleTransform = useCallback(async (op: "rot90" | "flipH" | "flipV") => {
     if (!src) return;
     try {
@@ -246,7 +244,7 @@ function ImageNode({ id, data }: NodeProps<ImageNodeType>) {
       description: "",
       prompt: d?.genSettings?.prompt ?? "",
     });
-  }, [src, data.label, id, addAsset, t]);
+  }, [src, data.label, id, t]);
 
   const handleGridSplit = useGridSplit(id, mediaUrl);
 

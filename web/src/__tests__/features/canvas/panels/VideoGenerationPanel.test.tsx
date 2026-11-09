@@ -90,7 +90,7 @@ vi.mock("@/features/canvas/upload", () => ({
   useRefUpload: () => vi.fn(),
 }));
 
-vi.mock("@/features/model/components/ModelSelector", () => ({
+vi.mock("@/components/model/ModelSelector", () => ({
   ModelSelector: () => <button type="button">model</button>,
 }));
 

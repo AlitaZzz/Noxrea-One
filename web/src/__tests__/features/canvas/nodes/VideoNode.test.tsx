@@ -22,11 +22,13 @@ vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-a
 
 const {
   captureFrameApi, createImageNodeFromRef, createVideoNodeFromRef, createAudioNodeFromRef,
+  commitDerivedNodes,
   serverExtractClip, tryClipOnClient, serverCropVideo, tryCropOnClient,
   serverDetachAudio, tryDetachAudioOnClient, playbackError, imageResult, posterRequests,
   readyResults,
 } = vi.hoisted(() => ({
   captureFrameApi: vi.fn(),
+  commitDerivedNodes: vi.fn(),
   createImageNodeFromRef: vi.fn(),
   createVideoNodeFromRef: vi.fn(),
   createAudioNodeFromRef: vi.fn(),
@@ -45,12 +47,13 @@ const {
 }));
 vi.mock("react-i18next", async (original) => ({ ...await original<typeof import("react-i18next")>(), useTranslation: () => ({ t: (key: string) => key }) }));
 vi.mock("@/components/ui/use-app-feedback", () => ({ useAppFeedback: () => ({ notification: { error: playbackError, warning: vi.fn() } }) }));
-vi.mock("@/features/assets/store", () => ({ useAssetsStore: (selector: (state: unknown) => unknown) => selector({ addAsset: vi.fn() }) }));
+vi.mock("@/entities/asset", () => ({ addAsset: vi.fn() }));
 vi.mock("@/features/canvas/upload", () => ({
   useNodeUpload: () => vi.fn(),
   createImageNodeFromRef,
   createVideoNodeFromRef,
   createAudioNodeFromRef,
+  commitDerivedNodes,
   DERIVED_BASE_GAP_Y: 20,
 }));
 vi.mock("@/features/canvas/api/file-api", async (original) => ({
@@ -109,31 +112,39 @@ const DETACH_VIDEO_KEY = makeStorageKey("d", ".mp4");
 const DETACH_AUDIO_KEY = makeStorageKey("e", ".m4a");
 /** 派生视频节点的统一创建契约：源 id、持久化 key、尺寸、构建后同批写入 */
 function expectDerivedVideoNode(key: string, width = 1280, height = 720) {
-  expect(createVideoNodeFromRef).toHaveBeenCalledWith(
-    "video",
-    key,
-    width,
-    height,
-    expect.any(String),
-    expect.anything(),
-    { source: "derived" },
-    undefined,
-    undefined,
-    { write: false },
-  );
+  expect(createVideoNodeFromRef).toHaveBeenCalledWith({
+    sourceId: "video",
+    ref: key,
+    naturalWidth: width,
+    naturalHeight: height,
+    labelSuffix: expect.any(String),
+    storeApi: expect.anything(),
+    extraNodeData: { source: "derived" },
+    options: { write: false },
+  });
 }
 /** 派生音频节点的统一创建契约（与视频节点同一形状，仅供分离音轨使用） */
 function expectDerivedAudioNode(key: string, position: { x: number; y: number }) {
-  expect(createAudioNodeFromRef).toHaveBeenCalledWith(
-    "video",
-    key,
-    expect.any(String),
-    expect.anything(),
-    { source: "derived" },
-    position,
-    undefined,
-    { write: false },
-  );
+  expect(createAudioNodeFromRef).toHaveBeenCalledWith({
+    sourceId: "video",
+    ref: key,
+    labelSuffix: expect.any(String),
+    storeApi: expect.anything(),
+    extraNodeData: { source: "derived" },
+    positionOverride: position,
+    options: { write: false },
+  });
+}
+/** 派生提交契约：调用点必须把源 id 与整批节点交给 commitDerivedNodes，并落到源→节点连线 */
+function expectDerivedCommit(ids: string[]) {
+  expect(commitDerivedNodes).toHaveBeenCalledTimes(1);
+  const [sourceId, nodes] = commitDerivedNodes.mock.calls[0]!;
+  expect(sourceId).toBe("video");
+  expect((nodes as Array<{ id: string }>).map((node) => node.id)).toEqual(ids);
+  const edges = useCanvasStore.getState().edges;
+  for (const id of ids) {
+    expect(edges.some((e) => e.source === "video" && e.target === id)).toBe(true);
+  }
 }
 /** 为派生工厂提供占位节点：测试只关心写入路径，不关心节点内容 */
 function stubNode(
@@ -163,6 +174,21 @@ function setNodeData(overrides: Partial<VideoNodeData>) {
   act(() => useCanvasStore.setState({ nodes: [{ id: "video", type: "video-node", position: { x: 5000, y: 0 }, data: { ...data, ...overrides } }] }));
 }
 beforeEach(() => {
+  // 复刻真实 commitDerivedNodes 的可观察契约：节点与源节点连线同批写入。
+  // 本文件断言调用点传给它的源 id 与连线方向；撤销语义由 derived-node-history 覆盖。
+  commitDerivedNodes.mockImplementation(
+    (
+      sourceId: string,
+      nodes: Array<{ id: string }>,
+      store: {
+        addNodes: (nodes: Array<{ id: string }>) => void;
+        addEdges: (edges: Array<{ id: string; source: string; target: string }>) => void;
+      },
+    ) => {
+      store.addNodes(nodes);
+      store.addEdges(nodes.map((node) => ({ id: `edge-${node.id}`, source: sourceId, target: node.id })));
+    },
+  );
   useCanvasStore.setState({ ...useCanvasStore.getInitialState(), nodes: [{ id: "video", type: "video-node", position: { x: 5000, y: 0 }, data: { ...data } }] });
   imageResult.current = { status: "ready", url: "/api/files/poster.webp" };
   readyResults.clear();
@@ -517,7 +543,16 @@ describe("VideoNode 编辑会话", () => {
     act(() => window.dispatchEvent(new CustomEvent(EventNames.CANVAS_NODE_ACTION, { detail: { nodeId: "video", action: "capture-frame", selection: { kind: "last" } } })));
     await flushMicrotasks();
     expect(captureFrameApi).toHaveBeenCalledWith(SOURCE_KEY, { kind: "last" }, expect.any(AbortSignal));
-    expect(createImageNodeFromRef).toHaveBeenCalledWith("video", FRAME_KEY, 1280, 720, expect.any(String), expect.anything(), { source: "derived" }, undefined, expect.any(String));
+    expect(createImageNodeFromRef).toHaveBeenCalledWith({
+      sourceId: "video",
+      ref: FRAME_KEY,
+      naturalWidth: 1280,
+      naturalHeight: 720,
+      labelSuffix: expect.any(String),
+      storeApi: expect.anything(),
+      extraNodeData: { source: "derived" },
+      labelOverride: expect.any(String),
+    });
   });
 
   it("换源替换中止进行中的抽帧请求", async () => {
@@ -559,6 +594,7 @@ describe("VideoNode 编辑会话", () => {
     await flushMicrotasks();
     expect(serverExtractClip).not.toHaveBeenCalled();
     expectDerivedVideoNode(CLIP_KEY);
+    expectDerivedCommit(["clip-node"]);
   });
 
   it("客户端管线不支持时，服务端兜底的截取产物仍写入存储 key", async () => {
@@ -571,6 +607,7 @@ describe("VideoNode 编辑会话", () => {
     await flushMicrotasks();
     expect(serverExtractClip).toHaveBeenCalledWith(SOURCE_KEY, 0, 2, expect.any(AbortSignal));
     expectDerivedVideoNode(CLIP_KEY);
+    expectDerivedCommit(["clip-node"]);
   });
 
   it("客户端管线裁剪产物写入存储 key，不写展示 URL", async () => {
@@ -583,6 +620,7 @@ describe("VideoNode 编辑会话", () => {
     await flushMicrotasks();
     expect(serverCropVideo).not.toHaveBeenCalled();
     expectDerivedVideoNode(CROP_KEY, rect.width, rect.height);
+    expectDerivedCommit(["crop-node"]);
   });
 
   it("客户端管线不支持时，服务端兜底的裁剪产物仍写入存储 key", async () => {
@@ -596,6 +634,7 @@ describe("VideoNode 编辑会话", () => {
     await flushMicrotasks();
     expect(serverCropVideo).toHaveBeenCalledWith(SOURCE_KEY, rect, expect.any(AbortSignal));
     expectDerivedVideoNode(CROP_KEY, rect.width, rect.height);
+    expectDerivedCommit(["crop-node"]);
   });
 
   it("客户端管线分离音轨双产物写入存储 key，不写展示 URL", async () => {
@@ -612,6 +651,7 @@ describe("VideoNode 编辑会话", () => {
     expect(serverDetachAudio).not.toHaveBeenCalled();
     expectDerivedVideoNode(DETACH_VIDEO_KEY);
     expectDerivedAudioNode(DETACH_AUDIO_KEY, { x: 5000, y: 220 });
+    expectDerivedCommit(["muted-node", "audio-node"]);
     expect(useCanvasStore.getState().nodes).toHaveLength(3);
   });
 
@@ -633,6 +673,7 @@ describe("VideoNode 编辑会话", () => {
     expectDerivedVideoNode(DETACH_VIDEO_KEY);
     // 音频节点排在静音视频正下方（间隙取 mock 的 DERIVED_BASE_GAP_Y = 20）
     expectDerivedAudioNode(DETACH_AUDIO_KEY, { x: 5000, y: 220 });
+    expectDerivedCommit(["muted-node", "audio-node"]);
     expect(useCanvasStore.getState().nodes).toHaveLength(3);
   });
 

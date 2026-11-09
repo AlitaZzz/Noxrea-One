@@ -6,7 +6,7 @@
  * `measured`），待渲染层采用新 `nodes` 后释放。活动期消费本节点的尺寸回传，
  * 避免 ResizeObserver 再写一次 store。完整规则见 specs/canvas-resize-gesture-session.md。
  *
- * 非 React 模块：由 `InfiniteCanvas` 持有并注入 store / 历史访问器。
+ * 非 React 模块：由 `CanvasSurface` 持有并注入 store / 历史访问器。
  * DOM 契约依赖本仓库固定的 React Flow 12.12 受控模式
  * （`.react-flow__node[data-id]`、行内尺寸由 `style.width/height` 决定），
  * 升级 React Flow 必须重新验证。
@@ -15,7 +15,7 @@ import type { RefObject } from "react";
 
 import type { Point } from "@/features/canvas/shared/geometry";
 import type { AnyNode } from "@/features/canvas/types";
-import type { HistorySnapshot } from "@/features/project/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 
 import { computeResizeSize, type ResizeSize, type ResizeStart } from "./resize-geometry";
 

@@ -21,8 +21,9 @@ vi.mock("react-i18next", async (importOriginal) => ({
   ...await importOriginal<typeof import("react-i18next")>(),
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
-vi.mock("@/features/assets/store", () => ({
-  useAssetsStore: (selector: (state: unknown) => unknown) => selector({ knownAssetKeys: new Set(), unsaveAssetsByFileKeys: vi.fn() }),
+vi.mock("@/entities/asset", () => ({
+  useKnownAssetKeys: () => new Set(),
+  unsaveAssetsByFileKeys: vi.fn(),
 }));
 vi.mock("@/features/canvas/stores/canvas-store", () => ({
   useCanvasStore: (selector: (state: unknown) => unknown) => selector(canvasState),

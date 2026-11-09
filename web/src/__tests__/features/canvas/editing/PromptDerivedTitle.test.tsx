@@ -22,7 +22,7 @@ vi.mock("@/features/canvas/api/canvas-api", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/features/canvas/api/canvas-api")>(),
   getPromptTemplate: vi.fn(),
 }));
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: { markDirty: vi.fn(), markDirtyImmediate: vi.fn() },
 }));
 

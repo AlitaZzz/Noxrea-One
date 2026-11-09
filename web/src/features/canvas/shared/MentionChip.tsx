@@ -9,8 +9,8 @@ import { type NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { createElement } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage, ResolvedVideo } from "@/components/media/ResolvedMedia";
 import { WaveIcon } from "@/components/ui/AppIcon";
-import { ResolvedImage, ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 
 import { useGenerationPanelActive } from "./generation-panel-active";
 import { findPreset, localizeText, presetIconOf, usePromptPresets } from "./prompt-presets";

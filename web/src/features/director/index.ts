@@ -1,27 +1,8 @@
 /**
  * Director feature 公开 API barrel。
+ * 只导出页面级挂载点；内部面板与 store 归本 feature 私有，
+ * 跨 feature 的导演数据类型走 `entities/director`。
  */
 
 // ── 组件 ──
 export { default as DirectorOverlay } from "./components/DirectorOverlay";
-export { default as DirectorViewport } from "./components/DirectorViewport";
-export { default as Dock } from "./components/Dock";
-export { default as Inspector } from "./components/Inspector";
-export { default as Outliner } from "./components/Outliner";
-export { default as PoseSliders } from "./components/PoseSliders";
-export { default as ScenePanel } from "./components/ScenePanel";
-
-// ── Store ──
-export { type DirectorRuntime,useDirectorStore } from "./director-store";
-
-// ── 类型 ──
-export type {
-  CameraEntity,
-  Character,
-  Crowd,
-  DirectorEntity,
-  DirectorEntityMeta,
-  Prop,
-  SceneState,
-  Shot,
-} from "./types";

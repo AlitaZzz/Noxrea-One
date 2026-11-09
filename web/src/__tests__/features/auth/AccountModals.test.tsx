@@ -5,24 +5,23 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  api: vi.fn(),
+  updateProfile: vi.fn(),
   canvasToBlob: vi.fn(),
-  uploadOne: vi.fn(),
   feedback: { message: { error: vi.fn(), info: vi.fn(), success: vi.fn() } },
-  authStore: {
+  userState: {
     user: { id: 1, username: "tester", avatarKey: null, theme: "light", language: "zh" },
     storage: null,
     refreshStorage: vi.fn(),
-    setState: vi.fn(),
   },
 }));
 
-vi.mock("@/lib/api/client", () => ({ api: mocks.api }));
 vi.mock("@/lib/utils/image-utils", () => ({ canvasToBlob: mocks.canvasToBlob }));
-vi.mock("@/features/canvas/upload", () => ({ uploadOne: mocks.uploadOne }));
 vi.mock("@/components/ui/use-app-feedback", () => ({ useAppFeedback: () => mocks.feedback }));
-vi.mock("@/features/auth/store", () => ({
-  useAuthStore: (selector: (state: typeof mocks.authStore) => unknown) => selector(mocks.authStore),
+vi.mock("@/entities/user", () => ({
+  useSessionUser: () => mocks.userState.user,
+  useUserStorage: () => mocks.userState.storage,
+  refreshStorage: () => mocks.userState.refreshStorage(),
+  updateProfile: (...args: unknown[]) => mocks.updateProfile(...args),
 }));
 
 import AvatarCropModal from "@/features/auth/components/AvatarCropModal";
@@ -36,7 +35,7 @@ afterEach(() => {
 
 describe("account modals", () => {
   it("resets the settings save state when the API returns no user", async () => {
-    mocks.api.mockResolvedValueOnce(undefined);
+    mocks.updateProfile.mockResolvedValueOnce(undefined);
     render(<SettingsModal open onClose={vi.fn()} />);
 
     fireEvent.change(document.getElementById("settings-current-password")!, { target: { value: "old-password" } });

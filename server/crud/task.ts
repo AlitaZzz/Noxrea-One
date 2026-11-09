@@ -1,11 +1,10 @@
 import { prisma } from "@server/core/database/client";
-import { TASK_TERMINAL_STATUSES } from "@noxrea/shared";
+import { Prisma } from "@server/core/database/generated/client";
+import { TASK_TERMINAL_STATUSES, type TerminalTaskStatus } from "@noxrea/shared";
 import { stringifyJson, parseJsonObject, parseJsonArray } from "./json-column";
-import { publishTaskTerminal } from "@server/services/tasks/event-bus";
 import { logEvent, errText } from "@server/core/logger/utils";
 import { minutesToMs } from "@server/core/duration";
 import { getSetting } from "@server/core/settings";
-import type { TerminalTaskState } from "@server/services/tasks/watcher";
 import crypto from "crypto";
 /**
  * 生成任务 CRUD。
@@ -360,11 +359,6 @@ export type TaskTerminalFields = Pick<
   "id" | "status" | "resultUrls" | "resultText" | "error" | "errorCode" | "prompt" | "config"
 >;
 
-/** 终态判断的单一谓词：取消路由、SSE 路由与 watcher 兜底共用，避免字面量逐处漂移 */
-export function isTerminalTaskStatus(status: string): status is TerminalTaskState["status"] {
-  return (TASK_TERMINAL_STATUSES as readonly string[]).includes(status);
-}
-
 /** 终态回填/广播所需的投影列：避免拉取 refImages/refAudios/refVideos 等大 JSON 列后丢弃 */
 const TERMINAL_FIELDS_SELECT = {
   id: true,
@@ -394,19 +388,6 @@ function deserializeTerminalRow(
   };
 }
 
-export function toTerminalState(task: TaskTerminalFields): TerminalTaskState {
-  return {
-    taskId: task.id,
-    status: task.status as TerminalTaskState["status"],
-    resultUrls: task.resultUrls ?? undefined,
-    resultText: task.resultText ?? undefined,
-    error: task.error ?? undefined,
-    errorCode: task.errorCode ?? undefined,
-    prompt: task.prompt || undefined,
-    config: task.config,
-  };
-}
-
 /**
  * 对账接口专用投影：只查终态回填需要的字段，
  * 避免把 refImages/refAudios/refVideos 等大 JSON 列整批拉出后丢弃。
@@ -421,7 +402,7 @@ export async function getTaskTerminalByIds(
   const tasks = await prisma.generationTask.findMany({
     where: {
       id: { in: ids },
-      status: { in: ["completed", "failed", "cancelled"] },
+      status: { in: [...TASK_TERMINAL_STATUSES] },
       ...(opts?.userId !== undefined ? { userId: opts.userId } : {}),
     },
     select: TERMINAL_FIELDS_SELECT,
@@ -430,135 +411,52 @@ export async function getTaskTerminalByIds(
 }
 
 /**
- * 终态流转的唯一入口：写入成功后广播终态事件，重读用投影查询构建 payload。
+ * 终态写库原语（specs/server-crud-service-boundary.md 规则 4）。
+ * 单条语句完成「守卫写入 + 返回同一行」：守卫命中返回本次写入的终态投影，
+ * 未命中（行不存在或守卫字段不匹配）由 Prisma P2025 映射为 null。
+ * 禁止 updateMany + 无条件重读——守卫命中后行可能已被并发改写，重读结果
+ * 不能冒充本次写入；事件发布与异常兜底属于 service 用例，不在 crud 内。
+ *
  * 守卫规则：
- * - completed/failed 只发生在已被认领的执行（processing）上，且无条件携带
- *   认领时间戳令牌（startedAt）：状态为 pending 说明僵尸清理已重置重试、
- *   时间戳不匹配说明任务已被重新认领——两种情况本执行者都已失去所有权，
- *   写入会误杀新一轮执行。令牌必填且无条件进 where：startedAt 为 null 时
- *   （不应发生于已认领任务）IS NULL 过滤匹配不到任何已认领行，写入被
- *   丢弃——宁可拒绝也不可无守卫覆盖。
- * - cancelled 来自用户操作，pending 的排队任务同样可以取消；cancelled 分支
- *   不带令牌过滤（pending 行的 startedAt 为 null，无法用令牌命中）。
- * 返回 null 表示任务不满足守卫条件，本次写入被丢弃。
+ * - completed/failed 只更新 status=processing 且 startedAt 与认领令牌一致的行；
+ *   令牌为 null 时按 IS NULL 过滤，匹配不到已认领行（宁可拒绝也不无守卫覆盖）。
+ * - cancelled 来自用户操作，pending 的排队任务同样可以取消，故只匹配
+ *   pending|processing，不使用 startedAt 过滤。
  */
-async function transitionToTerminal(
+export async function writeTaskTerminal(
   id: string,
-  status: TerminalTaskState["status"],
-  data: Record<string, unknown>,
-  ownership: { startedAt: Date | null }
+  status: TerminalTaskStatus,
+  data: { resultUrls?: string[]; resultText?: string; error?: string; errorCode?: string },
+  startedAt: Date | null,
 ): Promise<TaskTerminalFields | null> {
   const now = new Date();
-  const where = status === "cancelled"
+  const where: Prisma.GenerationTaskWhereUniqueInput = status === "cancelled"
     ? { id, status: { in: ["pending", "processing"] } }
-    : { id, status: "processing", startedAt: ownership.startedAt };
-  const res = await prisma.generationTask.updateMany({
-    where,
-    data: { status, completedAt: now, updatedAt: now, ...data },
-  });
-  if (res.count === 0) return null;
-  const row = await prisma.generationTask.findUnique({
-    where: { id },
-    select: TERMINAL_FIELDS_SELECT,
-  });
-  if (!row) return null;
-  const task = deserializeTerminalRow(row);
-  publishTaskTerminal(toTerminalState(task));
-  return task;
-}
-
-/**
- * completeTask / failTask：模块内私有，仅经 safeCompleteTask / safeFailTask
- * 兜底变体对外使用——终态写入的异常兜底是唯一正确的调用姿势。
- */
-function completeTask(
-  id: string,
-  data: { resultUrls?: string[]; resultText?: string },
-  ownership: { startedAt: Date | null }
-): Promise<TaskTerminalFields | null> {
-  return transitionToTerminal(id, "completed", {
-    ...(data.resultUrls !== undefined ? { resultUrls: stringifyJson(data.resultUrls) } : {}),
-    ...(data.resultText !== undefined ? { resultText: data.resultText } : {}),
-  }, ownership);
-}
-
-function failTask(
-  id: string,
-  data: { error?: string; errorCode?: string },
-  ownership: { startedAt: Date | null }
-): Promise<TaskTerminalFields | null> {
-  return transitionToTerminal(id, "failed", {
-    ...(data.error !== undefined ? { error: data.error } : {}),
-    ...(data.errorCode !== undefined ? { errorCode: data.errorCode } : {}),
-  }, ownership);
-}
-
-/**
- * safe 变体共享的兜底骨架：终态写入动作自身不能抛。
- * 写库失败（DB 抖动）记 terminal_write_failed 返回 null；所有权守卫拒绝记
- * skipped_terminal_write。DB 错误不能流入调用方的 catch——那会把已计费的任务
- * 用 DB 报错误写成对侧终态；守卫拒绝时任务已属于新执行者，同样不能覆盖。
- */
-async function safeTerminal(
-  id: string,
-  write: () => Promise<TaskTerminalFields | null>
-): Promise<TaskTerminalFields | null> {
+    : { id, status: "processing", startedAt };
   try {
-    const task = await write();
-    if (!task) {
-      logEvent("task", { stage: "skipped_terminal_write", taskId: id });
-    }
-    return task;
-  } catch (err: unknown) {
-    logEvent("task", {
-      level: "error",
-      stage: "terminal_write_failed",
-      taskId: id,
-      error: errText(err),
+    const row = await prisma.generationTask.update({
+      where,
+      data: {
+        status,
+        completedAt: now,
+        updatedAt: now,
+        ...(data.resultUrls !== undefined ? { resultUrls: stringifyJson(data.resultUrls) } : {}),
+        ...(data.resultText !== undefined ? { resultText: data.resultText } : {}),
+        ...(data.error !== undefined ? { error: data.error } : {}),
+        ...(data.errorCode !== undefined ? { errorCode: data.errorCode } : {}),
+      },
+      select: TERMINAL_FIELDS_SELECT,
     });
-    return null;
+    return deserializeTerminalRow(row);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return null;
+    }
+    throw error;
   }
 }
 
-/**
- * completeTask 的兜底变体：记录成功的动作本身不能抛。
- * completeTask 写库遇 DB 抖动抛错时，异常不能流入 executor 的 catch——那会把
- * 已计费的成功任务用 DB 错误信息写成 failed。任务停留 processing 交给僵尸清理
- * 重试：宁可重跑一次也不误杀成功结果。
- */
-export function safeCompleteTask(
-  id: string,
-  data: { resultUrls?: string[]; resultText?: string },
-  ownership: { startedAt: Date | null }
-): Promise<TaskTerminalFields | null> {
-  return safeTerminal(id, () => completeTask(id, data, ownership));
-}
-
-/**
- * failTask 的兜底变体：记录失败的动作本身不能抛（与 safeCompleteTask 对称）。
- * failTask 抛错（DB 抖动）时不能让 DB 错误被当成生成错误上报给 loop。
- */
-export function safeFailTask(
-  id: string,
-  data: { error?: string; errorCode?: string },
-  ownership: { startedAt: Date | null }
-): Promise<TaskTerminalFields | null> {
-  return safeTerminal(id, () => failTask(id, data, ownership));
-}
-
-// 取消任务
-// 取消使用独立的 cancelled 终态，不再复用 failed，便于前端区分
-// 令牌传 null 但 cancelled 分支不使用它（pending 行的 startedAt 本就是 null，
-// 取消必须能命中未认领的任务）
-
-export function cancelTask(id: string): Promise<TaskTerminalFields | null> {
-  return transitionToTerminal(id, "cancelled", {
-    error: "Task cancelled by user",
-    errorCode: "generation.cancelled",
-  }, { startedAt: null });
-}
-
-// 反序列化工具：将 SQLite JSON 字符串解析为对象
+// 反序列化工具：将 TEXT 列中的 JSON 字符串解析为对象
 
 function deserializeTask(task: GenerationTask): HydratedGenerationTask {
   return {

@@ -6,20 +6,11 @@
  */
 import { create } from "zustand";
 
-import type { DirectorStateData } from "@/features/canvas/types";
+import type { DirectorEntityMeta, DirectorStateData, SceneState, Shot } from "@/entities/director";
 import type { Stage } from "@/features/director/core/stage";
 import { DIRECTOR_SCENE_BG_HEX } from "@/features/director/theme";
 
-import type {
-  CameraEntity,
-  Character,
-  Crowd,
-  DirectorEntity,
-  DirectorEntityMeta,
-  Prop,
-  SceneState,
-  Shot,
-} from "./types";
+import type { CameraEntity, Character, Crowd, DirectorEntity, Prop } from "./types";
 
 // --- Runtime ref interface (exposed by DirectorViewport via useImperativeHandle) ---
 // UI calls these, DirectorViewport executes Three.js logic.
@@ -91,15 +82,9 @@ interface DirectorState {
   // Three.js runtime handle (set by DirectorViewport on mount)
   runtime: DirectorRuntime | null;
 
-  // Persistence
-  openingNodeId: string | null;
-  restoreState: DirectorStateData | null;
-
   // Actions (pure metadata, no Three.js)
   reset: () => void;
   setRuntime: (r: DirectorRuntime | null) => void;
-  setOpeningNodeId: (id: string | null) => void;
-  setRestoreState: (s: DirectorStateData | null) => void;
   setEntities: (entities: DirectorEntityMeta[]) => void;
   setSelectedId: (id: string | null) => void;
   toggleSelectedId: (id: string) => void;
@@ -136,8 +121,6 @@ export const useDirectorStore = create<DirectorState>((set) => ({
   shots: [],
   runtime: null,
   inspectorTick: 0,
-  openingNodeId: null,
-  restoreState: null,
 
   reset: () => set({
     entities: [],
@@ -148,12 +131,8 @@ export const useDirectorStore = create<DirectorState>((set) => ({
     activeCameraId: null,
     shots: [],
     runtime: null,
-    openingNodeId: null,
-    restoreState: null,
   }),
   setRuntime: (r) => set({ runtime: r }),
-  setOpeningNodeId: (id) => set({ openingNodeId: id }),
-  setRestoreState: (s) => set({ restoreState: s }),
   setEntities: (entities) => set({ entities }),
   setSelectedId: (id) => set({ selectedId: id, selectedIds: id ? [id] : [] }),
   toggleSelectedId: (id) => set((s) => {

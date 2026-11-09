@@ -139,7 +139,7 @@
 - 新增 `server/http/middleware/observability.ts`：访问日志 + HTTP 指标（在 `requestId` 之后、路由之前挂载，`next()` 之后读取响应状态；未捕获异常经 `onError` 后同样按 500 记录）。
 - [server/http/app.ts](../server/http/app.ts)：`/metrics` 路由、`/api/health/live` 与 `/api/health/ready`，删除 `/api/health`。
 - 各子系统在既有降级点调用具名 helper：`server/core/auth/snapshot.ts`、`server/http/routes/files.ts`、`server/services/storage/artifact.ts` / `resize-cache.ts`、`server/http/media-busy.ts`、`server/services/storage/gc.ts`。
-- [server/core/bootstrap.ts](../server/core/bootstrap.ts)：写入 `storage_probe_*`。
+- [server/bootstrap.ts](../server/bootstrap.ts)：写入 `storage_probe_*`。
 
 ### 前端
 
@@ -226,3 +226,5 @@
 2026-10-26 判断项修复：`derived_artifact_total{result="failed"}` 不再计入请求取消（`AbortError`）与媒体池过载（`MediaPoolBusyError`）——过载已由 HTTP 分类点的 `media_busy_rejected_total` 单点计数，取消不是生成故障；3.4 正文已补口径。GC 指标阶段数随第四条「探测残留清扫」阶段更新为四（3.7）；三阶段全败的 `failed` 阈值同步改为四阶段全败。测试：artifact 指标分类回归用例、gc 四阶段终态聚合用例。
 
 尚未验证：Prometheus 实际抓取与编排探针配置；真实部署下的指标连续性。状态已由用户于 2026-10-26 设为「已确认」；「已实现」待上述部署验收后设置。
+
+2026-11-09 边界澄清（文档）：规则 3.8 约束的是**指标标签集合**必须在 `server/core/metrics/` 内声明为有界联合类型，并不要求领域记录类型住在 metrics。`AddressingStyle` / `DerivedTier` 是标签集合，继续由 metrics 声明并被存储侧反向引用；`StorageCapabilities` 是存储能力记录（[storage-provider-portability.md](storage-provider-portability.md) 规则 4.1），归 `services/storage/providers.ts`。`MetricsHandle.storageProbe` 改为接收 metrics 自有的扁平入参 `StorageProbeMetrics`，由组合根 `bootstrap` 显式投影；标签取值与指标序列不变。规则正文未改。验证：`server/__tests__/core/metrics/storage-probe.test.ts` 锁定 `storage_probe_ok{addressing,response_overrides,browser_cors}` 与 `storage_probe_clock_skew_seconds` 的取值；server 全量 109 文件 / 1287 passed / 14 skipped。

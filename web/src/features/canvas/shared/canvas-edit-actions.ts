@@ -26,8 +26,8 @@ import { MEDIA_EDITOR_NODE_ID_KEYS, NODE_UI_STATE_KEYS } from "@/features/canvas
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode, MediaGenFields } from "@/features/canvas/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { createNodesFromFiles } from "@/features/canvas/upload";
-import type { HistorySnapshot } from "@/features/project/types";
 import { canConnect, isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
 import i18n from "@/lib/i18n/config";
 import { loadMediaImage } from "@/lib/load-media-image";

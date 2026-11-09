@@ -1,59 +1,42 @@
 /**
  * 画布资源管理器（Explorer）。
  * 上半部为节点大纲：按类型分组列出画布节点，支持搜索、筛选与定位选中；
- * 下半部为资产快捷区：分页浏览资产文件夹与素材，支持悬浮预览并拖入画布成节点。
+ * 下半部为资产快捷区：由 app 层注入资产浏览器，canvas 不依赖资产 feature UI。
  * 通过 shadcn Sheet 实现，不绑定具体方位，可在主题层调整为左 / 右 / 上下布局。
  */
 
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MediaHoverPreview } from "@/components/media/MediaHoverPreview";
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import {
   AppstoreOutlined,
   ClockCircleOutlined,
   DownOutlined,
-  FolderOpenOutlined,
   LoadingOutlined,
   RightOutlined,
   VideoCameraOutlined,
 } from "@/components/ui/AppIcon";
 import { AssetsIcon } from "@/components/ui/AppIcon";
-import { FilterIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
 import { SearchInput } from "@/components/ui/input-group";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { createAssetNode } from "@/features/assets/add-asset";
-import AssetBreadcrumb from "@/features/assets/components/AssetBreadcrumb";
-import AssetGrid from "@/features/assets/components/AssetGrid";
-import { AssetHoverPreview } from "@/features/assets/components/AssetHoverPreview";
-import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
-import { computeRecursiveFolderCounts, selectChildFolders, useAssetsStore } from "@/features/assets/store";
-import type { AssetFolder, AssetItem, AssetType } from "@/features/assets/types";
 import { getNodeTypeColor, getNodeTypeIcon, NODE_TYPE_I18N } from "@/features/canvas/NodeTypeDisplayMeta";
 import { getCanvasDerived, getCanvasOutline } from "@/features/canvas/shared/canvas-derived";
 import { useCenterNode } from "@/features/canvas/shared/center-node";
 import { applySelection } from "@/features/canvas/shared/selection";
-import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { AnyNode, TaskBinding, UploadState } from "@/features/canvas/types";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
-import { ASSET_CATEGORIES, isGenerating, NODE_TYPE } from "@/lib/constants";
+import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { AnyNode } from "@/features/canvas/types";
+import { isGenerating, NODE_TYPE } from "@/lib/constants";
 import { withManagedFileWidth } from "@/lib/file-url";
+import type { TaskBinding, UploadState } from "@/lib/types/canvas";
 import { formatBytes, formatDateTime, formatTime } from "@/lib/utils/format";
 
 export const DRAWER_WIDTH = 360;
@@ -64,9 +47,11 @@ const ROW_INDENT = 24;
 interface CanvasExplorerProps {
   open: boolean;
   onClose: () => void;
+  /** 资产快捷区内容（由 app 层注入，保留搜索、分页与文件夹状态）。 */
+  assetBrowser: ReactNode;
 }
 
-function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
+function CanvasExplorer({ open, onClose, assetBrowser }: CanvasExplorerProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<string>("elements");
 
@@ -113,7 +98,7 @@ function CanvasExplorer({ open, onClose }: CanvasExplorerProps) {
               <CanvasElementsView />
             </TabsContent>
             <TabsContent value="assets" forceMount className="min-h-0 w-full data-[state=inactive]:hidden">
-              <AssetsView />
+              {assetBrowser}
             </TabsContent>
           </Tabs>
         </div>
@@ -375,13 +360,11 @@ function ElementItemImpl(props: ElementItemProps) {
   }, [node, centerNode]);
 
   return (
-    <AssetHoverPreview
-      asset={{
-        name: label,
-        mediaType: nodeType === NODE_TYPE.TEXT ? "text" : nodeType === NODE_TYPE.VIDEO ? "video" : "image",
-        fileKey,
-        plainText,
-      }}
+    <MediaHoverPreview
+      name={label}
+      mediaType={nodeType === NODE_TYPE.TEXT ? "text" : nodeType === NODE_TYPE.VIDEO ? "video" : "image"}
+      fileKey={fileKey}
+      plainText={plainText}
       enabled={Boolean(
         (fileKey && (nodeType === NODE_TYPE.IMAGE || nodeType === NODE_TYPE.VIDEO))
         || (plainText && nodeType === NODE_TYPE.TEXT),
@@ -469,211 +452,11 @@ function ElementItemImpl(props: ElementItemProps) {
         </span>
       )}
       </Button>
-    </AssetHoverPreview>
+    </MediaHoverPreview>
   );
 }
 
 const ElementItem = memo(ElementItemImpl);
 
-// ── 资产视图 ──
-function AssetsView() {
-  const { t } = useTranslation();
-  const { message } = useAppFeedback();
-  const folders = useAssetsStore((s) => s.folders);
-  const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
-  const uncategorizedFolder = getUncategorizedFolder("personal");
-
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<AssetType[]>([]);
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-
-  // 抽屉只保留紧凑展示；查询、防抖、分页、错误重试完全交给资产模块。
-  const {
-    items,
-    totalCount,
-    loading,
-    loadingMore,
-    loadError,
-    hasMore,
-    loadMore,
-    retry,
-    reload,
-    appliedSearch,
-  } = useAssetLibrary({
-    enabled: true,
-    scope: "personal",
-    folderId: activeFolderId,
-    search,
-    categories: typeFilter,
-  });
-
-  // 资产条目在视图外变更（画布收藏 / 取消收藏等）时失效重拉当前视图。
-  // 用 ref 记录上次处理过的版本：挂载首帧与版本未变时不重复请求。
-  const libraryVersion = useAssetsStore((s) => s.libraryVersion);
-  const lastLibraryVersionRef = useRef(libraryVersion);
-  useEffect(() => {
-    if (libraryVersion === lastLibraryVersionRef.current) return;
-    lastLibraryVersionRef.current = libraryVersion;
-    reload();
-  }, [libraryVersion, reload]);
-
-  const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
-    // 离散插入：必定压栈
-    if (node) useCanvasStore.getState().addNodes([node], { forceHistory: true });
-    message.success(t("asset.added"));
-  }, [message, t]);
-
-  // 完整祖先面包屑链（从根到当前文件夹）
-  const breadcrumb = useMemo<AssetFolder[]>(() => {
-    if (!activeFolderId) return [];
-    const crumbs: AssetFolder[] = [];
-    let cur: string | undefined = activeFolderId;
-    while (cur) {
-      const f = folders.find((x) => x.id === cur);
-      if (!f) break;
-      crumbs.unshift(f);
-      cur = f.parentId || undefined;
-    }
-    return crumbs;
-  }, [activeFolderId, folders]);
-
-  // 与资产弹窗共用同一套递归计数逻辑，保证目录数量一致。
-  const recursiveCounts = useMemo(
-    () => computeRecursiveFolderCounts(folders),
-    [folders],
-  );
-
-  const gridFolders = useMemo<AssetFolder[]>(() => {
-    const childFolders = selectChildFolders(folders, "personal", activeFolderId ?? undefined).map((f) => ({
-      ...f,
-      count: recursiveCounts[f.id] ?? f.count ?? 0,
-    }));
-    if (activeFolderId !== null) return childFolders;
-    return uncategorizedFolder ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders] : childFolders;
-  }, [activeFolderId, folders, uncategorizedFolder, recursiveCounts, t]);
-
-  // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
-  const showFolderGrid = typeFilter.length === 0 && !appliedSearch.trim();
-
-  return (
-    // canvas-asset-drawer：画布拖放链路的排除标记（InfiniteCanvas.shouldIgnoreFileDrop），
-    // 使抽屉区域不作为画布落点——拖到抽屉上透传建节点 / 触发上传均被拦截
-    <div className="canvas-asset-drawer flex flex-col h-full">
-      {/* 搜索栏 + 风格筛选 */}
-      <div className="flex shrink-0 items-center gap-2 px-4 py-3">
-        <SearchInput
-          placeholder={t("asset.search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          clearable
-          onClear={() => setSearch("")}
-          containerClassName="h-8 flex-1"
-        />
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-pressed={typeFilter.length > 0}
-                  className={typeFilter.length > 0 ? "bg-muted text-foreground" : undefined}
-                >
-                  <FilterIcon />
-                </Button>
-              </DropdownMenuTrigger>
-            </TooltipTrigger>
-            <TooltipContent>{t("asset.filter")}</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent side="bottom" align="end" className="w-52">
-            <DropdownMenuLabel>{t("asset.filter")}</DropdownMenuLabel>
-            {ASSET_CATEGORIES.filter((category): category is typeof category & { key: AssetType } => category.key !== "all").map((st) => (
-              <DropdownMenuCheckboxItem
-                key={st.key}
-                checked={typeFilter.includes(st.key)}
-                onSelect={(event) => event.preventDefault()}
-                onCheckedChange={(checked) => {
-                  setTypeFilter((prev) =>
-                    checked ? [...prev, st.key] : prev.filter((k) => k !== st.key),
-                  );
-                }}
-              >
-                {t(st.labelKey)}
-              </DropdownMenuCheckboxItem>
-            ))}
-            {typeFilter.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setTypeFilter([])}>
-                  {t("asset.filterClear")}
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* 面包屑：完整祖先层级，逐级可点击；根视图也显示「个人资产库」。
-          统一使用 Breadcrumb 的 Chevron 分隔符，保持层级和主题样式一致。 */}
-      <AssetBreadcrumb
-        rootLabel={t("asset.spacePersonal")}
-        folders={breadcrumb}
-        activeFolderId={activeFolderId}
-        onNavigate={(folderId) => {
-          setSearch("");
-          setTypeFilter([]);
-          setActiveFolderId(folderId);
-        }}
-        getFolderLabel={(folder) => folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name}
-        collapsedLabel={t("asset.showParentFolders")}
-        className="shrink-0 px-4 pb-2 text-xs"
-        itemClassName="whitespace-nowrap text-xs"
-      />
-
-      {/* 紧凑资产网格；查询、加载、空态和重试逻辑由 AssetGrid / 资产 Hook 统一处理。
-          首页加载期间沿用旧列表占位会短暂撑高容器，临时隐藏滚动条避免其闪现。 */}
-      <div
-        className={`scrollbar-ui scrollbar-ui-compact min-h-0 flex-1 px-4 pb-3 ${loading ? "overflow-hidden" : "overflow-y-auto"}`}
-        style={{ scrollbarGutter: "stable" }}
-      >
-        <AssetGrid
-          assets={items}
-          folders={showFolderGrid ? gridFolders : undefined}
-          folderCounts={recursiveCounts}
-          compact
-          showHoverPreview
-          showInsertButton
-          draggable
-          onInsertCanvas={handleInsertCanvas}
-          onEnterFolder={(folder) => { setSearch(""); setTypeFilter([]); setActiveFolderId(folder.id); }}
-          loading={loading}
-          hasMore={hasMore}
-          loadingMore={loadingMore}
-          onLoadMore={loadMore}
-          loadError={loadError}
-          onRetry={retry}
-        />
-      </div>
-
-      {/* 底部统计 */}
-      <SheetFooter
-        className="flex shrink-0 flex-row items-center justify-end gap-2 border-t border-border px-4 py-2.5 text-xs text-muted-foreground"
-      >
-        {activeFolderId === null && typeFilter.length === 0 && !search.trim() ? (
-          <>
-            <FolderOpenOutlined />
-            <span>{gridFolders.length} {t("asset.foldersLabel")}</span>
-          </>
-        ) : (
-          <>
-            <FolderOpenOutlined />
-            <span>{totalCount || items.length} {t("asset.count")}</span>
-          </>
-        )}
-      </SheetFooter>
-    </div>
-  );
-}
 
 export default memo(CanvasExplorer);

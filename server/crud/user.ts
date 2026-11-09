@@ -4,20 +4,9 @@
  */
 import { prisma } from "@server/core/database/client";
 import { USERS_USERNAME_KEY } from "@server/core/database/constraint-names";
-import { invalidateAuthSnapshot } from "@server/core/auth/snapshot";
 import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { type User } from "@server/core/database/generated/client";
-import { hashFromStorageKey } from "@noxrea/shared/url";
-import { replaceSourceFileRef } from "@server/services/storage/file-ref-ledger";
-import { isKeyOwner } from "@server/services/storage/ownership";
-
-/** 头像引用值域错误：avatarKey 须为存储 key 严格形态（与 updateMeSchema 同值域）。 */
-export class UserAvatarKeyError extends Error {
-  constructor() {
-    super("avatar 引用须为存储 key");
-    this.name = "UserAvatarKeyError";
-  }
-}
+import type { DbTx } from "@server/core/database/transaction";
 
 export async function getUserById(id: number) {
   return prisma.user.findUnique({ where: { id } });
@@ -61,8 +50,8 @@ export async function touchLastLogin(id: number) {
   return prisma.user.update({ where: { id }, data: { lastLoginAt: new Date() } });
 }
 
-/** 用户可更新字段白名单 */
-type UpdatableUserFields = {
+/** 用户可更新字段白名单：类型即边界，事务原语不暴露白名单之外的能力。 */
+export type UpdatableUserFields = {
   avatarKey?: string | null;
   theme?: string;
   language?: string;
@@ -91,65 +80,26 @@ export function toPublicUser(user: User) {
 }
 
 /**
- * 修改密码的唯一入口：写入新哈希并递增凭据版本号，旧 JWT 立即失效。
- * 鉴权快照必须在提交后覆盖，否则新版本号要等 TTL 才对其他请求生效
- * （specs/auth-request-verification.md 规则 4）。
+ * 事务内密码单表写入原语：写入新哈希并递增凭据版本号。
+ * 只做单聚合写入；与画像字段的同事务编排、鉴权快照失效属于跨层编排，
+ * 由 `services/user/change-password` 负责（specs/server-crud-service-boundary.md 规则 3）。
  */
-export async function setUserPassword(id: number, hashedPassword: string) {
-  const user = await prisma.user.update({
+export async function updateUserPasswordTx(
+  tx: DbTx,
+  id: number,
+  hashedPassword: string,
+): Promise<User> {
+  return tx.user.update({
     where: { id },
     data: { hashedPassword, tokenVersion: { increment: 1 } },
   });
-  await invalidateAuthSnapshot(user);
-  return user;
 }
 
-export async function updateUser(
+/** 事务内按白名单字段更新用户行；调用方负责业务规则与跨聚合编排。 */
+export async function updateUserFieldsTx(
+  tx: DbTx,
   id: number,
-  data: UpdatableUserFields
-) {
-  // 白名单过滤收敛于此：仅允许安全字段更新，防止直接设置 hashedPassword 等敏感字段；
-  // avatarKey 在过滤前带类型捕获，账本分支免 Record 断言
-  const avatarKey = data.avatarKey;
-  const allowed: Record<string, unknown> = {};
-  const allowedKeys = new Set(["avatarKey", "theme", "language", "isActive"]);
-  for (const [key, val] of Object.entries(data)) {
-    if (allowedKeys.has(key) && val !== undefined) {
-      allowed[key] = val;
-    }
-  }
-
-  const user = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.update({ where: { id }, data: allowed });
-    // avatarKey 是托管引用：与引用账本（avatar 来源，sourceId=用户 id，每用户至多一行）
-    // 同事务整替，防止头像对象因账本无行被 GC 当孤儿回收。产品值域 = 存储 key 严格
-    // 形态（与统一 Spec 的 avatarKey 决策一致，判别单点 hashFromStorageKey，与封面同
-    // 规则）：key → {hash:1}；null → 清空该来源；非 key 形态（含外部 URL）fail-closed
-    // 抛错，不允许静默丢账本。avatarKey 未出现在更新里则不碰账本。
-    if (avatarKey !== undefined) {
-      if (avatarKey !== null) {
-        const hash = hashFromStorageKey(avatarKey);
-        // 引用接受边界（specs/file-access-ownership.md 规则 5）：key 必须内嵌当前用户
-        // （归属，isKeyOwner 与读路由同一判定），且对象行已存在（存在性）——否则账本/
-        // 聚合要么写不进（无行可加）要么 upsert 出 GC 不可见的惰性聚合行。
-        // 与账本整替同事务，检查与写入同生共死
-        if (!hash || !isKeyOwner(avatarKey, id)) {
-          throw new UserAvatarKeyError();
-        }
-        const object = await tx.fileObject.findUnique({
-          where: { userId_hash: { userId: id, hash } },
-          select: { hash: true },
-        });
-        if (!object) throw new UserAvatarKeyError();
-      }
-      await replaceSourceFileRef(tx, { userId: id, sourceType: "avatar", sourceId: String(id) }, avatarKey);
-    }
-    return user;
-  });
-
-  // 账号状态变更必须在提交后覆盖鉴权快照（specs/auth-request-verification.md 规则 4.2）；
-  // 画像字段（头像 / 主题 / 语言）不参与鉴权判定，不触发失效
-  if (allowed.isActive !== undefined) await invalidateAuthSnapshot(user);
-
-  return user;
+  fields: UpdatableUserFields,
+): Promise<User> {
+  return tx.user.update({ where: { id }, data: fields });
 }

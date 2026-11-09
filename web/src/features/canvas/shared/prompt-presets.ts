@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import type { ComponentType, CSSProperties } from "react";
 
 import { Wand2 } from "@/components/ui/AppIcon";
@@ -137,6 +137,20 @@ export function promptTemplatesQueryOptions() {
     queryFn: fetchPromptTemplates,
     gcTime: Infinity,
   };
+}
+
+/**
+ * 画布门页预取：拉取后返回「当前是否存在可用的提示词目录」。
+ * 刷新失败但缓存已有数据（短暂断网）时仍视为可用，后续面板订阅会继续追新；
+ * 无数据且拉取失败才返回 false，由门页进入失败态并允许重试。
+ */
+export async function preloadCanvasPromptTemplates(queryClient: QueryClient): Promise<boolean> {
+  try {
+    await queryClient.fetchQuery(promptTemplatesQueryOptions());
+    return true;
+  } catch {
+    return queryClient.getQueryData(PROMPT_TEMPLATES_QUERY_KEY) !== undefined;
+  }
 }
 
 /**

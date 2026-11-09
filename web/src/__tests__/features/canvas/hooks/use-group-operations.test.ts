@@ -19,7 +19,7 @@ import type { AnyNode } from "@/features/canvas/types";
 import { EventNames, GROUP_NODE_PADDING, NODE_TITLE_HEIGHT, NODE_TYPE } from "@/lib/constants";
 
 // 布局动作会触发落库；单测只关心 store 写入，隔离保存副作用
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: { markDirty: vi.fn(), markDirtyImmediate: vi.fn() },
 }));
 

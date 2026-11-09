@@ -1,0 +1,138 @@
+/**
+ * 资产领域 API 适配层（模块内部）。
+ * 只被 store 使用；DTO 与请求细节不对外暴露，调用方经公共 API 的命令与查询访问。
+ */
+import { api } from "@/lib/api/client";
+
+export interface AssetFolderDto {
+  id: number;
+  userId: number;
+  name: string;
+  scope: string;
+  kind: string;
+  parentId: number | null;
+  createdAt: string;
+  count: number;
+}
+
+export interface AssetItemDto {
+  id: number;
+  userId: number;
+  folderId: number;
+  scope: string;
+  /** 来源引用：存储 key 或外部 URL；收藏等入口写入的是节点 src 原值 */
+  fileKey?: string | null;
+  sourceType?: string;
+  name: string;
+  type: string;
+  mediaType: string;
+  width: number;
+  height: number;
+  /** 源文件大小（字节），服务端按 hash 关联 file_objects 得出；缺失为 0 */
+  size: number;
+  /** 媒体时长（秒），同出自 file_objects 的落盘探测；缺失为 0 */
+  duration: number;
+  description: string;
+  tags: string[];
+  prompt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetCountersDto {
+  folders: Record<string, number>;
+  total: number;
+}
+
+/** 批量创建时因重复被跳过的来源；重复属正常结果，不视为失败。 */
+export interface AssetSkippedDto {
+  fileKey: string;
+  reason: "already_exists" | "duplicate_in_batch";
+}
+
+interface AssetBootstrapDto {
+  folders: AssetFolderDto[];
+  fileKeys: string[];
+  totalCount: number;
+}
+
+// Folders
+export const assetApi = {
+  bootstrap: (scope = "personal") =>
+    api<AssetBootstrapDto>(`/api/assets/bootstrap?scope=${scope}`),
+
+  createFolder: (name: string, scope = "personal", parentId?: number) =>
+    api<AssetFolderDto>("/api/assets/folders", {
+      method: "POST",
+      body: JSON.stringify({ name, scope, parentId: parentId ?? null }),
+    }),
+
+  updateFolder: (id: number, name: string) =>
+    api<AssetFolderDto>(`/api/assets/folders/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteFolder: (id: number) =>
+    api<{ removedCount: number; fileKeys: string[]; counters: AssetCountersDto }>(`/api/assets/folders/${id}`, {
+      method: "DELETE",
+    }),
+
+  // Assets
+  listAssets: (params: { folderId?: number; type?: string; search?: string; scope?: string; cursor?: string; limit?: number; signal?: AbortSignal }) => {
+    const sp = new URLSearchParams();
+    if (params.folderId !== undefined) sp.set("folder_id", String(params.folderId));
+    if (params.type) sp.set("type", params.type);
+    if (params.search) sp.set("search", params.search);
+    if (params.scope) sp.set("scope", params.scope);
+    if (params.cursor) sp.set("cursor", params.cursor);
+    if (params.limit !== undefined) sp.set("limit", String(params.limit));
+    const qs = sp.toString();
+    return api<{ items: AssetItemDto[]; total: number; nextCursor: string | null }>(`/api/assets/items?${qs}`, { signal: params.signal });
+  },
+
+  createAsset: (data: {
+    name: string; type: string; mediaType?: string;
+    fileKey?: string; sourceType?: string;
+    description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
+  }) =>
+    api<{ item: AssetItemDto; counters: AssetCountersDto }>("/api/assets/items", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  createAssetsBatch: (items: Array<{
+    name: string; type: string; mediaType?: string;
+    fileKey?: string; sourceType?: string;
+    description?: string; tags?: string[]; prompt?: string; folderId?: number | null; scope?: string;
+  }>) =>
+    api<{ items: AssetItemDto[]; counters: AssetCountersDto; skipped: AssetSkippedDto[] }>("/api/assets/items/batch", {
+      method: "POST",
+      body: JSON.stringify(items),
+    }),
+
+  updateAsset: (id: number, data: Record<string, unknown>) =>
+    api<{ item: AssetItemDto; counters: AssetCountersDto }>(`/api/assets/items/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteAssetsBatch: (ids: number[]) =>
+    api<{ count: number; fileKeys: string[]; counters: AssetCountersDto }>("/api/assets/items/batch", {
+      method: "DELETE",
+      body: JSON.stringify({ ids }),
+    }),
+
+  /** 画布「取消收藏」：按 fileKey 删除个人库条目（宽松语义，无匹配也成功）。 */
+  deleteAssetsByFileKeys: (fileKeys: string[]) =>
+    api<{ count: number; fileKeys: string[]; counters: AssetCountersDto }>("/api/assets/items/by-file-keys", {
+      method: "DELETE",
+      body: JSON.stringify({ fileKeys }),
+    }),
+
+  updateAssetsBatch: (ids: number[], updates: Record<string, unknown>) =>
+    api<{ count: number; counters: AssetCountersDto }>("/api/assets/items/batch", {
+      method: "PUT",
+      body: JSON.stringify({ ids, updates }),
+    }),
+};

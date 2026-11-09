@@ -11,6 +11,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ModelSelector } from "@/components/model/ModelSelector";
 import { ArrowUpOutlined, CloseOutlined, DeleteOutlined } from "@/components/ui/AppIcon";
 import { HistoryIcon } from "@/components/ui/AppIcon";
 import { NewChatIcon } from "@/components/ui/AppIcon";
@@ -28,7 +29,6 @@ import { hasGeneratingNode, undoAction } from "@/features/canvas/shared/canvas-e
 import { modelsForCapability } from "@/features/canvas/shared/model-catalog";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { ModelSelector } from "@/features/model/components/ModelSelector";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 

@@ -8,23 +8,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
+  update: vi.fn(),
   findMany: vi.fn(),
   findUnique: vi.fn(),
   logEvent: vi.fn(),
-  publishTaskTerminal: vi.fn(),
 }));
 
 vi.mock("@server/core/database/client", () => ({
   prisma: {
     generationTask: {
       updateMany: mocks.updateMany,
+      update: mocks.update,
       findMany: mocks.findMany,
       findUnique: mocks.findUnique,
     },
   },
-}));
-vi.mock("@server/services/tasks/event-bus", () => ({
-  publishTaskTerminal: mocks.publishTaskTerminal,
 }));
 vi.mock("@server/core/logger/utils", () => ({
   logEvent: mocks.logEvent,
@@ -44,7 +42,9 @@ import {
   touchTaskHeartbeat,
   requeueProcessingAsyncTask,
   stuckLeaseCutoff,
+  writeTaskTerminal,
 } from "@server/crud/task";
+import { Prisma } from "@server/core/database/generated/client";
 import { resetTestSettings } from "../helpers/settings";
 
 const STARTED_AT = new Date("2026-01-01T00:00:00.000Z");
@@ -83,6 +83,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.updateMany.mockResolvedValue({ count: 0 });
+  mocks.update.mockResolvedValue(makeRow());
   mocks.findMany.mockResolvedValue([]);
   mocks.findUnique.mockResolvedValue(null);
 });
@@ -325,5 +326,77 @@ describe("requeueProcessingAsyncTask（轮询预算耗尽重入队）", () => {
     mocks.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(requeueProcessingAsyncTask("task-1", STARTED_AT, 2)).resolves.toBe(false);
+  });
+});
+
+describe("writeTaskTerminal（单条守卫写库原语）", () => {
+  it("守卫命中：只执行一条带扩展 where 的 update，返回本次写入行并反序列化", async () => {
+    mocks.update.mockResolvedValue(
+      makeRow({ status: "completed", resultUrls: '["k1","k2"]', config: '{"providerId":1}' })
+    );
+
+    const task = await writeTaskTerminal(
+      "task-1",
+      "completed",
+      { resultUrls: ["k1", "k2"], resultText: "done" },
+      STARTED_AT
+    );
+
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: "task-1", status: "processing", startedAt: STARTED_AT },
+      data: {
+        status: "completed",
+        completedAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+        resultUrls: '["k1","k2"]',
+        resultText: "done",
+      },
+      select: expect.objectContaining({ id: true, status: true, resultUrls: true, config: true }),
+    });
+    expect(mocks.findUnique).not.toHaveBeenCalled();
+    expect(task).toMatchObject({
+      id: "task-1",
+      status: "completed",
+      resultUrls: ["k1", "k2"],
+      config: { providerId: 1 },
+    });
+  });
+
+  it("守卫未命中（P2025）→ null；不重读、不伪造终态行", async () => {
+    mocks.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError("record not found", {
+        code: "P2025",
+        clientVersion: "test",
+      })
+    );
+
+    await expect(
+      writeTaskTerminal("task-1", "failed", { error: "x" }, STARTED_AT)
+    ).resolves.toBeNull();
+    expect(mocks.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("cancelled 只匹配 pending|processing，不使用 startedAt 过滤", async () => {
+    mocks.update.mockResolvedValue(makeRow({ status: "cancelled" }));
+
+    await writeTaskTerminal("task-1", "cancelled", {
+      error: "Task cancelled by user",
+      errorCode: "generation.cancelled",
+    }, null);
+
+    expect(mocks.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "task-1", status: { in: ["pending", "processing"] } },
+      })
+    );
+  });
+
+  it("非 P2025 数据库错误向上抛出（由 service 的 safe 变体兜底记日志）", async () => {
+    mocks.update.mockRejectedValue(new Error("db unavailable"));
+
+    await expect(
+      writeTaskTerminal("task-1", "completed", {}, STARTED_AT)
+    ).rejects.toThrow("db unavailable");
   });
 });

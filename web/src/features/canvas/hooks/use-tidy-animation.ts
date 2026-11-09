@@ -149,7 +149,7 @@ export interface ApplyTidyLayoutOptions {
 
 /**
  * 整理画布编排（单一实现）：计算布局 → 压栈 → 落位/动画 → 视口自适应。
- * 此前工具栏入口（InfiniteCanvas.handleTidyCanvas）与 Agent 桥（Runtime.tidyCanvas）
+ * 此前工具栏入口（CanvasSurface.handleTidyCanvas）与 Agent 桥（Runtime.tidyCanvas）
  * 各持一份逐行相同的编排，动画分支靠人肉保持一致。
  *
  * 返回是否实际移动了节点；skipHistory 时不自压快照，由调用方把整理并入整批变更的撤销。

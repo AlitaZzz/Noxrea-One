@@ -467,10 +467,67 @@ describe("DragPreviewSession", () => {
       computeEdgePath({ ...edgeGeometry("a", "c"), sourceX: 210 }).curve,
     );
 
-    // 会话结束清除覆盖，回落到登记几何
+    // 会话结束清除覆盖，回落到登记几何；路径预览写进 d，也必须还原而不只是清 mode
     session.cancel();
     expect(getFlowDrawable("e1")?.geometry.offset).toBeUndefined();
     expect(getFlowDrawable("e2")?.geometry.curve).toEqual(computeEdgePath(edgeGeometry("a", "c")).curve);
+    const baseD = computeEdgePath(edgeGeometry("a", "c")).path;
+    for (const path of e2.querySelectorAll("path")) {
+      expect(path.getAttribute("d")).toBe(baseD);
+    }
+  });
+
+  it("提交释放只清预览偏移，不按旧登记几何覆盖渲染层新路径", () => {
+    const raf = stubRaf();
+    const harness = createHarness([node("a", 0, 0, { selected: true }), node("c", 0, 400)]);
+    const { session, container } = harness;
+    addNodeEl(container, "a");
+    addEdgeEl(container, "e2");
+    registerEdge("e2", "a", "c");
+    const edge = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e2"]')!;
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
+    raf.flush();
+    // 预览阶段把拖动几何写进 d
+    const previewD = computeEdgePath({ ...edgeGeometry("a", "c"), sourceX: 210 }).path;
+    for (const path of edge.querySelectorAll("path")) {
+      expect(path.getAttribute("d")).toBe(previewD);
+    }
+
+    session.commit([{ id: "a", position: { x: 10, y: 0 } }]);
+    // 渲染层采用新节点后写出最终路径；登记表仍是拖动前几何（passive effect 尚未刷新）
+    for (const path of edge.querySelectorAll("path")) path.setAttribute("d", "M999 999");
+    session.syncRenderedNodes();
+
+    expect(session.isActive()).toBe(false);
+    for (const path of edge.querySelectorAll("path")) {
+      expect(path.getAttribute("d")).toBe("M999 999");
+    }
+  });
+
+  it("外部写入移除全部拖动项时按释放处理，不回退已渲染的边路径", () => {
+    const raf = stubRaf();
+    const harness = createHarness([node("a", 0, 0, { selected: true }), node("c", 0, 400)]);
+    const { session, container, writeStore } = harness;
+    addNodeEl(container, "a");
+    addEdgeEl(container, "e2");
+    registerEdge("e2", "a", "c");
+    const edge = container.querySelector<SVGGElement>('.react-flow__edge[data-id="e2"]')!;
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
+    raf.flush();
+    for (const path of edge.querySelectorAll("path")) path.setAttribute("d", "M777 777");
+
+    // 外部写入删除了全部拖动项：syncRenderedNodes 走重建，幸存集为空
+    writeStore([node("c", 0, 400)]);
+    session.syncRenderedNodes();
+
+    expect(session.isActive()).toBe(false);
+    for (const path of edge.querySelectorAll("path")) {
+      expect(path.getAttribute("d")).toBe("M777 777");
+    }
   });
 
   it("路径预览先于强调登记到达时，登记后仍按预览几何绘制", () => {

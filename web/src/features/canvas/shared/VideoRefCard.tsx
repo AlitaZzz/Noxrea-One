@@ -8,9 +8,9 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedVideo } from "@/components/media/ResolvedMedia";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { ResolvedVideo } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
 
 import { refThumbnailUrl } from "./reference";

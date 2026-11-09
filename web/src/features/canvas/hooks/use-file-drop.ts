@@ -7,7 +7,7 @@
 
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
-import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
+import { ASSET_DRAG_TYPE } from "@/entities/asset";
 import { createNodesFromFiles } from "@/features/canvas/upload";
 
 /** 参考区缩略图拖拽的自定义标记：携带此类标记的拖拽一律不视为文件上传 */

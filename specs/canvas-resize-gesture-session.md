@@ -33,7 +33,7 @@
 - `setNodes` 每次都执行 `assertUniqueNodeIds` 与 `orderGroupsBeforeMembers`（`stores/canvas-store.ts:394-399`），两者都是 O(N)。
 - 每次 `setNodes` 都产生新的 `nodes` 引用：`getCanvasDerived` 的 `derivedCache` 与 `getGroupMembership` 的 `membershipCache` 均按引用失效（`shared/canvas-derived.ts`），节点索引、选中集、选中框、全边高亮扫描、rail 宽度与组成员关系每帧全量重建。
 - `InfiniteCanvas` 订阅 `s.nodes`；受控 React Flow 在 props 引用变化后于被动 effect 中 `adoptUserNodes`（O(N) lookup 拷贝），`renderedNodes` 订阅再触发一轮节点树渲染。即每个指针帧至少两轮 React 提交。
-- **尺寸回传形成第二条写链**：store 尺寸变化 → wrapper 尺寸变化 → React Flow `useResizeObserver` 调 `updateNodeInternals(updates, force: true)` → 内部 lookup 替换并发出 `dimensions` 变更（不含 `setAttributes`）→ `handleNodesChange` 把 `dimensions` 归入 `otherChanges`（`InfiniteCanvas.tsx:525-528`）→ `applyNodeChanges` 写入 `measured` → 再次 `setNodes`。因此一次指针移动可能产生两次 store 写入与额外的 React 提交。
+- **尺寸回传形成第二条写链**：store 尺寸变化 → wrapper 尺寸变化 → React Flow `useResizeObserver` 调 `updateNodeInternals(updates, force: true)` → 内部 lookup 替换并发出 `dimensions` 变更（不含 `setAttributes`）→ `handleNodesChange` 把 `dimensions` 归入 `otherChanges`（`hooks/use-canvas-node-changes.ts:78-84`）→ `applyNodeChanges` 写入 `measured` → 再次 `setNodes`。因此一次指针移动可能产生两次 store 写入与额外的 React 提交。
 - 结论：缩放卡顿与框选/拖动同源——「每个指针帧写受控 store 并触发两轮 React 提交」；组缩放还叠加 O(N) 归一化、派生/成员关系重建与大面积半透明组体逐帧重绘。本 Spec 消除写 store 与 React 提交链，不消除组体自身的布局/重绘成本。
 
 ### 3. React Flow 机制（12.12，已验证）
@@ -51,7 +51,7 @@
 
 ### 5. 可复用件
 
-- 会话模式：`DragPreviewSession`（`drag/drag-preview-session.ts`）的 rAF 合并、DOM 契约、`syncRenderedNodes` 采用后释放、`cancel/dispose` 生命周期；`InfiniteCanvas.tsx:199-218` 的实例创建与布局副作用接线。
+- 会话模式：`DragPreviewSession`（`drag/drag-preview-session.ts`）的 rAF 合并、DOM 契约、`syncRenderedNodes` 采用后释放、`cancel/dispose` 生命周期；`root/CanvasSurface.tsx:199-218` 的实例创建与布局副作用接线。
 - 父级注入：`<ReactFlow>` 已由 `BatchConnectContext.Provider` / `CanvasMediaLoadingProvider` 包裹（`InfiniteCanvas.tsx:1116-1119`），缩放会话可用同模式的新 Context 暴露给节点内手柄。
 - 历史与快照：`takeCanvasSnapshot`、`useHistoryStore`、`markDirtyImmediate`（`stores/canvas-store.ts:116-122`）。
 - `shared/group-membership.ts` 的 `isGroupNode` 仅用于会话测试与语义说明；右下角收窄后缩放路径不再需要组成员补偿。
@@ -95,7 +95,7 @@
 
 ### 3. 尺寸回传接管
 
-3.1 会话活动期（含提交后等待渲染层采用）内，`NodeDimensionChange` 且 `change.id === 会话节点` 的变更由会话消费，不进入 `applyNodeChanges` 与 `setNodes`；判定在 `handleNodesChange` 过滤 `otherChanges` 处（`InfiniteCanvas.tsx:525-528`）调用会话的 `isResizingNode(id)`。
+3.1 会话活动期（含提交后等待渲染层采用）内，`NodeDimensionChange` 且 `change.id === 会话节点` 的变更由会话消费，不进入 `applyNodeChanges` 与 `setNodes`；判定在 `handleNodesChange` 过滤 `otherChanges` 处（`hooks/use-canvas-node-changes.ts`）调用会话的 `isResizingNode(id)`。
 3.2 其它节点的 `dimensions` 变更照常写 store（媒体加载、视频元数据等），不得一并吞掉。
 3.3 消费只阻止 store 回写；React Flow 内部 `nodeLookup` 的 `measured` / `handleBounds` 已由 `updateNodeInternals` 同步更新，预览期边与面板仍然正确。
 3.4 提交时写入最终 `measured`；此后会话释放，`dimensions` 变更恢复原有回写路径。
@@ -152,10 +152,10 @@
 
 - `web/src/features/canvas/nodes/ResizeHandle.tsx`：移除 store/历史直连与逐帧写入，改为从 Context 取会话并在 `pointerdown` 调用 `begin`；属性收窄（规则 7）；视觉不变。
 - `web/src/features/canvas/nodes/SelectionResizeHandle.tsx`：属性类型同步收窄。
-- `web/src/features/canvas/InfiniteCanvas.tsx`：
+- `web/src/features/canvas/root/CanvasSurface.tsx`：
   - 创建并持有 `ResizeSession`（与 `dragSession` / `marqueeSession` 同模式），在依赖 `renderedNodes` 的布局副作用中调用 `syncRenderedNodes()`，卸载时 `dispose()`；
-  - 用 `ResizeSessionContext.Provider` 包裹 `<ReactFlow>` 子树（与现有 Provider 同层，`InfiniteCanvas.tsx:1116-1119`）；
-  - `handleNodesChange` 的 `otherChanges` 过滤中消费会话节点的 `dimensions` 变更；
+  - 用 `ResizeSessionContext.Provider` 包裹 `<ReactFlow>` 子树（与现有 Provider 同层）；
+  - 经 `useCanvasNodeChanges` 的 `otherChanges` 过滤消费会话节点的 `dimensions` 变更；
   - 不新增 store action，不改 `canvas-store.ts`。
 - `web/src/features/canvas/shared/group-bounds.ts`：更新 `shiftGroupMembers` 的消费方注释（不再包含 ResizeHandle）。
 - `web/src/features/canvas/nodes/GroupNode.tsx`、`nodes/TextNode.tsx`：仅随属性收窄更新类型/传值，语义不变。

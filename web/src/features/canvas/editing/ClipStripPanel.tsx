@@ -6,7 +6,7 @@
  * 就近的手柄并连续 scrub，按住选区中段可整段平移，播放被约束在选区内循环，
  * 进度以白色竖线呈现。确认后把区间交给 VideoNode 走既有的事件链路创建派生视频节点。
  *
- * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
+ * 挂载位置由 CanvasOverlays 的节点级浮层用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放，轨道尺寸始终稳定。与帧序列面板互斥。
  */
 "use client";
@@ -24,14 +24,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { useProxyPlayback } from "@/features/canvas/hooks/use-proxy-playback";
 import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
+import { useCanvasInputBlocked } from "@/features/canvas/root/CanvasInputGateContext";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, isVideoPlaying, onVideoEnded, pauseVideo, playVideo, seekVideo, setVideoTime } from "@/features/canvas/shared/video-playback-registry";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
+import { clamp01 } from "@/lib/utils/number";
 
-import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
+import { clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import { MediaRetryNotice } from "./MediaRetryNotice";
 import { proxyNoticeOf, ProxyNoticeOverlay } from "./ProxyNotice";
 import { resolveTrackDuration } from "./track-duration";
@@ -50,6 +51,7 @@ interface ClipStripPanelProps {
 
 function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   const { t } = useTranslation();
+  const inputBlocked = useCanvasInputBlocked();
   // 媒体接口只接受存储 key：代理 / 截取都以此判定；外部 URL 仍可播放但不提供编辑
   const videoKey = storageKeyOf(videoRef);
   // 轨道缩略图：服务端出的整条雪碧图，拿不到时轨道退化为无缩略图形态；能否定位
@@ -380,10 +382,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // 面板打开时可能有输入框持有焦点，方向键要留给它们
       if (isEditableTarget(e.target)) return;
-      // 上层弹窗打开时方向键归弹窗控件（与 useEscapeToClose 的 modalOpen 守卫一致），
+      // 上层浮层打开时方向键归浮层控件（与 useEscapeToClose 的输入门守卫一致），
       // 否则隐藏面板会抢走方向键、把弹窗里的滑杆等控件卡住
-      const st = useCanvasStore.getState();
-      if (st.modalOpen || st.directorOverlayOpen) return;
+      if (inputBlocked) return;
       e.preventDefault();
       // 自动播放曾被拦截：keydown 是有效的用户激活，键盘微调同样恢复播放。
       // 恢复手势的定位必须用 setVideoTime（seekVideo 会 pause，会把刚恢复的
@@ -409,7 +410,7 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [rangeInitialized, duration, fps, activeHandle, setHandle, seekPreview, resumeIfBlocked, nodeId]);
+  }, [rangeInitialized, duration, fps, activeHandle, setHandle, seekPreview, resumeIfBlocked, nodeId, inputBlocked]);
 
   // 单格按 cover 规则缩放居中（裁掉超出部分）：contain 会在竖屏视频的每格左右
   // 留黑边、横屏视频上下留黑边，相邻格子的黑边连成「竖线」观感；cover 铺满格子

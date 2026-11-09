@@ -3,7 +3,7 @@
  *
  * 状态唯一真相源在 canvas-store 的瞬态字段 interaction（不落库、不进撤销历史）：
  * 节点组件（如 VideoNode 在连线 / 拖动期间抑制 hover 预览）也能读取同一状态。
- * 本 hook 只是把 store 状态与派发动作包装成记忆化 API，调用方（InfiniteCanvas）
+ * 本 hook 只是把 store 状态与派发动作包装成记忆化 API，调用方（CanvasSurface）
  * 无感知迁移。
  *
  * 建模收益：状态互斥，不存在未定义组合；与交互相关的 UI 可见性

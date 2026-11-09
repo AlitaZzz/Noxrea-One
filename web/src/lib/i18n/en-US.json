@@ -25,6 +25,7 @@
     "cancel": "Cancel",
     "confirm": "OK",
     "play": "Play",
+    "pause": "Pause",
     "stop": "Stop",
     "close": "Close",
     "save": "Save",
@@ -60,6 +61,10 @@
     "statusFailed": "Failed"
   },
   "media": {
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "volume": "Volume",
+    "videoProgress": "Video progress",
     "loadFailed": "Video failed to load",
     "previewLoadFailed": "Preview failed to load",
     "previewPlayFailed": "Preview playback failed. Please try again.",
@@ -949,6 +954,7 @@
       "models_set_failed": "Failed to update models in bulk"
     },
     "project": {
+      "create_failed": "Failed to create the project",
       "rename_failed": "Failed to rename the project",
       "cover_failed": "Failed to set the project cover",
       "delete_failed": "Failed to delete the project"

@@ -185,6 +185,7 @@
 - 取舍：签名 URL 是能力凭据，落盘会扩大其可用面（上限仍是 TTL 4h）；缓解是账号作用域隔离 + 登出清空 + TTL 封顶。XSS 本就能读内存，持久化不额外扩大攻击面；与参考实现（只持久化 cdn/origin）同一取向。
 - 登录/登出/切换账号清空内存与持久化条目，在途请求结果不得写入新作用域。
 - 不写入 localStorage、sessionStorage 或画布数据；描述结果不得直接写进 `<img src>`。
+- 读取时机（含首次渲染/水合首帧与缓存复用）见 [web-managed-media-hydration.md](web-managed-media-hydration.md) 规则 1.2（首帧未解析）、规则 1.4（水合后命中缓存）；本条只约束缓存内容、寿命与持久化，不复制该规则正文。
 
 3.3 批量调度（**2026-10-26 修订**）：
 
@@ -484,7 +485,7 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 
 规则 3.6 的元素级接线（2026-10-24）：
 
-- 新增共享组件 `web/src/features/media/components/ResolvedMedia.tsx`（`ResolvedImage` / `ResolvedVideo`）：引用值 → `withManagedFileWidth` → `useFileAccessUrl`；地址就绪前与加载失败后渲染调用方 `fallback`，元素 `onError` 触发 `retrySigned()` 一次，成功以 `reloadToken` 重挂元素（签名地址未变时也重新加载）。失败按**最终地址**记账，地址变化（换源 / 重描述 / 账号切换）自动复位。`fallback` 同时支持函数形态（`{ failed, retry }`）：媒体元素在描述失败时没有 `onError` 可挂，失败态与手动重试（`refresh`）由调用方在替代内容里表达——预览类「媒体即内容」的调用点据此渲染 `MediaAccessError`，装饰性缩略图继续用静态替代内容。
+- 新增共享组件 `web/src/components/media/ResolvedMedia.tsx`（`ResolvedImage` / `ResolvedVideo`）：引用值 → `withManagedFileWidth` → `useFileAccessUrl`；地址就绪前与加载失败后渲染调用方 `fallback`，元素 `onError` 触发 `retrySigned()` 一次，成功以 `reloadToken` 重挂元素（签名地址未变时也重新加载）。失败按**最终地址**记账，地址变化（换源 / 重描述 / 账号切换）自动复位。`fallback` 同时支持函数形态（`{ failed, retry }`）：媒体元素在描述失败时没有 `onError` 可挂，失败态与手动重试（`refresh`）由调用方在替代内容里表达——预览类「媒体即内容」的调用点据此渲染 `MediaAccessError`，装饰性缩略图继续用静态替代内容。
 - 已迁移的缩略/预览消费点：`AssetCard`、`AssetInspector`、`AssetCreateDialog`、`ProjectListPage`、`SettingsModal`、`UserMenuPopover`、`CanvasExplorer`、`ConfirmCard`、`Inspector`（机位截图与放大预览）、`MentionChip`、`MentionDropdown`、`ImageRefCard`、`VideoRefCard`、`MediaPreviewOverlay`。
 - 悬停大图由 `HoverCardMediaContent` 承担（`AssetHoverPreview` / `ReferenceHoverPreview`）：该组件新增 `onMediaError` / `mediaRevision` 两个与业务无关的回调，失败与重试按钮都会上报，调用方据此重新描述并重挂。
 - 仍直接消费 `useFileAccessUrl` 的是需要地址本身而非媒体元素的链路（命令式读取像素、`<audio>` 播放控制、3D 贴图、视频代理 / 雪碧图产出），其失败处理按各自产物形态实现，不走元素重试。
@@ -496,8 +497,8 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 
 消费方补齐（2026-10-24，未提交）：
 
-- **悬停大图改为打开时解析**：`AssetHoverPreview` / `ReferenceHoverPreview` 原先在卡片挂载时就调用 `useFileAccessUrl`，而消费地址的 `HoverCardMediaContent` 只随浮层打开才挂载——列表内每张卡片都会先发一次描述，且首次真实悬停时可能已过期再发一次。新增 `web/src/features/media/components/ResolvedHoverMedia.tsx`：`armed` 在首次 `open` 时置真且不复位（关闭动画期间内容仍在，重复悬停不重复描述），未武装时 Hook 收到 `undefined`、不发请求。`HoverCardMediaContent` 保持纯展示，不感知访问解析；`ReferenceHoverPreview` 的入参由 `src` / `onMediaError` / `mediaRevision` 改为 `value` / `width`。
-- **面板级失败态**：裁剪 / 标注 / 全景 / 打光 / 多角度 / 音频截取这些命令式消费方没有媒体元素可挂 `onError`，规则 3.6 的元素级接线覆盖不到；此前只取 `url`，描述失败表现为空白或永久「加载中」，没有任何重试入口。新增共享组件 `web/src/features/media/components/MediaAccessError.tsx` 统一渲染「说明 + 重试」，重试走 `refresh`（强制重新描述）——描述失败时 `retrySigned` 按设计返回 false（规则 3.6 的闩锁语义）。`CropPanel` / `AnnotationPanel` 的 `<img>` 仍接 `onError → retrySigned`，并以 `reloadToken` 重挂元素（重新签出的地址与旧地址相同时也强制重新加载）。
+- **悬停大图改为打开时解析**：`AssetHoverPreview` / `ReferenceHoverPreview` 原先在卡片挂载时就调用 `useFileAccessUrl`，而消费地址的 `HoverCardMediaContent` 只随浮层打开才挂载——列表内每张卡片都会先发一次描述，且首次真实悬停时可能已过期再发一次。新增 `web/src/components/media/ResolvedHoverMedia.tsx`：`armed` 在首次 `open` 时置真且不复位（关闭动画期间内容仍在，重复悬停不重复描述），未武装时 Hook 收到 `undefined`、不发请求。`HoverCardMediaContent` 保持纯展示，不感知访问解析；`ReferenceHoverPreview` 的入参由 `src` / `onMediaError` / `mediaRevision` 改为 `value` / `width`。
+- **面板级失败态**：裁剪 / 标注 / 全景 / 打光 / 多角度 / 音频截取这些命令式消费方没有媒体元素可挂 `onError`，规则 3.6 的元素级接线覆盖不到；此前只取 `url`，描述失败表现为空白或永久「加载中」，没有任何重试入口。新增共享组件 `web/src/components/media/MediaAccessError.tsx` 统一渲染「说明 + 重试」，重试走 `refresh`（强制重新描述）——描述失败时 `retrySigned` 按设计返回 false（规则 3.6 的闩锁语义）。`CropPanel` / `AnnotationPanel` 的 `<img>` 仍接 `onError → retrySigned`，并以 `reloadToken` 重挂元素（重新签出的地址与旧地址相同时也强制重新加载）。
 - **音频截取面板**：波形取数与播放改用面板自己的媒体元素（wavesurfer 只做渲染，不再由它取数）；元素 `error` 由 `useAudioElement` 按逻辑源失败回合触发一次 `retrySigned`，加载成功（`loadedmetadata`）收敛失败态；`reloadToken` 只让元素重新 `load()`，不再重建波形实例。峰值不可用（`clip.peaksUnavailable`）与媒体加载失败（`clip.unavailable`）是两条独立提示；描述失败仍显示面板级重试而不是「加载中」。详见 `specs/canvas-audio-peaks-cache.md`。
 - **宫格切分**：改为在动作发生时取地址（规则 3.6 的非元素形态），不再复用挂载时的 Hook 结果——长驻节点的签名可能早已过期，且描述失败此前是静默 `return`。最终失败按规则 3.7 发全局通知（`node.gridSplitFailed`），不再只写 `console.error`。
 - **命令式位图加载统一**：新增 `web/src/lib/load-media-image.ts`（`loadMediaImage`），
@@ -554,4 +555,20 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 - 规则 3.8 主动刷新的会话内定时行为（到点后台重描述、会话抖动、退避）未在浏览器触发：寿命 4h、`refreshAt` 在 80% 处（约 1.8h 后），本次只验证了「载入时丢弃过期条目并重描述」这一半，其余由单测覆盖。
 - `local` 后端（`stream` 描述）未验证——当前运行时 `backend=s3`，切换后端属于运行时设置变更，本次未做。
 
+2026-11-07 审查修复（工作区未提交，规则 3.8 展示快照）：
+
+- **`getSnapshot` 必须返回缓存值**：`peekMediaAccess` 每次派生新对象，Hook 原先在渲染期把冻结槽写入 ref；该写法在并发渲染下可能保留被放弃渲染的结果，且快照缓存的正确性依赖「渲染期写」这一副作用。现改为两层快照：已提交的冻结槽只在 effect / 会话事件里写入（规则 3.8 的「不替换已挂载地址」），提交前的派生快照按「来源 + 变更版本」缓存在 ref 中；`notifyAccessChanged` 同步递增版本，被丢弃渲染写入的旧条目在下次读取时被版本校验淘汰，因此缓存值始终是（来源, 当前缓存内容）的纯函数。修复了 Next.js dev 运行时 `The result of getSnapshot should be cached to avoid an infinite loop`（真实画布 152 节点客户端复验：0 条 console.error）。
+- 回归：`UseFileAccessUrl.test.tsx` 27 用例通过（含「无关媒体的缓存写入不重渲染」「缓存命中挂载：后台刷新不替换地址」「换源不残留冻结」）；全量 web 207 文件 / 1643 用例通过；typecheck / lint 通过。
+- `upload-pipeline.ts` 的 `itemIndex` 过期注释（「用于 onProgress 回传」）改为实际用途「按下标写回 summaryResults / summaryErrors」。
+
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。
+
+2026-11-08 文档引用约定（用户确认）：
+
+- 规则 3.2 增加读取时机指针，引用 [web-managed-media-hydration.md](web-managed-media-hydration.md) 规则 1.2（首帧未解析）、规则 1.4（水合后命中缓存）。首帧/水合读取契约的权威定义在该 Spec，本条只约束缓存内容、寿命与持久化，不复制规则正文。
+- 引用形式遵循 `AGENTS.md` 十二.3.4「规范条款单一权威」：跨 Spec 只引用到「文件名 + 规则编号 + 规则标题」，规则正文单点定义，引用关系不转移归属。
+- 仅文档变更，无代码、接口、数据或运行时行为变化，无需重新验收。
+
+2026-11-08 路径校正（仅文档）：
+
+- 上文历史记录中的 `web/src/features/media/components/*` 已随模块迁移改为 `web/src/components/media/*`（`specs/web-module-contracts.md` 验收 20）；仅更新路径，不改变规则、行为与验收结论。

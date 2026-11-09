@@ -32,7 +32,7 @@
   - `web/src/features/canvas/panels/use-generation-submit.ts` + Image/Video/Text 三面板（预生成快照注册表收口，面板直调注册表函数）
   - `web/src/features/canvas/hooks/use-sse-task-monitor.ts`（失败/取消终态弹快照）
   - `web/src/features/canvas/hooks/use-editable-title.ts`、`nodes/NodeToolbar.tsx`（GroupColorPicker）——离散压栈；`upload/upload-pipeline.ts`（replace 压栈时机前移 + 占位创建批量）、`upload/derived-node.ts`（派生批量 + `CanvasStoreApi` 复用 `HistoryPushOptions`）
-  - 规则 4 向全部调用点的落地（同一原子操作合并/离散必入栈）：`InfiniteCanvas.tsx`（建节点+归组+接线、batchConnect、资产拖放）、`nodes/VideoNode.tsx`（分离音频/片段截取/画面裁剪）、`controls/DeletableEdge.tsx`、`shared/AudioRefCard|ImageRefCard|VideoRefCard|TextRefChip`（断开参考）、`explorer/CanvasExplorer.tsx` 与 `features/assets/components/AssetsDialog.tsx`（资产插入）、`hooks/use-add-node.ts`
+  - 规则 4 向全部调用点的落地（同一原子操作合并/离散必入栈）：`root/CanvasSurface.tsx`（React Flow 装配、资产拖放直接建节点）、`hooks/use-canvas-connections.ts`（建节点 + 归组扩框 + 批量接线）、`controls/use-batch-connect-drag.ts`（batchConnect）、`hooks/use-file-drop.ts`（资产拖放）、`nodes/video/use-video-node-actions.ts`（分离音频/片段截取/画面裁剪）、`controls/DeletableEdge.tsx`、`shared/AudioRefCard|ImageRefCard|VideoRefCard|TextRefChip`（断开参考）、`root/CanvasRoot.tsx`（资产插入 `insertAssets`；`features/assets/components/AssetBrowserPanel.tsx` 与 `AssetsDialog.tsx` 经注入的 `onInsertAsset` 触发，`explorer/CanvasExplorer.tsx` 只渲染 `slots.assetBrowser`）、`hooks/use-add-node.ts`
   - `agent/components/AgentDrawer.tsx`（回合撤销入口走统一守卫）
   - 相关单测
 - 不改动：`history-store.ts` 结构（双栈 / version / popIfTop 语义不变）；保存格式与 `CanvasData` 契约（viewport 仍保存）；服务端；拖拽 / 缩放 / 编组 / 解组 / 组内布局 / 整理的既有直连压栈方式；`minimapVisible`/`snapEnabled` 随快照恢复的现状语义；GEN-02 任务生命周期语义（弹快照不取消任务）。
@@ -106,3 +106,8 @@
 - Agent 回合压栈与「撤销此轮」、生成失败/取消后第一次撤销、节点上传/更换的撤销链（验收 2 / 5 / 7）本次未走查。
 
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。
+
+- 2026-11-08 引用校正（仅文档）：根组件拆分后，规则 4 的落点由 `InfiniteCanvas.tsx` 分别归属 `root/CanvasSurface.tsx`（React Flow 装配、资产拖放直接建节点）、`hooks/use-canvas-connections.ts`（建节点 + 归组扩框 + 批量接线）、`controls/use-batch-connect-drag.ts`、`hooks/use-file-drop.ts` 与 `nodes/video/use-video-node-actions.ts`；资产插入落点校正为 `root/CanvasRoot.tsx`（`insertAssets`），`AssetBrowserPanel` / `AssetsDialog` 经注入的 `onInsertAsset` 触发，`CanvasExplorer` 只渲染 `slots.assetBrowser`；背景中的审查范围与缺陷证据保留拆分前快照。状态保持「已确认」。
+- 2026-11-08 评审修复（工作区未提交）：派生节点三工厂统一经 `writeDerivedNode` 在 `withHistoryBatch` 内完成节点 + 连线写入，修复音频/视频默认写入路径在距上次压栈不足 300ms 时不产生独立撤销步的缺陷（规则 4「离散操作必定压栈」）；新增 `derived-node-history.test.ts` 锁定。验证：web 全量 210 文件 / 1666 用例、typecheck、lint 0 error（6 个既有 `<img>` warning）通过；浏览器走查与验收 2/5/7 仍未完成，状态保持「已确认」。
+- 2026-11-08 四轮评审修复（工作区未提交）：`derived-node-history.test.ts` 扩展为图片 / 视频 / 音频三工厂逐项锁定；派生写入路径删除无调用方的 `connectToSource` / `skipHistory` 选项，三工厂统一「写入节点 + 连线」。验证：web 全量 210 文件 / 1668 用例、typecheck、lint 0 error（6 个既有 `<img>` warning）通过；浏览器走查与验收 2/5/7 仍未完成，状态保持「已确认」。
+- 2026-11-08 五轮评审修复（工作区未提交）：规则 4 落点校正——「建节点 + 归组扩框 + 批量接线」归 `hooks/use-canvas-connections.ts`，视频编辑动作归 `nodes/video/use-video-node-actions.ts`，资产插入经 `AssetBrowserPanel` / `AssetsDialog` 注入的 `onInsertAsset` 触发、`CanvasExplorer` 只渲染 `slots.assetBrowser`；`derived-node-history.test.ts` 增补 `commitDerivedNodes` 批量守卫用例（两次写入跨过 300ms 节流窗口仍只产生一条撤销记录，临时移除守卫可复现失败）。验证：web 全量 210 文件 / 1669 用例、typecheck、lint 0 error（6 个既有 `<img>` warning）通过；浏览器走查与验收 2/5/7 仍未完成，状态保持「已确认」。

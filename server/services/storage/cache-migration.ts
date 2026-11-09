@@ -15,7 +15,7 @@ import type { StorageBackend } from "./backend";
 /** 无版本旧目录的 8 个历史档位（冻结清单，禁止随当前档位表演进；本模块私有，无外部消费） */
 const LEGACY_RESIZE_WIDTH_TIERS = [64, 112, 200, 300, 320, 400, 480, 1280] as const;
 
-interface LegacyCachePurgeResult {
+export interface LegacyCachePurgeResult {
   /** 枚举到的旧键数 */
   scanned: number;
   /** 成功删除（含不存在）的键数 */

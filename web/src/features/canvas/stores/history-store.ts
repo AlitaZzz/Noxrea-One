@@ -4,7 +4,7 @@
  */
 import { create } from "zustand";
 
-import type { HistorySnapshot } from "@/features/project/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { HISTORY_MAX_SIZE } from "@/lib/constants";
 
 interface HistoryState {

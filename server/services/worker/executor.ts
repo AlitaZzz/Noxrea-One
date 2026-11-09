@@ -6,10 +6,7 @@
  */
 
 import { routeGenerate } from "@server/services/gateway/router";
-import {
-  safeCompleteTask,
-  safeFailTask,
-} from "@server/crud/task";
+import { safeCompleteTask, safeFailTask } from "@server/services/tasks/terminal";
 import { getProvider } from "@server/crud/model-config";
 import { resolveRefImages, resolveRefAudio, resolveRefVideo } from "@server/services/resolvers/reference";
 import { resolveAndValidate } from "@server/core/ssrf";
@@ -133,7 +130,7 @@ export async function executeSubmissionPhase(
     if (capability === "llm" && !result?.urls?.length && result?.text) {
       const finalized = await safeCompleteTask(task.id, {
         resultText: result.text,
-      }, { startedAt: task.startedAt });
+      }, task.startedAt);
       // null = 所有权守卫拒绝或写库失败（safeCompleteTask 已记日志）；
       // 写库失败时任务停留 processing 交清扫收口，不能流入 catch 误判失败
       if (!finalized) return;
@@ -203,6 +200,6 @@ export async function executeSubmissionPhase(
       error: errorMsg,
       // 失败分类落库：供前端本地化展示，也便于按错误码统计失败分布
       errorCode: code,
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
   }
 }

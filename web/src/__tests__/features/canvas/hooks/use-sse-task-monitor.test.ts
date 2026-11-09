@@ -32,7 +32,7 @@ vi.mock("@/lib/utils/image-utils", async (importOriginal) => {
     loadMediaDimensions: mocks.loadMediaDimensions,
   };
 });
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: { markDirty: vi.fn(), markDirtyImmediate: vi.fn() },
 }));
 

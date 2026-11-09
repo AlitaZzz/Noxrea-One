@@ -15,9 +15,9 @@ import { editResultResponse, makeStorageKey } from "@/__tests__/test-utils/stora
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ClientUnsupportedError } from "@/features/canvas/editing/client-media/client-video";
 import AudioNode from "@/features/canvas/nodes/AudioNode";
+import { saveManager } from "@/features/canvas/persistence/save-manager";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AudioNodeData } from "@/features/canvas/types";
-import { saveManager } from "@/features/project/save-manager";
 import { EventNames } from "@/lib/constants";
 vi.mock("@/lib/use-file-access-url", () => import("@/__tests__/test-utils/file-access-mock"));
 
@@ -114,13 +114,13 @@ describe("AudioNode 编辑产物", () => {
     dispatchClip();
     await flushMicrotasks();
     expect(extractAudioClip).toHaveBeenCalledWith(SOURCE_KEY, { start: 0, end: 11 }, expect.anything());
-    expect(createAudioNodeFromRef).toHaveBeenCalledWith(
-      "audio",
-      CLIENT_KEY,
-      expect.any(String),
-      expect.anything(),
-      { source: "derived" },
-    );
+    expect(createAudioNodeFromRef).toHaveBeenCalledWith({
+      sourceId: "audio",
+      ref: CLIENT_KEY,
+      labelSuffix: expect.any(String),
+      storeApi: expect.anything(),
+      extraNodeData: { source: "derived" },
+    });
   });
 
   it("音频截取（服务端兜底）派生节点写入存储 key，不写展示 URL", async () => {
@@ -130,13 +130,13 @@ describe("AudioNode 编辑产物", () => {
     dispatchClip();
     await flushMicrotasks();
     expect(serverExtractAudioClip).toHaveBeenCalledWith(SOURCE_KEY, 0, 11, expect.any(AbortSignal));
-    expect(createAudioNodeFromRef).toHaveBeenCalledWith(
-      "audio",
-      SERVER_KEY,
-      expect.any(String),
-      expect.anything(),
-      { source: "derived" },
-    );
+    expect(createAudioNodeFromRef).toHaveBeenCalledWith({
+      sourceId: "audio",
+      ref: SERVER_KEY,
+      labelSuffix: expect.any(String),
+      storeApi: expect.anything(),
+      extraNodeData: { source: "derived" },
+    });
   });
 
   it("音频变速（客户端管线）派生节点写入存储 key，不写展示 URL", async () => {
@@ -149,13 +149,13 @@ describe("AudioNode 编辑产物", () => {
     await flushMicrotasks();
     expect(applyAudioSpeed).toHaveBeenCalledWith(SOURCE_KEY, 1.5, expect.anything());
     expect(serverApplyAudioSpeed).not.toHaveBeenCalled();
-    expect(createAudioNodeFromRef).toHaveBeenCalledWith(
-      "audio",
-      CLIENT_SPEED_KEY,
-      expect.any(String),
-      expect.anything(),
-      { source: "derived" },
-    );
+    expect(createAudioNodeFromRef).toHaveBeenCalledWith({
+      sourceId: "audio",
+      ref: CLIENT_SPEED_KEY,
+      labelSuffix: expect.any(String),
+      storeApi: expect.anything(),
+      extraNodeData: { source: "derived" },
+    });
   });
 
   it("音频变速（服务端兜底）派生节点写入存储 key，不写展示 URL", async () => {
@@ -165,12 +165,12 @@ describe("AudioNode 编辑产物", () => {
     dispatchSpeed(1.5);
     await flushMicrotasks();
     expect(serverApplyAudioSpeed).toHaveBeenCalledWith(SOURCE_KEY, 1.5, expect.any(AbortSignal));
-    expect(createAudioNodeFromRef).toHaveBeenCalledWith(
-      "audio",
-      SPEED_KEY,
-      expect.any(String),
-      expect.anything(),
-      { source: "derived" },
-    );
+    expect(createAudioNodeFromRef).toHaveBeenCalledWith({
+      sourceId: "audio",
+      ref: SPEED_KEY,
+      labelSuffix: expect.any(String),
+      storeApi: expect.anything(),
+      extraNodeData: { source: "derived" },
+    });
   });
 });

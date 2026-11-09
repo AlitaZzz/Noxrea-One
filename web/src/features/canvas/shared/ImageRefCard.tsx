@@ -9,9 +9,9 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { Card } from "@/components/ui/card";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
 
 import { ReferenceHoverPreview, ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";

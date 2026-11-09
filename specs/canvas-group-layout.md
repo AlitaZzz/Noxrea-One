@@ -11,7 +11,7 @@
 3. **宫格**：`cols = ceil(√n)`，行内游标按成员自身宽度累加、净间距 `LAYOUT_GAP = 60`，行高取该行最高，**成员顶对齐**（`y = cursorY`）；成员顺序 = `groupMembers` 的 store 数组顺序，即创建/粘贴顺序，与成员在画布上的位置无关。
 4. **组框尺寸**：`width = max(200, contentW + 80)`，`height = max(120, contentH + 28 + 80)`；原点 `(40, 28 + 40)`（不压标题栏）。
 5. **与 GroupNode 的最小尺寸一致**：`GroupNode` 的 `dynMinWidth = max(200, childMaxX + 40)`、`dynMinHeight = max(120, childMaxY + 40)`，其中 `childMaxX = contentW + 40`、`childMaxY = 68 + contentH`，与第 4 条公式恒等。布局收缩后缩放手柄不会立刻允许再缩。
-6. **组不可连，但成员之间的连线存在且渲染**：`InfiniteCanvas.tsx:1123` 把 store 的 `edges` 全量交给 ReactFlow，`shared/connection-rules.ts` 不限制成员互连。组内布局当前完全不读连线。
+6. **组不可连，但成员之间的连线存在且渲染**：`root/CanvasSurface.tsx` 把 store 的 `edges` 全量交给 ReactFlow（`edges={edges}`），`shared/connection-rules.ts` 不限制成员互连。组内布局当前完全不读连线。
 7. **画布级整理有图布局，但不进组**：`shared/tidy-layout.ts` 用 `@dagrejs/dagre` 做 LR 分层，但把「组 + 成员」当作一个原子块，成员内部不参与。
 8. **画布整理的宫格模式同样行内顶对齐**：`tidy-layout.ts` 的 `packRows` 写入 `y = cursorY`（行顶），与 1.1-3 的组内宫格是同一缺陷模式，同一份数据在两个入口下的垂直观感不一致。
 
@@ -310,7 +310,7 @@
   - `tidy-layout.test.ts` 的网格用例中，同行块高度相同或高块独占一行，行内居中不改变其坐标；唯一受影响的是「组成员不参与顶层排序」用例的 `pos("g").y === pos("a").y`（组 400×300 与节点 200×120 同行），需改为按居中公式断言。
   - 吸附用例（`snapSize: 20`）的块等高，居中后坐标不变，吸附断言保持有效。
 - 调查范围与证据：
-  - 本仓库：`NodeToolbar.tsx`（组下拉）、`use-group-operations.ts`（三算法与提交）、`GroupNode.tsx`（最小尺寸派生）、`tidy-layout.ts`（dagre 与读序）、`group-membership.ts`、`InfiniteCanvas.tsx`（边渲染）、`connection-rules.ts`、`lib/constants.ts`、i18n 文案。
+  - 本仓库：`NodeToolbar.tsx`（组下拉）、`use-group-operations.ts`（三算法与提交）、`GroupNode.tsx`（最小尺寸派生）、`tidy-layout.ts`（dagre 与读序）、`group-membership.ts`、`root/CanvasSurface.tsx`（边渲染）、`connection-rules.ts`、`lib/constants.ts`、i18n 文案。
   - 即梦：`canvas-data.*.js` 模块 86158（宫格与读序）、49197（`flow` 分层与容器）、`main.*.js`（布局菜单与 i18n），并对原函数做离线复算（链、菱形、环、孤立成员、无连线）。
   - 未验证：即梦在真实画布上的运行时行为（登录墙，仅静态分析与原函数执行）；即梦组内 flow 对孤立成员的具体摆放分支未逐路径确认，本 Spec 的尾列策略为自有设计（沿用本仓库 `packWithDagre` 的 tail 策略），不以即梦为依据。
 - 2026-11-01：按已确认 Spec 完成实现。状态保持「已确认」——验收项 9（浏览器手工走查）待用户确认，代码尚未提交。落地内容：
@@ -346,3 +346,4 @@
   - 待用户走查：验收 11（菜单与组框尺寸变更同帧消失、无闪跳）与布局菜单关闭观感；验收 9 的其余项。
 - 2026-11-02：用户确认验收完成（含浏览器走查），状态更新为「已实现」。实现代码随 `17cd1e08` 提交（仅本地，未推送）。
 - 2026-11-03：组框矩形口径收敛，已提交 `247d6515`。`group-bounds.ts` 新增 `groupRectFromContent`：成员内容并集 → 组框矩形，body 左右/底部内缩 `GROUP_NODE_PADDING`、顶部内缩 `GROUP_BODY_TOP_INSET`（标题带 + body 内边距）；编组创建（`use-group-operations`）与组内布局（`group-layout`）改为共用此函数，`group-layout` 删除本地 `LAYOUT_ORIGIN` 与重复的宽高计算。行为不变（`GROUP_BODY_TOP_INSET = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING`，与原 `(40, 68)` 口径一致）；`computeFittedGroupRect` 的顶部扩张同步改用同一常量。单测 `group-layout.test.ts`、`layout-idempotence.test.ts`、`use-group-operations.test.ts` 通过。
+- 2026-11-08 引用校正（仅文档）：根组件拆分后，边渲染归属为 `root/CanvasSurface.tsx`（`edges={edges}`）；1.1-6 与调查范围中的 `InfiniteCanvas.tsx` 已同步。状态保持「已实现」。

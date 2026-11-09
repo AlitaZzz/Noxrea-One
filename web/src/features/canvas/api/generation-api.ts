@@ -2,8 +2,9 @@
  * 生成任务（视频 / 文本 / 图片）相关 API 封装。
  * 提交、取消与流式监听共用 /api/generate/task 端点，按 type 区分业务。
  */
+import type { TaskStatus } from "@noxrea/shared";
+
 import { api, apiRaw, apiStream } from "@/lib/api/client";
-import type { TaskStatus } from "@/lib/types/canvas";
 
 export interface SubmitGenerationTaskBody {
   type: "video" | "image" | "llm";
@@ -67,11 +68,7 @@ export interface TaskStatusEvent {
   config?: unknown;
 }
 
-/** 终态判断的单一谓词：SSE 推送与批量对账共用，避免字面量逐处漂移 */
-export function isTerminalTaskStatus(status: TaskStatus): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
+/** 终态判断的单一谓词：SSE 推送与批量对账共用，终态集合取自共享契约 */
 /** 批量查询任务状态（对账兜底：页面重新可见 / 网络恢复时调用）。失败时抛 ApiError。 */
 export async function fetchTasksStatus(taskIds: string[]): Promise<TaskStatusEvent[]> {
   return api<TaskStatusEvent[]>("/api/generate/tasks/batch-status", {

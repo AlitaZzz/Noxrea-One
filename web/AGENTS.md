@@ -56,27 +56,74 @@ store、工具函数等非 React 上下文使用统一封装方法：
 ```
 页面与路由（app）
         ↓
-业务组件与业务逻辑（features）
+业务能力（features）
         ↓
-项目 UI 基础层（components/ui）
+领域契约（entities）
         ↓
-共享基础设施与纯逻辑（lib）
-        ↓
-Radix UI primitives、样式与图标实现
+共享能力（shared：components/ui、components/media、components/model、lib、types）
 ```
 
 依赖只能向下。
 
-`lib` 是最底层：只承载不依赖领域状态的通用能力（协议客户端、工具函数、无业务语义的通用 Hook，如 `lib/use-file-access-url.ts`）。Hook 本身不构成一个跨目录的层级——带业务语义的 Hook 属于所属领域（`features/*/hooks`），通用 Hook 放 `lib`，因此 `src/hooks` 不再是分层结构中的一层，也不再作为新文件的位置。
+- `app`：路由、布局、页面组合根、全局 Provider（`src/app`、`src/providers`、`src/components/layout`）。可以导入 feature/entity 公共 API 并组合，不包含领域规则、业务请求编排或持久化逻辑。
+- `features`：用户能力与业务流程（`src/features/*`）。可以导入自身任意内部文件；不得导入其它 feature 的任何路径，包括类型。
+- `entities`：跨 feature 的领域契约（`src/entities/*`）：领域类型、读取 Hook/selector、命令/用例、纯函数与不变量。entity 之间允许通过公共 API 形成领域关系，但依赖图必须无环；跨实体编排优先放在 feature 用例层。
+- `shared`：无业务状态的共享能力，由 `components/ui`、`components/media`、`components/model`、`lib`、`types` 组成。`shared` 不导入 app/features/entities；`components/ui` 只依赖 shared，`lib` 只依赖 shared，`types` 只承载类型。`shared` 是层名，不要求新建 `src/shared` 目录。
+
+依赖矩阵：
+
+| from \ to | app | features | entities | shared |
+| --- | --- | --- | --- | --- |
+| app | 允许 | 仅公共 API | 仅公共 API | 允许 |
+| features | 禁止 | 仅自身内部；禁止其它 feature | 仅公共 API | 允许 |
+| entities | 禁止 | 禁止 | 仅公共 API，且必须无环 | 允许 |
+| shared | 禁止 | 禁止 | 禁止 | 允许 |
+
+Hook 本身不构成一个跨目录的层级：带业务语义的 Hook 属于所属领域（`features/*/hooks` 或 entity 公共 API），通用 Hook 放 `lib`，因此 `src/hooks` 不再是分层结构中的一层，也不再作为新文件的位置。`lib` 只承载不依赖领域状态的通用能力（协议客户端、工具函数、无业务语义的通用 Hook，如 `lib/use-file-access-url.ts`）。
 
 禁止：
 
-- `features/*`、`app/*` 直接依赖 Radix、第三方 UI 库、图标库或 SVG 资源。
+- `features/*`、`entities/*`、`app/*` 直接依赖 Radix、第三方 UI 库、图标库或 SVG 资源。
 - `components/ui` 包含业务请求、领域状态或业务规则。
-- UI 基础组件反向依赖 `features/*`。
+- shared 反向依赖 `features/*` 或 `entities/*`。
 - 通过兼容层、别名组件或旧 API 保留已经废弃的通用控件。
 
-### 2. 领域层规范
+边界由 `web/eslint.config.mjs` 的 `boundaries/dependencies` 与 `web/src/__tests__/architecture/module-boundaries.test.ts` 共同强制：ESLint 负责层级方向，架构测试负责跨模块公共入口、`export *`、循环依赖与 `import type` 边。存量违规只记录在 `module-boundaries.baseline.json`，基线只能缩小；新增或变化的违规立即失败。测试文件不豁免层级规则：`__tests__/features/<name>/**` 归对应 feature，`__tests__/entities/<name>/**` 归对应 entity，其余测试归 app；跨模块测试只能使用公共 API。
+
+### 2. 模块契约
+
+一个“模块”是一个 feature slice 或 entity slice。模块根目录必须有 `index.ts`，它是唯一对外入口。
+
+1. 公共 API 使用显式命名导出，禁止 `export *`；禁止把其它模块的导出原样转发（barrel 不能成为中间人）。
+2. 公共 API 只暴露行为与类型，不暴露实现：
+   - entity 可以导出领域类型、读取 Hook/selector、命令/用例、纯函数与不变量；不得导出视觉组件、store 对象、setter 或内部状态结构。无视觉的领域基础设施（如 Provider/Context）如确需由 entity 提供，必须由 app 组合根挂载，且不得包含 UI 组合。
+   - feature 可以导出页面/区块级组件、公开 Hook、页面级加载/命令函数与公开类型；不得导出内部 store、内部组件、内部 Hook。
+3. 公共 API 是最小契约：只为真实调用方导出，不为“以后可能用”预留；没有调用方的导出删除。被保留公共导出签名引用的类型视为有调用方；测试经公共 API 断言契约时，该导出可保留。
+4. 类型-only 导入与运行时导入使用同一规则；不得用 `import type` 绕过边界。跨模块必须使用 `@/features/<name>` 或 `@/entities/<name>`，不得深导入其它模块内部路径；模块内部可以使用相对路径或自身模块路径。
+5. 公共 API 变更视为契约变更：必须同步更新所有调用方、测试和 Spec 的模块归属表；不得保留旧导出兼容。
+6. 模块之间禁止循环依赖；feature 同层、entity 同层、跨层均适用。
+
+### 3. 状态归属与跨 feature 注入
+
+| 状态类型 | 归属 | 规则 |
+| --- | --- | --- |
+| 跨 feature 或跨页面共享的领域状态（资产、项目、导演场景、当前用户等） | `entities/*` | 只能通过 entity 公共 selector/命令读写；其它模块不得持有副本 |
+| 仅一个 feature 消费的领域状态（如 canvas 节点图、交互会话） | 该 feature | 不得被其它 feature 导入；一旦需要跨 feature 读取，先抽 entity 契约 |
+| 页面壳、路由、会话建立、跨 feature 浮层开关 | `app` | 页面组合根持有；通过 props/slots/ports 注入 feature |
+| 通用 UI/基础设施状态 | `shared` | 不得承载业务实体状态或业务流程 |
+
+同一状态只能有一个所有者；禁止在 app/feature/entity 各存一份，禁止用同步 effect 维持多份状态一致。
+
+跨 feature UI 能力通过消费方公共 API 的 props/slots/ports 注入：
+
+1. 消费方在自己的公共 API 中定义最小接口；app 负责用其它 feature 的公共 UI/动作实现它。
+2. port 只用于“动作/能力”（如打开资产库、打开设置、打开快捷键说明）；slot 只用于“UI 组合”（如用户菜单、资产浏览器）。领域数据一律走 entity，不为数据再造 port。
+3. 不允许通过全局事件总线、模块级可变单例、`window` 事件、隐式 Context 或动态 `require` 跨模块通信。
+4. 跨模块 React Context 必须由 app 组合根注入；feature 不得导入其它 feature 的 Context 实现。
+5. port/slot 必须有明确类型、稳定引用和可测试的默认/缺失行为；禁止 `any` 和隐式可选链兜底。所有成员必填：不需要的 slot 由 app 显式传 `() => null`，不需要的 port 传显式 no-op。
+6. page 传入的 port/slot 渲染函数与其它对象 prop 必须使用模块级函数或 `useCallback` / `useMemo` 保持稳定引用；唯一例外是依赖打开状态的浮层 slot（如 canvas 的 `slots.assetsDialog`），其引用变化不得扩散到主体渲染边界。公共契约测试必须覆盖必填缺失（类型层失败）、slot 参数和父组件无关重渲染 bail。
+
+### 4. 领域层规范
 
 `features/*` 属于业务领域层。
 
@@ -132,9 +179,9 @@ Radix UI primitives、样式与图标实现
 - 可折叠内容统一使用 `components/ui/collapsible`；需要动画时读取 Radix 的 `--radix-collapsible-content-height`，不得用 `inert`、常驻隐藏节点或 `grid-template-rows` 伪造折叠状态。
 - 业务语义色可以保留在标准控件上：例如 API 模型能力按钮用文字、图片、视频的颜色区分模型类型；迁移控件时保留该语义色，不要为追求统一而改成无差别的主题色。
 
-### 3. UI 基础层规范
+### 5. UI 基础层规范
 
-`components/ui` 是项目维护的 shadcn/ui 组件层，也是业务层使用的 UI 契约。shadcn/ui 组件以源码形式存在于仓库中，不把第三方组件库作为业务运行时 API。
+`components/ui` 是项目维护的 shadcn/ui 组件层，也是业务层使用的 UI 契约；`components/media`、`components/model` 是共享 UI 组合层，同属 shared。shadcn/ui 组件以源码形式存在于仓库中，不把第三方组件库作为业务运行时 API。
 
 负责：
 
@@ -158,17 +205,17 @@ UI 基础层：
 - 对外提供 shadcn 风格的标准组件 API，不创建只转发 props 的 `App*` 通用适配器；
 - 只有在增加真实通用行为、可访问性或组合价值时，才创建项目级 UI 组合组件。
 
-业务特有的组合组件必须放在对应的 `features/*` 中。例如 `DeleteProjectDialog`、`ModelSelector` 和 `AssetPicker` 可以组合多个 UI 基础组件，但不能反向成为 `components/ui` 的业务依赖。
+业务特有的组合组件必须放在对应的 `features/*` 中，例如 `DeleteProjectDialog`、`AssetPicker`；不表达用户能力、只组合 UI 的共享组合组件放 `components/media` / `components/model`（如 `ModelSelector`），不得反向依赖 feature/entity。
 
-图标也属于 UI 实现的一部分。`features/*`、`app/*`、`lib/*`、`providers/*` 禁止直接导入任何图标库（包括 `@ant-design/icons`、`lucide-react`）或 SVG 图标文件；业务层只能使用 `components/ui` 提供的图标组件、带图标能力的通用控件或其他项目级 UI 出口。图标库与 SVG 资源的选择、映射和替换全部留在 `components/ui` 内部。
+图标也属于 UI 实现的一部分。`features/*`、`entities/*`、`app/*`、`lib/*`、`providers/*` 禁止直接导入任何图标库（包括 `@ant-design/icons`、`lucide-react`）或 SVG 图标文件；业务层只能使用 `components/ui` 提供的图标组件、带图标能力的通用控件或其他项目级 UI 出口。图标库与 SVG 资源的选择、映射和替换全部留在 `components/ui` 内部。
 
 `components/ui/icons` 是运行时图标的唯一实现层，图标以 React 组件形式提供，并遵循项目图标契约：使用 `currentColor`，支持 `className`、`style` 和尺寸控制；新增或替换图标时应支持标准 SVG 属性。原始 `.svg` 文件可以作为设计源或组件生成输入，但不得由业务层直接导入；不得通过 `public` 路径或资源 URL 绕过 UI 出口使用图标。图标的具体存储方式可以调整，但对业务层暴露的始终是项目定义的 UI 组件契约。
 
 `components/ui/AppIcon` 中的 `*Outlined` / `*Filled` 导出是历史命名，底层统一映射到 Lucide 实现；它们属于现有 UI 出口契约。业务代码继续使用已有导出，新代码不直接引入图标库；批量改名需单独评估，不通过别名或兼容层扩展命名。
 
-`ParamFields` / `ParamSummary` 只消费已解析的展示描述。模型默认值、提交字段判断、翻译约定与自适应比例语义由 `features/model/param-fields.ts` 处理，UI 层不反向依赖领域适配器。
+`ParamFields` / `ParamSummary` 只消费已解析的展示描述。模型默认值、提交字段判断、翻译约定与自适应比例语义由 `components/model/param-fields.ts` 处理，UI 层不反向依赖领域适配器。
 
-### 4. 第三方 UI 库使用规范
+### 6. 第三方 UI 库使用规范
 
 Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组件源码组织方式和主题约定。
 
@@ -198,19 +245,21 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 
 **强制约束**（由 `eslint.config.mjs` 保证，违反无法合入）：
 
-- `src/features/**`、`src/app/**`、`src/lib/**`、`src/providers/**` 禁止导入、重新导出或动态加载具体 UI 库及其子路径，包括类型与通知入口。
+- `src/features/**`、`src/entities/**`、`src/app/**`、`src/lib/**`、`src/providers/**` 禁止导入、重新导出或动态加载具体 UI 库及其子路径，包括类型与通知入口。
 - 当前运行时不再依赖 antd；未来引入或替换第三方 UI 实现时，只允许在 `components/ui` 内部接入。所有图标库和 SVG 图标资源也只允许由 `components/ui` 导入，业务层不得直接依赖 `@ant-design/icons`、`lucide-react` 或具体 SVG 文件。
 - 业务组件直接使用 `components/ui` 中的 shadcn 组件；通用 UI 不再通过 `App*` 转发层访问。
-- 具体实现与主题样式集中在 `components/ui` 和全局设计令牌中；业务流程和领域组件集中在 `features/*`。
-- 跨层依赖由 `boundaries/dependencies` 以 error 级别强制：app → feature → ui → lib，反向依赖直接报错。
+- 具体实现与主题样式集中在 `components/ui` 和全局设计令牌中；业务流程和领域组件集中在 `features/*`，跨 feature 领域契约集中在 `entities/*`。
+- 跨层依赖由 `boundaries/dependencies` 以 error 级别强制：app → features → entities → shared，反向依赖直接报错；跨 feature 隔离与公共入口由架构测试强制。
 
-### 5. 组件归属判断
+### 7. 组件归属判断
 
 | 组件表达的内容 | 归属位置 | 示例 |
 | --- | --- | --- |
 | 页面和路由组合 | `app/*` | 页面入口、布局、路由参数组合 |
 | 产品能力和业务交互 | `features/*/components` | `ImageNode`、`VideoNode`、Agent 功能、生成流程 |
+| 跨 feature 领域契约与无视觉领域能力 | `entities/*` | 领域类型、读取 Hook/selector、命令、不变量；不承载视觉组件 |
 | 通用界面能力 | `components/ui` | `Button`、`Input`、`Dialog`、`Tooltip`、`DropdownMenu` |
+| 共享媒体/模型 UI 组合 | `components/media`、`components/model` | `MediaHoverPreview`、`VideoPlayer`、`AudioWaveform`、`ModelSelector`、`ModelParamFields` |
 | 第三方技术实现 | `components/ui` 内部 | Radix primitive、图标库、SVG 组件 |
 
 ---
@@ -240,7 +289,7 @@ Radix UI 是 `components/ui` 的基础实现，shadcn/ui 是项目维护的组�
 - 交互控件的颜色、边框、焦点和悬停状态优先使用主题 token（如 `bg-background`、`bg-popover`、`text-foreground`、`border-input`、`ring-ring`）；业务组件不得用硬编码颜色覆盖基础组件的主题契约。
 - Checkbox 的状态样式必须匹配 Radix 的 `data-state="checked"` / `data-state="indeterminate"`，选中和半选背景、边框及图标颜色统一走主题 token。
 - 媒体缩略图底部的信息条统一使用黑色半透明背景和白色文字（与资产卡片一致），明暗主题保持相同，确保覆盖在不同内容上时有稳定对比度。
-- 视频播放器覆盖控件（图标、进度条、遮罩）的配色与明暗主题解耦：白色前景 + 黑色渐变遮罩 + 固定品牌色进度（`--brand-lime`，实现于 `globals.css` 的 `.video-controls-bar` 及 `.video-control-btn` 规则），悬停/聚焦反馈同为固定色（白 15%），不使用 muted/accent 主题 token，保证任意画面与主题下对比度一致。音频波形属画布领域组件，默认继续按「颜色从当前主题计算并在切换时更新」规则执行；绘制在固定深色轨道上时（如音频截取面板的黑底轨道）例外：波形前景固定为白色（`#ffffff`），不随明暗主题重绘——轨道本身与主题解耦，跟随主题会在浅色主题下失去对比度。
+- 视频播放器覆盖控件（图标、进度条、遮罩）的配色与明暗主题解耦：白色前景 + 黑色渐变遮罩 + 固定品牌色进度（`--brand-lime`，实现于 `globals.css` 的 `.video-controls-bar` 及 `.video-control-btn` 规则），悬停/聚焦反馈同为固定色（白 15%），不使用 muted/accent 主题 token，保证任意画面与主题下对比度一致。音频波形（`components/media/AudioWaveform`）属共享媒体组合层，默认继续按「颜色从当前主题计算并在切换时更新」规则执行；绘制在固定深色轨道上时（如音频截取面板的黑底轨道）例外：波形前景固定为白色（`#ffffff`），不随明暗主题重绘——轨道本身与主题解耦，跟随主题会在浅色主题下失去对比度。
 - 媒体内容内的局部遮罩统一使用 Tailwind `bg-black/xx` 与 `text-white` 写法，禁止在业务组件中以内联 `rgba` 重复实现固定遮罩颜色；全屏交互遮罩（如媒体预览、文件拖放）统一使用 `bg-card/55 backdrop-blur-md`，控件前景使用主题 token。
 - 媒体卡片右上角的删除角标与资产卡片的 `+` 操作统一使用透明背景、白色图标，悬停或聚焦时使用 `bg-white/15`；保留 `focus-visible` 可见状态，不使用红色作为默认删除角标颜色。
 - 图片、视频等媒体悬浮预览统一由 `HoverCardContent` 提供外层边框、圆角、背景和裁剪；媒体元素本身不得重复添加边框、圆角或背景，避免出现双层边框。

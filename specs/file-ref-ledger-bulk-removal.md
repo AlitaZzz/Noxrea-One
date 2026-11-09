@@ -10,13 +10,13 @@
 
 ## 目标
 
-消除大批量资产删除时引用回收的逐 hash 循环：实测 5 万资产文件夹删除因约 5 万次串行 Prisma 查询触发交互式事务 5 秒超时（P2028），整批回滚且确定性失败。将 `removeSourceFileRefsBatch` 内部改为集合运算 SQL 后，同规模实测 892ms（IN 分片变体）/ 558ms（子查询变体），事务总耗时 <1s。
+消除大批量资产删除时引用回收的逐 hash 循环：实测 5 万资产文件夹删除因约 5 万次串行 Prisma 查询触发交互式事务 5 秒超时（P2028），整批回滚且确定性失败。将 `removeSourceFileRefsBatchTx` 内部改为集合运算 SQL 后，同规模实测 892ms（IN 分片变体）/ 558ms（子查询变体），事务总耗时 <1s。
 
 ## 范围
 
-- 重写 `server/services/storage/file-ref-ledger.ts` 中 `removeSourceFileRefsBatch` 的内部实现。
-- `removeSourceFileRefs`（单来源）改为以单元素来源列表委托 `removeSourceFileRefsBatch`，"移除来源引用"只有一套实现；`replaceSourceFileRefs` 不变（按期望集合差值调整，语义不同，仍使用 `adjustFileRefCount`）。
-- 函数签名、调用方（`deleteFolder`、`deleteAssetsBatch`、画布删除）、对外接口契约全部不变。
+- 重写 `server/crud/file-ref-ledger.ts` 中 `removeSourceFileRefsBatchTx` 的内部实现（模块已按 `server-crud-service-boundary` 从 `services/storage` 下沉至 `crud`，原 `removeSourceFileRefsBatch` 现带 `Tx` 后缀并接收事务客户端）。
+- `removeSourceFileRefsTx`（单来源）改为以单元素来源列表委托 `removeSourceFileRefsBatchTx`，“移除来源引用”只有一套实现；`replaceSourceFileRefsTx` 不变（按期望集合差值调整，语义不同，仍使用 `adjustFileRefCountTx`）。
+- 移除语义与对外行为不变；`crud` 下沉后签名统一为 `(tx, …)`，由调用方在自己的事务内调用（资产批量/分类删除 `crud/asset.ts`、画布删除 `crud/canvas.ts`），账本函数不自行开启事务。
 - 同批落地的 Web 端批量删除/移动分片提交，以及服务端批量上限常量 `ASSET_BATCH_LIMIT`（原 `max(200)` 魔法数字），契约见下文"Web 批量提交分片契约"。
 - 不改变数据库结构；不改变 `file_objects` / `file_refs` 表语义；不改变 GC 流程。
 
@@ -37,7 +37,7 @@
 
 ## Web 批量提交分片契约
 
-- 服务端按 id 的批量删除/移动单批上限为 `ASSET_BATCH_LIMIT = 200`（`server/schemas/asset.ts`）；Web 端 `features/assets/api.ts` 持有同值常量，两端数值必须同步修改；超量请求由服务端 422 兜底。
+- 批量删除/移动单批上限为 `ASSET_BATCH_LIMIT = 200`，唯一定义于 `shared/asset.ts`（`@noxrea/shared/asset`）；服务端校验（`server/schemas/asset.ts`、`server/http/routes/assets.ts`）与 Web 分片（`web/src/entities/asset/store.ts`）共用同一定义，不存在需同步的副本；超量请求由服务端 422 兜底。
 - Web store 对超过上限的批量删除/移动，按上限顺序分片提交，每片是独立的服务端事务。
 - 每个成功分片后立即：应用服务端返回的计数快照、失效资产视图（打开中的列表重拉）、同步本地已知来源 URL 集合。
 - 失败语义：某分片失败即停止后续分片，已完成分片保留（不回滚），弹出失败通知，调用方得到 `{ ok: false, total }`（`total` 为最后一次成功的计数快照，尚无成功分片时为 `undefined`）。
@@ -52,7 +52,7 @@
 
 ## 验收标准
 
-- 既有 `file-ref-ledger.test.ts` 中 `replaceSourceFileRefs` 的用例不改动即通过；该文件中的 mock 基建（`makeTx` 的 `$executeRaw`）保留给"空来源列表不触发 SQL"用例。
+- 既有 `server/__tests__/crud/file-ref-ledger.test.ts` 中 `replaceSourceFileRefsTx` 的用例不改动即通过；该文件中的 mock 基建（`makeTx` 的 `$executeRaw`）保留给"空来源列表不触发 SQL"用例。
 - 单来源与批量移除的语义测试均在真实 PostgreSQL 库接缝（`$executeRaw` 无法在内存 mock 上验证）：混合存在与缺失的 `file_objects` 行、同一 hash 多来源合并、其他来源不受影响、空列表/空来源。
 - 5 万来源大规模回归（随 CI 常跑）：以 Prisma 默认 5s 事务预算本身为断言（超时会抛 P2028），不再设独立的耗时断言，避免 CI 慢机抖动；同时断言 `ref_count` 无负值、无残留账本行。
 - Web：超过 `ASSET_BATCH_LIMIT` 的批量删除/移动按上限分片，某分片失败时停止并保留已完成进度（既有 store 测试覆盖）。
@@ -64,6 +64,7 @@
 
 ## 当前状态
 
-- 已实施：`removeSourceFileRefsBatch` 集合运算（每片 UPDATE + DELETE）、`removeSourceFileRefs` 委托批量实现；单来源/批量/跨分片/5 万规模回归已随测试基座迁移到真实 PostgreSQL（`file-ref-ledger-bulk.test.ts`，需 `TEST_DATABASE_URL`），2026-10-26 复跑 7/7 通过（5 万来源用例 16.8s 含插入与断言，事务本身未触发 P2028）；Web 分片提交与 `ASSET_BATCH_LIMIT` 已落地。
+- 已实施：`removeSourceFileRefsBatchTx` 集合运算（每片 UPDATE + DELETE）、`removeSourceFileRefsTx` 委托批量实现；单来源/批量/跨分片/5 万规模回归已随测试基座迁移到真实 PostgreSQL（`file-ref-ledger-bulk.test.ts`，需 `TEST_DATABASE_URL`），2026-10-26 复跑 7/7 通过（5 万来源用例 16.8s 含插入与断言，事务本身未触发 P2028）；Web 分片提交与 `ASSET_BATCH_LIMIT` 已落地。
 - 2026-10-11 审查修复已通过 typecheck、lint、全量 server 测试。
 - 2026-10-26 用户验收确认，状态更新为「已实现」；实现代码已提交入库。
+- 2026-11-08 文档对齐实现（工作区未提交）：函数名与签名按现状更正为 `removeSourceFileRefsBatchTx` / `removeSourceFileRefsTx` / `replaceSourceFileRefsTx` / `adjustFileRefCountTx`；「函数签名不变」改为 `crud` 下沉后统一为 `(tx, …)`、由调用方在自己的事务内调用（`crud/asset.ts`、`crud/canvas.ts`）。移除语义与既有验收结论不变。

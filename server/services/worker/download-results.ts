@@ -14,11 +14,10 @@ import { logger } from "@server/core/logger";
 import { logEvent } from "@server/core/logger/utils";
 import {
   getTaskStatus,
-  safeCompleteTask,
-  safeFailTask,
   touchTaskHeartbeat,
   TASK_HEARTBEAT_INTERVAL_MS,
 } from "@server/crud/task";
+import { safeCompleteTask, safeFailTask } from "@server/services/tasks/terminal";
 import {
   fetchMediaBytes,
   identifyMediaBytes,
@@ -152,13 +151,13 @@ export async function finalizeGeneratedResult(
     await safeFailTask(taskId, {
       error: "生成结果下载失败",
       errorCode: "generation.download_failed",
-    }, { startedAt });
+    }, startedAt);
     return false;
   }
 
   // 终态守卫：期间被取消的话写入会被丢弃，保留 cancelled。
   // safeCompleteTask 自身不抛：写库失败已记日志，任务停留 processing 交僵尸清理
-  const finalized = await safeCompleteTask(taskId, { resultUrls, resultText: text }, { startedAt });
+  const finalized = await safeCompleteTask(taskId, { resultUrls, resultText: text }, startedAt);
   if (!finalized) return false;
 
   // 全部动作（保存 + 状态更新 + 媒体处理）完成后再输出收尾节点

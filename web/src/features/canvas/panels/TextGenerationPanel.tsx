@@ -10,6 +10,7 @@
 import { memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ModelSelector } from "@/components/model/ModelSelector";
 import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -25,7 +26,6 @@ import { useNodeUpstreamRefs } from "@/features/canvas/hooks/use-node-upstream-r
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { TextGenSettings, TextNodeData } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import { ModelSelector } from "@/features/model/components/ModelSelector";
 import { useModelStore } from "@/lib/model-store";
 
 import AudioRefCard from "../shared/AudioRefCard";

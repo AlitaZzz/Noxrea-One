@@ -10,6 +10,8 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect, useRef } from "react";
 
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
+import { useCanvasInputBlocked } from "@/features/canvas/root/CanvasInputGateContext";
+import { useCanvasPorts } from "@/features/canvas/root/CanvasPortsContext";
 import {
   clearSelection,
   copySelection,
@@ -36,6 +38,8 @@ import i18n from "@/lib/i18n/config";
 export function useCanvasKeyboard() {
   const { message } = useAppFeedback();
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
+  const inputBlocked = useCanvasInputBlocked();
+  const { onOpenShortcuts } = useCanvasPorts();
 
   const resetViewport = useCanvasStore((s) => s.resetViewport);
 
@@ -56,8 +60,7 @@ export function useCanvasKeyboard() {
   // 输入框 / Tiptap 内的原生粘贴在监听器开头放行，不受影响。
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      const state = useCanvasStore.getState();
-      if (state.modalOpen || state.directorOverlayOpen) return;
+      if (inputBlocked) return;
       if (isEditableTarget(e.target)) return;
 
       if (!e.clipboardData) return;
@@ -85,17 +88,17 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [screenToFlowPosition]);
+  }, [inputBlocked, screenToFlowPosition]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       // Focused controls and floating layers own the keys they have consumed.
       if (e.defaultPrevented) return;
 
-      // Skip canvas shortcuts when a modal or director overlay is open,
+      // Skip canvas shortcuts when a page-level overlay blocks input,
       // or when a media editor panel (标注/裁剪/选帧/片段截取) owns the keyboard
       const state = useCanvasStore.getState();
-      if (state.modalOpen || state.directorOverlayOpen || isMediaEditorOpen()) return;
+      if (inputBlocked || isMediaEditorOpen()) return;
 
       const mod = e.ctrlKey || e.metaKey;
       // 文本节点编辑态例外：Tiptap 内部历史被禁用（undoRedo: false），画布 store
@@ -208,11 +211,11 @@ export function useCanvasKeyboard() {
 
       // ---- Shortcuts help ----
       if (e.key === "?") {
-        useCanvasStore.getState().setShortcutsVisible(true);
+        onOpenShortcuts();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, message, resetViewport, screenToFlowPosition]);
+  }, [zoomIn, zoomOut, fitView, inputBlocked, message, onOpenShortcuts, resetViewport, screenToFlowPosition]);
 }

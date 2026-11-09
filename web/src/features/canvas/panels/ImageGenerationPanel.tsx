@@ -9,6 +9,9 @@
 import { memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import ModelParamFields from "@/components/model/ModelParamFields";
+import { ModelSelector } from "@/components/model/ModelSelector";
+import { fieldDefaults, hasField, toParamFieldViews } from "@/components/model/param-fields";
 import { ParamsIcon } from "@/components/ui/AppIcon";
 import { PresetIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
@@ -27,9 +30,6 @@ import { createImageNode } from "@/features/canvas/node-defaults";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { ImageGenSettings, MediaGenFields } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import ModelParamFields from "@/features/model/components/ModelParamFields";
-import { ModelSelector } from "@/features/model/components/ModelSelector";
-import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import { useModelStore } from "@/lib/model-store";
 
 import { useGenSettings, writeGenSettings } from "../shared/gen-settings";

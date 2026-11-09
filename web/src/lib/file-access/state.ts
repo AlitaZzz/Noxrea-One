@@ -5,6 +5,7 @@
  * 单独成模块是为了让「会话切换只改变这三个值 + 清空各模块状态」这条不变量
  * 有唯一的读入口，避免循环依赖。
  */
+import { notifyAccessChanged } from "./change-signal";
 
 /** 账号作用域：会话切换即 +1，旧作用域的缓存与在途结果一律作废 */
 let scope = 0;
@@ -24,7 +25,9 @@ export function isStreamLearned(): boolean {
 }
 
 export function learnStreamDelivery(): void {
+  if (streamLearned) return;
   streamLearned = true;
+  notifyAccessChanged();
 }
 
 export function nextRequestSeq(): number {
@@ -35,4 +38,5 @@ export function nextRequestSeq(): number {
 export function beginNewScope(): void {
   scope += 1;
   streamLearned = false;
+  notifyAccessChanged();
 }

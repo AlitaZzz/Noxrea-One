@@ -9,6 +9,7 @@
 import { memo, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { IDLE_PLAYBACK, type PlaybackMirror } from "@/components/media/media-playback";
 import { PlayIcon, StopIcon, WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,7 +18,6 @@ import { managedFileUrl } from "@/lib/file-url";
 import { useElementMirror } from "@/lib/use-element-mirror";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
 
-import { IDLE_PLAYBACK, type PlaybackMirror } from "./media-playback";
 import { ReferenceIndexBadge, ReferenceRemoveButton } from "./ReferenceCardChrome";
 import { useRevealCanvasNode } from "./reveal-node";
 

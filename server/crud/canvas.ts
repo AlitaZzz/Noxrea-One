@@ -1,44 +1,44 @@
 /**
  * 画布工程 CRUD。
- * 按用户读写画布工程、节点数据与缩略图等持久化信息。
+ * 保留查询、创建、存在性探测与删除等单聚合操作，以及供写用例组合的事务内单表原语；
+ * 编辑权租约、版本冲突与引用账本编排属于跨聚合用例，见 services/canvas/project-write。
  */
 import { prisma } from "@server/core/database/client";
-import type { CanvasDelta } from "@server/schemas/canvas";
+import { Prisma, type CanvasProject } from "@server/core/database/generated/client";
+import { withTransaction, type DbTx } from "@server/core/database/transaction";
 import { newId } from "@server/utils/id";
-import { withProjectGate, isCurrentLease } from "@server/services/canvas/editor-lease";
-import { extractHashCountsFromCanvas, hashCountsEqual } from "@server/services/canvas/extract-hashes";
-import { hashFromStorageKey } from "@noxrea/shared/url";
-import { deriveCanvasSummary, toProjectSummary } from "@server/services/canvas/project-summary";
-import {
-  replaceSourceFileRefs,
-  replaceSourceFileRef,
-  removeSourceFileRefs,
-} from "@server/services/storage/file-ref-ledger";
+import { deriveCanvasSummary, toProjectSummary } from "@server/utils/canvas-summary";
+import { removeSourceFileRefsTx } from "./file-ref-ledger";
 import { stringifyJson, parseJsonObject } from "./json-column";
 
-/** 画布版本冲突错误；currentRevision 帮助前端同步到服务端最新版本。 */
-export class CanvasRevisionConflictError extends Error {
-  constructor(readonly currentRevision: number) {
-    super("canvas project revision conflict");
-  }
-}
+/** 返回给 HTTP 的完整工程行：`canvasData` 已解析为对象。 */
+export type ProjectRow = Omit<CanvasProject, "canvasData"> & {
+  canvasData: Record<string, unknown>;
+};
 
-/** 封面引用不是存储 key 严格形态（无法登记引用账本防 GC） */
-export class CanvasCoverKeyError extends Error {
-  constructor() {
-    super("cover ref is not a storage key");
-  }
+declare const projectWriteRowBrand: unique symbol;
+
+/**
+ * 写用例读取的事务内行投影：仅写判定所需字段，不扩大读取面。
+ * 品牌字段不可导出：只有 `getProjectRowForWriteTx` 的返回值能作为
+ * `updateProjectRowTx` 的入参，外部构造的行在类型层即被拒绝。
+ */
+export interface ProjectWriteRow {
+  readonly [projectWriteRowBrand]: never;
+  id: string;
+  revision: number;
+  canvasData: Record<string, unknown>;
+  coverKey: string | null;
 }
 
 /**
- * 编辑权租约失效：请求携带的租约令牌已被其他页面实例的握手轮换掉。
- * 与版本冲突同形映射为 409（前端处理收敛为「同步版本 + 进入过期态」，无需分叉）；
- * currentRevision 供 409 响应回传，前端据此同步 revision。
+ * 项目行可写列补丁：字段缺省表示不更新该列；`coverKey: null` 表示清空封面。
+ * 该类型是 `updateProjectRowTx` 的公开参数契约，导出供写用例命名复用。
  */
-export class CanvasLeaseLostError extends Error {
-  constructor(readonly currentRevision: number | null) {
-    super("canvas editor lease lost");
-  }
+export interface ProjectWritePatch {
+  name?: string;
+  canvasData?: Record<string, unknown>;
+  coverKey?: string | null;
 }
 
 export async function getProjects(userId: number) {
@@ -68,34 +68,37 @@ export async function getProject(id: string, userId: number) {
   };
 }
 
-export async function createProject(
-  userId: number,
-  data: { name?: string; canvasData?: Record<string, unknown> }
-) {
-  return prisma.$transaction(async (tx) => {
-    const summary = deriveCanvasSummary(data.canvasData ?? {});
+/**
+ * 创建空画布工程（specs/web-module-contracts.md）：只接收名称，不接收初始画布内容。
+ * 返回值不含 canvasData：创建接口只下发项目摘要所需列，画布内容由会话握手读取。
+ * 空画布没有文件引用，因此不产生 file_refs 行；账本行由后续保存按 hash 按需创建。
+ */
+export async function createProject(userId: number, data: { name?: string }) {
+  return withTransaction(async (tx) => {
+    const summary = deriveCanvasSummary({});
     const project = await tx.canvasProject.create({
       data: {
         id: newId(),
         userId,
         name: data.name ?? "Untitled",
-        canvasData: stringifyJson(data.canvasData ?? {}),
+        canvasData: stringifyJson({}),
         nodeCount: summary.nodeCount,
         thumbnailSrc: summary.thumbnailSrc,
       },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        revision: true,
+        coverKey: true,
+        nodeCount: true,
+        thumbnailSrc: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
-    // 画布创建时同步登记初始引用；空画布会得到空引用集合。
-    await replaceSourceFileRefs(tx, {
-      userId,
-      sourceType: "canvas",
-      sourceId: project.id,
-    }, extractHashCountsFromCanvas(data.canvasData ?? {}));
-
-    return {
-      ...project,
-      canvasData: parseJsonObject(project.canvasData),
-    };
+    return project;
   });
 }
 
@@ -108,194 +111,98 @@ export async function projectExists(id: string, userId: number): Promise<boolean
   return row !== null;
 }
 
-/** 构造租约失效错误：读取当前版本供 409 响应回传，前端据此同步 revision（须在写临界区内调用） */
-async function leaseLostError(id: string, userId: number): Promise<CanvasLeaseLostError> {
-  const row = await prisma.canvasProject.findFirst({ where: { id, userId }, select: { revision: true } });
-  return new CanvasLeaseLostError(row?.revision ?? null);
-}
-
-export async function updateProject(
+/**
+ * 事务内读取写判定所需行投影。
+ * 写用例只能把本函数返回的行传给 `updateProjectRowTx`；不接受外部构造的行。
+ */
+export async function getProjectRowForWriteTx(
+  tx: DbTx,
   id: string,
   userId: number,
-  data: { name?: string; canvasData?: Record<string, unknown>; coverKey?: string | null },
-  options?: { baseRevision?: number; lease?: number }
-) {
-  // 画布内容写必须持有效编辑权租约：租约校验与事务整体进入每项目写临界区，
-  // 与 SSE 握手的「轮换租约 + 快照读」互斥不交错——被接管的旧持有者的迟到
-  // 写入无论落在握手哪一侧，都会被租约校验结构性拒绝（fencing token）。
-  // 改名 / 封面是元数据：不递增 revision、不参与编辑权，无需进临界区。
-  if (data.canvasData === undefined) {
-    return updateProjectRow(id, userId, data, options);
-  }
-  return withProjectGate(id, async () => {
-    if (options?.lease === undefined || !isCurrentLease(id, options.lease)) {
-      throw await leaseLostError(id, userId);
-    }
-    return updateProjectRow(id, userId, data, options);
+): Promise<ProjectWriteRow | null> {
+  const row = await tx.canvasProject.findFirst({
+    where: { id, userId },
+    select: { id: true, revision: true, canvasData: true, coverKey: true },
   });
+  if (!row) return null;
+  // 品牌只在这里落下：行必须是本事务内刚读到的投影，不接受外部构造
+  return {
+    id: row.id,
+    revision: row.revision,
+    canvasData: parseJsonObject(row.canvasData),
+    coverKey: row.coverKey,
+  } as ProjectWriteRow;
 }
 
 /**
- * 合并卸载阶段的画布增量。读取、合并、摘要派生、文件引用账本和 revision
- * 都在同一项目写临界区与数据库事务内完成，避免增量请求成为另一条弱写路径。
+ * 按同一事务内读到的行写入画布工程。
+ * 只做单表写入：不做版本冲突判定、不解析封面、不写账本、不抛业务错误。
+ * 内容字段写入时派生摘要并以数据库原子递增 revision。
+ * 行在事务内被并发删除时由 Prisma P2025 映射为 null。
  */
-export async function updateProjectDelta(
-  id: string,
-  userId: number,
-  delta: CanvasDelta,
-  options: { baseRevision: number; lease: number },
-) {
-  return withProjectGate(id, async () => {
-    if (!isCurrentLease(id, options.lease)) {
-      throw await leaseLostError(id, userId);
-    }
-    return prisma.$transaction(async (tx) => {
-      const existing = await tx.canvasProject.findFirst({
-        where: { id, userId },
-        select: { id: true, revision: true, canvasData: true },
-      });
-      if (!existing) return null;
-      if (existing.revision !== options.baseRevision) {
-        throw new CanvasRevisionConflictError(existing.revision);
-      }
+export async function updateProjectRowTx(
+  tx: DbTx,
+  row: ProjectWriteRow,
+  patch: ProjectWritePatch,
+): Promise<ProjectRow | null> {
+  const data: Prisma.CanvasProjectUncheckedUpdateInput = {};
+  if (patch.name !== undefined) {
+    data.name = patch.name;
+  }
+  if (patch.canvasData !== undefined) {
+    data.canvasData = stringifyJson(patch.canvasData);
+    data.revision = { increment: 1 };
+    // 摘要冗余列随保存派生；画布 JSON 在同一事务内本就要解析用于账本对比
+    const summary = deriveCanvasSummary(patch.canvasData);
+    data.nodeCount = summary.nodeCount;
+    data.thumbnailSrc = summary.thumbnailSrc;
+  }
+  if (patch.coverKey !== undefined) {
+    data.coverKey = patch.coverKey;
+  }
 
-      const current = parseJsonObject(existing.canvasData);
-      const currentNodes = Array.isArray(current.nodes) ? current.nodes as Record<string, unknown>[] : [];
-      const currentEdges = Array.isArray(current.edges) ? current.edges as Record<string, unknown>[] : [];
-      const deletedNodes = new Set(delta.nodes.delete);
-      const deletedEdges = new Set(delta.edges.delete);
-      const nodeUpserts = new Map(delta.nodes.upsert.map((node) => [node.id as string, node]));
-      const edgeUpserts = new Map(delta.edges.upsert.map((edge) => [edge.id as string, edge]));
-      const existingNodeIds = new Set(currentNodes.map((node) => node.id as string));
-      const existingEdgeIds = new Set(currentEdges.map((edge) => edge.id as string));
-      const nodes = currentNodes
-        .filter((node) => !deletedNodes.has(node.id as string))
-        .map((node) => nodeUpserts.get(node.id as string) ?? node)
-        .concat(delta.nodes.upsert.filter((node) => !existingNodeIds.has(node.id as string)));
-      const edges = currentEdges
-        .filter((edge) => !deletedEdges.has(edge.id as string))
-        .map((edge) => edgeUpserts.get(edge.id as string) ?? edge)
-        .concat(delta.edges.upsert.filter((edge) => !existingEdgeIds.has(edge.id as string)));
-      const next: Record<string, unknown> = { ...current, nodes, edges };
-      if (delta.viewport !== undefined) next.viewport = delta.viewport;
-      if (delta.minimapVisible !== undefined) next.minimapVisible = delta.minimapVisible;
-      if (delta.snapEnabled !== undefined) next.snapEnabled = delta.snapEnabled;
-      if (delta.agentModel !== undefined) next.agentModel = delta.agentModel;
-
-      const summary = deriveCanvasSummary(next);
-      const updated = await tx.canvasProject.update({
-        where: { id },
-        data: {
-          canvasData: stringifyJson(next),
-          revision: { increment: 1 },
-          nodeCount: summary.nodeCount,
-          thumbnailSrc: summary.thumbnailSrc,
-        },
-      });
-      const oldCounts = extractHashCountsFromCanvas(current);
-      const newCounts = extractHashCountsFromCanvas(next);
-      if (!hashCountsEqual(oldCounts, newCounts)) {
-        await replaceSourceFileRefs(tx, { userId, sourceType: "canvas", sourceId: id }, newCounts);
-      }
-      return { ...updated, canvasData: parseJsonObject(updated.canvasData) };
-    });
-  });
-}
-
-async function updateProjectRow(
-  id: string,
-  userId: number,
-  data: { name?: string; canvasData?: Record<string, unknown>; coverKey?: string | null },
-  options?: { baseRevision?: number }
-) {
-  return prisma.$transaction(async (tx) => {
-    // 事务内读取当前版本；baseRevision 不一致时拒绝。租约校验已在临界区入口
-    // 完成主防线，此处为纵深防御。版本校验只针对画布内容：revision 语义 =
-    // 画布内容版本，纯改名 / 改封面是元数据、不参与冲突判定也不递增版本——
-    // 否则改名会把其他窗口的画布会话误杀成过期。
-    const existing = await tx.canvasProject.findFirst({
-      where: { id, userId },
-      select: { id: true, revision: true, canvasData: true },
-    });
-    if (!existing) return null;
-    if (
-      data.canvasData !== undefined &&
-      options?.baseRevision !== undefined &&
-      existing.revision !== options.baseRevision
-    ) {
-      throw new CanvasRevisionConflictError(existing.revision);
-    }
-
-    const updateData: Record<string, unknown> = {};
-    if (data.name !== undefined) {
-      updateData.name = data.name;
-    }
-    if (data.canvasData !== undefined) {
-      updateData.canvasData = stringifyJson(data.canvasData);
-      updateData.revision = { increment: 1 };
-      // 摘要冗余列随保存派生（画布 JSON 已在下方账本重算中解析，此处复用对象）
-      const summary = deriveCanvasSummary(data.canvasData);
-      updateData.nodeCount = summary.nodeCount;
-      updateData.thumbnailSrc = summary.thumbnailSrc;
-    }
-    if (data.coverKey !== undefined) {
-      // 封面必须是存储 key 严格形态：引用账本按 hash 登记，防 GC 回收封面文件
-      if (data.coverKey !== null && !hashFromStorageKey(data.coverKey)) {
-        throw new CanvasCoverKeyError();
-      }
-      updateData.coverKey = data.coverKey;
-    }
-
-    const updated = await tx.canvasProject.update({
-      where: { id },
-      data: updateData,
-    });
-
-    // 引用账本重算由服务端权威判定：事务内比较落库前后的引用计数，
-    // 仅媒体结构变化（引用集合或数量不同）才写账本；布局保存零账本写入。
-    if (data.canvasData !== undefined) {
-      const oldCounts = extractHashCountsFromCanvas(parseJsonObject(existing.canvasData));
-      const newCounts = extractHashCountsFromCanvas(data.canvasData);
-      if (!hashCountsEqual(oldCounts, newCounts)) {
-        await replaceSourceFileRefs(tx, {
-          userId,
-          sourceType: "canvas",
-          sourceId: id,
-        }, newCounts);
-      }
-    }
-
-    // 封面引用走独立来源（canvas_cover），与画布内容（canvas）正交：
-    // 画布保存整替 canvas 来源集合，封面混入会被冲掉。清除封面（null）即清空该来源。
-    if (data.coverKey !== undefined) {
-      await replaceSourceFileRef(tx, {
-        userId,
-        sourceType: "canvas_cover",
-        sourceId: id,
-      }, data.coverKey ?? null);
-    }
-
+  try {
+    const updated = await tx.canvasProject.update({ where: { id: row.id }, data });
     return {
       ...updated,
       canvasData: parseJsonObject(updated.canvasData),
     };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** 只读当前版本；供写用例在进入事务前构造租约失效错误。 */
+export async function getProjectRevision(id: string, userId: number): Promise<number | null> {
+  const row = await prisma.canvasProject.findFirst({
+    where: { id, userId },
+    select: { revision: true },
   });
+  return row?.revision ?? null;
 }
 
 export async function deleteProject(id: string, userId: number) {
-  return prisma.$transaction(async (tx) => {
-    // 先按账本递减聚合计数，再删除画布；两个操作在同一事务中回滚一致。
+  return withTransaction(async (tx) => {
+    // 先删除项目行并持有行锁，再清理账本：并发保存/封面写要么先提交
+    // （随后被本次清理按最新账本回收），要么在行删除后得到 P2025 而不会写账本。
+    // 反过来先清账再删行会留下并发写入新插入的孤儿 file_refs。
+    const deleted = await tx.canvasProject.deleteMany({ where: { id, userId } });
+    if (deleted.count === 0) return deleted;
+
     // 封面来源（canvas_cover）一并清理，封面文件随项目走 GC 宽限期回收
-    await removeSourceFileRefs(tx, {
+    await removeSourceFileRefsTx(tx, {
       userId,
       sourceType: "canvas",
       sourceId: id,
     });
-    await removeSourceFileRefs(tx, {
+    await removeSourceFileRefsTx(tx, {
       userId,
       sourceType: "canvas_cover",
       sourceId: id,
     });
-    return tx.canvasProject.deleteMany({ where: { id, userId } });
+    return deleted;
   });
 }

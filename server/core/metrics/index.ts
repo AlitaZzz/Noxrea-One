@@ -32,7 +32,7 @@ import {
  * 读写两类结果同表：两者共用同一个键空间与同一份失败语义，分表会让「快照不可用
  * 的总体比例」需要跨两个指标求和。
  */
-type AuthSnapshotResult =
+export type AuthSnapshotResult =
   | "hit"
   | "miss"
   | "db_fallback"
@@ -42,19 +42,44 @@ type AuthSnapshotResult =
   | "invalidate_error";
 
 /** 描述接口的两种形态（`server/http/routes/files.ts`） */
-type FileAccessDelivery = "signed" | "stream";
-type FileAccessResult = "ok" | "error";
+export type FileAccessDelivery = "signed" | "stream";
+export type FileAccessResult = "ok" | "error";
 
 /**
  * 派生产物四个命名空间（`_cache` / `_posters` / `_sprite` / `_proxy`）。标签取值集合
- * 按规则 3.8 在 metrics 声明；档位由 key 的命名空间推导（`derived-keys.derivedTierOf`），
- * 调用方不手写——两处取值一旦不同集，`ensureArtifact` 的调用点会编译失败。
+ * 按规则 3.8 在 metrics 声明；`services/storage/derived-keys` 直接引用该类型，档位由
+ * key 的命名空间推导（`derived-keys.derivedTierOf`），调用方不手写。
  */
-type DerivedTier = "cache" | "poster" | "sprite" | "proxy";
+export type DerivedTier = "cache" | "poster" | "sprite" | "proxy";
 /** `skipped`：按设计不生成（如 APNG 退回原图），不计入失败率 */
-type DerivedResult = "hit" | "generated" | "failed" | "skipped";
+export type DerivedResult = "hit" | "generated" | "failed" | "skipped";
 
-type PresignResult = "ok" | "failed";
+/**
+ * 存储寻址风格（`storage_probe_ok{addressing}` 的标签集合）。
+ * 按规则 3.8 在 metrics 声明；`services/storage` 反向引用该类型。
+ */
+export type AddressingStyle = "path" | "virtual";
+
+/**
+ * 存储启动探测的指标入参。
+ *
+ * 规则 3.8 只约束**指标标签集合**：`addressing` / `response_overrides` / `browser_cors`
+ * 的取值必须在这里有界声明。存储侧的能力记录 `StorageCapabilities` 是领域类型，
+ * 归 `services/storage/providers`；metrics 不反向引用它，由组合根（bootstrap）
+ * 把探测报告投影为本模块自有的扁平形状。
+ */
+export interface StorageProbeMetrics {
+  /** 实际生效的寻址风格（`storage_probe_ok{addressing}`） */
+  addressing: AddressingStyle;
+  /** 是否遵守预签名 URL 的 `response-*` 覆盖（`storage_probe_ok{response_overrides}`） */
+  responseOverrides: boolean;
+  /** bucket 是否对浏览器跨源放行（`storage_probe_ok{browser_cors}`） */
+  browserCors: boolean;
+  /** 探测得到的时钟偏差秒数（`storage_probe_clock_skew_seconds`） */
+  clockSkewSeconds: number;
+}
+
+export type PresignResult = "ok" | "failed";
 /**
  * GC 单周期结果：四个阶段（引用回收 / staging 清扫 / 派生清扫 / 探测残留清扫）独立成败。
  *
@@ -63,7 +88,6 @@ type PresignResult = "ok" | "failed";
  * 终态，而不是被 `ok` 吞掉。
  */
 export type GcResult = "ok" | "partial" | "failed";
-type StorageAddressingLabel = "path" | "virtual";
 
 /** HTTP 方法标签的有界集合：未知方法归入 OTHER，避免任意字符串成为标签 */
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] as const;
@@ -78,7 +102,7 @@ const AUTH_DURATION_BUCKETS = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2
 /** 单批描述条数：1–50（`FILE_ACCESS_BATCH_LIMIT`），桶按批量语义取 */
 const BATCH_SIZE_BUCKETS = [1, 2, 5, 10, 20, 30, 40, 50];
 
-interface MetricsHandle {
+export interface MetricsHandle {
   readonly registry: Registry;
   httpRequest(method: string, route: string, status: number, durationSeconds: number): void;
   authSnapshot(result: AuthSnapshotResult): void;
@@ -89,10 +113,7 @@ interface MetricsHandle {
   derivedArtifact(tier: DerivedTier, result: DerivedResult): void;
   mediaBusyRejected(): void;
   storageGcRun(result: GcResult, reclaimedBytes: number): void;
-  storageProbe(report: {
-    capabilities: { addressing: StorageAddressingLabel; responseOverrides: boolean; browserCors: boolean };
-    clockSkewSeconds: number;
-  }): void;
+  storageProbe(report: StorageProbeMetrics): void;
   /** 队列与 worker 的抓取时读数（Gauge collect）：由调用方提供读取函数，core 不反向依赖 services */
   registerQueueGauges(read: () => Promise<{ queueDepth: number | null; workerRunning: boolean }>): void;
 }
@@ -218,12 +239,11 @@ function createMetrics(): MetricsHandle {
       if (reclaimedBytes > 0) storageGcReclaimedBytesTotal.inc(reclaimedBytes);
     },
     storageProbe(report) {
-      const { addressing, responseOverrides, browserCors } = report.capabilities;
       storageProbeOk.set(
         {
-          addressing,
-          response_overrides: String(responseOverrides),
-          browser_cors: String(browserCors),
+          addressing: report.addressing,
+          response_overrides: String(report.responseOverrides),
+          browser_cors: String(report.browserCors),
         },
         1,
       );

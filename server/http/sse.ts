@@ -4,12 +4,12 @@
  * 任务异常转 error 事件）收拢为 createSseResponse 一个入口，供 SSE 路由复用。
  */
 
-interface SseContext {
+export interface SseContext {
   emit: (event: string, data: unknown) => void;
   signal: AbortSignal;
 }
 
-interface SseOptions {
+export interface SseOptions {
   onDisconnect?: () => void;
 }
 

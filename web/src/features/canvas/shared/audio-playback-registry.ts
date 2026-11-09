@@ -10,15 +10,12 @@
  * 直接支撑，波形不可用时注册与暂停同样有效
  * （specs/canvas-audio-peaks-cache.md 规则 5.2）。
  */
-export interface AudioPlaybackHandle {
-  getCurrentTime(): number;
-  pause(): void;
-}
+import type { AudioPlayerHandle } from "@/components/media/AudioWaveform";
 
-const registry = new Map<string, AudioPlaybackHandle>();
+const registry = new Map<string, AudioPlayerHandle>();
 
 /** 注册节点内的播放句柄，返回注销函数（直接交给 useEffect 清理） */
-export function registerAudioPlayer(nodeId: string, handle: AudioPlaybackHandle): () => void {
+export function registerAudioPlayer(nodeId: string, handle: AudioPlayerHandle): () => void {
   registry.set(nodeId, handle);
   return () => {
     // 仅在仍是同一句柄时注销，避免新句柄注册后被旧句柄的清理误删

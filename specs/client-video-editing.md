@@ -307,3 +307,5 @@
 - `Range` 请求头本身：跨域资源计时不含请求头，只能证明分次 `fetch`，不能逐条确认 `Range`。
 
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。
+
+- 2026-11-08 派生工厂参数形状更新：本 Spec 2026-10-22 审查处置中「维持 `createVideoNodeFromRef` 位置参数」与「两种派生工厂位置参数顺序不同」的表述已过时；三个 `*FromRef` 工厂现均接收单一参数对象，`options` 统一收在 `CreateDerivedNodeParams`。当前契约见 [web-module-contracts.md](web-module-contracts.md) 规则 9（派生节点工厂与提交出口）。

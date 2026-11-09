@@ -4,21 +4,11 @@
  * DB 轮询仅作为事件丢失时的兜底，确保状态最终可达。
  */
 import { logger } from "@server/core/logger";
-import { getTaskTerminalByIds, toTerminalState } from "@server/crud/task";
+import { getTaskTerminalByIds } from "@server/crud/task";
 
 import { onAnyTaskTerminal } from "./event-bus";
-
-export interface TerminalTaskState {
-  taskId: string;
-  status: "completed" | "failed" | "cancelled";
-  resultUrls?: string[];
-  resultText?: string;
-  error?: string;
-  /** 机器可读的失败分类，前端据此取本地化文案 */
-  errorCode?: string;
-  prompt?: string;
-  config?: unknown;
-}
+import { toTerminalState } from "./terminal";
+import type { TerminalTaskState } from "./terminal-state";
 
 interface PendingSubscription {
   taskId: string;

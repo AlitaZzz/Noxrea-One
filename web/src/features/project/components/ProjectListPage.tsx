@@ -8,10 +8,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import AppShell from "@/components/layout/AppShell";
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { CheckOutlined, ChevronDownIcon, ClockCircleOutlined, DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOpenOutlined, PictureOutlined, PlusOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,20 +19,37 @@ import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import SettingsModal from "@/features/auth/components/SettingsModal";
-import { UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
-import { useAuthStore } from "@/features/auth/store";
-import { useCurrentUser } from "@/features/auth/UserContext";
-import { flushAndWait } from "@/features/canvas/stores/canvas-store";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
-import { useProjectStore } from "@/features/project/store";
-import type { ProjectSummary } from "@/features/project/types";
-import { classifyUploadError, uploadWithRetry } from "@/lib/utils/upload";
+import { uploadMany } from "@/entities/asset";
+import type { ProjectSummary } from "@/entities/project";
+import {
+  activateProject,
+  createProject,
+  deleteProject,
+  refreshProjects,
+  renameProject,
+  updateCover,
+  useProjects,
+} from "@/entities/project";
+import { logout, savePreference, useCurrentUser } from "@/entities/user";
+import type { AccountSettingsProps, UserMenuProps } from "@/types/user-menu";
 
 // 固定信息区高度，让空列表首帧与项目数据加载后的网格行保持同一尺寸。
 const PROJECT_CARD_INFO_CLASS = "h-[100px] shrink-0 p-3";
 
-export default function ProjectListPage() {
+interface ProjectListPageProps {
+  /** app 注入：等待画布未落盘的保存完成（项目列表不导入 canvas） */
+  flushPendingCanvasSaves: () => Promise<void>;
+  /** app 注入：用户菜单 UI（features/auth） */
+  accountMenu: ComponentType<UserMenuProps>;
+  /** app 注入：账号设置弹窗 UI（features/auth） */
+  accountSettings: ComponentType<AccountSettingsProps>;
+}
+
+export default function ProjectListPage({
+  flushPendingCanvasSaves,
+  accountMenu: AccountMenu,
+  accountSettings: AccountSettings,
+}: ProjectListPageProps) {
   const router = useRouter();
   const { notification } = useAppFeedback();
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -45,14 +62,9 @@ export default function ProjectListPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetRef = useRef<string | null>(null);
   const [coverUploadingId, setCoverUploadingId] = useState<string | null>(null);
-  const renameProject = useProjectStore((s) => s.renameProject);
   const user = useCurrentUser();
   const { t, i18n } = useTranslation();
-  const projects = useProjectStore((s) => s.projects);
-  const createProject = useProjectStore((s) => s.createProject);
-  const deleteProject = useProjectStore((s) => s.deleteProject);
-  const setActiveProject = useProjectStore((s) => s.setActiveProject);
-  const refreshProjects = useProjectStore((s) => s.refreshProjects);
+  const projects = useProjects();
 
   const pathname = usePathname();
 
@@ -61,11 +73,11 @@ export default function ProjectListPage() {
   useEffect(() => {
     if (pathname !== "/project") return;
     let cancelled = false;
-    flushAndWait().finally(() => {
+    flushPendingCanvasSaves().finally(() => {
       if (!cancelled) refreshProjects();
     });
     return () => { cancelled = true; };
-  }, [pathname, refreshProjects]);
+  }, [pathname, flushPendingCanvasSaves]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -97,21 +109,23 @@ export default function ProjectListPage() {
 
     setCoverUploadingId(targetId);
     try {
-      const result = await uploadWithRetry(file);
+      // 走 entity 公共上传通道：离线 / 不支持类型 / 体积超限在发请求前统一拦截
+      const { outcomes } = await uploadMany([{ blob: file, filename: file.name }]);
+      const outcome = outcomes[0];
       // 封面落库存 key；展示 URL 由渲染期派生
-      useProjectStore.getState().updateCover(targetId, result.key);
-    } catch (err) {
-      const info = classifyUploadError(err);
-      notification.error({ title: info.message, placement: "bottomRight", duration: 6 });
+      if (outcome?.result) updateCover(targetId, outcome.result.key);
+      else if (outcome?.error) notification.error({ title: outcome.error.message, placement: "bottomRight", duration: 6 });
     } finally {
       setCoverUploadingId(null);
     }
   };
 
   const handleCreate = async () => {
-    const p = await createProject();
-    setActiveProject(p.id);
-    router.push(`/canvas/${p.id}`);
+    // 命令成功后已写入 activeProjectId；项目身份仍以 URL 为准
+    const project = await createProject();
+    // 失败提示由 entity 统一负责；返回 null 时不导航
+    if (!project) return;
+    router.push(`/canvas/${project.id}`);
   };
 
   const formatDate = (ts: number) => {
@@ -120,8 +134,7 @@ export default function ProjectListPage() {
   };
 
   return (
-    <AppShell>
-      <div className="ui-select-none h-full overflow-y-auto p-6 text-foreground md:p-10">
+    <div className="ui-select-none h-full overflow-y-auto p-6 text-foreground md:p-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-8 max-w-6xl mx-auto">
         <div className="flex items-center gap-3">
@@ -129,7 +142,7 @@ export default function ProjectListPage() {
           <span className="text-sm text-muted-foreground">{projects.length}</span>
         </div>
 
-        <UserMenuPopover
+        <AccountMenu
           open={avatarOpen}
           onOpenChange={setAvatarOpen}
           placement="bottomRight"
@@ -145,10 +158,10 @@ export default function ProjectListPage() {
             if (key === "settings") {
               setSettingsOpen(true);
             } else if (key === "lang") {
-              useAuthStore.getState().savePreference("language", i18n.language === "zh" ? "en" : "zh");
+              void savePreference("language", i18n.language === "zh" ? "en" : "zh");
             }
           }}
-          onLogout={() => useAuthStore.getState().logout().finally(() => router.push("/login"))}
+          onLogout={() => logout().finally(() => router.push("/login"))}
           trigger={
             /* 用户信息 SSR 直出（根布局注入 cookie 缓存），水合后由 /me 校正 */
             <Button
@@ -290,7 +303,7 @@ export default function ProjectListPage() {
               {/* 整卡跳转（stretched-link）：铺满卡片承担导航，菜单/重命名等交互控件以 relative z-10 浮于其上 */}
               <Link
                 href={`/canvas/${p.id}`}
-                onClick={() => setActiveProject(p.id)}
+                onClick={() => activateProject(p.id)}
                 aria-label={p.name}
                 className="absolute inset-0 z-0 cursor-pointer rounded-[inherit] outline-none focus-visible:inset-ring-3 focus-visible:inset-ring-ring/50"
               />
@@ -307,7 +320,7 @@ export default function ProjectListPage() {
           onChange={handleCoverChange}
         />
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AccountSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <DestructiveConfirmModal
         open={!!deleteTarget}
@@ -315,10 +328,14 @@ export default function ProjectListPage() {
         description={t("project.deleteConfirm", { name: deleteTarget?.name ?? "" })}
         confirmText={t("common.delete")}
         cancelText={t("common.cancel")}
-        onConfirm={() => deleteTarget ? deleteProject(deleteTarget.id) : false}
+        onConfirm={async () => {
+          if (!deleteTarget) return false;
+          // 画布保存可能仍在途中：先落盘再删除，避免保存请求在项目删除后到达
+          await flushPendingCanvasSaves();
+          return deleteProject(deleteTarget.id);
+        }}
         onCancel={() => setDeleteTarget(null)}
       />
-      </div>
-    </AppShell>
+    </div>
   );
 }

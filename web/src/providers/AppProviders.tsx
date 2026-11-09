@@ -12,14 +12,13 @@ import { ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import AppUiProvider from "@/components/ui/AppUiProvider";
-import { useAuthStore } from "@/features/auth/store";
-import { useCurrentUser } from "@/features/auth/UserContext";
+import { ThemeModeProvider } from "@/components/ui/theme-mode";
+import { logout, useCurrentUser, useSessionUser } from "@/entities/user";
 import { setUnauthorizedHandler, setUnauthorizedNavigationHandler } from "@/lib/api/client";
 import { loadUploadFormats } from "@/lib/upload-formats";
 
-/** 401 的登出动作属于 auth feature，由 app 层注入给 lib/api/client，避免 lib 反向依赖 feature */
+/** 401 的登出动作来自 entities/user，由 app 层注入给 lib/api/client，避免 lib 反向依赖 entity */
 function UnauthorizedHandlerRegistrar() {
-  const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
   useEffect(() => {
     setUnauthorizedHandler(logout);
@@ -28,14 +27,14 @@ function UnauthorizedHandlerRegistrar() {
       setUnauthorizedHandler(null);
       setUnauthorizedNavigationHandler(null);
     };
-  }, [logout, router]);
+  }, [router]);
   return null;
 }
 
 /** 已登录后预热上传格式白名单（失败静默回落兜底值），供各上传入口同步读取。
  *  未登录不发：接口要求鉴权，未登录预热是必败请求（登录页上的 401 噪音）。 */
 function UploadFormatsWarmup() {
-  const user = useAuthStore((s) => s.user);
+  const user = useSessionUser();
   useEffect(() => {
     if (user) void loadUploadFormats();
   }, [user]);
@@ -51,8 +50,11 @@ function HtmlLangSync() {
   return null;
 }
 
-/** 同步用户主题到 <html>，让全局 shadcn 令牌和画布控件共用一个主题来源。 */
-function HtmlThemeSync() {
+/**
+ * 同步用户主题到 <html>，并向下提供主题模式，让全局 shadcn 令牌、
+ * 画布控件与 React Flow 共用一个主题来源。
+ */
+function ThemeModeSync({ children }: { children: ReactNode }) {
   const user = useCurrentUser();
   const theme = user?.theme === "light" ? "light" : "dark";
 
@@ -62,7 +64,7 @@ function HtmlThemeSync() {
     root.classList.toggle("light", theme === "light");
   }, [theme]);
 
-  return null;
+  return <ThemeModeProvider theme={theme}>{children}</ThemeModeProvider>;
 }
 
 function SessionProviders({ children }: { children: ReactNode }) {
@@ -78,14 +80,15 @@ function SessionProviders({ children }: { children: ReactNode }) {
 }
 
 export function AppProviders({ children }: { children: ReactNode }) {
-  const userId = useAuthStore((state) => state.user?.id);
+  const userId = useSessionUser()?.id;
   return (
     <AppUiProvider>
       <UnauthorizedHandlerRegistrar />
       <UploadFormatsWarmup />
       <HtmlLangSync />
-      <HtmlThemeSync />
-      <SessionProviders key={userId ?? "guest"}>{children}</SessionProviders>
+      <ThemeModeSync>
+        <SessionProviders key={userId ?? "guest"}>{children}</SessionProviders>
+      </ThemeModeSync>
     </AppUiProvider>
   );
 }

@@ -29,7 +29,8 @@ import path from "path";
 import { Readable, Transform } from "stream";
 import { pipeline } from "stream/promises";
 import { hashFromStorageKey, isStorageKey } from "@noxrea/shared/url";
-import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "./backend";
+import { STAGING_PREFIX } from "./backend";
+import { DERIVED_ROOT_PREFIXES } from "./derived-keys";
 
 export type MigrationDirection = "local-to-s3" | "s3-to-local";
 /** 校验方式：etag-md5=ETag 与本地 MD5 比对；readback-sha256=降级回读重算；sha256-key=与 key 内 hash 比对；size=字节数 */
@@ -51,7 +52,7 @@ export interface MigrationIssue {
  * derived=派生产物；staging=直传在途暂存；unknown=未知形态（列入清单交人工核对，绝不静默丢弃）。
  */
 export function classifyObjectKey(key: string): "content" | "derived" | "staging" | "unknown" {
-  if ((DERIVED_ROOT_PREFIXES as readonly string[]).some((p) => key.startsWith(p))) return "derived";
+  if (DERIVED_ROOT_PREFIXES.some((p) => key.startsWith(p))) return "derived";
   if (key.startsWith(STAGING_PREFIX)) return "staging";
   return isStorageKey(key) ? "content" : "unknown";
 }

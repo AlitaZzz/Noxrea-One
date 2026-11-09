@@ -13,6 +13,7 @@ import { pipeline } from "stream/promises";
 import { isPathWithinBase } from "@server/core/paths";
 import { isTransientFileError, RENAME_RETRIES, withRetry } from "@server/services/storage/fs-utils";
 import { isKeyWithinNamespace, listDerivedArtifactKeys, StorageTraversalError, type StorageBackend } from "@server/services/storage/backend";
+import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/derived-keys";
 import { uploadRoot, tmpDir, writeAtomic } from "@server/services/storage/workspace";
 
 export class LocalStorageBackend implements StorageBackend {
@@ -151,8 +152,9 @@ export class LocalStorageBackend implements StorageBackend {
       // 向上回收该派生文件留下的空目录（档位目录、版本目录等）
       await this.cleanupEmptyDirs(path.dirname(this.resolveLocalPath(derived)));
     }
-    for (const root of ["_cache", "_posters"]) {
-      await this.cleanupEmptyDirs(path.join(this.baseDir, root));
+    // 派生根目录逐一回收；命名空间常量以对象 key 形态带尾随 `/`，本地路径需去掉分隔符
+    for (const prefix of DERIVED_ROOT_PREFIXES) {
+      await this.cleanupEmptyDirs(path.join(this.baseDir, prefix.slice(0, -1)));
     }
   }
 

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { UploadTransportError } from "@/lib/api/client";
+import {
+  classifyUploadError,
+  uploadBatchWithRetry,
+  UploadOfflineError,
+} from "@/lib/utils/upload";
+
 const uploadBatch = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api/client", async (original) => ({
@@ -8,9 +15,6 @@ vi.mock("@/lib/api/client", async (original) => ({
 }));
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key, exists: () => true } }));
 vi.mock("@/lib/api/error-message", () => ({ resolveApiError: () => "item failed" }));
-
-import { UploadTransportError } from "@/lib/api/client";
-import { uploadBatchWithRetry } from "@/lib/utils/upload";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -69,12 +73,32 @@ describe("uploadBatchWithRetry", () => {
     expect(results[1]).toMatchObject({ status: "fulfilled", value: { url: "same", key: "same" } });
   });
 
-  it("离线时不创建请求，不调用传输层", async () => {
+  it("离线时不创建请求，按不可重试的 offline 结算", async () => {
     vi.stubGlobal("navigator", { onLine: false });
     const results = await uploadBatchWithRetry([new File(["a"], "a.png", { type: "image/png" })]);
     expect(uploadBatch).not.toHaveBeenCalled();
     expect(results[0].status).toBe("rejected");
-    if (results[0].status === "rejected") expect(results[0].reason.message).toBe("error.upload.offline");
+    if (results[0].status === "rejected") {
+      expect(results[0].reason).toBeInstanceOf(UploadOfflineError);
+      expect(classifyUploadError(results[0].reason)).toMatchObject({ category: "offline", retryable: false });
+    }
+  });
+
+  it("传输失败后转离线：不再重试，按不可重试的 offline 结算", async () => {
+    vi.stubGlobal("navigator", { onLine: true });
+    uploadBatch.mockImplementationOnce(async () => {
+      vi.stubGlobal("navigator", { onLine: false });
+      throw new UploadTransportError("network", "network boom");
+    });
+
+    const results = await uploadBatchWithRetry([new File(["a"], "a.png", { type: "image/png" })]);
+
+    expect(uploadBatch).toHaveBeenCalledTimes(1);
+    expect(results[0].status).toBe("rejected");
+    if (results[0].status === "rejected") {
+      expect(results[0].reason).toBeInstanceOf(UploadOfflineError);
+      expect(classifyUploadError(results[0].reason)).toMatchObject({ category: "offline", retryable: false });
+    }
   });
 
   it("进度按 FormData 区间归因到单文件", async () => {

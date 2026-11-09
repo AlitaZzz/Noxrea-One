@@ -17,7 +17,7 @@ import {
   type UploadErrorKind,
   UploadTransportError,
 } from "@/lib/api/client";
-import { resolveApiError } from "@/lib/api/error-message";
+import { type ApiErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, SessionChangedError } from "@/lib/session-lifecycle";
 import { getUploadMode, invalidateUploadLimits } from "@/lib/upload-formats";
@@ -60,6 +60,19 @@ export function isUploadResult(value: unknown): value is UploadResult {
 /** 会话句柄：捕获自 captureSession，供批次重试等异步流程归属校验复用 */
 export type UploadSession = ReturnType<typeof captureSession>;
 
+/**
+ * 浏览器离线导致的本地拒绝：请求尚未发出，不属于传输层错误。
+ * 独立成类型而非普通 Error，失败分类才能落到 offline 而不是 unknown。
+ * offline 属于发起请求前即可判定的本地拒绝，失败分类不可重试（重试同一轮必然继续失败）；
+ * 网络恢复后由用户重新发起上传。
+ */
+export class UploadOfflineError extends Error {
+  constructor(message: string = i18n.t("error.upload.offline")) {
+    super(message);
+    this.name = "UploadOfflineError";
+  }
+}
+
 /** 业务错误：服务端返回了响应但 code !== 200，不应重试 */
 export class UploadBusinessError extends Error {
   detail?: string;
@@ -73,8 +86,11 @@ export class UploadBusinessError extends Error {
   }
 }
 
-/** 上传失败类别：决定 UI 是否提供「重试」入口 */
-export type UploadErrorCategory = UploadErrorKind | "business" | "unknown";
+/**
+ * 上传失败类别：决定 UI 是否提供「重试」入口。
+ * offline / unsupported 是发起请求前就能判定的本地拒绝，不属于传输层错误。
+ */
+export type UploadErrorCategory = UploadErrorKind | "business" | "unknown" | "offline" | "unsupported";
 
 /** 结构化失败信息：节点失败态与全局提示共用 */
 export interface UploadErrorInfo {
@@ -90,6 +106,64 @@ export function isOffline(): boolean {
   return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
+/** 单文件是否超过批次总字节上限：超限时任何拆分都无法满足约束 */
+function exceedsUploadBatchBytes(size: number, maxBatchBytes: number): boolean {
+  return size > maxBatchBytes;
+}
+
+/** 单文件是否超过单文件体积上限（MB → 字节换算的唯一实现） */
+function exceedsUploadFileBytes(size: number, maxSizeMb: number): boolean {
+  return size > maxSizeMb * 1024 * 1024;
+}
+
+/**
+ * 超限文件对应的业务错误体；在两条上限内返回 null。
+ * 单文件上限优先于批次上限：两条都超时报告更准确的「文件体积超限」。
+ * 调用方在发请求前用它结算，避免发送注定被服务端拒绝的文件。
+ */
+export function oversizeUploadErrorBody(
+  size: number,
+  maxSizeMb: number,
+  maxBatchBytes: number,
+): ApiErrorBody | null {
+  if (exceedsUploadFileBytes(size, maxSizeMb)) {
+    return { error: "upload.file_too_large", ctx: { limit: maxSizeMb } };
+  }
+  if (exceedsUploadBatchBytes(size, maxBatchBytes)) {
+    return { error: "upload.batch_too_large" };
+  }
+  return null;
+}
+
+/**
+ * 按文件数与总字节数把上传项切成批次，保持原顺序。
+ * 单个文件超过 maxBytes 时仍会独占一个批次（调用方须先用
+ * oversizeUploadErrorBody 剔除，避免发出注定被拒的请求）。
+ */
+export function splitUploadBatches<T>(
+  items: readonly T[],
+  sizeOf: (item: T) => number,
+  maxFiles: number,
+  maxBytes: number,
+): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let currentBytes = 0;
+  for (const item of items) {
+    const exceedsFiles = current.length >= maxFiles;
+    const exceedsBytes = current.length > 0 && exceedsUploadBatchBytes(currentBytes + sizeOf(item), maxBytes);
+    if (exceedsFiles || exceedsBytes) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(item);
+    currentBytes += sizeOf(item);
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
 /**
  * 把任意上传异常归一为结构化失败信息。
  * 业务错误（code !== 200）不可重试；传输错误按其类别判定；其余按可重试处理。
@@ -97,6 +171,9 @@ export function isOffline(): boolean {
 export function classifyUploadError(err: unknown): UploadErrorInfo {
   if (err instanceof SessionChangedError) {
     return { category: "abort", message: i18n.t("error.upload.aborted"), retryable: false };
+  }
+  if (err instanceof UploadOfflineError) {
+    return { category: "offline", message: err.message, retryable: false };
   }
   if (err instanceof UploadBusinessError) {
     return {
@@ -234,7 +311,7 @@ async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettl
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (isOffline()) {
-      return rejected(new UploadTransportError("network", i18n.t("error.upload.offline")));
+      return rejected(new UploadOfflineError());
     }
     try {
       const formData = new FormData();
@@ -274,7 +351,7 @@ async function uploadBatchRelay(params: BatchUploadParams): Promise<PromiseSettl
       }
       if (err instanceof UploadBusinessError || err instanceof UnauthorizedError) return rejected(err);
       if (err instanceof UploadTransportError && !err.retryable) return rejected(err);
-      if (isOffline()) return rejected(new UploadTransportError("network", i18n.t("error.upload.offline")));
+      if (isOffline()) return rejected(new UploadOfflineError());
 
       lastErr = err;
       if (attempt >= maxRetries) break;
@@ -423,7 +500,7 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
     });
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (isOffline()) {
-        throw new UploadTransportError("network", i18n.t("error.upload.offline"));
+        throw new UploadOfflineError();
       }
       try {
         const value = await directUploadFile(files[index], {
@@ -444,6 +521,9 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
           throw err;
         }
         if (err instanceof UnauthorizedError) throw err;
+        // 传输失败后已转为离线：本轮重试必然继续失败，按不可重试的 offline 结算，
+        // 不能把前置的本地拒绝伪装成可重试的 network。
+        if (isOffline()) throw new UploadOfflineError();
         if (!(err instanceof UploadTransportError) || !err.retryable) throw err;
         lastErr = err;
         if (attempt >= maxRetries) break;
@@ -468,14 +548,4 @@ async function uploadBatchDirect(params: BatchUploadParams): Promise<PromiseSett
   };
   await Promise.all(Array.from({ length: Math.min(DIRECT_CONCURRENCY, files.length) }, worker));
   return results;
-}
-
-/**
- * 从上传错误中提取可读的失败原因。
- * UploadBusinessError 返回其 detail，其他错误返回 message。
- */
-export function getUploadErrorDetail(err: unknown): string | undefined {
-  if (err instanceof UploadBusinessError) return err.detail;
-  if (err instanceof Error) return err.message;
-  return undefined;
 }

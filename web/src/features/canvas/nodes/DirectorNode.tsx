@@ -1,7 +1,7 @@
 /**
  * Director 节点（director-node）在画布上的入口卡片。
- * 仅做占位展示与标题编辑，点击后把节点内保存的三维场景状态载入 director store
- * 并打开全屏 Director 编辑器，本身不含三维逻辑。
+ * 仅做占位展示与标题编辑，点击后经页面端口打开全屏 Director 编辑器，
+ * 本身不含三维逻辑，也不持有编辑器状态。
  */
 "use client";
 
@@ -11,15 +11,16 @@ import { useTranslation } from "react-i18next";
 import { PartitionOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
+import { useCanvasPorts } from "@/features/canvas/root/CanvasPortsContext";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { type DirectorNode as DirectorNodeType, type DirectorStateData } from "@/features/canvas/types";
-import { useDirectorStore } from "@/features/director/director-store";
+import type { DirectorNode as DirectorNodeType } from "@/features/canvas/types";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
 
 function DirectorNode({ id, data }: NodeProps<DirectorNodeType>) {
   const { t } = useTranslation();
+  const { onOpenDirector } = useCanvasPorts();
   // Agent 提议-确认的幻影蒙层（删除/整理预览）
   const agentGhost = useCanvasStore((s) => s.agentPreviewNodeIds.includes(id));
   return (
@@ -43,16 +44,7 @@ function DirectorNode({ id, data }: NodeProps<DirectorNodeType>) {
             size="lg"
             variant="secondary"
             className="nodrag px-6"
-            onClick={() => {
-              const cs = useCanvasStore.getState();
-              const node = cs.nodes.find(n => n.id === id);
-              const directorState = (node?.data as { directorState?: DirectorStateData } | undefined)?.directorState;
-              if (directorState) {
-                useDirectorStore.getState().setRestoreState(directorState);
-              }
-              useDirectorStore.getState().setOpeningNodeId(id);
-              cs.setDirectorOverlayOpen(true);
-            }}
+            onClick={() => onOpenDirector(id)}
           >
             {t("node.directorOpen")}
           </Button>

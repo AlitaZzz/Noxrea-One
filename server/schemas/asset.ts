@@ -2,6 +2,7 @@
  * 资产相关请求校验模式。
  * 定义文件夹与资产的创建、更新等入参的 zod 校验规则。
  */
+import { ASSET_BATCH_LIMIT, ASSET_NAME_MAX_LENGTH } from "@noxrea/shared/asset";
 import { z } from "zod";
 
 import { fileRefSchema } from "@server/schemas/file-ref";
@@ -37,7 +38,7 @@ export type FolderOut = z.infer<typeof folderOutSchema>;
 const tagsSchema = z.array(z.string().trim().min(1).max(20)).max(6);
 
 export const assetCreateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(ASSET_NAME_MAX_LENGTH).optional(),
   type: z.string().max(20).optional(),
   mediaType: z.enum(["image", "video", "audio", ""]).optional(),
   fileKey: fileRefSchema.optional(),
@@ -49,13 +50,10 @@ export const assetCreateSchema = z.object({
   scope: z.literal("personal").optional(),
 });
 
-/** 单次批量操作（创建 / 更新 / 删除）的素材数量上限；前端按同一上限分片提交，服务端仅作兜底校验。 */
-export const ASSET_BATCH_LIMIT = 200;
-
 export const assetBatchCreateSchema = z.array(assetCreateSchema).min(1).max(ASSET_BATCH_LIMIT);
 
 export const assetUpdateSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(ASSET_NAME_MAX_LENGTH).optional(),
   type: z.string().min(1).max(20).optional(),
   description: z.string().optional(),
   folderId: z.number().int().positive().nullable().optional(),

@@ -6,10 +6,12 @@ import { z } from "zod";
 
 import { isStorageKey } from "@noxrea/shared/url";
 
-export const canvasCreateSchema = z.object({
-  name: z.string().max(200).optional(),
-  canvasData: z.record(z.unknown()).optional(),
-});
+/** 创建契约只接收名称：画布内容由服务端以空文档建立，客户端不得提交初始内容。 */
+export const canvasCreateSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+  })
+  .strict();
 
 export const canvasUpdateSchema = z.object({
   name: z.string().max(200).optional(),

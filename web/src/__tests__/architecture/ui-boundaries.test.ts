@@ -57,12 +57,12 @@ describe("UI architecture constraints", () => {
     expect(await violations(code, "src/components/ui/AppIcon.tsx")).toHaveLength(0);
   });
 
-  it.each(["src/features/settings/ApiSettingsModels.tsx", "src/features/auth/store.ts", "src/app/page.tsx", "src/lib/feedback.ts", "src/providers/AppProviders.tsx"])("protects all business directories: %s", async (filePath) => {
+  it.each(["src/features/settings/ApiSettingsModels.tsx", "src/entities/user/store.ts", "src/app/page.tsx", "src/lib/feedback.ts", "src/providers/AppProviders.tsx"])("protects all business directories: %s", async (filePath) => {
     expect(await violations('import { App } from "antd"; export default App;', filePath)).not.toHaveLength(0);
   });
 
   it.each(["src/lib/model-store.ts", "src/components/ui/dialog.tsx"])("rejects reverse dependencies from %s", async (filePath) => {
-    expect(await violations('import { useAuthStore } from "@/features/auth/store"; export default useAuthStore;', filePath))
+    expect(await violations('import { useUserStore } from "@/entities/user/store"; export default useUserStore;', filePath))
       .toEqual(expect.arrayContaining([expect.objectContaining({ ruleId: "boundaries/dependencies" })]));
   });
 });

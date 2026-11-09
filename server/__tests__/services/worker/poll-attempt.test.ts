@@ -24,9 +24,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@server/services/tasks/poll-loop", () => ({ pollUpstreamOnce: mocks.pollUpstreamOnce }));
 vi.mock("@server/crud/task", () => ({
-  safeFailTask: mocks.safeFailTask,
   requeueProcessingAsyncTask: mocks.requeueProcessingAsyncTask,
   deferPollTick: mocks.deferPollTick,
+}));
+vi.mock("@server/services/tasks/terminal", () => ({
+  safeFailTask: mocks.safeFailTask,
 }));
 vi.mock("@server/services/worker/queue", () => ({
   deferActiveTickOrThrow: mocks.deferActiveTickOrThrow,
@@ -117,7 +119,7 @@ describe("runPollAttempt", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       { error: "boom", errorCode: "generation.upstream_rejected" },
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 
@@ -187,7 +189,7 @@ describe("runPollAttempt", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ errorCode: "generation.poll_timeout" }),
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
     expect(mocks.deferActiveTickOrThrow).not.toHaveBeenCalled();
   });
@@ -245,7 +247,7 @@ describe("runPollAttempt", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       expect.objectContaining({ error: expect.stringContaining("Failed to poll upstream task") }),
-      { startedAt: STARTED_AT }
+      STARTED_AT
     );
   });
 

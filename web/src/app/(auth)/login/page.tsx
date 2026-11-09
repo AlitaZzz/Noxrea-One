@@ -2,7 +2,7 @@
  * 登录 / 注册页面。
  * 左侧为品牌展示区（使用应用内置视频做轮播背景，叠加青柠极光带
  * 与逐字入场标题），右侧为登录/注册表单：自定义字段校验、密码可见切换、聚光卡片，
- * 提交后调用 auth store 完成登录或注册并跳转回根路由分流。
+ * 提交后调用 entities/user 的登录/注册命令并跳转回根路由分流。
  * 视觉统一到应用品牌色（石墨深色 + 青柠 #c7f43d），动效均为纯 CSS/轻量 JS 自实现。
  */
 
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { useAuthStore } from "@/features/auth/store";
+import { login, register } from "@/entities/user";
 import { SESSION_EXPIRED_FLAG } from "@/lib/api/client";
 import i18n from "@/lib/i18n/config";
 
@@ -339,7 +339,6 @@ function RightPanel({
 
 export default function LoginPage() {
   const router = useRouter();
-  const authStore = useAuthStore();
   const { message } = useAppFeedback();
 
   // 全局 401 登出跳转而来：读取 client.ts 留下的标记，展示一次性「会话过期」提示
@@ -386,11 +385,11 @@ export default function LoginPage() {
         // 二次跳转（客户端软导航 + middleware 重定向组合在部分环境下不可靠，
         // 会出现「提示登录成功却停在登录页」）；全局提示渲染在 portal，不受导航影响
         if (mode === "signin") {
-          await authStore.login(username, password);
+          await login(username, password);
           message.success(i18n.t("auth.login.welcomeBack"));
           router.replace("/project");
         } else {
-          await authStore.register(username, password);
+          await register(username, password);
           message.success(i18n.t("auth.login.accountCreated"));
           router.replace("/project");
         }
@@ -400,7 +399,7 @@ export default function LoginPage() {
         setLoading(false);
       }
     },
-    [mode, username, password, router, authStore, message]
+    [mode, username, password, router, message]
   );
 
   const toggleMode = useCallback(() => {

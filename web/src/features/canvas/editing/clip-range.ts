@@ -5,6 +5,7 @@
  */
 
 import { SEEK_MARGIN_S } from "@/lib/constants";
+import { clamp01 } from "@/lib/utils/number";
 
 /** 最小区间（s）：拖动与键盘步进都被钳住，防止截出过短片段 */
 export const MIN_RANGE_S = 0.5;
@@ -24,11 +25,6 @@ export function isRangeLongEnough(inTime: number, outTime: number): boolean {
     （SEEK_MARGIN_S 容差吸收 seek 精度，避免贴着入点时来回折跳） */
 export function isOutsideLoopRange(currentTime: number, inTime: number, outTime: number): boolean {
   return currentTime >= outTime || currentTime < inTime - SEEK_MARGIN_S;
-}
-
-export function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(1, Math.max(0, value));
 }
 
 /** band 整段平移的入点钳制：时长不变的平移整体落在 [0,1] 内。

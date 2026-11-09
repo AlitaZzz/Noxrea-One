@@ -23,7 +23,8 @@ import { getSetting } from "@server/core/settings";
 import { bootstrapCliStorage } from "./cli-bootstrap.mts";
 import { isStorageKey } from "@noxrea/shared/url";
 import { buildStorageKey, getStorageBackend } from "@server/services/storage/service";
-import { DERIVED_ROOT_PREFIXES, STAGING_PREFIX } from "@server/services/storage/backend";
+import { STAGING_PREFIX } from "@server/services/storage/backend";
+import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/derived-keys";
 
 /** 审计计数的前缀全集：派生产物四根 + `_tmp` 工作区（审计须覆盖临时区残留计数） */
 const AUDIT_COUNTED_PREFIXES = [...DERIVED_ROOT_PREFIXES, "_tmp/"] as const;

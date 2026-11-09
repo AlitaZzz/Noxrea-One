@@ -255,8 +255,8 @@
 
 1. **流光描边**：`web/src/styles/globals.css` 的三处共用 recipe；改为「父层静态 mask + 子层静态 conic-gradient 仅 transform 旋转」后，影响生成浮层、连接目标高亮、Agent 入口按钮三处视觉与动画实现。需要验证圆角、非方形节点、缩放下 1.5px 描边、明暗主题、`prefers-reduced-motion`。
 2. **生成面板宿主复用（若采纳 5.4）**：三类面板的生命周期从「选中即挂载、取消即卸载」改为「宿主常驻、按目标切换」；影响 Tiptap 实例生命周期、mention 建议、undo/焦点语义、参考卡片媒体 URL 解析与订阅。隐藏状态下必须停掉重活。
-3. **起拖路径**：`drag-preview-session.begin`、`InfiniteCanvas.handleNodeDragStart`、交互状态机；可能涉及 DOM 快照按 id 定位/缓存、减少选中提交重渲染范围、合并交互态写入。具体改动以 trace 归因为前提。
-4. **选中提交**：`InfiniteCanvas` 的整画布渲染范围与工具条挂载成本；若需把选中态订阅从画布壳层拆出，属于架构调整，另行评估（与原 4.3 同类问题）。
+3. **起拖路径**：`drag-preview-session.begin`、`CanvasSurface` 接线的 `handleNodeDragStart`、交互状态机；可能涉及 DOM 快照按 id 定位/缓存、减少选中提交重渲染范围、合并交互态写入。具体改动以 trace 归因为前提。
+4. **选中提交**：`CanvasSurface` 的整画布渲染范围与工具条挂载成本；若需把选中态订阅从画布壳层拆出，属于架构调整，另行评估（与原 4.3 同类问题）。
 5. **明确不做**：延迟挂载、`useDeferredValue`/`startTransition` 等拆分 UI 时序的方案已证伪，不再采用。
 
 ## 5. 方案

@@ -8,6 +8,8 @@
  * 旧工具轮的 tool_calls / tool 结果不回放（其中的 id 与选择状态早已过期）。
  */
 
+import { isRecord } from "@noxrea/shared/object";
+
 import type { ProtocolToolCall } from "@server/services/protocols/base";
 
 /** 组装后发给上游的消息条目 */
@@ -86,10 +88,6 @@ const CANVAS_SYSTEM_MAX_CHARS = 12_000;
 const MIN_KEEP_NODES = 20;
 const MIN_KEEP_EDGES = 100;
 const MAX_SELECTION_IDS = 200;
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
 
 /**
  * 结构性截断：按节点/连线整条丢弃并给出剩余计数，绝不产生被切一半的 JSON。

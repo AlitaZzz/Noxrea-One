@@ -15,7 +15,7 @@
 
 **范围内：**
 
-1. 数据层瘦身：`server/core/database/client.ts`、`server/core/database/migrate.ts`、`server/core/bootstrap.ts`、`server/index.ts`、`prisma.config.ts`。
+1. 数据层瘦身：`server/core/database/client.ts`、`server/core/database/migrate.ts`、`server/bootstrap.ts`、`server/index.ts`、`prisma.config.ts`。
 2. `DATABASE_URL` 必填校验与错误文案（放在数据库层首次使用点，bootstrap 提前触发，不进入全局 config schema——避免纯工具测试被迫提供数据库连接）。
 3. 迁移授权链路：`scripts/db/author-migration.mts` 由 `createPgliteMigration` 改为真实 PG 的官方开发工作流（`prisma migrate diff --from-migrations --to-schema`，只读 shadow 库）；`scripts/storage/cli-bootstrap.mts` 移除本地迁移调用。
 4. 依赖清理：`@electric-sql/pglite`、`pglite-prisma-adapter`、`prisma-pglite`。
@@ -36,7 +36,7 @@
 | # | 事实 | 出处 |
 | --- | --- | --- |
 | 1 | 数据库客户端为双模式：`postgres(ql)://` → `PrismaPg`；`file:` 或未设置 → PGlite + 数据目录锁 + 本地迁移 runner | [client.ts:1-7](../server/core/database/client.ts)、[:119-138](../server/core/database/client.ts) |
-| 2 | 本地模式启动迁移 `ensureLocalMigrations` 在 bootstrap 第 2 步执行；服务器模式为 no-op | [bootstrap.ts:22-28](../server/core/bootstrap.ts)、[client.ts:167-178](../server/core/database/client.ts) |
+| 2 | 本地模式启动迁移 `ensureLocalMigrations` 在 bootstrap 第 2 步执行；服务器模式为 no-op | [bootstrap.ts:29-33](../server/bootstrap.ts)、[client.ts:167-178](../server/core/database/client.ts) |
 | 3 | 本地迁移 runner 自行解析 `prisma/migrations`、维护 `_prisma_migrations` 记账并应用事务（约 80 行） | [migrate.ts:1-79](../server/core/database/migrate.ts) |
 | 4 | 关停流程调用 `closeLocalDatabase`（PGlite checkpoint + 释放目录锁） | [index.ts:55-59](../server/index.ts)、[client.ts:152-165](../server/core/database/client.ts) |
 | 5 | 迁移授权 `npm run db:migrate:new` 依赖 `prisma-pglite` 的 `createPgliteMigration`（影子 PGlite + schema 差分），不启动任何数据库 | [author-migration.mts:1-28](../scripts/db/author-migration.mts)、[prisma.config.ts:1-23](../prisma.config.ts) |
@@ -45,7 +45,7 @@
 | 8 | 生产容器固定服务器模式：compose 注入 `DATABASE_URL`，entrypoint 执行 `prisma migrate deploy` 后启动 | [docker-entrypoint.sh:150-170](../docker-entrypoint.sh)、[docker-compose.nas.yml](../docker-compose.nas.yml) |
 | 9 | README 与 `.env.example` 仍将“不设置 DATABASE_URL 即本地模式”作为快速开始路径 | [README.md:96](../README.md)、[:149](../README.md)、[.env.example:36-41](../.env.example) |
 | 10 | 当前开发环境已使用 NAS PostgreSQL 与 S3 演练桶，日常不使用 PGlite | 用户 2026-10-21 陈述 |
-| 11 | 本地存储后端被至少 9 个存储/上传测试文件使用，是测试基座；生产为 S3，且启动探测失败即失败、无静默降级 | `grep LocalStorageBackend server/__tests__`；[bootstrap.ts:46-55](../server/core/bootstrap.ts) |
+| 11 | 本地存储后端被至少 9 个存储/上传测试文件使用，是测试基座；生产为 S3，且启动探测失败即失败、无静默降级 | `grep LocalStorageBackend server/__tests__`；[bootstrap.ts:56-64](../server/bootstrap.ts) |
 
 补充：`server/__tests__/services/json-loader.test.ts`、`upload-direct.test.ts` 中也出现 `file:` 字面量，但并非真实数据库用例；实施时以是否调用 `ensureLocalMigrations` / 访问 `prisma` 为准逐一核对。
 
@@ -80,7 +80,7 @@
 | `server/core/database/connection-string.ts` | 新增连接串校验、目标描述与同库判定：`isPostgresDatabaseUrl`、`assertDatabaseUrl`、`describeDatabaseTarget`、`parsePostgresDatabaseTarget`、`isSameDatabaseTarget`、`assertDistinctDatabaseTargets`；解析与错误文案统一由一个内部入口提供，描述函数不会接受未校验串；shadow / 测试库的同库守卫共用该 target 判定与统一文案 |
 | `server/core/database/client.ts` | 删除 PGlite 分支、锁、目录解析、`ensureLocalMigrations`；保留惰性 Proxy 与连接串键控缓存；首次取客户端时触发连接串校验；`closeDatabase` |
 | `server/core/database/migrate.ts` | 删除（连同 `runPendingMigrations`） |
-| `server/core/bootstrap.ts` | 删除 `ensureLocalMigrations` 调用与 `isServerMode` 分支；日志只保留 `target`；在数据库步骤触发 R1 校验 |
+| `server/bootstrap.ts` | 删除 `ensureLocalMigrations` 调用与 `isServerMode` 分支；日志只保留 `target`；在数据库步骤触发 R1 校验 |
 | `server/index.ts` | 关停调用改为 `closeDatabase` |
 | `prisma.config.ts` | `DATABASE_URL` / `SHADOW_DATABASE_URL` 一经设置即校验为 postgres 连接串（非法值在 CLI 启动前失败，不透传给 CLI）；`datasource.url` 在 `DATABASE_URL` 存在时提供；`shadowDatabaseUrl` 独立提供（DATABASE_URL 缺失时迁移授权仍可用）且不得与 `url` 指向同一个数据库（host/port/database 判定）；不使用会强制抛错的 `env()`，保持 `prisma generate` 在无任何 URL 时可运行（镜像构建/postinstall 不要求数据库凭据）；移除本地模式分支；连接串校验与同库判定复用 `server/core/database/connection-string.ts` |
 | `scripts/db/author-migration.mts` | 改用 `prisma migrate diff --from-migrations --to-schema --script`：只读 shadow 库，不连接/重置应用库；空差分（去注释后无 SQL）不创建目录；按 UTC 时间戳写迁移目录并执行一次 `prisma generate`（v7 不再自动生成）；迁移名做白名单校验（防路径注入）并在错误文案中说明允许字符集；迁移目录与 schema 使用基于 `repoRoot` 的绝对路径，与 CLI 调用共用同一路径来源；输出提示改为“审阅 SQL 后执行 db:migrate:deploy” |

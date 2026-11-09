@@ -3,18 +3,19 @@
  * 每个用户拥有一个资产库，「未分类」是固定的系统文件夹；
  * 资产变更与文件夹计数在同一事务内执行，保证数据与计数一致。
  */
+import {
+  encodeAssetCursor as encodeSharedAssetCursor,
+  parseAssetCursor as parseSharedAssetCursor,
+} from "@noxrea/shared/asset";
 import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
+import type { DbTx } from "@server/core/database/transaction";
 import { ASSET_FOLDERS_UNCATEGORIZED_KEY } from "@server/core/database/constraint-names";
 import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { hashFromStorageKey, isFileRefValue } from "@noxrea/shared/url";
-import {
-  replaceSourceFileRef,
-  removeSourceFileRefsBatch,
-} from "@server/services/storage/file-ref-ledger";
+import { replaceSourceFileRefTx, removeSourceFileRefsBatchTx } from "./file-ref-ledger";
 import { stringifyJson, parseJsonArray } from "./json-column";
 
-type TransactionClient = Prisma.TransactionClient;
 
 /** Prisma 资产记录反序列化后的返回结构。 */
 type SerializedAssetItem = Omit<AssetItemModel, "tags"> & {
@@ -35,35 +36,71 @@ export class AssetOperationError extends Error {
   }
 }
 
-/**
- * 资产行删除的账本不变量（唯一实现）：先清引用账本（账本层按 hash 聚合递减
- * file_objects 计数，缺失的聚合行不阻塞删除），再删行，并按目录聚合递减直属计数。
- * deleteAsset / deleteAssetsBatch / deleteAssetsByFileKeys 与 key 化迁移脚本共用，
- * 保证「资产删除同步账本」只有一套规则。
- */
-/** deleteAssetItemsTx 所需的资产条目最小字段集：账本清理与目录计数递减的定位键 */
+/** deleteAssetItemsTx 所需的资产条目最小字段集：按主键与归属定位待删除行。 */
 export interface AssetItemLedgerRef {
   id: number;
   userId: number;
-  folderId: number;
 }
 
+/** 实际删除的资产行：账本清理与目录计数只认它，不认调用前的快照。 */
+export interface DeletedAssetRow {
+  id: number;
+  userId: number;
+  folderId: number;
+  fileKey: string | null;
+}
+
+/**
+ * 资产行删除的账本不变量（唯一实现）：先按主键删除并取得**实际删除行**，
+ * 再按实际删除集清引用账本（账本层按 hash 聚合递减 file_objects 计数），
+ * 最后按实际删除行聚合递减目录直属计数。
+ * deleteAsset / deleteAssetsBatch / deleteAssetsByFileKeys 共用，保证
+ * 「资产删除同步账本」只有一套规则。
+ *
+ * 不能先按调用方快照清账再按谓词删行：并发删除同一资产时，后到事务的 DELETE
+ * 影响 0 行却仍按快照递减，会把聚合计数/目录计数扣成负数。
+ */
 export async function deleteAssetItemsTx(
-  tx: TransactionClient,
+  tx: DbTx,
   rows: Array<AssetItemLedgerRef>,
-): Promise<void> {
-  if (rows.length === 0) return;
+): Promise<DeletedAssetRow[]> {
+  if (rows.length === 0) return [];
+  // 单条 DELETE ... RETURNING 同时完成删除与取实际删除集；并发删除者只能有一方拿到该行。
+  // 谓词按 (id, user_id) 成对匹配，不能拆成两个 IN：否则混合所有者的输入会误删
+  // 「他人 id × 本批其他 userId」交叉命中的行。
+  const deleted = await tx.$queryRaw<Array<{
+    id: number;
+    user_id: number;
+    folder_id: number;
+    file_key: string | null;
+  }>>(Prisma.sql`
+    DELETE FROM asset_items
+    WHERE (id, user_id) IN (${Prisma.join(
+      rows.map((row) => Prisma.sql`(${row.id}, ${row.userId})`),
+    )})
+    RETURNING id, user_id, folder_id, file_key
+  `);
+  if (deleted.length === 0) return [];
+
+  const deletedRows: DeletedAssetRow[] = deleted.map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    folderId: row.folder_id,
+    fileKey: row.file_key,
+  }));
+
+  // 账本清理只针对实际删除的来源；并发删掉的行不会重复扣减聚合计数。
   const byUser = new Map<number, string[]>();
-  for (const row of rows) {
+  for (const row of deletedRows) {
     byUser.set(row.userId, [...(byUser.get(row.userId) ?? []), String(row.id)]);
   }
   for (const [userId, sourceIds] of byUser) {
-    await removeSourceFileRefsBatch(tx, { userId, sourceType: "asset_item", sourceIds });
+    await removeSourceFileRefsBatchTx(tx, { userId, sourceType: "asset_item", sourceIds });
   }
-  await tx.assetItem.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
-  // 同一直属目录被删多条时聚合成一次递减，避免逐条 update
+
+  // 同一直属目录按实际删除条数聚合递减，避免逐条 update。
   const folderCounts = new Map<number, number>();
-  for (const row of rows) {
+  for (const row of deletedRows) {
     folderCounts.set(row.folderId, (folderCounts.get(row.folderId) ?? 0) + 1);
   }
   for (const [folderId, count] of folderCounts) {
@@ -72,6 +109,8 @@ export async function deleteAssetItemsTx(
       data: { directCount: { decrement: count } },
     });
   }
+
+  return deletedRows;
 }
 
 /** 写操作返回的文件夹计数快照；回传全量当前库目录计数，避免前端手工加减。 */
@@ -96,7 +135,7 @@ function identityKey(scope: string, fileKey: string): string {
 
 /** 按 scope 分组查询库内已存在的来源引用，返回 (scope, fileKey) 键集合。 */
 async function findExistingIdentityKeys(
-  tx: TransactionClient,
+  tx: DbTx,
   userId: number,
   items: Array<{ scope?: string; fileKey?: string | null }>
 ): Promise<Set<string>> {
@@ -144,7 +183,7 @@ export interface AssetMediaMeta {
  * 供各序列化出口经 withMediaMeta 附加 size / width / height / duration。
  */
 async function mediaMetaMapFor(
-  db: Pick<Prisma.TransactionClient, "fileObject">,
+  db: Pick<DbTx, "fileObject">,
   userId: number,
   items: Array<{ fileKey?: string | null }>,
 ): Promise<Map<string, AssetMediaMeta>> {
@@ -190,7 +229,7 @@ function withMediaMeta<T extends { fileKey?: string | null }>(
 
 /** 获取（必要时创建）当前用户当前 scope 的固定「未分类」目录。 */
 async function getOrCreateUncategorizedFolder(
-  tx: TransactionClient,
+  tx: DbTx,
   userId: number,
   scope = "personal"
 ) {
@@ -218,7 +257,7 @@ async function getOrCreateUncategorizedFolder(
 
 /** 校验目录归属与 scope，避免任意目录 ID 越权或跨库移动。 */
 async function requireFolder(
-  tx: TransactionClient,
+  tx: DbTx,
   userId: number,
   folderId: number,
   scope = "personal"
@@ -232,7 +271,7 @@ async function requireFolder(
 
 /** 读取当前用户当前 scope 的全部目录计数；资产总数由所有目录直属计数求和得出。 */
 async function readCounters(
-  tx: TransactionClient,
+  tx: DbTx,
   userId: number,
   scope = "personal"
 ): Promise<AssetCounters> {
@@ -328,25 +367,29 @@ export async function deleteFolder(userId: number, id: number) {
     });
     const subtreeIds = collectSubtreeIds(id, folders);
 
-    const deletedAssets = await tx.assetItem.findMany({
-      where: { userId, folderId: { in: subtreeIds } },
-      select: { id: true, fileKey: true },
-    });
+    // 先删资产并用 RETURNING 取实际删除集：并发移出的资产不会进入账本清理，
+    // 并发移入/新建的资产由后续文件夹删除的 FK Restrict 阻止并整体回滚，
+    // 不会出现「行已删除但账本仍残留」或「行已移出却先被清账」。
+    const deletedAssets = await tx.$queryRaw<Array<{
+      id: number;
+      file_key: string | null;
+    }>>(Prisma.sql`
+      DELETE FROM asset_items
+      WHERE user_id = ${userId} AND folder_id IN (${Prisma.join(subtreeIds)})
+      RETURNING id, file_key
+    `);
     // 子树内资产可能引用同一文件，账本层会合并数量后递减聚合计数。
-    await removeSourceFileRefsBatch(tx, {
+    await removeSourceFileRefsBatchTx(tx, {
       userId,
       sourceType: "asset_item",
       sourceIds: deletedAssets.map((asset) => String(asset.id)),
-    });
-    await tx.assetItem.deleteMany({
-      where: { userId, folderId: { in: subtreeIds } },
     });
     await tx.assetFolder.deleteMany({ where: { id: { in: subtreeIds }, userId } });
 
     return {
       removedCount: deletedAssets.length,
       fileKeys: deletedAssets
-        .map((asset) => asset.fileKey)
+        .map((asset) => asset.file_key)
         .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, root.scope),
     };
@@ -355,18 +398,17 @@ export async function deleteFolder(userId: number, id: number) {
 
 // Items
 
-/** 资产列表游标：`<createdAt 毫秒>_<id>`。
+/** 资产列表游标：`<createdAt 毫秒>_<id>`（编解码契约见 `@noxrea/shared`）。
  * 排序固定为 createdAt desc, id desc，游标指向「上一页最后一条」，
  * 取下一行严格更旧的记录。keyset 分页在新增/删除后不会像 offset 那样漂移、重复或漏项。
  * 导出供测试锁定游标契约。 */
 export function parseAssetCursor(raw: string): { createdAt: Date; id: number } | null {
-  const match = /^(\d+)_(\d+)$/.exec(raw);
-  if (!match) return null;
-  return { createdAt: new Date(Number(match[1])), id: Number(match[2]) };
+  const parsed = parseSharedAssetCursor(raw);
+  return parsed ? { createdAt: new Date(parsed.createdAtMs), id: parsed.id } : null;
 }
 
 export function encodeAssetCursor(row: { createdAt: Date; id: number }): string {
-  return `${row.createdAt.getTime()}_${row.id}`;
+  return encodeSharedAssetCursor(row.createdAt.getTime(), row.id);
 }
 
 /** 展开某文件夹的完整子树 id（含自身）；folders 为同一 scope 下全部文件夹的 id/parentId 列表。
@@ -575,7 +617,7 @@ export async function createAssetsBatch(
         if (!isFileRefValue(record.fileKey)) {
           throw new AssetOperationError("invalid_file_key");
         }
-        await replaceSourceFileRef(tx, {
+        await replaceSourceFileRefTx(tx, {
           userId: item.userId,
           sourceType: "asset_item",
           sourceId: String(record.id),
@@ -704,8 +746,9 @@ export async function deleteAsset(userId: number, id: number) {
     const current = await tx.assetItem.findFirst({ where: { id, userId } });
     if (!current) throw new AssetOperationError("asset_not_found");
 
-    // 资产删除统一走 deleteAssetItemsTx：清账本 → 删行 → 目录计数聚合递减
-    await deleteAssetItemsTx(tx, [{ id: current.id, userId, folderId: current.folderId }]);
+    // 资产删除统一走 deleteAssetItemsTx：先删行取实际删除集，再清账本与目录计数。
+    const deleted = await deleteAssetItemsTx(tx, [{ id: current.id, userId }]);
+    if (deleted.length === 0) throw new AssetOperationError("asset_not_found");
 
     return {
       item: withMediaMeta(deserializeAsset(current), await mediaMetaMapFor(tx, userId, [current])),
@@ -718,7 +761,7 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
   return prisma.$transaction(async (tx) => {
     const currentItems = await tx.assetItem.findMany({
       where: { id: { in: ids }, userId },
-      select: { id: true, folderId: true, scope: true, fileKey: true },
+      select: { id: true, scope: true, fileKey: true },
     });
     if (currentItems.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
 
@@ -726,11 +769,12 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
     if (scopes.length > 1) throw new AssetOperationError("asset_not_found");
     const scope = scopes[0] ?? "personal";
 
-    await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId, folderId: item.folderId })));
+    const deleted = await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId })));
+    if (deleted.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
 
     return {
-      count: currentItems.length,
-      fileKeys: currentItems
+      count: deleted.length,
+      fileKeys: deleted
         .map((item) => item.fileKey)
         .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, scope),
@@ -747,17 +791,17 @@ export async function deleteAssetsByFileKeys(userId: number, fileKeys: string[])
   return prisma.$transaction(async (tx) => {
     const currentItems = await tx.assetItem.findMany({
       where: { userId, scope: "personal", fileKey: { in: fileKeys } },
-      select: { id: true, folderId: true, scope: true, fileKey: true },
+      select: { id: true, fileKey: true },
     });
     if (currentItems.length === 0) {
       return { count: 0, fileKeys: [], counters: await readCounters(tx, userId, "personal") };
     }
 
-    await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId, folderId: item.folderId })));
+    const deleted = await deleteAssetItemsTx(tx, currentItems.map((item) => ({ id: item.id, userId })));
 
     return {
-      count: currentItems.length,
-      fileKeys: currentItems
+      count: deleted.length,
+      fileKeys: deleted
         .map((item) => item.fileKey)
         .filter((fileKey): fileKey is string => Boolean(fileKey)),
       counters: await readCounters(tx, userId, "personal"),

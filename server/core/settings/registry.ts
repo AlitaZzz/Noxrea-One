@@ -13,7 +13,11 @@ import {
 import { parseDecimalText, parseIntegerText } from "@server/core/numeric-text";
 import { isValidTrustedProxyCidrs } from "@server/core/ratelimit/client-ip";
 
-interface SettingDef<T> {
+/**
+ * 单个设置的 schema 与默认值。`SETTING_DEFS` 的导出值类型引用它，因此随注册表一起导出：
+ * 公开契约中的命名类型必须可命名（specs/server-crud-service-boundary.md）。
+ */
+export interface SettingDef<T> {
   readonly schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   readonly default: T;
 }

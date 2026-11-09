@@ -29,13 +29,13 @@ export const AUTH_SNAPSHOT_TTL_SECONDS = 60;
 const KEY_PREFIX = "noxrea:auth:snap:";
 
 /** 鉴权判定需要的全部账号状态；画像字段（用户名/头像/主题/语言）不进快照。 */
-interface AuthSnapshot {
+export interface AuthSnapshot {
   readonly tokenVersion: number;
   readonly isActive: boolean;
 }
 
 /** 写路径掌握的权威状态（数据库提交后的用户行子集）。 */
-interface AuthSnapshotSource extends AuthSnapshot {
+export interface AuthSnapshotSource extends AuthSnapshot {
   readonly id: number;
 }
 

@@ -5,8 +5,10 @@
  * apiRaw（原始 Response）与 apiStream（流式）等底层能力与全局 401 处理。
  * 具体业务接口请使用同目录下的 *-api.ts 模块。
  */
+import { isRecord } from "@noxrea/shared/object";
+
 import type { ApiErrorBody } from "@/lib/api/error-message";
-import { isRecord, parseErrorBody, resolveApiError } from "@/lib/api/error-message";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, onSessionChange } from "@/lib/session-lifecycle";
 
@@ -16,15 +18,15 @@ export const BASE = "";
 // ── 全局 401 处理 ──
 // 凭据存于 httpOnly cookie（服务端登录/注册时 Set-Cookie 下发），
 // 请求自动携带，前端不再管理 token。
-// 登出动作属于 auth feature：lib 不得反向依赖 feature，故由上层注入处理函数
-// （注册方见 AppProviders），而非在此 import store。
+// 登出动作来自 entities/user：lib 不得反向依赖 entity，故由上层注入处理函数
+// （注册方见 AppProviders），而非在此 import entity 实现。
 type UnauthorizedHandler = () => Promise<void> | void;
 type UnauthorizedNavigationHandler = () => void;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 let unauthorizedNavigationHandler: UnauthorizedNavigationHandler | null = null;
 
-/** 注入 401 时的登出处理，由 app 层用 auth store 的 logout 注册 */
+/** 注入 401 时的登出处理，由 app 层用 entities/user 的 logout 注册 */
 export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
   unauthorizedHandler = handler;
 }

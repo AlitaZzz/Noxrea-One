@@ -25,7 +25,7 @@ import { notifyActionFailed, notifyNodeBusy } from "@/features/canvas/shared/not
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 
 /** 本地处理忙状态（busy 浮层的唯一数据形状） */
-interface MediaEditBusy {
+export interface MediaEditBusy {
   kind: string;
   startedAt: number;
   progress?: number;

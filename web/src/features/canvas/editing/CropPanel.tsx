@@ -9,6 +9,8 @@ import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MediaAccessImage } from "@/components/media/MediaAccessImage";
+import { MediaAccessOverlay } from "@/components/media/MediaAccessOverlay";
 import { CloseOutlined, ReloadOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,8 +21,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import WheelGuard from "@/components/ui/WheelGuard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload } from "@/features/canvas/upload";
-import { MediaAccessImage } from "@/features/media/components/MediaAccessImage";
-import { MediaAccessOverlay } from "@/features/media/components/MediaAccessOverlay";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { canvasToBlob, loadMediaDimensions } from "@/lib/utils/image-utils";
 

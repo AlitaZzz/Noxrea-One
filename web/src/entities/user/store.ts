@@ -1,0 +1,231 @@
+/**
+ * 当前用户状态仓库（entity 内部实现，不对外导出）。
+ * 保存用户信息、存储摘要与登录态，提供会话恢复、登录、注册、登出、
+ * 账户资料更新与主题 / 语言偏好持久化。
+ * 对外只通过 `entities/user` 的公共 Hook 与命令访问。
+ */
+import { create } from "zustand";
+
+import { ApiError, UnauthorizedError } from "@/lib/api/client";
+import { resolveApiError } from "@/lib/api/error-message";
+import { showGlobalNotification } from "@/lib/global-notification";
+import { setAppLanguage } from "@/lib/i18n/config";
+import { captureSession, changeSession, onSessionChange, SessionChangedError } from "@/lib/session-lifecycle";
+
+import { authApi } from "./api";
+import type { ProfilePatch, StorageSummary, UserInfo } from "./types";
+import { cacheUser, readCachedUser, toUserInfo } from "./user-cookie";
+
+// 用户信息缓存在非 httpOnly cookie（stale-while-revalidate）：刷新后首帧
+// 服务端即可直出真实头像/用户名（根布局解析同一 cookie 注入），/me 在后台校正。
+// localStorage 服务端读不到，会导致「占位 → 填充」闪变，故弃用。
+
+/** 登出清凭据的最大等待时长：超过即放行导航，避免网络挂起时卡在当前页 */
+const LOGOUT_CLEAR_TIMEOUT_MS = 3000;
+
+/**
+ * initialize 的在途 promise：并发调用（StrictMode 双挂载）共享同一次 /me。
+ * 会话变化时解除在途引用，旧请求不能更新新会话。
+ */
+let authInitInFlight: Promise<void> | null = null;
+
+/** refreshStorage 的在途 promise：并发调用（弹窗快速关-开、StrictMode 双触发 effect）共享同一次 /me */
+let storageRefreshInFlight: Promise<void> | null = null;
+
+interface UserState {
+  user: UserInfo | null;
+  /** 存储摘要：会话内存态，不进 UserInfo / 持久 cookie（契约只含身份字段）；GET/PUT /me 响应刷新 */
+  storage: StorageSummary | null;
+  loading: boolean;
+  initialized: boolean;
+
+  initialize: () => Promise<void>;
+  /** 拉取最新存储摘要：设置弹窗打开时调用，避免展示页面加载时的陈旧用量 */
+  refreshStorage: () => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  savePreference: (key: "theme" | "language", value: string) => Promise<void>;
+  updateProfile: (patch: ProfilePatch) => Promise<UserInfo | null>;
+}
+
+export const useUserStore = create<UserState>((set, get) => ({
+  user: readCachedUser(),
+  storage: null,
+  loading: false,
+  initialized: false,
+
+  initialize: () => {
+    if (get().initialized) return Promise.resolve();
+    if (authInitInFlight) return authInitInFlight;
+    const session = captureSession();
+    const pending = (async () => {
+      set({ loading: true });
+      try {
+        // api() 对空/无法解析的响应体返回 null：视为无登录用户，与其余入口一样先判空再转换
+        const me = await session.run(() => authApi.me());
+        session.assertCurrent();
+        set({
+          user: me ? toUserInfo(me) : null,
+          storage: me?.storage ?? null,
+          loading: false,
+          initialized: true,
+        });
+      } catch (e) {
+        if (session.signal.aborted) return;
+        set({
+          ...(e instanceof UnauthorizedError ? { user: null, storage: null } : {}),
+          loading: false,
+          initialized: true,
+        });
+      }
+    })().finally(() => {
+      if (authInitInFlight === pending) authInitInFlight = null;
+    });
+    authInitInFlight = pending;
+    return pending;
+  },
+
+  login: async (rawUsername, rawPassword) => {
+    const session = captureSession();
+    const username = rawUsername.trim().toLowerCase();
+    // 密码不做 trim：空格是合法密码字符，静默裁剪会让「注册时按裁剪值存储、
+    // 登录时按原值提交」产生不一致
+    // 凭据由服务端登录接口 Set-Cookie 下发（httpOnly），前端不再保存 token
+    let data: { user: UserInfo };
+    try {
+      data = await session.run(() => authApi.login<{ user: UserInfo }>(username, rawPassword));
+      session.assertCurrent();
+    } catch (e) {
+      if (e instanceof SessionChangedError) throw e;
+      throw new Error(
+        e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.login_failed")
+      );
+    }
+    if (data?.user) {
+      // 登录响应不含存储摘要：置空防止串号，设置弹窗打开时经 refreshStorage 拉新
+      set({ user: toUserInfo(data.user), storage: null, loading: false, initialized: true });
+    } else {
+      throw new Error(resolveApiError(null, undefined, "auth.login_failed"));
+    }
+  },
+
+  register: async (rawUsername, rawPassword) => {
+    const session = captureSession();
+    const username = rawUsername.trim().toLowerCase();
+    // 同 login：密码不裁剪
+    let data: { user: UserInfo };
+    try {
+      data = await session.run(() => authApi.register<{ user: UserInfo }>(username, rawPassword));
+      session.assertCurrent();
+    } catch (e) {
+      if (e instanceof SessionChangedError) throw e;
+      throw new Error(
+        e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.register_failed")
+      );
+    }
+    if (data?.user) {
+      // 同 login：响应不含存储摘要，置空待 refreshStorage 拉新
+      set({ user: toUserInfo(data.user), storage: null, loading: false, initialized: true });
+    } else {
+      throw new Error(resolveApiError(null, undefined, "auth.register_failed"));
+    }
+  },
+
+  refreshStorage: () => {
+    if (storageRefreshInFlight) return storageRefreshInFlight;
+    const session = captureSession();
+    const pending = (async () => {
+      try {
+        const me = await session.run(() => authApi.me());
+        session.assertCurrent();
+        if (me?.storage) set({ storage: me.storage });
+      } catch {
+        // 展示型数据：刷新失败保留现值，不打断弹窗打开
+      }
+    })().finally(() => {
+      if (storageRefreshInFlight === pending) storageRefreshInFlight = null;
+    });
+    storageRefreshInFlight = pending;
+    return pending;
+  },
+
+  logout: () => {
+    // 服务端过期 httpOnly cookie（JS 无法清除）；本地同步清用户态与缓存。
+    // 返回 promise 供调用方等待：cookie 未清除前导航，proxy.ts 会按 cookie 有效性放行/拦截。
+    if (!get().user) changeSession();
+    set({ user: null, storage: null, loading: false, initialized: true });
+    const done = authApi.logout();
+    // 请求挂起时超时放行；登出失败（网络错误等）不影响本地清态，静默吞掉
+    let timeout: ReturnType<typeof setTimeout>;
+    return Promise.race([
+      done.catch(() => undefined),
+      new Promise<void>((resolve) => { timeout = setTimeout(resolve, LOGOUT_CLEAR_TIMEOUT_MS); }),
+    ]).then(() => undefined).finally(() => clearTimeout(timeout));
+  },
+
+  savePreference: async (key, value) => {
+    const session = captureSession();
+    const user = get().user;
+    if (!user) return;
+    const prev = user[key];
+    // 语言切换唯一入口：i18n 与 localStorage/cookie 由 setAppLanguage 统一处理，
+    // 保存失败时一并回滚，避免「账号偏好已回退、界面语言仍是新值」的分叉
+    if (key === "language") setAppLanguage(value === "en" ? "en" : "zh");
+    set({ user: { ...user, [key]: value } });
+    try {
+      // 前端用 avatarKey / language，后端 updateMeSchema 校验这些字段
+      // 校验结果：此前无论成败都保留本地值，刷新后偏好会静默回退
+      const updated = await session.run(() => authApi.updateMe({ [key]: value }));
+      session.assertCurrent();
+      // PUT 与 GET 同组合存储摘要：顺带刷新，用量随保存保持最新
+      if (updated?.storage) set({ storage: updated.storage });
+    } catch (e) {
+      if (session.signal.aborted) return;
+      // 仅当失败的是最新一次修改时才回滚：并发保存（如双击切换）后，
+      // 旧请求迟到失败不能覆盖新值
+      const cur = get().user;
+      if (cur && cur[key] === value) {
+        set({ user: { ...cur, [key]: prev } });
+        if (key === "language") setAppLanguage(prev === "en" ? "en" : "zh");
+      }
+      showGlobalNotification().error({
+        title: e instanceof ApiError ? e.message : resolveApiError(null, undefined, "auth.preference_failed"),
+        placement: "bottomRight",
+        duration: 6,
+      });
+    }
+  },
+
+  updateProfile: async (patch) => {
+    const session = captureSession();
+    try {
+      const updated = await session.run(() => authApi.updateMe(patch));
+      session.assertCurrent();
+      if (!updated) return null;
+      const user = toUserInfo(updated);
+      set({ user, storage: updated.storage });
+      return user;
+    } catch (e) {
+      // 会话已切换：丢弃旧账号的响应，不写新会话状态
+      if (session.signal.aborted) return null;
+      throw e;
+    }
+  },
+}));
+
+// user 的任何变化（登录 / 偏好更新 / 回滚 / 登出）统一落盘缓存。
+// 账号标识随会话切换一并交给 lib：设备本地缓存（签名描述）按账号作用域隔离，
+// lib 不得反向依赖 entity，所以账号身份从这一处注入
+useUserStore.subscribe((state, previous) => {
+  if (state.user?.id !== previous.user?.id) {
+    changeSession(state.user ? String(state.user.id) : null);
+  }
+  cacheUser(state.user);
+});
+// 初始身份：cookie 预置的 user 在模块加载时就已存在，不产生状态迁移，上面的订阅不会触发。
+// 账号作用域（设备本地描述缓存等）必须以它建立，否则刷新后 currentAccountKey() 一直为 null，
+// 持久化载入与写入整条链路都不会启动。身份来源是本模块，注入点也只能在这里。
+const initialUser = useUserStore.getState().user;
+if (initialUser) changeSession(String(initialUser.id));
+onSessionChange(() => { authInitInFlight = null; storageRefreshInFlight = null; });

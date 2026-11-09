@@ -5,7 +5,8 @@
  * 等）的值域是存储 key 或外部 URL；托管展示 URL 只能在渲染期派生。本测试用
  * TypeScript AST 扫描源码锁定该不变量——AST 天然忽略注释与字符串字面量，函数 /
  * 生成器 / 方法定义不是 CallExpression，不会像文本扫描那样把定义计入调用点：
- * 1. 节点创建调用（`create*Node[FromRef]`）的引用实参不来自 URL 表达式；
+ * 1. 节点创建调用（`create*Node[FromRef]`）的引用实参（位置第 2 参或参数对象的
+ *    `ref` 属性）不来自 URL 表达式；
  * 2. 持久化引用字段（对象字面量与 `data.<field>` 赋值）不来自 URL 表达式；
  * 3. 编辑信封不按 `{ url }` 声明，onSuccess 不以 `url` 为形参（历史回归形态）；
  * 4. 上传写入层不引用任何 URL 派生 helper 或托管路径。
@@ -167,6 +168,33 @@ function isDataRefAccess(expression: ts.Expression, aliases: ReadonlySet<string>
   return !!name && ts.isStringLiteralLike(name) && REF_FIELDS.has(name.text);
 }
 
+/** 对象字面量中的 `ref` 属性值（参数对象形式的节点工厂入参） */
+function refPropertyOfObjectLiteral(expression: ts.Expression | undefined): ts.Expression | undefined {
+  if (!expression || !ts.isObjectLiteralExpression(expression)) return undefined;
+  for (const property of expression.properties) {
+    if (ts.isPropertyAssignment(property) && propertyNameOf(property.name) === "ref") {
+      return property.initializer;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 节点工厂调用的引用实参：
+ * - 位置参数形式 `createImageNode(position, ref)` 取第 2 参；
+ * - 参数对象形式 `create*NodeFromRef({ ref, ... })` 取对象字面量的 `ref` 属性。
+ * 工厂签名收敛为参数对象后，位置分支不再命中对象调用，必须显式读取 `ref` 属性；
+ * 否则参数对象中的 URL 引用会绕过本断言。
+ */
+function nodeFactoryRefExpression(node: ts.CallExpression): ts.Expression | undefined {
+  const objectRef =
+    refPropertyOfObjectLiteral(node.arguments[0]) ??
+    refPropertyOfObjectLiteral(node.arguments[1]);
+  if (objectRef) return objectRef;
+  const positional = node.arguments[1];
+  return positional && !ts.isObjectLiteralExpression(positional) ? positional : undefined;
+}
+
 /** onSuccess 回调是否以 url 为第一个形参（历史回归形态） */
 function hasUrlFirstParam(expression: ts.Expression): boolean {
   if (!ts.isArrowFunction(expression) && !ts.isFunctionExpression(expression)) return false;
@@ -225,8 +253,8 @@ function scanSource(fileName: string, source: string): ScanResult {
       NODE_FACTORY.test(node.expression.text)
     ) {
       result.nodeFactoryCalls += 1;
-      // 工厂签名第 2 参是引用值（key / 外部 URL）；URL 表达式不得进入持久化值域
-      const ref = node.arguments[1];
+      // 引用值（位置第 2 参或参数对象的 ref 属性）不得来自展示 URL
+      const ref = nodeFactoryRefExpression(node);
       if (ref && isUrlDerived(ref)) result.refArgOffenses.push(`${at(node)} ${ref.getText(sourceFile)}`);
     }
 
@@ -337,6 +365,18 @@ describe("Web 存储 key 写入契约（持久化引用字段不落展示 URL）
       "fileRefUrl",
       "fileRefUrl",
     ]);
+  });
+
+  it("参数对象形式的节点工厂调用同样检查 ref 属性", () => {
+    const sample = [
+      "const ok = createImageNodeFromRef({ sourceId: id, ref: key, naturalWidth: 1, naturalHeight: 1, labelSuffix: '', storeApi: store });",
+      "const bad = createImageNodeFromRef({ sourceId: id, ref: result.url, naturalWidth: 1, naturalHeight: 1, labelSuffix: '', storeApi: store });",
+    ].join("\n");
+    const result = scanSource("<object-args>.tsx", sample);
+
+    expect(result.nodeFactoryCalls).toBe(2);
+    expect(result.refArgOffenses).toHaveLength(1);
+    expect(result.refArgOffenses[0]).toContain("result.url");
   });
 
   it("节点创建调用的引用实参不来自 URL 表达式", () => {

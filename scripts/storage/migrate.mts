@@ -27,7 +27,7 @@ import { Readable } from "stream";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@server/core/database/client";
 import { bootstrapCliCore } from "./cli-bootstrap.mts";
-import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/backend";
+import { DERIVED_ROOT_PREFIXES } from "@server/services/storage/derived-keys";
 import { LocalStorageBackend } from "@server/services/storage/backends/local";
 import { S3Backend, applyS3Prefix, createS3Client } from "@server/services/storage/backends/s3";
 import { buildStorageKey, missingS3Settings, s3OptionsFromSettings } from "@server/services/storage/service";

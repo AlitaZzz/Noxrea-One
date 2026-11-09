@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InputGroup, InputGroupClearButton, InputGroupInput } from "@/components/ui/input-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { AssetType } from "@/features/assets/types";
+import type { AssetType } from "@/entities/asset";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
 interface Props {

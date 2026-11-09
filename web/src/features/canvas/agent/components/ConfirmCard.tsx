@@ -8,11 +8,11 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ConfirmDecision, PendingConfirmation } from "@/features/canvas/agent/types";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
 import { NODE_TYPE } from "@/lib/constants";
 
 /** 节点类型 → i18n key（类型名与画布元素面板共用 node.* 文案） */

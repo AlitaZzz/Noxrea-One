@@ -17,24 +17,26 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@server/http/middleware/auth", () => ({ authenticateRequest: mocks.authenticateRequest }));
 vi.mock("@server/services/json-loader", () => ({ loadJson: mocks.loadJson }));
 vi.mock("@server/core/database/client", () => ({ prisma: {} }));
-// CRUD 函数替换为 mock；错误类保持真实实现（路由按 instanceof 分支映射状态码）
-vi.mock("@server/crud/canvas", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@server/crud/canvas")>();
+// 读写函数替换为 mock；错误类保持真实实现（路由按 instanceof 分支映射状态码）
+vi.mock("@server/crud/canvas", () => ({
+  getProjects: mocks.getProjects,
+  createProject: mocks.createProject,
+  getProject: mocks.getProject,
+  deleteProject: mocks.deleteProject,
+  projectExists: mocks.projectExists,
+}));
+vi.mock("@server/services/canvas/project-write", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@server/services/canvas/project-write")>();
   return {
     ...actual,
-    getProjects: mocks.getProjects,
-    createProject: mocks.createProject,
-    getProject: mocks.getProject,
     updateProject: mocks.updateProject,
     updateProjectDelta: mocks.updateProjectDelta,
-    deleteProject: mocks.deleteProject,
-    projectExists: mocks.projectExists,
   };
 });
 
 import { router } from "@server/http/routes/canvas";
 import { resetCanvasPresence } from "@server/services/canvas/editor-lease";
-import { CanvasLeaseLostError, CanvasRevisionConflictError } from "@server/crud/canvas";
+import { CanvasCoverKeyError, CanvasLeaseLostError, CanvasRevisionConflictError } from "@server/services/canvas/project-write";
 
 const selectableIds = [
   "characterFaceThreeView", "characterThreeView", "productThreeView", "cinematicLightCorrection",
@@ -227,6 +229,31 @@ describe("canvas prompt template routes", () => {
   });
 });
 
+describe("POST /api/canvas/projects（空画布创建契约）", () => {
+  const post = (body: unknown) => router.request("/api/canvas/projects", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+
+  it("只传名称：服务端创建空画布，客户端不提交内容", async () => {
+    mocks.createProject.mockResolvedValue(project);
+
+    const response = await post({ name: "New" });
+
+    expect(response.status).toBe(200);
+    expect(mocks.createProject).toHaveBeenCalledWith(1, { name: "New" });
+  });
+
+  it("携带 canvasData：422，且不进入创建用例", async () => {
+    const response = await post({ name: "New", canvasData: { nodes: [] } });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toBe("common.invalid_request");
+    expect(mocks.createProject).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /api/canvas/projects/:id/events（原子握手）", () => {
   it("首帧下发 handshake：全量项目快照 + 租约令牌（sync 事件已删除）", async () => {
     const sse = await openSse("/api/canvas/projects/p1234567890123/events?sid=A");
@@ -310,7 +337,7 @@ describe("PUT /api/canvas/projects/:id（租约契约）", () => {
     expect(mocks.updateProject).not.toHaveBeenCalled();
   });
 
-  it("合法保存：baseRevision 与 lease 原样传入 crud", async () => {
+  it("合法保存：baseRevision 与 lease 原样传入写用例", async () => {
     mocks.updateProject.mockResolvedValue(project);
     const response = await put("/api/canvas/projects/p1234567890123", { canvasData: { nodes: [] }, baseRevision: 3, lease: 42 });
     expect(response.status).toBe(200);
@@ -348,6 +375,14 @@ describe("PUT /api/canvas/projects/:id（租约契约）", () => {
     expect(conflict.status).toBe(409);
     expect(((await conflict.json()) as { ctx?: Record<string, number> }).ctx).toEqual({ revision: 9 });
   });
+
+  it("封面引用无法登记账本：映射 422，不透传为 500", async () => {
+    mocks.updateProject.mockRejectedValueOnce(new CanvasCoverKeyError());
+    const response = await put("/api/canvas/projects/p1234567890123", { coverKey: `1/aa/${"a".repeat(64)}.png` });
+
+    expect(response.status).toBe(422);
+    expect(((await response.json()) as { error: string }).error).toBe("common.invalid_request");
+  });
 });
 
 describe("PATCH /api/canvas/projects/:id（增量租约契约）", () => {
@@ -358,7 +393,7 @@ describe("PATCH /api/canvas/projects/:id（增量租约契约）", () => {
     lease: 42,
   };
 
-  it("合法增量原样传入 CRUD", async () => {
+  it("合法增量原样传入写用例", async () => {
     mocks.updateProjectDelta.mockResolvedValue(project);
     const response = await router.request("/api/canvas/projects/p1234567890123", {
       method: "PATCH",

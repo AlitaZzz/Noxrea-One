@@ -1,0 +1,242 @@
+/**
+ * 项目摘要 store 写操作回归测试（fail-throw 契约：api() 失败抛 ApiError，成功返回解包数据）。
+ *
+ * 覆盖：
+ *   - 重命名成功 → 同步服务端版本
+ *   - 重命名失败 → 回滚本地名称并提示
+ *   - 改封面成功 / 失败回滚（乐观更新契约）
+ *   - 删除失败 → 项目回到列表
+ *   - 拉取列表失败 → 保留现有列表，不清空；成功且为空才清空
+ *   - 创建：默认名按列表长度生成、写入 activeProjectId、只返回摘要
+ *   - 创建失败：提示并返回 null（不向调用方抛错）；会话切换丢弃迟到响应
+ */
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ApiError } from "@/lib/api/client";
+import { changeSession } from "@/lib/session-lifecycle";
+
+const mocks = vi.hoisted(() => ({
+  createProject: vi.fn(),
+  deleteProject: vi.fn(),
+  listProjects: vi.fn(),
+  updateProject: vi.fn(),
+  notify: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
+
+vi.mock("@/entities/project/api", () => ({
+  createProject: (...args: unknown[]) => mocks.createProject(...args),
+  deleteProject: (...args: unknown[]) => mocks.deleteProject(...args),
+  listProjects: (...args: unknown[]) => mocks.listProjects(...args),
+  updateProject: (...args: unknown[]) => mocks.updateProject(...args),
+}));
+
+vi.mock("@/lib/global-notification", () => ({
+  showGlobalNotification: () => mocks.notify,
+}));
+
+vi.mock("@/lib/i18n/config", () => ({
+  default: { t: (k: string) => k, exists: () => false },
+}));
+
+import { useProjectStore } from "@/entities/project/store";
+
+const seed = () => {
+  useProjectStore.setState({
+    projects: [
+      { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2 },
+      { id: "p2", name: "B", revision: 1, updatedAt: 0, nodeCount: 0 },
+      { id: "p3", name: "C", revision: 1, updatedAt: 0, nodeCount: 0 },
+    ],
+    activeProjectId: "p1",
+  });
+};
+
+describe("project store 删除与列表", () => {
+  beforeEach(() => {
+    mocks.createProject.mockReset();
+    mocks.deleteProject.mockReset();
+    mocks.listProjects.mockReset();
+    mocks.updateProject.mockReset();
+    mocks.notify.error.mockReset();
+    seed();
+  });
+
+  it("重命名成功时同步服务端版本（纯元数据不携带 baseRevision）", async () => {
+    mocks.updateProject.mockResolvedValue({ revision: 6 });
+
+    useProjectStore.getState().renameProject("p1", "A2");
+
+    await vi.waitFor(() => {
+      const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+      expect(project?.name).toBe("A2");
+      expect(project?.revision).toBe(6);
+    });
+    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { name: "A2" });
+    expect(mocks.notify.error).not.toHaveBeenCalled();
+  });
+
+  it("重命名失败时回滚本地名称并提示错误", async () => {
+    mocks.updateProject.mockRejectedValue(new ApiError(409, "conflict"));
+
+    useProjectStore.getState().renameProject("p1", "A2");
+
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+    const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(project?.name).toBe("A");
+    expect(project?.revision).toBe(1);
+  });
+
+  it("改封面成功时乐观更新封面与缩略图", async () => {
+    mocks.updateProject.mockResolvedValue({ revision: 1 });
+    const cover = "1/ab/abcd.png";
+
+    useProjectStore.getState().updateCover("p1", cover);
+
+    await vi.waitFor(() => {
+      const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+      expect(project?.coverKey).toBe(cover);
+      expect(project?.thumbnail).toBe(cover);
+    });
+    expect(mocks.updateProject).toHaveBeenCalledWith("p1", { coverKey: cover });
+    expect(mocks.notify.error).not.toHaveBeenCalled();
+  });
+
+  it("改封面失败时回滚并提示错误", async () => {
+    useProjectStore.setState({
+      projects: [
+        { id: "p1", name: "A", revision: 1, updatedAt: 0, nodeCount: 2, coverKey: "/old.png", thumbnail: "/old.png" },
+      ],
+    });
+    mocks.updateProject.mockRejectedValue(new ApiError(500, "服务内部错误"));
+
+    useProjectStore.getState().updateCover("p1", "1/ab/new.png");
+
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+    const project = useProjectStore.getState().projects.find((p) => p.id === "p1");
+    expect(project?.coverKey).toBe("/old.png");
+    expect(project?.thumbnail).toBe("/old.png");
+  });
+
+  it("删除失败时把项目放回列表", async () => {
+    mocks.deleteProject.mockRejectedValue(new ApiError(500, "服务内部错误"));
+
+    useProjectStore.getState().deleteProject("p1");
+    await vi.waitFor(() => expect(mocks.notify.error).toHaveBeenCalled());
+
+    await vi.waitFor(() => {
+      expect(useProjectStore.getState().projects.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    });
+    expect(useProjectStore.getState().activeProjectId).toBe("p1");
+  });
+
+  it("删除成功时移除该项目", async () => {
+    mocks.deleteProject.mockResolvedValue(undefined);
+
+    useProjectStore.getState().deleteProject("p1");
+    await vi.waitFor(() => {
+      expect(useProjectStore.getState().projects.map((p) => p.id)).toEqual(["p2", "p3"]);
+    });
+    expect(mocks.notify.error).not.toHaveBeenCalled();
+  });
+
+  it("拉取列表失败时保留现有列表", async () => {
+    mocks.listProjects.mockRejectedValue(new ApiError(0, "网络不可达"));
+
+    await useProjectStore.getState().refreshProjects();
+
+    expect(useProjectStore.getState().projects).toHaveLength(3);
+    expect(useProjectStore.getState().activeProjectId).toBe("p1");
+  });
+
+  it("拉取列表成功且为空时才清空", async () => {
+    mocks.listProjects.mockResolvedValue([]);
+
+    await useProjectStore.getState().refreshProjects();
+
+    expect(useProjectStore.getState().projects).toHaveLength(0);
+  });
+});
+
+describe("project store 创建", () => {
+  beforeEach(() => {
+    mocks.createProject.mockReset();
+    mocks.notify.error.mockReset();
+    seed();
+  });
+
+  it("默认名按当前列表长度生成，成功后写入 activeProjectId 且只返回摘要", async () => {
+    mocks.createProject.mockResolvedValue({
+      id: "p9",
+      name: "Project 4",
+      revision: 1,
+      updatedAt: "2026-01-01T00:00:00Z",
+      thumbnailSrc: null,
+      nodeCount: 0,
+    });
+
+    const project = await useProjectStore.getState().createProject();
+    if (!project) throw new Error("创建成功应返回项目摘要");
+
+    expect(mocks.createProject).toHaveBeenCalledWith("Project 4");
+    expect(project).toMatchObject({ id: "p9", name: "Project 4", revision: 1, nodeCount: 0 });
+    expect("nodes" in project).toBe(false);
+    expect(useProjectStore.getState().activeProjectId).toBe("p9");
+    expect(useProjectStore.getState().projects.map((p) => p.id)).toContain("p9");
+  });
+
+  it("显式名称优先", async () => {
+    mocks.createProject.mockResolvedValue({
+      id: "p9",
+      name: "自定义",
+      revision: 1,
+      updatedAt: "2026-01-01T00:00:00Z",
+      thumbnailSrc: null,
+      nodeCount: 0,
+    });
+
+    await useProjectStore.getState().createProject("自定义");
+
+    expect(mocks.createProject).toHaveBeenCalledWith("自定义");
+  });
+
+  it("创建失败时提示并返回 null，不向调用方抛错", async () => {
+    mocks.createProject.mockRejectedValue(new ApiError(500, "boom"));
+
+    await expect(useProjectStore.getState().createProject()).resolves.toBeNull();
+
+    expect(mocks.notify.error.mock.calls[0]?.[0]).toMatchObject({ title: "boom" });
+    expect(useProjectStore.getState().projects.map((p) => p.id)).toEqual(["p1", "p2", "p3"]);
+    expect(useProjectStore.getState().activeProjectId).toBe("p1");
+  });
+
+  it("创建接口未返回数据时使用兜底文案并返回 null", async () => {
+    mocks.createProject.mockResolvedValue(undefined);
+
+    await expect(useProjectStore.getState().createProject()).resolves.toBeNull();
+
+    expect(mocks.notify.error.mock.calls[0]?.[0]).toMatchObject({
+      title: "error.project.create_failed",
+    });
+  });
+
+  it("请求期间会话切换：丢弃迟到响应，不提示也不写列表", async () => {
+    let resolveCreate!: (value: unknown) => void;
+    mocks.createProject.mockReturnValue(new Promise((resolve) => { resolveCreate = resolve; }));
+
+    const pending = useProjectStore.getState().createProject();
+    changeSession("u2");
+    resolveCreate({
+      id: "p9",
+      name: "Project 4",
+      revision: 1,
+      updatedAt: "2026-01-01T00:00:00Z",
+      thumbnailSrc: null,
+      nodeCount: 0,
+    });
+
+    await expect(pending).resolves.toBeNull();
+    expect(mocks.notify.error).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().projects.some((p) => p.id === "p9")).toBe(false);
+  });
+});

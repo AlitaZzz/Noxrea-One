@@ -6,7 +6,7 @@
  * 松手时按吸附后的最终几何一次 `setNodes` 提交，待渲染层采用新位置后再清除
  * 预览偏移。完整规则见 specs/canvas-drag-preview-session.md。
  *
- * 非 React 模块：由 `InfiniteCanvas` 持有并注入 store / React Flow 访问器。
+ * 非 React 模块：由 `CanvasSurface` 持有并注入 store / React Flow 访问器。
  * DOM 契约依赖本仓库固定的 React Flow 12.12 受控模式（`.react-flow__node[data-id]`、
  * `.react-flow__edge[data-id]`、`.react-flow__nodesselection`、
  * `.react-flow__node-toolbar[data-id]`、`.react-flow__edgelabel-renderer`），
@@ -173,7 +173,11 @@ export class DragPreviewSession {
     settings: DragSnapSettings,
     options: DragBeginOptions = {},
   ): void {
-    if (this.active) this.cancel();
+    if (this.active) {
+      // 已提交待渲染采用：渲染层路径已随新节点前进，不能按旧登记几何回退
+      if (this.commitPending) this.release();
+      else this.cancel();
+    }
     const nodes = this.deps.getNodes();
     const existing = new Set(nodes.map((node) => node.id));
     const ids = dragItemIds.filter((id) => existing.has(id));
@@ -322,10 +326,10 @@ export class DragPreviewSession {
     if (!this.active) return;
     this.cancelRaf();
     this.pendingFrame = null;
-    const dom = this.dom;
-    if (dom) {
-      this.clearDomOffsets(dom);
-      this.restoreEdgePaths(dom);
+    if (this.dom) {
+      // 只有取消路径需要回退 `d`：此时没有 store 写入，渲染层不会覆盖预览路径
+      this.restoreDomPaths(this.dom);
+      this.clearDomOffsets(this.dom);
     }
     this.reset();
   }
@@ -354,7 +358,8 @@ export class DragPreviewSession {
     const existing = new Set(nodes.map((node) => node.id));
     const surviving = this.dragItemIds.filter((id) => existing.has(id));
     if (surviving.length === 0) {
-      this.cancel();
+      // 外部写入已由渲染层采用：路径应保留 React 渲染结果，不能按旧登记几何回退
+      this.release();
       return;
     }
     this.dragItemIds = surviving;
@@ -628,6 +633,13 @@ export class DragPreviewSession {
     for (const layer of this.dom.labelLayers) layer.el.style.visibility = "hidden";
   }
 
+  /**
+   * 撤销本次会话对 DOM 的全部改写（清 translate / 标签层 / 选中框 / 工具条并重置边 mode）。
+   *
+   * 不还原边路径：提交与外部写入路径上，React Flow 已在同一提交中渲染新几何，
+   * 而 `DeletableEdge` 的几何登记在 passive effect 中才刷新——此处按登记值重算 `d`
+   * 会把路径写回拖动前（规则 1.5 禁止回跳）。路径还原只由 `cancel()` 执行。
+   */
   private clearDomOffsets(dom: DomSnapshot): void {
     for (const el of dom.wrappers.values()) el.style.translate = "";
     for (const edge of dom.edges.values()) {
@@ -642,19 +654,19 @@ export class DragPreviewSession {
     for (const toolbar of dom.toolbars) toolbar.el.style.translate = toolbar.originalTranslate;
   }
 
-  private restoreEdgePaths(dom: DomSnapshot): void {
+  /**
+   * 取消专用：把预览路径还原为登记几何。预览路径直接写进 `d`，不还原会留在 DOM；
+   * 仅在没有 store 写入、渲染层不会覆盖时调用（`cancel()`）。
+   */
+  private restoreDomPaths(dom: DomSnapshot): void {
     for (const [edgeId, edge] of dom.edges) {
       if (edge.mode !== "path") continue;
       const geometry = getEdgeGeometry(edgeId);
       if (geometry) this.restoreEdgePath(edge, geometry);
-      else edge.mode = "none";
     }
   }
 
-  /**
-   * 把预览改写的路径还原为基准几何：由登记几何重算（与 `DeletableEdge` 同一纯函数），
-   * 不保存 DOM 里的旧 `d`——外部写入会让登记值刷新，重算永远得到当前正确路径。
-   */
+  /** 把单条边的预览路径还原为登记几何；由 `DeletableEdge` 同一纯函数重算。 */
   private restoreEdgePath(edge: EdgeDom, geometry: RegisteredEdgeGeometry): void {
     const base = computeEdgePath(geometry).path;
     for (const path of edge.paths) path.setAttribute("d", base);

@@ -1,7 +1,8 @@
 /**
- * Director 领域共享类型。
- * 抽出实体联合类型与展示/场景相关的纯类型，供 store 与 engine（core）
- * 共同引用，从而打破 store <-> core 之间的循环依赖
+ * Director 运行态实体联合类型。
+ * 可序列化的场景/展示类型已下沉至 `entities/director`；
+ * 这里只保留实体类联合，供 store 与 engine（core）共同引用，
+ * 从而打破 store <-> core 之间的循环依赖
  * （原 selection.ts / camera-rig.ts 直接引用 store.ts 中的 DirectorEntity）。
  */
 import type { CameraEntity } from "./entities/camera";
@@ -13,38 +14,3 @@ export type { CameraEntity, Character, Crowd, Prop };
 
 /** 导演场景中所有实体类型的联合（角色/道具/相机/群众）。 */
 export type DirectorEntity = Character | Prop | CameraEntity | Crowd;
-
-/** 实体元数据（Three.js 对象保存在运行时，此处仅存展示层信息）。 */
-export interface DirectorEntityMeta {
-  id: string;
-  type: "character" | "prop" | "camera" | "crowd";
-  name: string;
-  visible: boolean;
-  _members?: DirectorEntityMeta[];
-}
-
-export interface Shot {
-  id: string;
-  /** 快照引用值：存储 key 或外部 URL；展示时派生访问 URL */
-  ref: string;
-  name: string;
-  cameraId: string;
-  createdAt: number;
-  selected?: boolean;
-}
-
-export interface SceneState {
-  scale: number;
-  pos: { x: number; y: number; z: number };
-  rot: { x: number; y: number; z: number };
-  sky: string;
-  labels: boolean;
-  ground: {
-    visible: boolean;
-    opacity: number;
-    height: number;
-  };
-  panoActive: boolean;
-  panoRot: number;
-  panoRadius: number;
-}

@@ -13,9 +13,8 @@ import * as THREE from "three";
 
 import { NavSvg } from "@/components/ui/AppIcon";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { DirectorEntityState, DirectorStateData } from "@/features/canvas/types";
-import { createImageNodeFromRef, uploadOne } from "@/features/canvas/upload";
+import { uploadOne } from "@/entities/asset";
+import type { DirectorEntityMeta, DirectorEntityState, DirectorImageNodeInput, DirectorStateData } from "@/entities/director";
 import type { CameraPresetCtx } from "@/features/director/core/camera-presets";
 import { CAMERA_PRESETS } from "@/features/director/core/camera-presets";
 import { CameraRig } from "@/features/director/core/camera-rig";
@@ -29,7 +28,7 @@ import { Character } from "@/features/director/entities/character";
 import { Crowd } from "@/features/director/entities/crowd";
 import { Prop } from "@/features/director/entities/prop";
 import { DIRECTOR_CAMERA_HEX, DIRECTOR_PRIMARY } from "@/features/director/theme";
-import type { DirectorEntity, DirectorEntityMeta } from "@/features/director/types";
+import type { DirectorEntity } from "@/features/director/types";
 import { worldBox } from "@/features/director/util/measure";
 import { loadMediaImage } from "@/lib/load-media-image";
 
@@ -55,15 +54,28 @@ function setTransform(root: THREE.Object3D, pos: [number, number, number], rot: 
 
 const D2R = Math.PI / 180;
 
-export default function DirectorViewport() {
+export interface DirectorViewportProps {
+  /** 打开时恢复的场景快照；null 表示新建场景。 */
+  initialState: DirectorStateData | null;
+  /** 出图后回传画布；由页面桥接，节点不存在时安全退化为 no-op。 */
+  onCreateImageNode: (input: DirectorImageNodeInput) => Promise<void>;
+}
+
+export default function DirectorViewport({ initialState, onCreateImageNode }: DirectorViewportProps) {
   const { t } = useTranslation();
   const viewportRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const { notification } = useAppFeedback();
   const translateRef = useRef(t);
   const notificationRef = useRef(notification);
+  // 场景只在挂载时恢复一次，出图回调只在该次挂载生命周期内使用：
+  // 用 ref 承接，避免页面重渲染时重建 Three.js 场景。
+  const initialStateRef = useRef(initialState);
+  const onCreateImageNodeRef = useRef(onCreateImageNode);
   translateRef.current = t;
   notificationRef.current = notification;
+  initialStateRef.current = initialState;
+  onCreateImageNodeRef.current = onCreateImageNode;
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -559,8 +571,8 @@ export default function DirectorViewport() {
             runtime._endCleanRender();
           }
 
-          // 上传（统一管道 raw sink：只拿存储 key，不碰画布；快照引用落 key，
-          // 展示 URL 由消费点派生）
+          // 上传（统一上传出口 entities/asset.uploadOne：只拿存储 key，不碰画布；
+          // 快照引用落 key，展示 URL 由消费点派生）
           const blob = await (await fetch(dataURL)).blob();
           // notify：截图失败不再静默，交由管道统一提示
           uploadOne(blob, `shot_${Date.now()}.png`, "derived", { notify: true }).then((result) => {
@@ -583,16 +595,13 @@ export default function DirectorViewport() {
         const ds = useDirectorStore.getState();
         const shot = ds.shots.find((s) => s.id === shotId);
         if (!shot) return;
-        const cs = useCanvasStore.getState();
-        const nodeId = ds.openingNodeId;
-        if (!nodeId || !cs.nodes.find((n) => n.id === nodeId)) return;
 
         try {
           // 动作时现取最终地址并加载（S3 签名直连，跨域读像素需 bucket CORS）；
           // 元素失败按规则 3.6 刷新一次
           const img = await loadMediaImage(shot.ref);
           // 节点 src 落快照引用原值（key）；展示由 CanvasImage 派生
-          await createImageNodeFromRef(nodeId, shot.ref, img.naturalWidth, img.naturalHeight, shot.name, useCanvasStore.getState(), { source: "derived" }, undefined, shot.name);
+          await onCreateImageNodeRef.current({ ref: shot.ref, width: img.naturalWidth, height: img.naturalHeight, name: shot.name });
           feedback.success({ title: translate("director.sentToCanvas", { name: shot.name }), placement: "bottomRight", duration: 5 });
         } catch {
           feedback.error({ title: translate("director.sendToCanvasFailed"), placement: "bottomRight", duration: 6 });
@@ -869,7 +878,7 @@ export default function DirectorViewport() {
     stage.setFrameCallback(tick);
 
     // ---- Seed or Restore ----
-    const restore = useDirectorStore.getState().restoreState;
+    const restore = initialStateRef.current;
     if (restore) {
       (async () => {
         await runtime.restoreState(restore);

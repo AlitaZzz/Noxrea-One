@@ -9,6 +9,9 @@
 import { Fragment, memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import ModelParamFields from "@/components/model/ModelParamFields";
+import { ModelSelector } from "@/components/model/ModelSelector";
+import { fieldDefaults, hasField, toParamFieldViews } from "@/components/model/param-fields";
 import { DownOutlined } from "@/components/ui/AppIcon";
 import { ParamsIcon } from "@/components/ui/AppIcon";
 import { TextToVideoIcon } from "@/components/ui/AppIcon";
@@ -30,9 +33,6 @@ import { useVideoGenPanel } from "@/features/canvas/hooks/use-video-gen-panel";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { MediaGenFields, VideoGenSettings } from "@/features/canvas/types";
 import { useRefUpload } from "@/features/canvas/upload";
-import ModelParamFields from "@/features/model/components/ModelParamFields";
-import { ModelSelector } from "@/features/model/components/ModelSelector";
-import { fieldDefaults, hasField, toParamFieldViews } from "@/features/model/param-fields";
 import i18n from "@/lib/i18n/config";
 import { useModelStore } from "@/lib/model-store";
 

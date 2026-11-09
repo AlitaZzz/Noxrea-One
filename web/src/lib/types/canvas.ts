@@ -5,8 +5,7 @@
  * isGenerating 等）依赖这些类型，而架构分层约定 lib 只能
  * 依赖 lib。若类型留在 features/canvas/types，就会形成 lib → features 的反向依赖。
  *
- * features/canvas/types.ts 会从这里转出，上层既有的
- * `import type { … } from "@/features/canvas/types"` 导入路径保持不变。
+ * 这里是这些类型的唯一定义处与导入路径；feature 内部与测试直接从这里导入。
  */
 import type { TaskStatus } from "@noxrea/shared";
 
@@ -17,9 +16,6 @@ export interface ViewportState {
   y: number;
   zoom: number;
 }
-
-/** 任务状态：契约单一来源在 @noxrea/shared（zod 派生），此处仅转出给画布层 */
-export type { TaskStatus };
 
 export interface TaskBinding {
   /** 后端任务 ID：绑定只在拿到真实 taskId 后才写入，不存在空串形态 */

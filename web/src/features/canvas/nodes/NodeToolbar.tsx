@@ -45,7 +45,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useAssetsStore } from "@/features/assets/store";
+import { unsaveAssetsByFileKeys, useKnownAssetKeys } from "@/entities/asset";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { mediaDataHasContent } from "@/features/canvas/shared/gen-settings-node";
 import type { GroupLayoutMode } from "@/features/canvas/shared/group-layout";
@@ -83,7 +83,7 @@ interface NodeToolbarProps {
   nodeId: string;
   nodeType?: string;
   onShowInspector: (nodeId: string) => void;
-  /** 打开帧序列面板（由画布层挂在节点下方，故需回抛给 InfiniteCanvas） */
+  /** 打开帧序列面板（由画布层挂在节点下方，故需回抛给 CanvasOverlays） */
   onOpenFrameStrip: (nodeId: string) => void;
   /** 打开片段截取面板（同上，画布层挂载；与帧序列面板互斥） */
   onOpenClipStrip: (nodeId: string) => void;
@@ -253,8 +253,8 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
     文件引用是计数账本，画布节点的引用不受影响）。 */
 function AssetStarButton({ nodeId, assetSrc }: { nodeId: string; assetSrc?: string }) {
   const { t } = useTranslation();
-  const unsaveAssetsByFileKeys = useAssetsStore((s) => s.unsaveAssetsByFileKeys);
-  const isInAssets = useAssetsStore((s) => !!assetSrc && s.knownAssetKeys.has(assetSrc));
+  const knownAssetKeys = useKnownAssetKeys();
+  const isInAssets = !!assetSrc && knownAssetKeys.has(assetSrc);
   return (
     <Tooltip><TooltipTrigger asChild>
         <Button size="icon"

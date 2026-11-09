@@ -2,21 +2,41 @@
 import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ReactNode, StrictMode, useEffect, useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const mocks = vi.hoisted(() => ({ api: vi.fn(), login: vi.fn(), updateMe: vi.fn() }));
+
+vi.mock("@/lib/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/client")>();
+  return { ...actual, api: mocks.api };
+});
 vi.mock("@/components/ui/AppUiProvider", () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key } }));
+vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key }, setAppLanguage: vi.fn() }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ i18n: { language: "zh" } }) }));
 vi.mock("@/lib/upload-formats", () => ({ loadUploadFormats: async () => undefined }));
 
-import { useAuthStore } from "@/features/auth/store";
-import { CachedUserProvider, useCurrentUser } from "@/features/auth/UserContext";
+import { login, logout, savePreference } from "@/entities/user";
 import { AppProviders } from "@/providers/AppProviders";
 
-afterEach(() => {
+const userA = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
+const userB = { ...userA, id: 2, username: "b" };
+
+beforeEach(async () => {
+  mocks.api.mockReset();
+  mocks.api.mockImplementation((path: string, options?: { method?: string }) => {
+    if (path === "/api/auth/login") return mocks.login();
+    if (path === "/api/auth/me" && options?.method === "PUT") return mocks.updateMe();
+    return Promise.resolve(null);
+  });
+  mocks.login.mockResolvedValue({ user: userA });
+  mocks.updateMe.mockResolvedValue(null);
+  await logout();
+});
+
+afterEach(async () => {
   cleanup();
-  useAuthStore.setState({ user: null });
+  await logout();
   document.documentElement.classList.remove("light", "dark");
 });
 
@@ -30,27 +50,12 @@ describe("page session boundary", () => {
     await waitFor(() => expect(screen.getByText("Ready")).toBeTruthy());
   });
 
-  it("does not resurrect the SSR user cache after logout", () => {
-    const cachedUser = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
-    useAuthStore.setState({ user: null, initialized: false });
-    function UserLabel() {
-      const user = useCurrentUser();
-      return <span>{user?.username ?? "Guest"}</span>;
-    }
-    render(<CachedUserProvider user={cachedUser}><UserLabel /></CachedUserProvider>);
-    expect(screen.getByText("a")).toBeTruthy();
-    act(() => useAuthStore.setState({ initialized: true }));
-    expect(screen.getByText("Guest")).toBeTruthy();
-  });
-
   it("syncs the persisted user theme to the document root", async () => {
-    const user = { id: 1, username: "a", avatarKey: null, theme: "light", language: "zh" };
-    useAuthStore.setState({ user, initialized: true });
+    mocks.login.mockResolvedValue({ user: { ...userA, theme: "light" } });
+    await login("a", "password");
 
     render(
-      <CachedUserProvider user={null}>
-        <AppProviders><span>Content</span></AppProviders>
-      </CachedUserProvider>,
+      <AppProviders><span>Content</span></AppProviders>,
     );
 
     await waitFor(() => {
@@ -59,9 +64,8 @@ describe("page session boundary", () => {
     });
   });
 
-  it("preserves local state for profile changes and recreates it and query cache for another account", () => {
-    const userA = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
-    useAuthStore.setState({ user: userA });
+  it("preserves local state for profile changes and recreates it and query cache for another account", async () => {
+    await login("a", "password");
     const clients: QueryClient[] = [];
     function Page() {
       const client = useQueryClient();
@@ -75,10 +79,11 @@ describe("page session boundary", () => {
     render(<AppProviders><Page /></AppProviders>);
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByRole("button").textContent).toBe("1");
-    act(() => useAuthStore.setState({ user: { ...userA, language: "en" } }));
+    await act(async () => { await savePreference("language", "en"); });
     expect(screen.getByRole("button").textContent).toBe("1");
     expect(clients).toHaveLength(1);
-    act(() => useAuthStore.setState({ user: { ...userA, id: 2, username: "b" } }));
+    mocks.login.mockResolvedValue({ user: userB });
+    await act(async () => { await login("b", "password"); });
     expect(screen.getByRole("button").textContent).toBe("0");
     expect(clients).toHaveLength(2);
     expect(clients[0].getQueryData(["private"])).toBeUndefined();

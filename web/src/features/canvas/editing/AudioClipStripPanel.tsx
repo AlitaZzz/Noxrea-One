@@ -6,7 +6,7 @@
  * 连续 scrub，按住选区中段可整段平移，播放被约束在选区内循环，进度以
  * 白色竖线呈现。确认后把区间交给 AudioNode 走既有的事件链路创建派生音频节点。
  *
- * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
+ * 挂载位置由 CanvasOverlays 的节点级浮层用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放。面板持有独立的 wavesurfer 实例
  * （节点内的实例跨组件共享不可行），打开即用、关闭即销毁。
  *
@@ -20,26 +20,27 @@ import { storageKeyOf } from "@noxrea/shared/url";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useAudioWaveformInstance } from "@/components/media/audio-waveform-instance";
+import { IDLE_PROGRESS_PLAYBACK } from "@/components/media/media-playback";
+import { MediaAccessError } from "@/components/media/MediaAccessError";
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import IconActionButton from "@/components/ui/IconActionButton";
 import { Separator } from "@/components/ui/separator";
 import { FRAME_TRACK_WIDTH } from "@/features/canvas/hooks/use-frame-sprite";
+import { useCanvasInputBlocked } from "@/features/canvas/root/CanvasInputGateContext";
 import { getAudioPlaybackTime, pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
-import { useAudioWaveformInstance } from "@/features/canvas/shared/audio-waveform-instance";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
-import { IDLE_PROGRESS_PLAYBACK } from "@/features/canvas/shared/media-playback";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { MediaAccessError } from "@/features/media/components/MediaAccessError";
 import { useAudioPeaks } from "@/lib/audio-peaks/use-audio-peaks";
 import { SEEK_MARGIN_S } from "@/lib/constants";
 import { useAudioElement } from "@/lib/use-audio-element";
 import { useMediaPlaybackMirror } from "@/lib/use-media-playback-mirror";
 import { useMediaProgress } from "@/lib/use-media-progress";
+import { clamp01 } from "@/lib/utils/number";
 
-import { clamp01, clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
+import { clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
 
@@ -75,6 +76,7 @@ interface AudioClipStripPanelProps {
 
 export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: AudioClipStripPanelProps) {
   const { t } = useTranslation();
+  const inputBlocked = useCanvasInputBlocked();
   // 播放元素与访问地址：与节点内波形走同一解析层（描述缓存共享，不重复请求）。
   // 波形本身不消费地址——wavesurfer 只拿 peaks 渲染，不产生字节请求
   const { mediaRef, src, mediaFailed, accessFailed, refresh: refreshAccess, readTime } = useAudioElement(audioRef);
@@ -271,10 +273,9 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // 面板打开时可能有输入框持有焦点，方向键要留给它们
       if (isEditableTarget(e.target)) return;
-      // 上层弹窗打开时方向键归弹窗控件（与 useEscapeToClose 的 modalOpen 守卫一致），
+      // 上层浮层打开时方向键归浮层控件（与 useEscapeToClose 的输入门守卫一致），
       // 否则隐藏面板会抢走方向键、把弹窗里的滑杆等控件卡住
-      const st = useCanvasStore.getState();
-      if (st.modalOpen || st.directorOverlayOpen) return;
+      if (inputBlocked) return;
       e.preventDefault();
       // 自动播放曾被拦截：keydown 是有效的用户激活，键盘微调同样恢复试听
       resumeIfBlocked();
@@ -288,7 +289,7 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [operable, clipHandle, duration, setClipHandle, resumeIfBlocked, clipSeek]);
+  }, [operable, clipHandle, duration, setClipHandle, resumeIfBlocked, clipSeek, inputBlocked]);
 
   // 播放位置逐帧跟随 + 循环约束：进度 Hook 只在时间变化时触发渲染，循环约束走
   // 每帧回调（规则 4.5 / 5.2）。循环只在播放中运行——暂停时没有推进可言，

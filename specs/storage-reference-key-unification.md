@@ -36,6 +36,8 @@
 | `agent_messages.ref_images` 等 | 含 hash 的值（2026-10-17 已核实：双库实库 0 行、客户端唯一调用方不传该字段、请求侧已收紧 fileRefSchema） | 统一 key |
 | `file_refs.hash` | 已存 hash | 不动 |
 
+画布账本统计的引用字段及排除项见 [canvas-file-ref-ledger-coverage.md](canvas-file-ref-ledger-coverage.md) 业务规则 1（账本字段清单）。
+
 前端 `withManagedFileWidth`（托管缩略参数派生）与 `isManagedFileUrl`（托管 URL 形态识别，用于下载参数判定）保留为渲染期工具；媒体 API（抽帧 / 截取 / 代理）的入参直接消费引用值本身（存储 key），需要 key 的请求与编辑入口统一经 `storageKeyOf` 单点归一判定（严格 key → 自身，其余值域 → null，2026-10-22 第十二轮），外部 URL / 本地预览地址不发起只接受 key 的请求，节点保留下载 / 预览但禁用编辑入口。`toFileKey` 的 `/api/files/` 前缀剥离属旧 URL 值域的兼容逻辑，已随值域统一删除（2026-10-22 第十一轮）。不存在「粘贴 `/api/files/` URL 转 key」的用户流程（2026-10-17 审查核实：原条款描述的能力并不存在，按非投机原则删除该条款）。
 
 **节点字段取舍**：保留单字段 `data.src`（值域 = key 或外部 URL），不拆 `fileKey` 双字段——外部 URL 是前端必须长期支持的值域（[canvas-image-http-url-rendering.md](canvas-image-http-url-rendering.md)），union 本身不构成债；拆双字段的改造面（undo/redo 载荷、upload pipeline、SSE monitor、全部渲染点）高一个量级而收益相同。配套新增 **key 格式判别 helper**（`{userId}/{hash[:2]}/{hash}{ext}` 严格校验）：服务端画布保存收集引用与账本登记、前端渲染分流共用，替代对 `/api/files/` 前缀的字符串解析。
@@ -92,7 +94,7 @@ code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟�
 - 修复轮验证：typecheck / lint:web（0 error）/ lint:server / test:server（664 过）/ web test（918 过）串行通过；契约测试注释字面量误报以改写注释措辞解决（保持绊线测试的粗暴字面量断言不变）。
 
 第二轮审查与修复（2026-10-16，入库值域校验统一 + 账本不变量补齐）：
-- key 段结构知识单点化：`hashFromStorageKey` 移入 shared/url.ts（STORAGE_KEY_PATTERN 捕获组提取，消灭第二处手工切片）；extract-hashes 仅保留画布计数逻辑。
+- key 段结构知识单点化：`hashFromStorageKey` 移入 shared/url.ts（STORAGE_KEY_PATTERN 捕获组提取，消灭第二处手工切片）；`server/utils/canvas-hashes.ts`（原 `services/canvas/extract-hashes.ts`）仅保留画布计数逻辑。
 - 入库值域校验统一（规则 1/3 的强制落地）：shared 新增 `isFileRefValue`（key 严格形态或外部 http(s) URL；data:/blob: 不持久化不在值域）；资产 `fileKey`、批量删除 `fileKeys` 走 schema 层 refine 校验；`avatarKey` 收紧为 key 严格形态（头像只来自上传，无外部 URL 值域）；crud 创建层对出域值 fail-closed 抛 `assets.invalid_file_key`（替代静默跳过账本登记——原行为会让托管文件失去 GC 保护）。
 - 迁移脚本资产段改为单事务（去重删行 + key 重写原子生效，崩溃重跑保持幂等），删行对齐 deleteAssetsBatch 语义：先清引用账本（removeSourceFileRefsBatch）、再删行、并递减目录直属计数。
 - web `multiResultUrls` 更名 `multiResultKeys`（字段与注释值域订正，值域同 src）。
@@ -179,3 +181,7 @@ code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟�
 - **server 全量套件对本批次补跑**：89 个测试文件 / 977 用例通过、11 用例 skip（2 个文件 skip）；此前各轮「server 业务代码未改动」的记录不再作为省略全量套件的依据，本批次的最终验证包含 server 全量。
 - 轮十一日志中「雪碧图 / 代理改以 `isStorageKey` 判定」为历史表述，已就地补注其被 `storageKeyOf` 取代。
 - 验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 + 4 用例、web test（131 文件 / 966 用例）、server 全量（89 文件 / 977 用例）串行通过。
+
+2026-11-08 文档对齐（工作区未提交）：画布账本字段清单按 `AGENTS.md` 十二.3.4 改为引用 [canvas-file-ref-ledger-coverage.md](canvas-file-ref-ledger-coverage.md) 业务规则 1（账本字段清单），不再在本文复制字段列表；规则归属不变，实现未改动。
+
+2026-11-09 根因修复（工作区未提交）：资产删除的账本与目录计数结算改为以 `DELETE ... RETURNING` 的实际删除集为唯一依据——先删行取得实际删除集，再按实际行清账本，最后按实际行聚合递减目录计数；删除谓词按 `(id, user_id)` 成对匹配，混合所有者的输入不会交叉命中。`crud/canvas.deleteProject` 同步改为先删项目行并持锁，再清理 `canvas` / `canvas_cover` 账本，避免并发保存写入孤儿引用。上文第三轮日志中的「清账本 → 删行」为修复前实现的历史记录，现行语义以本条为准。回归测试见 `server/__tests__/crud/asset-delete.test.ts` 与 `server/__tests__/crud/canvas.test.ts`。

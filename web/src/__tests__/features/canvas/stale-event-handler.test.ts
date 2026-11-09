@@ -1,10 +1,12 @@
 /**
  * RF 事件处理器过期闭包测试。
  *
- * 建模背景：InfiniteCanvas 的五个事件 handler（handleNodesChange / handleEdgesChange
- * / handleNodeClick / handlePaneClick / handleConnect）当前闭包捕获 RenderScope
- * 的 nodes/edges。React Flow 在同一渲染帧内可能连续派发多次变更（选中 + 位置/
- * 尺寸），若第二次以过期闭包基底计算，会覆盖第一次的选中写入。
+ * 建模背景：拆分前 CanvasSurface 的五个事件 handler（handleNodesChange /
+ * handleEdgesChange / handleNodeClick / handlePaneClick / handleConnect）闭包捕获
+ * RenderScope 的 nodes/edges；拆分后分别落在 use-canvas-node-changes /
+ * use-canvas-edge-changes / use-canvas-pointer / use-canvas-connections，约束不变。
+ * React Flow 在同一渲染帧内可能连续派发多次变更（选中 + 位置/尺寸），若第二次以
+ * 过期闭包基底计算，会覆盖第一次的选中写入。
  *
  * 本测试不模拟 handler 本身，而是用 applyNodeChanges / applyEdgeChanges 直接证明：
  * "同帧两次变更时，用 store 实时基底的结果包含两次变更；用过期闭包基底则丢失前一次"。

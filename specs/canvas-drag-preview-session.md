@@ -117,7 +117,7 @@
 
 3.1 吸附口径由 `specs/canvas-snap-alignment.md` 取代：唯一总开关同时控制对齐与网格，关闭时两者都不生效，开启时对齐优先、网格只在无对齐的轴并受缩放门槛约束；单选、多选、组拖动统一按移动集并集盒吸附；阈值以屏幕像素归一并有 5/8 滞回；候选排除移动集与隐藏节点；Ctrl/Meta 旁路、Shift 轴限。框选外框拖动整组移动与多选拖动一致：保持 React Flow 默认命中，外框拖动经 `onNodeDragStart` 进入拖动会话，正常走同一吸附链路（`specs/canvas-snap-alignment.md` 范围「不改动」）。
 3.2 吸附与辅助线在预览几何上计算，得到该帧的吸附后位移；提交使用同一算法对终态位置计算，保证所见即所得。
-3.3 辅助线不属于画布数据：不进 store、不进历史、不落库。拖动期通过独立瞬态订阅只驱动 `AlignmentGuides`，不得让 `InfiniteCanvas` 或节点树每帧重渲染。
+3.3 辅助线不属于画布数据：不进 store、不进历史、不落库。拖动期通过独立瞬态订阅只驱动 `AlignmentGuides`，不得让 `CanvasSurface` 或节点树每帧重渲染。
 3.4 拖入组高亮沿用现状：读取 React Flow 回调的原始拖动位置执行 `resolveDropGroupId`，仅在归属将变化时高亮（`setDragOverGroup` 的相等短路保留）。
 
 ### 4. 边
@@ -137,7 +137,7 @@
 
 ### 6. 历史、自动保存与数据
 
-6.1 历史语义不变：拖动开始压入拖动前快照（`InfiniteCanvas.tsx:806`），提交不再压栈。
+6.1 历史语义不变：拖动开始压入拖动前快照（`hooks/use-canvas-pointer.ts` 的 `handleNodeDragStart`），提交不再压栈。
 6.2 拖动期不 `markDirty`；提交有位置变化时 `markDirtyImmediate` 一次，无位置变化不写 store、不落库；自动保存不写入中间位置。
 6.3 提交只改 `position`；组成员相对位置不变。组归属、组框重算、空组删除仍在 `onNodeDragStop` 执行，顺序与现状一致。
 6.4 非拖拽位置帧（`dragging !== true`，会话未激活）按终态位置直接提交、不吸附；吸附只作用于指针拖动。本仓库键盘微移走 `nudgeSelectedNodes` 直接写 store（不经过位置帧路径），此处修复的是「吸附开启时非拖拽位置帧被回退」的既有缺陷，并为将来任何 `updateNodePositions(dragging=false)` 调用方兜底（2026-10-29 已确认纳入）。
@@ -159,7 +159,7 @@
 
 新增（均属 `web/src/features/canvas` 领域层，无新依赖）：
 
-- `drag/drag-preview-session.ts`：会话控制器（begin/preview/commit/cancel/release、rAF 合并、DOM 应用、外部写入重建、释放时序）。非 React 模块，由 `InfiniteCanvas` 持有并传入 store / React Flow 访问器。
+- `drag/drag-preview-session.ts`：会话控制器（begin/preview/commit/cancel/release、rAF 合并、DOM 应用、外部写入重建、释放时序）。非 React 模块，由 `CanvasSurface` 持有并传入 store / React Flow 访问器。
 - `drag/drag-snap.ts`：从 `handleNodesChange` 抽出的纯吸附/对齐计算，供预览与提交共用。
 - `drag/preview-guides.ts`：辅助线瞬态订阅，`AlignmentGuides` 消费。
 - `shared/edge-geometry.ts`：`computeEdgePath`（inset 锚点 + `getBezierPath`），`DeletableEdge` 与会话共用。
@@ -170,7 +170,7 @@
 
 修改：
 
-- `InfiniteCanvas.tsx`：`handleNodesChange` 按「拖拽帧 → 会话 / 终态帧 → 提交 / 其他变更 → 现状」分流；拖动开始/停止接线；容器捕获阶段记录按下点供参考点补偿；移除 `alignmentGuides` 局部状态；卸载时 `cancel()`（项目切换经会话门在渲染期重置为 `connecting`，页面换回加载门即卸载画布，同样走 `cancel()`）。
+- `root/CanvasSurface.tsx`（`handleNodesChange` 由 `hooks/use-canvas-node-changes.ts` 提供）：按「拖拽帧 → 会话 / 终态帧 → 提交 / 其他变更 → 现状」分流；拖动开始/停止接线；容器捕获阶段记录按下点供参考点补偿；移除 `alignmentGuides` 局部状态；卸载时 `cancel()`（项目切换经会话门在渲染期重置为 `connecting`，页面换回加载门即卸载画布，同样走 `cancel()`）。
 - `controls/DeletableEdge.tsx`：改用共享几何函数并登记几何，视觉不变。
 - `controls/AlignmentGuides.tsx`：改为订阅瞬态辅助线，去掉 props。
 - 测试：新增会话、吸附、边几何、位置帧分流与清理用例；现有测试保持通过。
@@ -178,7 +178,7 @@
 约束：
 
 - 会话依赖本仓库固定的 React Flow 12.12 受控模式与 DOM 契约（`.react-flow__node[data-id]`、`.react-flow__edge[data-id]`、`.react-flow__nodesselection`、`.react-flow__node-toolbar[data-id]`、`.react-flow__edgelabel-renderer`）；升级 React Flow 必须重新验证契约。
-- 保持现有约束：事件处理器读取 store 实时状态（过期闭包回归测试 `__tests__/features/canvas/stale-event-handler.test.ts`）；不拆分 `InfiniteCanvas` 文件。
+- 保持现有约束：事件处理器读取 store 实时状态（过期闭包回归测试 `__tests__/features/canvas/stale-event-handler.test.ts`）。原「不拆分 `InfiniteCanvas` 文件」约束已由 [canvas-root-decomposition.md](canvas-root-decomposition.md) 取代（画布根已拆分）。
 - 不修改 store schema、持久化数据与接口契约。
 
 ## 异常与边界
@@ -246,7 +246,7 @@
   - 位置帧 ↔ Map 的转换集中到 `shared/node-positions.ts` 的 `toPositionMap` / `toPositionFrames`，会话预览/提交/兜底/重建与画布直接写入共 5 处不再各写一份；
   - `shared/node-positions.ts` 的口径由「画布唯一位置应用口径」收窄为「位置帧应用口径」：整理动画、键盘微移、组框重算等结构/几何写入不属于位置帧，避免虚假的「唯一」宣称；
   - `shared/node-identity.ts` 恢复 HEAD 的模块级复用缓冲：上一轮把 `assertUniqueNodeIds` 改成每次分配 `Set` 属与本 Spec 无关的重构，按 AGENTS.md 六.1 回退，语义与分配口径回到 HEAD；
-  - 规则 1.7 复核（已验证）：项目切换时 `use-canvas-session` 在渲染期把状态重置为 `connecting`（`web/src/features/project/use-canvas-session.ts:149-153`），页面加载门换掉画布 → `InfiniteCanvas` 卸载 → `dispose()` → `cancel()`；画布根节点是组件的无条件根元素，移除即卸载。两条路径均覆盖，不新增监听；
+  - 规则 1.7 复核（已验证）：项目切换时 `use-canvas-session` 在渲染期把状态重置为 `connecting`（`web/src/features/canvas/session/use-canvas-session.ts:57-64`），页面加载门换掉画布 → `CanvasRoot`（含 `CanvasSurface`）卸载 → `dispose()` → `cancel()`；画布根节点是组件的无条件根元素，移除即卸载。两条路径均覆盖，不新增监听；
   - 吸附盒尺寸（`drag/drag-snap.ts` 的 `nodeBoxSize`，显式尺寸优先）与布局估算（`shared/tidy-layout.ts` 的 `measureNode`，实测尺寸优先）保持各自口径：HEAD 吸附即显式尺寸优先，规则 3.1 要求「与现状一致」，不合并两者；`use-tidy-animation.ts` 不在本 Spec 影响面内，未改动；
   - 复核：`npx tsc --noEmit` 通过；`npm run lint` 0 error（6 条既有 `<img>` warning）；`npx vitest run src/__tests__/features/canvas/drag`（单 worker）28 例通过（`drag-preview-session` 20、`position-routing` 5、`pointer-position` 3）；`src/__tests__/features/canvas` 71 文件 / 666 例通过；全量单 worker 162 文件 / 1281 例通过。上文「16 例」为当轮记录。
   - 未提交树还包含与本 Spec 无关的并行改动（画布外壳 memo 提取 `controls/ProjectToolbar.tsx`、生成面板上游引用 `shared/upstream-refs.ts` 及其 hook/测试）：本轮审查未把它们当作本 Spec 的需求，也未改动其行为。
@@ -266,6 +266,8 @@
 - 2026-10-29 上述走查由 Agent 在预览环境完成（合成指针事件）；验收标准 8 的真人操作与「跟手」主观体验仍需用户确认。
 - 2026-10-30 用户确认验收标准 8 走查通过；实现与编译依赖同批提交（`6d14d5eb` feat(canvas): 拖动改为 DOM 预览会话并在终态一次提交），状态更新为「已实现」。提交树已在独立工作树复核：`tsc --noEmit` 通过，`src/__tests__/features/canvas` 69 文件 / 661 例通过。
 - 2026-10-30 吸附规则由 `specs/canvas-snap-alignment.md` 取代（对齐常开、网格独立、多选/组并集吸附、屏幕像素阈值与滞回、修饰键）。本 Spec 规则 1.6、3.1、验收标准 3 已同步；拖动预览、边路径、释放时机与外部写入重建机制不变。
+
+- 2026-11-08 文档校正（仅文档）：规则 3.3、规则 6.1 与技术影响中仍把 `InfiniteCanvas` 当作现状的表述改为 `root/CanvasSurface.tsx`；`handleNodeDragStart` 的归属改为 `hooks/use-canvas-pointer.ts`（拖动会话仍由 `CanvasSurface` 持有）。「调查记录」保留拆分前快照，不回改。运行时行为未变。
 
 ## 调查记录
 

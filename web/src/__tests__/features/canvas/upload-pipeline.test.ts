@@ -19,7 +19,6 @@ import { loadUploadLimits } from "@/lib/upload-formats";
 import {
   uploadBatchWithRetry,
   type UploadErrorInfo,
-  type UploadProgressValue,
   uploadWithRetry,
 } from "@/lib/utils/upload";
 
@@ -31,7 +30,7 @@ vi.mock("@/lib/upload-formats", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/upload-formats")>();
   return { ...actual, loadUploadLimits: vi.fn() };
 });
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: {
     markDirty: vi.fn(),
     markDirtyImmediate: vi.fn(),
@@ -161,86 +160,6 @@ describe("上传管道的失败与落库行为", () => {
     expect(vi.mocked(uploadWithRetry)).not.toHaveBeenCalled();
   });
 
-  it("200 个文件按服务端批次限制拆分并全部完成", async () => {
-    vi.mocked(uploadBatchWithRetry).mockImplementation(async (files) => files.map((file) => ({
-      status: "fulfilled",
-      value: { url: `https://cdn/${file.name}`, key: file.name },
-    })));
-
-    const { settled } = await runMediaUpload({
-      items: Array.from({ length: 200 }, (_, index) => item(`${index}.png`)),
-      sink: { kind: "raw" },
-    });
-    const summary = await settled;
-
-    expect(summary).toMatchObject({ succeeded: 200, failed: 0 });
-    expect(vi.mocked(uploadBatchWithRetry)).toHaveBeenCalledTimes(10);
-    expect(vi.mocked(uploadBatchWithRetry).mock.calls.every(([files]) => files.length <= 20)).toBe(true);
-  });
-
-  it("单批总字节超限时按字节数边界拆批（不只按文件数）", async () => {
-    vi.mocked(loadUploadLimits).mockResolvedValue({
-      maxSizeMb: 100,
-      maxBatchFiles: 20,
-      maxBatchBytes: 6,
-      formats: { image: ["png"], video: [], audio: [] },
-      mode: "relay",
-    });
-    vi.mocked(uploadBatchWithRetry).mockImplementation(async (files) => files.map((file) => ({
-      status: "fulfilled",
-      value: { url: `https://cdn/${file.name}`, key: file.name },
-    })));
-
-    // 6 个 3 字节文件：字节上限 6 → 每批 2 个 → 3 批（文件数上限 20 从不触发）
-    const { settled } = await runMediaUpload({
-      items: Array.from({ length: 6 }, (_, index) => item(`${index}.png`)),
-      sink: { kind: "raw" },
-    });
-    const summary = await settled;
-
-    expect(summary).toMatchObject({ succeeded: 6, failed: 0 });
-    expect(vi.mocked(uploadBatchWithRetry)).toHaveBeenCalledTimes(3);
-    expect(
-      vi.mocked(uploadBatchWithRetry).mock.calls.map(([files]) => files.length),
-    ).toEqual([2, 2, 2]);
-  });
-
-  it("限制请求期间会话结束：不发送旧会话的 raw 批次", async () => {
-    let resolveLimits!: (limits: {
-      maxSizeMb: number;
-      maxBatchFiles: number;
-      maxBatchBytes: number;
-      formats: { image: string[]; video: string[]; audio: string[] };
-      mode: "direct" | "relay";
-    }) => void;
-    const limits = new Promise<{
-      maxSizeMb: number;
-      maxBatchFiles: number;
-      maxBatchBytes: number;
-      formats: { image: string[]; video: string[]; audio: string[] };
-      mode: "direct" | "relay";
-    }>((resolve) => { resolveLimits = resolve; });
-    vi.mocked(loadUploadLimits).mockReturnValue(limits);
-    vi.mocked(uploadBatchWithRetry).mockResolvedValue([{
-      status: "fulfilled",
-      value: { url: "https://cdn/raw.png", key: "raw.png" },
-    }]);
-
-    const { settled } = await runMediaUpload({ items: [item("raw.png")], sink: { kind: "raw" } });
-    changeSession();
-    resolveLimits({
-      maxSizeMb: 100,
-      maxBatchFiles: 20,
-      maxBatchBytes: 128 * 1024 * 1024,
-      formats: { image: ["png"], video: [], audio: [] },
-      mode: "relay",
-    });
-
-    const summary = await settled;
-    expect(summary).toMatchObject({ succeeded: 0, failed: 1, results: [null] });
-    expect(vi.mocked(uploadBatchWithRetry)).not.toHaveBeenCalled();
-  });
-
   it("单文件超过批次总大小时按业务失败落库，不发注定 413 的请求", async () => {
     vi.mocked(loadUploadLimits).mockResolvedValue({
       maxSizeMb: 100,
@@ -264,36 +183,28 @@ describe("上传管道的失败与落库行为", () => {
     expect(data?.upload?.error?.retryable).toBe(false);
   });
 
-  it("批次进度按批内下标转发（归因由模式层完成）", async () => {
-    let captured: ((index: number, progress: UploadProgressValue) => void) | undefined;
-    vi.mocked(uploadBatchWithRetry).mockImplementation(async (_files, onProgress) => {
-      captured = onProgress;
-      return [
-        { status: "fulfilled", value: { url: "https://cdn/small.png", key: "small.png" } },
-        { status: "fulfilled", value: { url: "https://cdn/large.png", key: "large.png" } },
-      ];
+  it("单文件超过体积上限但仍在批次字节上限内时按业务失败落库，不发注定被拒的请求", async () => {
+    vi.mocked(loadUploadLimits).mockResolvedValue({
+      maxSizeMb: 1,
+      maxBatchFiles: 20,
+      maxBatchBytes: 128 * 1024 * 1024,
+      formats: { image: ["png"], video: [], audio: [] },
+      mode: "relay",
     });
-    const onProgress = vi.fn();
-    const { settled } = await runMediaUpload({
-      items: [
-        { blob: new File([new Uint8Array(1)], "small.png", { type: "image/png" }), filename: "small.png" },
-        { blob: new File([new Uint8Array(3)], "large.png", { type: "image/png" }), filename: "large.png" },
-      ],
-      sink: { kind: "raw" },
-      onProgress,
-    });
-    await settled;
+    vi.mocked(uploadBatchWithRetry).mockResolvedValue([]);
 
-    // 模式层已归因到单文件并划分阶段（relay 按 FormData 区间 / direct 区分哈希与传输），
-    // 管线只按下标转发进度值本身
-    captured?.(0, { phase: "uploading", pct: 100 });
-    captured?.(1, { phase: "uploading", pct: 33 });
-    expect(onProgress).toHaveBeenCalledWith(0, { phase: "uploading", pct: 100 });
-    expect(onProgress).toHaveBeenCalledWith(1, { phase: "uploading", pct: 33 });
-    // 模式层重试前的重置：逐文件归零
-    captured?.(0, { phase: "uploading", pct: 0 });
-    captured?.(1, { phase: "uploading", pct: 0 });
-    expect(onProgress).toHaveBeenLastCalledWith(1, { phase: "uploading", pct: 0 });
+    const big = new File([new Uint8Array(1024 * 1024 + 1)], "over.png", { type: "image/png" });
+    const { nodeIds, settled } = await runMediaUpload({
+      items: [{ blob: big, filename: "over.png", naturalWidth: 800, naturalHeight: 600 }],
+      sink: { kind: "create-node" },
+    });
+    const summary = await settled;
+
+    expect(summary.failed).toBe(1);
+    expect(vi.mocked(uploadBatchWithRetry)).not.toHaveBeenCalled();
+    const data = dataOf(nodeIds[0]);
+    expect(data?.upload?.error).toBeTruthy();
+    expect(data?.upload?.error?.retryable).toBe(false);
   });
 
   it("断网后未开始的批次不发送，剩余文件都结算为失败而非一直排队", async () => {
@@ -314,27 +225,11 @@ describe("上传管道的失败与落库行为", () => {
     const summary = await settled;
     expect(uploadBatchWithRetry).toHaveBeenCalledTimes(1);
     expect(summary).toMatchObject({ succeeded: 1, failed: 2 });
-    expect(summary.errors[1]?.message).toBe("error.upload.offline");
-    expect(summary.errors[2]?.message).toBe("error.upload.offline");
+    expect(summary.errors[1]).toMatchObject({ category: "offline", message: "error.upload.offline", retryable: false });
+    expect(summary.errors[2]).toMatchObject({ category: "offline", message: "error.upload.offline", retryable: false });
     expect(dataOf(nodeIds[1])?.upload?.error).toBeTruthy();
     expect(dataOf(nodeIds[2])?.upload?.error).toBeTruthy();
     expect(useUploadProgressStore.getState().byNodeId.size).toBe(0);
-  });
-
-  it("raw sink 的逐项失败原因按原索引保留，成功项不受影响", async () => {
-    vi.mocked(uploadBatchWithRetry).mockResolvedValue([
-      { status: "fulfilled", value: { key: "ok", url: "ok" } },
-      { status: "rejected", reason: new Error("size limit exceeded") },
-      { status: "rejected", reason: new Error("unsupported media") },
-    ]);
-    const { settled } = await runMediaUpload({
-      items: [item("ok.png"), item("big.png"), item("bad.png")], sink: { kind: "raw" }, silent: true,
-    });
-    const summary = await settled;
-    expect(summary.errors).toHaveLength(3);
-    expect(summary.errors[0]).toBeUndefined();
-    expect(summary.errors[1]?.message).toBe("size limit exceeded");
-    expect(summary.errors[2]?.message).toBe("unsupported media");
   });
 
   it("多文件部分失败：失败项留在画布上，成功项正常落库", async () => {

@@ -14,10 +14,10 @@ import {
   getTask,
   claimPendingTask,
   takeOverInterruptedTask,
-  safeFailTask,
-  isTerminalTaskStatus,
   stuckLeaseCutoff,
 } from "@server/crud/task";
+import { isTerminalTaskStatus } from "@noxrea/shared";
+import { safeFailTask } from "@server/services/tasks/terminal";
 import { executeSubmissionPhase } from "./executor";
 import { runPollAttempt } from "./poll-attempt";
 import type { TickDeferContext } from "./queue";
@@ -77,7 +77,7 @@ export async function processTaskJob(
     await safeFailTask(taskId, {
       error: "任务执行中断（提交结果不确定），为避免重复提交上游已放弃重试",
       errorCode: "generation.submission_uncertain",
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
     return;
   }
 
@@ -98,7 +98,7 @@ export async function processTaskJob(
     await safeFailTask(taskId, {
       error: "任务多次执行中断，重试预算已耗尽，为避免重复提交上游已放弃重试",
       errorCode: "generation.interrupted_retry_exhausted",
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
     return;
   }
   // lost：接管输给并发竞争（他实例已接管/已收口），本轮放弃

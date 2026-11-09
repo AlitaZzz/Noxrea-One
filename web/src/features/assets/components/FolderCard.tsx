@@ -11,7 +11,7 @@ import { DeleteOutlined, EditOutlined, EllipsisOutlined, FolderOutlined } from "
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { AssetFolder } from "@/features/assets/types";
+import type { AssetFolder } from "@/entities/asset";
 
 interface Props {
   folder: AssetFolder;

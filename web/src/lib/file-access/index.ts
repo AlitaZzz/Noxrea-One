@@ -7,13 +7,14 @@
  *
  * 模块分工（同目录）：`protocol` 值域与描述契约、`batch` 批次与去重、
  * `cache` 内存缓存、`persisted` 设备本地副本、`state` 会话作用域与形态学习、
- * `proactive` 主动刷新共享调度。
+ * `access` 同步读取、`proactive` 主动刷新共享调度、`change-signal` 变更通知。
  * 本文件只做编排：查缓存 → 发请求 → 返回结果，以及会话切换的重置顺序。
  */
 import { ApiError } from "@/lib/api/client";
 import { onSessionChange } from "@/lib/session-lifecycle";
 
 import { abortError } from "./abort";
+import { accessOf } from "./access";
 import { requestDescriptor, resetBatches } from "./batch";
 import { cachedDescriptorOf, resetCache } from "./cache";
 import {
@@ -25,7 +26,6 @@ import {
 import { resetProactiveRefresh } from "./proactive";
 import {
   cacheKeyOf,
-  type FileAccessDescriptor,
   FileAccessError,
   type FileAccessOptions,
   type FileDelivery,
@@ -34,11 +34,12 @@ import {
   type ResolvedMediaUrl,
   splitFragment,
   streamDescriptorOf,
-  withFragment,
 } from "./protocol";
 import { beginNewScope, currentScope, isStreamLearned } from "./state";
 
 export { isAbortError } from "./abort";
+export { peekMediaAccess } from "./access";
+export { subscribeAccessChanges } from "./change-signal";
 export { FileAccessError, isManagedMediaValue } from "./protocol";
 export type { FileDelivery, ResolvedMediaAccess, ResolvedMediaUrl };
 
@@ -55,42 +56,11 @@ export function credentialsForDelivery(delivery: FileDelivery | undefined): Requ
   return delivery === "signed" ? "omit" : "include";
 }
 
-/** 描述 → 访问结果（唯一映射点）；寿命字段只对 signed 有意义 */
-function accessOf(descriptor: FileAccessDescriptor, fragment: string): ResolvedMediaAccess {
-  const url = withFragment(descriptor.url, fragment);
-  if (descriptor.delivery === "stream") return { url, delivery: "stream" };
-  return {
-    url,
-    delivery: "signed",
-    expiresAt: descriptor.expiresAt,
-    ...(descriptor.refreshAt !== undefined ? { refreshAt: descriptor.refreshAt } : {}),
-  };
-}
-
 /** 访问结果 → 普通消费方契约（收窄掉主动刷新用的寿命字段） */
 function urlOf(access: ResolvedMediaAccess): ResolvedMediaUrl {
   return access.delivery === undefined
     ? { url: access.url }
     : { url: access.url, delivery: access.delivery };
-}
-
-/**
- * 同步取已解析结果（不触发网络）：
- * - 外部值 / 非托管值：原样返回；
- * - 已学习到 stream：由归一化请求直接构造；
- * - 内存缓存的 signed 条目、或持久化副本中未过期的描述：直接返回。
- *
- * 不等待持久化载入：这是渲染期探测，等不到就返回 null，由解析路径补齐。
- */
-export function peekMediaAccess(value: string | null | undefined): ResolvedMediaAccess | null {
-  if (!value) return null;
-  const request = requestOf(value, {});
-  if (!request) return { url: value };
-  const fragment = splitFragment(value).fragment;
-  if (isStreamLearned()) return accessOf(streamDescriptorOf(value, request), fragment);
-  const cached = cachedDescriptorOf(cacheKeyOf(currentScope(), request), { evict: false })
-    ?? persistedDescriptorOf(request);
-  return cached ? accessOf(cached, fragment) : null;
 }
 
 /**
@@ -187,6 +157,9 @@ export async function resolveMediaUrlString(
 /**
  * 会话切换的唯一重置入口（顺序即语义）：先作废旧作用域（在途结果据此判为过期），
  * 再清内存缓存与设备本地副本，随后结算在途/排队请求，最后载入新账号的持久化条目。
+ *
+ * 这里只清账号作用域的真相。展示快照由各 Hook 按源冻结、随组件或会话释放，
+ * 解析层不保存派生存储，因此没有第二份需要按顺序清理的账号数据。
  */
 onSessionChange(() => {
   beginNewScope();

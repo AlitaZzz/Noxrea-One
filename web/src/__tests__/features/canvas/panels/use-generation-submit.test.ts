@@ -23,7 +23,7 @@ vi.mock("@/features/canvas/api/generation-api", () => ({
   },
 }));
 
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: {
     markDirty: vi.fn(),
     markDirtyImmediate: vi.fn(),

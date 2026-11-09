@@ -23,8 +23,8 @@ import { buildNodeIndex, nodeAbsolutePosition } from "@/features/canvas/shared/g
 import { isNodeInUiState, NODE_UI_STATE_KEYS, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode, ImageNodeData } from "@/features/canvas/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
-import type { HistorySnapshot } from "@/features/project/types";
 import { NODE_TYPE } from "@/lib/constants";
 
 function makeSnapshot(nodesCount: number, label = "", edges: Record<string, unknown>[] = []): HistorySnapshot {
@@ -740,10 +740,24 @@ describe("压栈通道二分与批量守卫（Spec: canvas-undo-redo-integrity�
     expect(useHistoryStore.getState().undoStack.length).toBe(2);
   });
 
+  it("addEdges 追加到最新 edges、保留现有连线并压一条记录", () => {
+    useCanvasStore.setState({
+      nodes: [node("a"), node("b")],
+      edges: [{ id: "existing", source: "a", target: "b" } as Edge],
+    });
+    useCanvasStore.getState().addEdges(
+      [{ id: "new", source: "b", target: "a" } as Edge],
+      { forceHistory: true },
+    );
+    expect(useCanvasStore.getState().edges.map((e) => e.id)).toEqual(["existing", "new"]);
+    expect(useHistoryStore.getState().undoStack.length).toBe(1);
+  });
+
   it("skipHistory 始终跳过压栈", () => {
     useCanvasStore.getState().addNodes([node("a")], { skipHistory: true });
     useCanvasStore.getState().updateNodeData("a", { label: "b" }, undefined, { skipHistory: true });
     useCanvasStore.getState().updateNodeVisual("a", { data: { label: "c" }, skipHistory: true });
+    useCanvasStore.getState().addEdges([{ id: "e", source: "a", target: "b" } as Edge], { skipHistory: true });
     expect(useHistoryStore.getState().undoStack.length).toBe(0);
   });
 

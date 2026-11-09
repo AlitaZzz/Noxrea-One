@@ -14,10 +14,10 @@ import { pollUpstreamOnce } from "@server/services/tasks/poll-loop";
 import { resolveProviderEndpoints, hostFromBaseUrl } from "@server/services/model-config";
 import { stripTrailingSlash } from "@noxrea/shared/url";
 import {
-  safeFailTask,
   requeueProcessingAsyncTask,
   deferPollTick,
 } from "@server/crud/task";
+import { safeFailTask } from "@server/services/tasks/terminal";
 import { deferActiveTickOrThrow, type TickDeferContext } from "./queue";
 import { finalizeGeneratedResult } from "./download-results";
 
@@ -65,7 +65,7 @@ export async function runPollAttempt(
   } catch (err: unknown) {
     await safeFailTask(taskId, {
       error: `Failed to poll upstream task: ${(err as Error).message}`,
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
     return;
   }
 
@@ -104,7 +104,7 @@ export async function runPollAttempt(
     await safeFailTask(taskId, {
       error: outcome.error,
       errorCode: outcome.errorCode,
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
     return;
   }
 
@@ -139,7 +139,7 @@ export async function runPollAttempt(
     await safeFailTask(taskId, {
       error: lastError ?? `异步轮询超时（upstream_task_id=${upstreamTaskId}）`,
       errorCode: lastError ? undefined : "generation.poll_timeout",
-    }, { startedAt: task.startedAt });
+    }, task.startedAt);
     return;
   }
 

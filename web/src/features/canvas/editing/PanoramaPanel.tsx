@@ -5,6 +5,7 @@ import { NodeToolbar as RfNodeToolbar, Position } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MediaAccessOverlay } from "@/components/media/MediaAccessOverlay";
 import { BorderInnerOutlined, CameraOutlined, CloseOutlined, ReloadOutlined } from "@/components/ui/AppIcon";
 import { AspectRatioIcon } from "@/components/ui/AppIcon";
 import { Grid4Icon } from "@/components/ui/AppIcon";
@@ -21,7 +22,6 @@ import { useMultiSelect, useNodeSelected } from "@/features/canvas/hooks/use-nod
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { runMediaUpload, type UploadItem } from "@/features/canvas/upload";
-import { MediaAccessOverlay } from "@/features/media/components/MediaAccessOverlay";
 import { loadMediaImage } from "@/lib/load-media-image";
 import { useFileAccessUrl } from "@/lib/use-file-access-url";
 import { computeDerivedGrid, findDerivedBatchOrigin, gridPositionAt } from "@/lib/utils/image-utils";

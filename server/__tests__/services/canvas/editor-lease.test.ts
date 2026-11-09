@@ -12,7 +12,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   broadcastToOthers,
-  currentLeaseToken,
   destroyRoom,
   EMPTY_ROOM_GRACE_MS,
   gateCount,
@@ -121,7 +120,7 @@ describe("leaveCanvasRoom", () => {
 
     // 空置窗口内 B 进入取得编辑权
     const second = joinCanvasRoom("p1", "B", b.emit);
-    expect(currentLeaseToken("p1")).toBe(second.leaseToken);
+    expect(isCurrentLease("p1", second.leaseToken)).toBe(true);
 
     // A 同 sid 重连：不判全新进入、不反踢 B，自身被判 superseded（路由补发 evict）
     const rejoin = joinCanvasRoom("p1", "A", a.emit);
@@ -186,7 +185,6 @@ describe("leaveCanvasRoom", () => {
     destroyRoom("p1");
     // 房间已不存在：令牌随之失效
     expect(isCurrentLease("p1", first.leaseToken)).toBe(false);
-    expect(currentLeaseToken("p1")).toBeNull();
 
     // 在室连接断开：房间已不存在，静默跳过
     expect(() => leaveCanvasRoom("p1", "A", first.connId)).not.toThrow();
@@ -233,13 +231,6 @@ describe("租约令牌查询（isCurrentLease）", () => {
     expect(isCurrentLease("p1", "not-a-number")).toBe(false);
     expect(isCurrentLease("p1", leaseToken + 0.5)).toBe(false);
     expect(isCurrentLease("p1", leaseToken)).toBe(true);
-  });
-
-  it("currentLeaseToken：观察当前生效令牌，未知项目返回 null", () => {
-    expect(currentLeaseToken("none")).toBeNull();
-    const a = collector();
-    const { leaseToken } = joinCanvasRoom("p1", "A", a.emit);
-    expect(currentLeaseToken("p1")).toBe(leaseToken);
   });
 });
 

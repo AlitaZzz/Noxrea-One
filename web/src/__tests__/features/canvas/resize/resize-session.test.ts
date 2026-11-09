@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { stubRaf } from "@/__tests__/test-utils/raf";
 import { ResizeSession } from "@/features/canvas/resize/resize-session";
 import type { AnyNode } from "@/features/canvas/types";
-import type { HistorySnapshot } from "@/features/project/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
 
 interface PointerInit {

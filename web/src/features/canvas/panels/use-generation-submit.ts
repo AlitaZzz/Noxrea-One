@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { generationApi } from "@/features/canvas/api/generation-api";
 import { flushAndWait, getCanvasProjectId, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { HistorySnapshot } from "@/features/project/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import i18n from "@/lib/i18n/config";
 

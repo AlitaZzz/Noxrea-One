@@ -21,9 +21,10 @@ vi.mock("@server/http/middleware/auth", () => ({
 vi.mock("@server/crud/task", () => ({
   createTask: mocks.createTask,
   getTask: mocks.getTask,
-  cancelTask: mocks.cancelTask,
   getTaskTerminalByIds: mocks.getTaskTerminalByIds,
-  isTerminalTaskStatus: vi.fn(),
+}));
+vi.mock("@server/services/tasks/terminal", () => ({
+  cancelTask: mocks.cancelTask,
   toTerminalState: vi.fn(),
 }));
 vi.mock("@server/crud/model-config", () => ({

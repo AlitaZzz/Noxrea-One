@@ -1,25 +1,44 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const login = vi.hoisted(() => vi.fn());
-vi.mock("@/features/auth/api", () => ({ authApi: { login } }));
+const mocks = vi.hoisted(() => ({ api: vi.fn(), login: vi.fn() }));
+
+vi.mock("@/lib/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/client")>();
+  return { ...actual, api: mocks.api };
+});
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/lib/i18n/config", () => ({ default: { t: (key: string) => key }, setAppLanguage: vi.fn() }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ i18n: { language: "zh" } }) }));
 vi.mock("@/lib/upload-formats", () => ({ loadUploadFormats: async () => undefined }));
 
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { useAuthStore } from "@/features/auth/store";
+import { login, logout } from "@/entities/user";
 import { AppProviders } from "@/providers/AppProviders";
 
-afterEach(() => { cleanup(); useAuthStore.setState({ user: null }); vi.restoreAllMocks(); });
+const USER = { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" };
+
+beforeEach(async () => {
+  mocks.api.mockReset();
+  mocks.api.mockImplementation((path: string) => {
+    if (path === "/api/auth/login") return mocks.login();
+    return Promise.resolve(null);
+  });
+  mocks.login.mockResolvedValue({ user: USER });
+  await logout();
+});
+
+afterEach(async () => {
+  cleanup();
+  await logout();
+  vi.restoreAllMocks();
+});
 
 describe("login feedback lifetime", () => {
   it("displays success from the login callback across an account boundary using the real UI backend", async () => {
-    useAuthStore.setState({ user: null, initialized: true });
     let complete!: (data: unknown) => void;
-    login.mockReturnValue(new Promise((resolve) => { complete = resolve; }));
+    mocks.login.mockReturnValue(new Promise((resolve) => { complete = resolve; }));
     let resumeFeedback!: () => void;
     const feedbackGate = new Promise<void>((resolve) => { resumeFeedback = resolve; });
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -27,7 +46,7 @@ describe("login feedback lifetime", () => {
     function LoginAction() {
       const { message } = useAppFeedback();
       return <button onClick={async () => {
-        await useAuthStore.getState().login("a", "password");
+        await login("a", "password");
         await feedbackGate;
         message.success("Welcome");
         finished();
@@ -36,7 +55,7 @@ describe("login feedback lifetime", () => {
     render(<AppProviders><LoginAction /></AppProviders>);
     fireEvent.click(screen.getByRole("button", { name: "Login" }));
     await act(async () => {
-      complete({ user: { id: 1, username: "a", avatarKey: null, theme: "dark", language: "zh" } });
+      complete({ user: USER });
     });
     // Resume the old callback after React has committed the new account subtree.
     await act(async () => { resumeFeedback(); });

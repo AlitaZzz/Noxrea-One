@@ -51,7 +51,7 @@
 ### 4. 可复用件
 
 - 绝对几何：`buildNodeIndex` / `nodeAbsolutePosition`（`web/src/features/canvas/shared/group-bounds.ts:32-51`）、`measureNode`（实测优先，`shared/tidy-layout.ts:86-91`）、组判定与成员关系（`shared/group-membership.ts`）。
-- 会话模式：`DragPreviewSession`（`drag/drag-preview-session.ts`）的 rAF 合并、DOM 契约、`syncRenderedNodes` 采用后释放、`cancel/dispose` 生命周期；`InfiniteCanvas.tsx:188-208` 的实例创建与布局副作用接线。
+- 会话模式：`DragPreviewSession`（`drag/drag-preview-session.ts`）的 rAF 合并、DOM 契约、`syncRenderedNodes` 采用后释放、`cancel/dispose` 生命周期；`root/CanvasSurface.tsx:141-157` 的实例创建与布局副作用接线。
 - 交互状态机：`selection-start` / `click`（`stores/canvas-store.ts:323-349`），`showSelectionChrome` 仅在 idle 为真。
 - 主题与选中视觉：`.node-body.node-selected` 使用 `--ring` 主题 token（`web/src/styles/globals.css:252-261`）；框选矩形沿用 `.react-flow__selection` 的 `--marquee-bg` / `--marquee-border`（`:230-237`）。
 
@@ -212,7 +212,7 @@
 
 ### 修改
 
-- `web/src/features/canvas/InfiniteCanvas.tsx`
+- `web/src/features/canvas/root/CanvasSurface.tsx`
   - 创建并持有会话（与 `dragSession` 同模式，依赖稳定引用）；在依赖 `renderedNodes` 的独立 `useLayoutEffect` 中调用 `marqueeSession.syncRenderedNodes()`；卸载时 `dispose`。
   - 移除 `onSelectionStart` / `handleSelectionStart`、`selectionMode`；`selectionOnDrag={false}`、`selectionKeyCode={null}`。
   - 在 `<ReactFlow>` 内渲染选框静态元素（`data-canvas-marquee`）。
@@ -221,7 +221,7 @@
   - `[data-marquee-hit]` 选中视觉与 z-index（组节点不参与抬升，保持既有沉底）；`[data-canvas-marquee]` 显隐（复用现有 `.react-flow__selection` 视觉）。
   - 手势光标由状态整体接管（规则 14）：节点拖动与框选经常驻覆盖层 `.canvas-gesture-cursor` 打开（根属性 `data-interaction="dragging-nodes"` / `data-marquee-active` → `grabbing` / `default`）；连线取根属性 `data-connecting`，对 `.react-flow` 子树整体写 `cursor: crosshair !important`——拖线中目标 handle 依赖节点 `:hover` 显示，覆盖层会吞掉 hover；门控不用 `data-interaction`，避免选中态切换（idle ↔ box-selecting）触发全子树光标重算。逐元素枚举会漏掉边、节点内控件的内联 `cursor` 等 hover 目标（规则 14 要求「整块画布」不随命中跳变）。
 - `web/src/features/canvas/hooks/use-canvas-interaction.ts`
-  - 移除仅供内建框选使用的 `onSelectionStart` 包装（唯一调用方是 `InfiniteCanvas`；框选激活改由会话直接派发 `selection-start`）。
+  - 移除仅供内建框选使用的 `onSelectionStart` 包装（唯一调用方是 `CanvasSurface`；框选激活改由会话直接派发 `selection-start`）。
 - `web/src/features/canvas/stores/canvas-store.ts`
   - 仅更新「框选（Shift 拖拽）」过时注释为「框选（空白区左键拖拽）」；无新 action（提交使用现有 `setNodes` / `setEdges` / `getCanvasProjectId`）。
 - `web/src/features/canvas/shared/snap-engine.ts`、`shared/image-visibility.ts`、`shared/media-visibility.ts`

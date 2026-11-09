@@ -5,25 +5,26 @@
  * select_nodes 锁定选中写入走 applySelection 的契约（只克隆选中态变化的
  * 节点，选区未变时不写回 store）。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// 执行器写回会触发保存调度；测试只关心 store 写入，隔离保存计时器
-vi.mock("@/features/project/save-manager", () => ({
-  saveManager: {
-    markDirty: vi.fn(),
-    markDirtyImmediate: vi.fn(),
-    markDirtyUndo: vi.fn(),
-    flushAndWait: vi.fn(),
-    resetForProjectSwitch: vi.fn(),
-  },
-}));
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { executeCanvasToolCall, fillNodeData, parseRatioValue } from "@/features/canvas/agent/tools/executors";
 import { createImageNode, createTextNode, createVideoNode } from "@/features/canvas/node-defaults";
+import { saveManager } from "@/features/canvas/persistence/save-manager";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
-import { saveManager } from "@/features/project/save-manager";
 import { NODE_TYPE } from "@/lib/constants";
+
+// 执行器写回会触发保存意图；桩掉保存器方法以隔离计时器与网络，订阅链保持真实
+beforeEach(() => {
+  vi.spyOn(saveManager, "markDirty").mockImplementation(() => {});
+  vi.spyOn(saveManager, "markDirtyImmediate").mockImplementation(() => {});
+  vi.spyOn(saveManager, "markDirtyUndo").mockImplementation(() => {});
+  vi.spyOn(saveManager, "resetForProjectSwitch").mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const at = { x: 0, y: 0 };
 

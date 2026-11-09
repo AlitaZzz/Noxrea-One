@@ -13,7 +13,7 @@ import { AssetsIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
 import { Spinner } from "@/components/ui/spinner";
-import type { AssetFolder, AssetItem } from "@/features/assets/types";
+import type { AssetFolder, AssetItem } from "@/entities/asset";
 
 import AssetCard from "./AssetCard";
 import FolderCard from "./FolderCard";

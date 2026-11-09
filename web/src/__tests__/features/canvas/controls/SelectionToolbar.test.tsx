@@ -26,7 +26,7 @@ vi.mock("react-i18next", async (importOriginal) => ({
   }),
 }));
 
-// 展示层测试不触达真实画布动作；容器层只在 InfiniteCanvas 中挂载。
+// 展示层测试不触达真实画布动作；容器层只在 CanvasOverlays 中挂载。
 vi.mock("@/features/canvas/shared/canvas-edit-actions", () => ({
   copySelection: vi.fn(),
   deleteSelection: vi.fn(),

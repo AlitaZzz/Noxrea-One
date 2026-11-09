@@ -19,12 +19,14 @@
 - 仍然只有一个开关，不做「对齐开关 + 网格开关」的双开关方案（不变）；
 - 开关继续控制整理布局、Agent 整理与方向键微移的网格步进（不变）。
 
-### 2. 当前实现（已验证事实）
+### 2. 改造前实现（2026-10-30 基线，已验证事实）
+
+> 本节记录改造前的现状，用于对照设计目标；实现后的字段与归属见「范围」「业务规则」与「当前状态」。
 
 - `hooks/use-alignment-guides.ts` 的 `computeAlignment` 是吸附唯一计算入口：阈值以画布单位计（`snapThreshold = 5`），不随缩放归一；无滞回（进入与保持同阈值）；只要关系在阈值内就为每个关系生成辅助线，即使最终吸附偏移并不满足该关系（线不真实）；去重按「同 type + 位置差 < 0.5」只保留第一条，会丢掉不同跨度的同坐标线。辅助线跨度恒为两盒并集。
 - `drag/drag-snap.ts` 仅在拖动项 = 1 且 `snapToGrid` 开启时吸附；网格与对齐共用该开关；多选拖动直接使用原始位置，不吸附、无辅助线。
 - 吸附候选为 `baseNodes` 中除拖动项外的全部节点，仅做阈值邻近预筛；没有排除拖动组的成员，也没有排除 `hidden` 节点（`drag-preview-session.ts` 的 `captureSnapshot` 会把被拖组的成员放进 `baseNodes`，静态推断拖组时成员可成为自身对齐目标）。
-- 阈值/网格设置随 `snapThreshold`、`snapGridSize` 存在 store 中；拖动开始时由 `InfiniteCanvas.tsx:776` 捕获一次。
+- 阈值/网格设置随 `snapThreshold`、`snapGridSize` 存在 store 中；拖动开始时由 `InfiniteCanvas.tsx:776` 捕获一次（改造后由 `hooks/use-canvas-pointer.ts` 在拖动开始时读取并交给拖动会话）。
 - 辅助线为屏幕坐标 SVG（`controls/AlignmentGuides.tsx`），渲染在节点之上（`zIndex: 100`），绿色虚线。
 - `snapToGrid` 同时被 `use-tidy-animation.ts`、`agent/tools/executors.ts` 与 `canvas-edit-actions.ts` 的方向键微移读取，语义是「按网格步进」。
 
@@ -62,9 +64,9 @@
 - `web/src/features/canvas/controls/AlignmentGuides.tsx`、`drag/preview-guides.ts`：类型来源改到 `shared/alignment-guides.ts`；`AlignmentGuides` 的 React key 改为包含完整线段几何（`type`/`position`/`start`/`end`，全精度），以支持规则 5.4 的同坐标多线段。
 - `web/src/features/canvas/controls/CanvasControls.tsx`、`web/src/lib/i18n/zh-CN.json`、`en-US.json`：开关文案改为「吸附开 / 吸附关」（`canvas.snap.on/off`），图标注释同步。
 - `web/src/features/canvas/stores/canvas-store.ts`：删除 `snapThreshold`（不再由 store 配置）；开关字段 `snapToGrid` 更名为 `snapEnabled`（动作 `toggleSnapEnabled`），保留 `snapGridSize`。
-- 开关字段更名涉及：`project/types`（`CanvasData`）、`project/store`、`project/save-manager`（全量与增量）、`CanvasControls`、`InfiniteCanvas`（拖动开始捕获）、`canvas-edit-actions`（撤销恢复、方向键步进）、`use-tidy-animation`、`agent/tools/executors` 与相关测试。
+- 开关字段更名涉及：`web/src/features/canvas/types.ts`（`CanvasData`）、`web/src/features/canvas/stores/canvas-store.ts`、`web/src/features/canvas/persistence/save-manager.ts`（全量与增量）、`CanvasControls`、`CanvasSurface`（拖动开始捕获）、`canvas-edit-actions`（撤销恢复、方向键步进）、`use-tidy-animation`、`agent/tools/executors` 与相关测试。
 - `web/src/lib/constants.ts`：新增 `DEFAULT_SNAP_GRID_SIZE`（store 初值与拖动会话初值共用的默认步长，值仍为 20）与 `DEFAULT_SNAP_ENABLED`（吸附总开关默认值 `true`，store 初值、项目恢复与拖动会话初值共用）。
-- `web/src/features/canvas/InfiniteCanvas.tsx`：会话开始传入吸附开关与网格设置；拖动开始事件提供初始修饰键状态。
+- `web/src/features/canvas/root/CanvasSurface.tsx`：会话开始传入吸附开关与网格设置；拖动开始事件提供初始修饰键状态。
 - 测试：新增吸附引擎与适配器单测，更新拖动会话与相关用例。
 
 ### 不改动
@@ -359,3 +361,4 @@
 - 验证（已验证事实）：web 与根目录 `tsc --noEmit` 通过；改动文件 ESLint 通过；web canvas + project 82 文件 / 783 用例、server canvas 33 用例全部通过，含新增「总开关关闭时引擎与拖动会话均无吸附、锁定清空」回归用例。浏览器 A/B（测试画布 mvubeirp5219lc，zoom 1）：关闭时拖动 +13px 落点 (273,297)，为原始位移、拖动中无辅助线、不取整；开启后拖动 +6px，拖动中出现辅助线，落点 (280,300)（y 对齐 300、x 网格取整 280）；开关状态刷新后保持；旧存档打开画布为吸附开启。
 - 复审修复：`CanvasControls` 头注释由「网格吸附开关」改为「吸附总开关」（旧描述把总开关说成仅网格）；三处 `{ x: null, y: null }` 字面量收敛为 `emptySnapState()`；`DEFAULT_SNAP_ENABLED` 补入「范围」；`specs/canvas-shared-module-convergence.md` 因 `orderGroupsBeforeMembers` 修复尚未提交，状态由「已实现」暂回「已确认」。
 - 当前状态说明：实现已提交并推送（be612033，2026-10-30），验收标准 1–10 的单测、检查与浏览器 A/B 走查均已完成；用户于 2026-10-30 要求转为「已实现」，状态转「已实现」。
+- 2026-11-08 文档校正（仅文档）：「### 2. 当前实现」改为「### 2. 改造前实现（2026-10-30 基线，已验证事实）」并加注说明；阈值捕获处的 `InfiniteCanvas.tsx:776` 补注改造后由 `hooks/use-canvas-pointer.ts` 在拖动开始时读取并交给拖动会话。规则、验收与实现均未变。

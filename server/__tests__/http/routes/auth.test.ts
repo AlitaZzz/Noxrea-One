@@ -1,25 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  authenticateRequest: vi.fn(),
-  setAuthCookie: vi.fn(),
-  getUserByUsername: vi.fn(),
-  getUserById: vi.fn(),
-  updateUser: vi.fn(),
-  createUser: vi.fn(),
-  setUserPassword: vi.fn(),
-  touchLastLogin: vi.fn(),
-  toPublicUser: vi.fn(),
-  isUsernameTakenError: vi.fn(),
-  createAccessToken: vi.fn(),
-  hashPassword: vi.fn(),
-  verifyPassword: vi.fn(),
-  checkLoginRateLimit: vi.fn(),
-  checkRegisterRateLimit: vi.fn(),
-  getConnInfo: vi.fn(),
-  loggerWarn: vi.fn(),
-  aggregate: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class UserAvatarKeyError extends Error {}
+  return {
+    UserAvatarKeyError,
+    authenticateRequest: vi.fn(),
+    setAuthCookie: vi.fn(),
+    getUserByUsername: vi.fn(),
+    getUserById: vi.fn(),
+    updateUser: vi.fn(),
+    changePassword: vi.fn(),
+    createUser: vi.fn(),
+    touchLastLogin: vi.fn(),
+    toPublicUser: vi.fn(),
+    isUsernameTakenError: vi.fn(),
+    createAccessToken: vi.fn(),
+    hashPassword: vi.fn(),
+    verifyPassword: vi.fn(),
+    checkLoginRateLimit: vi.fn(),
+    checkRegisterRateLimit: vi.fn(),
+    getConnInfo: vi.fn(),
+    loggerWarn: vi.fn(),
+    aggregate: vi.fn(),
+  };
+});
 
 vi.mock("@server/http/middleware/auth", () => ({
   authenticateRequest: mocks.authenticateRequest,
@@ -28,12 +32,17 @@ vi.mock("@server/http/middleware/auth", () => ({
 vi.mock("@server/crud/user", () => ({
   getUserByUsername: mocks.getUserByUsername,
   getUserById: mocks.getUserById,
-  updateUser: mocks.updateUser,
   createUser: mocks.createUser,
-  setUserPassword: mocks.setUserPassword,
   touchLastLogin: mocks.touchLastLogin,
   toPublicUser: mocks.toPublicUser,
   isUsernameTakenError: mocks.isUsernameTakenError,
+}));
+vi.mock("@server/services/user/change-password", () => ({
+  changePassword: mocks.changePassword,
+}));
+vi.mock("@server/services/user/update-profile", () => ({
+  updateUser: mocks.updateUser,
+  UserAvatarKeyError: mocks.UserAvatarKeyError,
 }));
 vi.mock("@server/core/auth", () => ({
   createAccessToken: mocks.createAccessToken,
@@ -274,5 +283,114 @@ describe("me 存储摘要（specs/storage-user-quota.md 规则 5）", () => {
 
     expect(res.status).toBe(200);
     await expect(storageOf(res)).resolves.toEqual({ usedBytes: 5, quotaBytes: 1024 * 1024 });
+  });
+});
+
+describe("PUT me：密码与画像更新", () => {
+  const HASH = "a".repeat(64);
+  const AVATAR_KEY = `7/${HASH.slice(0, 2)}/${HASH}.png`;
+
+  beforeEach(() => {
+    mocks.authenticateRequest.mockResolvedValue({ user: { id: 7 } });
+    mocks.toPublicUser.mockImplementation((user: { id: number; username: string }) => ({
+      id: user.id,
+      username: user.username,
+    }));
+    mocks.aggregate.mockResolvedValue({ _sum: { size: null } });
+    mocks.updateUser.mockResolvedValue(undefined);
+    mocks.hashPassword.mockResolvedValue("hashed-new");
+    mocks.createAccessToken.mockResolvedValue("fresh-token");
+  });
+
+  const putMe = (body: unknown) => router.request("/api/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+  });
+
+  it("旧密码校验通过后委托 changePassword，并用新版本号重签会话", async () => {
+    const current = makeUser({ id: 7, username: "alice", hashedPassword: "old-hash", tokenVersion: 3 });
+    const fresh = makeUser({ id: 7, username: "alice", tokenVersion: 4 });
+    mocks.getUserById.mockResolvedValueOnce(current).mockResolvedValueOnce(fresh);
+    mocks.verifyPassword.mockResolvedValue(true);
+
+    const res = await putMe({ password: "new-secret", oldPassword: "old-secret" });
+
+    expect(res.status).toBe(200);
+    expect(mocks.verifyPassword).toHaveBeenCalledWith("old-secret", "old-hash");
+    expect(mocks.changePassword).toHaveBeenCalledWith(7, "hashed-new", {});
+    expect(mocks.createAccessToken).toHaveBeenCalledWith(7, "alice", 4);
+    expect(mocks.setAuthCookie).toHaveBeenCalledWith(expect.anything(), "fresh-token");
+  });
+
+  it("密码与画像同改：资料随同一事务提交，成功后重签会话", async () => {
+    const current = makeUser({ id: 7, username: "alice", hashedPassword: "old-hash", tokenVersion: 3 });
+    const fresh = makeUser({ id: 7, username: "alice", tokenVersion: 4 });
+    mocks.getUserById.mockResolvedValueOnce(current).mockResolvedValueOnce(fresh);
+    mocks.verifyPassword.mockResolvedValue(true);
+    mocks.changePassword.mockResolvedValue(fresh);
+
+    const res = await putMe({
+      password: "new-secret",
+      oldPassword: "old-secret",
+      avatarKey: AVATAR_KEY,
+      theme: "dark",
+    });
+
+    expect(res.status).toBe(200);
+    expect(mocks.changePassword).toHaveBeenCalledWith(7, "hashed-new", {
+      avatarKey: AVATAR_KEY,
+      theme: "dark",
+    });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+    expect(mocks.setAuthCookie).toHaveBeenCalledWith(expect.anything(), "fresh-token");
+  });
+
+  it("密码与头像同改且头像校验失败：422，不重签、不单独写资料", async () => {
+    mocks.getUserById.mockResolvedValue(makeUser({ hashedPassword: "old-hash" }));
+    mocks.verifyPassword.mockResolvedValue(true);
+    mocks.changePassword.mockRejectedValue(new mocks.UserAvatarKeyError());
+
+    const res = await putMe({
+      password: "new-secret",
+      oldPassword: "old-secret",
+      avatarKey: AVATAR_KEY,
+    });
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toBe("common.invalid_request");
+    expect(mocks.changePassword).toHaveBeenCalledWith(7, "hashed-new", { avatarKey: AVATAR_KEY });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+    expect(mocks.setAuthCookie).not.toHaveBeenCalled();
+  });
+
+  it("旧密码错误：400，不写库、不重签", async () => {
+    mocks.getUserById.mockResolvedValue(makeUser({ hashedPassword: "old-hash" }));
+    mocks.verifyPassword.mockResolvedValue(false);
+
+    const res = await putMe({ password: "new-secret", oldPassword: "wrong" });
+
+    expect(res.status).toBe(400);
+    expect(mocks.changePassword).not.toHaveBeenCalled();
+    expect(mocks.setAuthCookie).not.toHaveBeenCalled();
+  });
+
+  it("用户不存在：404，不写库", async () => {
+    mocks.getUserById.mockResolvedValue(null);
+
+    const res = await putMe({ password: "new-secret" });
+
+    expect(res.status).toBe(404);
+    expect(mocks.changePassword).not.toHaveBeenCalled();
+  });
+
+  it("头像引用校验失败：映射 422，不透传为 500", async () => {
+    mocks.getUserById.mockResolvedValue(makeUser());
+    mocks.updateUser.mockRejectedValue(new mocks.UserAvatarKeyError());
+
+    const res = await putMe({ avatarKey: AVATAR_KEY });
+
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toBe("common.invalid_request");
   });
 });

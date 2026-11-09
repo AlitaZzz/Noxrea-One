@@ -11,6 +11,14 @@
       "types": "./index.ts",
       "default": "./index.ts"
     },
+    "./asset": {
+      "types": "./asset.ts",
+      "default": "./asset.ts"
+    },
+    "./object": {
+      "types": "./object.ts",
+      "default": "./object.ts"
+    },
     "./url": {
       "types": "./url.ts",
       "default": "./url.ts"
@@ -30,6 +38,14 @@
     "./text": {
       "types": "./text.ts",
       "default": "./text.ts"
+    },
+    "./time": {
+      "types": "./time.ts",
+      "default": "./time.ts"
+    },
+    "./canvas-summary": {
+      "types": "./canvas-summary.ts",
+      "default": "./canvas-summary.ts"
     }
   },
   "dependencies": {

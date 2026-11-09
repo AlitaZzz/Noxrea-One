@@ -26,7 +26,8 @@ vi.mock("@/lib/api/client", () => ({
   getTokenHeader: () => ({ Authorization: "Bearer test-token" }),
 }));
 
-vi.mock("@/lib/utils/upload", () => ({
+vi.mock("@/lib/utils/upload", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/utils/upload")>()),
   isOffline: mocks.isOffline,
   uploadBatchWithRetry: mocks.uploadBatchWithRetry,
   uploadWithRetry: vi.fn(),

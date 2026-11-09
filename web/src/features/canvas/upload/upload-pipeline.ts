@@ -2,7 +2,7 @@
  * 画布素材统一上传管道。
  *
  * 拖入画布、节点内替换、生成面板参考区、裁剪 / 宫格切分 / 标注、
- * 全景截图、导演截图、资产库上传等全部入口共用这一条链路：
+ * 全景截图等全部画布入口共用这一条链路：
  *
  *   类型校验 → 本地预览 + 尺寸探测 → 建占位节点（乐观 UI）
  *   → 并发上传（失败自动重试）→ 进度回写 → 成功原地落库
@@ -26,10 +26,9 @@ import { createAudioNode, createEdge, createImageNode, createVideoNode } from "@
 import { absoluteNodeOf, buildNodeIndex, nodeAbsolutePosition, toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import type { AnyEdge, AnyNode, UploadState } from "@/features/canvas/types";
+import type { AnyEdge, AnyNode } from "@/features/canvas/types";
+import type { HistorySnapshot } from "@/features/canvas/types";
 import { useUploadProgressStore } from "@/features/canvas/upload/upload-progress-store";
-import type { HistorySnapshot } from "@/features/project/types";
-import { resolveApiError } from "@/lib/api/error-message";
 import {
   AUDIO_NODE_HEIGHT,
   AUDIO_NODE_WIDTH,
@@ -41,7 +40,8 @@ import {
 import { showGlobalMessage } from "@/lib/global-message";
 import i18n from "@/lib/i18n/config";
 import { captureSession, onSessionChange } from "@/lib/session-lifecycle";
-import { FALLBACK_UPLOAD_LIMITS, kindOfBlob, loadUploadLimits } from "@/lib/upload-formats";
+import type { UploadState } from "@/lib/types/canvas";
+import { kindOfBlob } from "@/lib/upload-formats";
 import { stripMediaExtension } from "@/lib/utils/file-name";
 import { formatTime } from "@/lib/utils/format";
 import { computeNodeSize, loadMediaDimensions } from "@/lib/utils/image-utils";
@@ -49,14 +49,12 @@ import {
   classifyUploadError,
   isOffline,
   UPLOAD_MAX_RETRIES,
-  uploadBatchWithRetry,
-  UploadBusinessError,
   type UploadErrorInfo,
   type UploadProgressValue,
   type UploadResult,
-  type UploadSession,
   uploadWithRetry,
 } from "@/lib/utils/upload";
+import { runUploadBatches } from "@/lib/utils/upload-batches";
 
 import { resolveDerivedLabel, resolveDerivedPosition } from "./derived-node";
 import type { MediaKind, UploadHandle, UploadItem, UploadPlan, UploadSummary } from "./types";
@@ -118,7 +116,7 @@ function toFile(item: UploadItem): File {
   return new File([item.blob], item.filename, { type: item.blob.type || "image/png" });
 }
 
-/** 释放一批任务的 blob 预览 URL（previewUrl 可为空：raw sink 与音频不创建预览） */
+/** 释放一批任务的 blob 预览 URL（previewUrl 可为空：音频不创建预览） */
 function releasePreviews(entries: ReadonlyArray<{ previewUrl?: string }>): void {
   for (const entry of entries) if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
 }
@@ -131,7 +129,7 @@ function createPlaceholderNode(kind: MediaKind, position: { x: number; y: number
 
 /** 已完成准备（本地预览 / 尺寸 / 占位）的单个上传任务 */
 interface Prepared {
-  /** 在 plan.items 中的下标，用于 onProgress 回传 */
+  /** 在原 plan.items 中的下标：结果按下标写回 summaryResults / summaryErrors */
   itemIndex: number;
   item: UploadItem;
   kind: MediaKind;
@@ -239,7 +237,7 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
       return emptyHandle();
     }
 
-    const needsPreview = sink.kind !== "raw" && kind !== "audio";
+    const needsPreview = kind !== "audio";
     const previewUrl = needsPreview ? (item.previewUrl ?? URL.createObjectURL(item.blob)) : undefined;
 
     let nw = item.naturalWidth ?? 0;
@@ -341,9 +339,6 @@ export async function runMediaUpload(plan: UploadPlan): Promise<UploadHandle> {
         );
         continue;
       }
-
-      // raw：只上传拿远程地址，不创建任何画布节点
-      if (sink.kind === "raw") continue;
 
       const node = createPlaceholderNode(p.kind, resolvePosition(p, sink, cursor, sourceNode, newNodes, storeNodes));
 
@@ -501,47 +496,6 @@ function applyUploadResult(nodeId: string, result: UploadResult, ctx: RetryConte
   if (ctx.previewUrl) URL.revokeObjectURL(ctx.previewUrl);
 }
 
-function splitRawUploadBatches(prepared: Prepared[], maxFiles: number, maxBytes: number): Prepared[][] {
-  const batches: Prepared[][] = [];
-  let current: Prepared[] = [];
-  let currentBytes = 0;
-  for (const item of prepared) {
-    const exceedsFiles = current.length >= maxFiles;
-    const exceedsBytes = current.length > 0 && currentBytes + item.file.size > maxBytes;
-    if (exceedsFiles || exceedsBytes) {
-      batches.push(current);
-      current = [];
-      currentBytes = 0;
-    }
-    current.push(item);
-    currentBytes += item.file.size;
-  }
-  if (current.length > 0) batches.push(current);
-  return batches;
-}
-
-/**
- * 上传一个批次：批次层已把进度按阶段归因到单文件（relay 只有传输阶段，
- * 按 FormData 字节区间归因；direct 区分哈希/传输两阶段），这里按批内下标转发。
- */
-async function uploadPreparedBatch(
-  batch: Prepared[],
-  source: "upload" | "derived",
-  session: UploadSession,
-  onFileProgress: (p: Prepared, index: number, progress: UploadProgressValue) => void,
-): Promise<PromiseSettledResult<UploadResult>[]> {
-  return uploadBatchWithRetry(
-    batch.map((p) => p.file),
-    (index, progress) => {
-      if (session.signal.aborted) return;
-      onFileProgress(batch[index], index, progress);
-    },
-    UPLOAD_MAX_RETRIES,
-    source,
-    session,
-  );
-}
-
 async function runUploads(
   plan: UploadPlan,
   prepared: Prepared[],
@@ -567,7 +521,7 @@ async function runUploads(
 
     const targetId = p.node?.id ?? p.replaceId;
     if (!targetId) {
-      // 无落库目标（raw sink）：只记录结果
+      // 替换目标在准备阶段已消失：没有落库目标，只记录结果
       releasePreview();
       if (r.status === "fulfilled") {
         succeeded++;
@@ -684,67 +638,36 @@ async function runUploads(
     }
   };
 
-  if (prepared.length > 0) {
-    const limits = await loadUploadLimits().catch(() => FALLBACK_UPLOAD_LIMITS);
-    if (session.signal.aborted) {
-      releasePreviews(prepared);
-      return {
-        succeeded: 0,
-        failed: prepared.length,
-        results: plan.items.map(() => null),
-        errors: plan.items.map(() => undefined),
-      };
-    }
-    // 单文件体积超过批次总字节上限：任何拆分都无法满足约束，直接按业务失败落库，
-    // 不发注定 413 的请求。该文件通常同时超单文件上限（默认 100MB < 批次 128MiB），
-    // 此时报告更准确的「文件体积超限」；仅批次上限低于单文件上限的配置下报批次超限
-    const singleFileLimitBytes = limits.maxSizeMb * 1024 * 1024;
-    const oversized = prepared.filter((p) => p.file.size > limits.maxBatchBytes);
-    const batchable = prepared.filter((p) => p.file.size <= limits.maxBatchBytes);
-    for (const p of oversized) {
-      settleOne(p, {
-        status: "rejected",
-        reason: new UploadBusinessError(resolveApiError(
-          p.file.size > singleFileLimitBytes
-            ? { error: "upload.file_too_large", ctx: { limit: limits.maxSizeMb } }
-            : { error: "upload.batch_too_large" },
-        )),
-      });
-    }
-    const batches = splitRawUploadBatches(batchable, limits.maxBatchFiles, limits.maxBatchBytes);
-    for (const [batchIndex, batch] of batches.entries()) {
-      if (session.signal.aborted) break;
-      if (isOffline()) {
-        // 不再发送请求，但必须逐项结算剩余文件，避免占位节点和资产卡片一直处于等待态。
-        const error = new Error(i18n.t("error.upload.offline"));
-        for (const pendingBatch of batches.slice(batchIndex)) {
-          for (const p of pendingBatch) settleOne(p, { status: "rejected", reason: error });
-        }
-        break;
-      }
-      const reporters = batch.map((p) => {
+  // 批次进度归因：每批传输前登记节点进度态，逐项结算时先落账再清理
+  const reporters = new Map<number, { targetId?: string; reporter: ProgressReporter | null }>();
+  const status = await runUploadBatches(prepared, {
+    fileOf: (p) => p.file,
+    source,
+    batchStarted: (batch) => {
+      for (const p of batch) {
         const targetId = p.node?.id ?? p.replaceId;
         const reporter = targetId ? createProgressReporter(targetId, p.version) : null;
         if (targetId) useUploadProgressStore.getState().begin(targetId, p.version);
-        return { targetId, reporter };
-      });
-      const batchResults = await uploadPreparedBatch(batch, source, session, (p, i, progress) => {
-        plan.onProgress?.(p.itemIndex, progress);
-        const { targetId, reporter } = reporters[i];
-        if (targetId && isCurrentUpload(findNode(targetId), p.version)) reporter?.report(progress);
-      });
-      for (let i = 0; i < batch.length; i++) {
-        const { targetId, reporter } = reporters[i];
-        reporter?.flush();
-        settleOne(batch[i], batchResults[i]);
-        reporter?.cancel();
-        if (targetId) useUploadProgressStore.getState().clear(targetId, batch[i].version);
+        reporters.set(p.itemIndex, { targetId, reporter });
       }
-      if (session.signal.aborted) break;
-    }
-  }
+    },
+    progress: (p, progress) => {
+      const entry = reporters.get(p.itemIndex);
+      if (!entry?.targetId) return;
+      if (!isCurrentUpload(findNode(entry.targetId), p.version)) return;
+      entry.reporter?.report(progress);
+    },
+    settle: (p, result) => {
+      const entry = reporters.get(p.itemIndex);
+      entry?.reporter?.flush();
+      settleOne(p, result);
+      entry?.reporter?.cancel();
+      if (entry?.targetId) useUploadProgressStore.getState().clear(entry.targetId, p.version);
+      reporters.delete(p.itemIndex);
+    },
+  });
 
-  if (session.signal.aborted) {
+  if (status === "aborted") {
     releasePreviews(prepared);
     return {
       succeeded: 0,
@@ -756,7 +679,7 @@ async function runUploads(
   markDirtyImmediate();
 
   // 画布上已有失败节点（自带失败遮罩与重试入口）时不再弹全局汇总，避免重复打扰；
-  // 仅当画布上没有留下任何失败痕迹（节点替换回滚、raw 截图等）才统一提示一次
+  // 仅当画布上没有留下任何失败痕迹（节点替换回滚等）才统一提示一次
   if (!plan.silent && failed > 0 && retained === 0) {
     const t = i18n.t;
     // 单文件失败直接展示原因（"全部文件上传失败"对一次只传一个的场景不适用）
@@ -769,28 +692,6 @@ async function runUploads(
   }
 
   return { succeeded, failed, reason, results: summaryResults, errors: summaryErrors };
-}
-
-/**
- * 上传单个 Blob 并只取结果（不碰画布）。
- * 供头像裁剪、导演视图截图等「只需要一个远程地址」的场景使用。
- *
- * @param options.notify 为 true 时失败也会弹全局提示（默认静默，由调用方自行提示）
- */
-export async function uploadOne(
-  blob: Blob,
-  filename: string,
-  source?: "upload" | "derived",
-  options?: { notify?: boolean },
-): Promise<UploadResult | null> {
-  const { settled } = await runMediaUpload({
-    items: [{ blob, filename }],
-    sink: { kind: "raw" },
-    source,
-    silent: !options?.notify,
-  });
-  const { results } = await settled;
-  return results[0] ?? null;
 }
 
 /**

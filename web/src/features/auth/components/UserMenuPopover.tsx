@@ -7,14 +7,16 @@
  * 页面差异通过参数注入：触发器与中段条目（items）由调用方给定
  * （画布=小 logo 触发 + 项目操作条目；项目页=头像 pill + 账户/语言条目）；
  * onLogout 由页面决定收尾（画布先弹确认框，项目页直接登出跳登录页）。
- * 放在 auth 特性层而非 components/ui：ui 层禁止依赖 feature（useCurrentUser）。
+ * 放在 auth 特性层而非 components/ui：ui 层只依赖 shared，不能读取 entities/user
+ * 的登录态（useCurrentUser），且退出登录属账户能力而非通用控件行为。
  */
 
 "use client";
 
-import { memo, type ReactElement, type ReactNode } from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,26 +25,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useCurrentUser } from "@/features/auth/UserContext";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
+import { useCurrentUser } from "@/entities/user";
+import type { UserMenuProps } from "@/types/user-menu";
 
-export type UserMenuItem =
-  | { type: "divider"; key?: string }
-  | { type?: never; key: string; label?: ReactNode; extra?: ReactNode };
-
-function UserMenuPopoverImpl({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  trigger: ReactElement;
-  /** 弹出方位：画布工具栏（左上角）用 bottomLeft，项目页头像（右上角）用 bottomRight */
-  placement?: "bottomLeft" | "bottomRight";
-  /** 中段业务条目：画布=项目主页/新建/删除，项目页=账户设置/语言切换 */
-  items: UserMenuItem[];
-  /** 中段条目点击（按 key 分发；退出登录走 onLogout，不经此处） */
-  onItemClick: (key: string) => void;
-  /** 退出登录动作：页面自持（确认框 / 直接登出 + 跳转目标） */
-  onLogout: () => void;
-}) {
+function UserMenuPopoverImpl({ open, onOpenChange, trigger, placement = "bottomRight", items, onItemClick, onLogout }: UserMenuProps) {
   const { t } = useTranslation();
   const user = useCurrentUser();
 

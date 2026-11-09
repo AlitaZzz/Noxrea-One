@@ -5,7 +5,7 @@
  * - HTTP 由 Hono 提供，监听 API_PORT（默认 4000）
  * - Worker（BullMQ）与对账清扫异步运行，不阻塞事件循环
  */
-import { bootstrap } from "@server/core/bootstrap";
+import { bootstrap } from "@server/bootstrap";
 import { startTaskWorker, stopTaskWorker } from "@server/services/worker/worker";
 import { startReconcileSweep, stopReconcileSweep } from "@server/services/worker/reconcile";
 import { closeTaskQueue } from "@server/services/worker/queue";

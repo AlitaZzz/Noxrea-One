@@ -2,8 +2,8 @@
  * 前后端契约一致性测试（T8a/T8b）。
  *
  * 前后端分离部署，跨包契约由 shared/（@noxrea/shared）单一数据源 + 本测试守护：
- * 1. 任务状态：shared/index.ts 的 taskStatusSchema 单源，web types/canvas.ts
- *    只允许转出（export type { TaskStatus }），不得 reintroduce 本地字面量联合
+ * 1. 任务状态：shared/index.ts 的 taskStatusSchema 单源，web 不得本地声明字面量
+ *    联合，也不得经中间模块转出，直接从 @noxrea/shared 导入
  * 2. 错误码：server/core/errors/codes.ts 的 ERROR_CODES ↔ web i18n error 命名空间
  *    （codes.ts 头部约定：每个登记码必须有 zh-CN / en-US 双语文案，否则前端退回
  *    通用兜底并在开发环境告警）
@@ -31,9 +31,12 @@ describe("前后端契约一致性", () => {
     const src = webSrc("lib/types/canvas.ts");
     expect(
       /export type TaskStatus\s*=[^;]+;/.test(src),
-      "web types/canvas.ts 不得本地声明 TaskStatus，应从 @noxrea/shared 转出"
+      "web types/canvas.ts 不得本地声明 TaskStatus，应直接导入 @noxrea/shared"
     ).toBe(false);
-    expect(/export type \{ TaskStatus \};/.test(src)).toBe(true);
+    expect(
+      /import type \{ TaskStatus \} from "@noxrea\/shared";/.test(src),
+      "web types/canvas.ts 应从 @noxrea/shared 直接导入 TaskStatus"
+    ).toBe(true);
 
     // 运行时全集来自 zod schema 派生，钉住语义
     expect([...TASK_STATUSES]).toEqual([

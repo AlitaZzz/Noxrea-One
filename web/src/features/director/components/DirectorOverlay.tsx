@@ -12,7 +12,7 @@ import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { LayerContext } from "@/components/ui/modal/layer-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
+import type { DirectorImageNodeInput, DirectorStateData } from "@/entities/director";
 import Dock from "@/features/director/components/Dock";
 import Inspector from "@/features/director/components/Inspector";
 import Outliner from "@/features/director/components/Outliner";
@@ -29,13 +29,19 @@ const DirectorViewport = dynamic(() => import("@/features/director/components/Di
   loading: () => <ViewportLoading />,
 });
 
-interface Props {
+export interface DirectorOverlayProps {
+  /** 打开时恢复的场景快照；由页面从 Director 节点数据读取。 */
+  initialState: DirectorStateData | null;
+  /** 关闭时回写场景快照；节点已删除时为 no-op。 */
+  onSaveState: (state: DirectorStateData) => void;
+  /** 出图落回画布；节点已删除时为 no-op。 */
+  onCreateImageNode: (input: DirectorImageNodeInput) => Promise<void>;
   onClose: () => void;
 }
 
 const DIRECTOR_LAYER_Z_INDEX = 100;
 
-export default function DirectorOverlay({ onClose }: Props) {
+export default function DirectorOverlay({ initialState, onSaveState, onCreateImageNode, onClose }: DirectorOverlayProps) {
   const { t } = useTranslation();
   const runtime = useDirectorStore((s) => s.runtime);
   const selectedId = useDirectorStore((s) => s.selectedId);
@@ -86,13 +92,8 @@ export default function DirectorOverlay({ onClose }: Props) {
           <div className="ml-auto flex items-center">
             <Button variant="ghost" size="icon-sm" aria-label={t("common.close")} onClick={() => {
               const ds = useDirectorStore.getState();
-              const nodeId = ds.openingNodeId;
-              if (ds.runtime && nodeId) {
-                const state = ds.runtime.captureState();
-                if (state) {
-                  useCanvasStore.getState().updateNodeData(nodeId, { directorState: state });
-                }
-              }
+              const state = ds.runtime?.captureState();
+              if (state) onSaveState(state);
               ds.reset();
               onClose();
             }} className="text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -111,7 +112,7 @@ export default function DirectorOverlay({ onClose }: Props) {
 
           {/* 中:3D 视口 */}
           <div className="flex-1 relative min-w-0 bg-black">
-            <DirectorViewport />
+            <DirectorViewport initialState={initialState} onCreateImageNode={onCreateImageNode} />
           </div>
 
           {/* 右:面板 — 290px, panel bg, no padding(由内部组件自行处理) */}

@@ -80,7 +80,7 @@ function alignedSigningTimeMs(windowSeconds: number, nowMs: number): number {
 }
 
 /** 一次签名的时间窗口（Unix 秒）：客户端据此决定何时刷新 */
-interface PresignedWindow {
+export interface PresignedWindow {
   /** 签名时刻（窗口起点） */
   issuedAt: number;
   /** URL 失效时刻 */

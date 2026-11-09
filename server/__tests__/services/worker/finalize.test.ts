@@ -19,10 +19,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@server/crud/task", () => ({
   getTaskStatus: mocks.getTaskStatus,
-  safeCompleteTask: mocks.safeCompleteTask,
-  safeFailTask: mocks.safeFailTask,
   touchTaskHeartbeat: mocks.touchTaskHeartbeat,
   TASK_HEARTBEAT_INTERVAL_MS: 30_000,
+}));
+vi.mock("@server/services/tasks/terminal", () => ({
+  safeCompleteTask: mocks.safeCompleteTask,
+  safeFailTask: mocks.safeFailTask,
 }));
 vi.mock("@server/services/storage/download", () => ({
   fetchMediaBytes: mocks.fetchMediaBytes,
@@ -76,7 +78,7 @@ describe("finalizeGeneratedResult", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/a.png", "u1/b.png"], resultText: "caption" },
-      { startedAt }
+      startedAt
     );
     expect(mocks.safeFailTask).not.toHaveBeenCalled();
   });
@@ -91,7 +93,7 @@ describe("finalizeGeneratedResult", () => {
     expect(mocks.safeFailTask).toHaveBeenCalledWith(
       "task-1",
       { error: "生成结果下载失败", errorCode: "generation.download_failed" },
-      { startedAt }
+      startedAt
     );
     expect(mocks.safeCompleteTask).not.toHaveBeenCalled();
   });
@@ -108,7 +110,7 @@ describe("finalizeGeneratedResult", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/a.png"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -121,7 +123,7 @@ describe("finalizeGeneratedResult", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: [], resultText: undefined },
-      { startedAt }
+      startedAt
     );
     expect(mocks.fetchMediaBytes).not.toHaveBeenCalled();
   });
@@ -157,7 +159,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/a.png"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -174,7 +176,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/image-a"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -190,7 +192,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/image-b"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -206,7 +208,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/image-c"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -220,7 +222,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/b.png", "u1/a.png"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -237,7 +239,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/retry-ok"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 
@@ -252,7 +254,7 @@ describe("产物身份收口", () => {
     expect(mocks.safeCompleteTask).toHaveBeenCalledWith(
       "task-1",
       { resultUrls: ["u1/same"], resultText: undefined },
-      { startedAt }
+      startedAt
     );
   });
 });

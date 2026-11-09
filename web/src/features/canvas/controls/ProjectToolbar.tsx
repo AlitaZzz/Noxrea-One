@@ -1,7 +1,7 @@
 /**
  * 画布左上角项目工具栏（常驻 Panel 内容）。
- * 菜单开合与项目名编辑是局部交互状态，内聚在此；props 全部为稳定引用/原语，
- * 画布外壳在程序化位置帧逐帧重渲染时本组件直接 bail。
+ * 菜单开合与项目名编辑是局部交互状态，内聚在此；用户菜单由页面插槽注入，
+ * 项目菜单条目与动作也归页面（本组件只提供触发器）。
  */
 import { memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,23 +11,22 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { type UserMenuItem, UserMenuPopover } from "@/features/auth/components/UserMenuPopover";
-import { useProjectStore } from "@/features/project/store";
+import {
+  renameProject,
+  useActiveProjectId,
+  useActiveProjectSummary,
+} from "@/entities/project";
+import type { CanvasSlots } from "@/features/canvas/root/contracts";
 
 export interface ProjectToolbarProps {
-  projectName: string;
-  items: UserMenuItem[];
-  onItemClick: (key: string) => void;
-  onLogout: () => void;
+  /** 页面注入的用户菜单；触发器与开合状态由本组件提供。 */
+  userMenu: CanvasSlots["userMenu"];
 }
 
-const ProjectToolbar = memo(function ProjectToolbar({
-  projectName,
-  items,
-  onItemClick,
-  onLogout,
-}: ProjectToolbarProps) {
+const ProjectToolbar = memo(function ProjectToolbar({ userMenu }: ProjectToolbarProps) {
   const { t } = useTranslation();
+  const activeProjectId = useActiveProjectId();
+  const projectName = useActiveProjectSummary()?.name ?? "";
   const [menuOpen, setMenuOpen] = useState(false);
   const [editName, setEditName] = useState(projectName);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -53,15 +52,7 @@ const ProjectToolbar = memo(function ProjectToolbar({
   return (
     <div style={{ paddingLeft: 30, paddingTop: 30 }}>
       <Card className="pointer-events-auto flex h-9 w-[280px] shrink-0 flex-row items-center gap-1 rounded-lg border-border bg-card/70 px-2 py-0 backdrop-blur-[10px]">
-        <UserMenuPopover
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          placement="bottomLeft"
-          items={items}
-          onItemClick={onItemClick}
-          onLogout={onLogout}
-          trigger={menuTrigger}
-        />
+        {userMenu({ trigger: menuTrigger, open: menuOpen, onOpenChange: setMenuOpen })}
         <Separator orientation="vertical" className="mx-0.5 h-5" />
         {isEditingName ? (
           <Input
@@ -74,9 +65,8 @@ const ProjectToolbar = memo(function ProjectToolbar({
             onFocus={(e) => e.target.setSelectionRange(0, e.target.value.length)}
             onBlur={() => {
               setIsEditingName(false);
-              const activeId = useProjectStore.getState().activeProjectId;
-              if (activeId && editName.trim()) {
-                useProjectStore.getState().renameProject(activeId, editName.trim());
+              if (activeProjectId && editName.trim()) {
+                renameProject(activeProjectId, editName.trim());
               }
             }}
             onKeyDown={(e) => {

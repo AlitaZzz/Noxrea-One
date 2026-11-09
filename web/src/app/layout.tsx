@@ -9,8 +9,7 @@ import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
 import { cookies } from "next/headers";
 
-import { parseUserCookie, USER_COOKIE } from "@/features/auth/user-cache";
-import { CachedUserProvider } from "@/features/auth/UserContext";
+import { CachedUserProvider, parseUserCookie, USER_COOKIE } from "@/entities/user";
 import enUS from "@/lib/i18n/en-US.json";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { LANG_COOKIE } from "@/lib/i18n/lang-cookie";

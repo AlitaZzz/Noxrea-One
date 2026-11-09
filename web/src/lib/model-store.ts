@@ -3,15 +3,12 @@
  * 管理供应商及其模型清单的增删改、能力标记，
  * 支持从供应商远端拉取模型列表、读取服务商预设与模型参数配置缓存。
  */
+import { isRecord } from "@noxrea/shared/object";
 import { stripTrailingSlash } from "@noxrea/shared/url";
 import { create } from "zustand";
 
 import { ApiError } from "@/lib/api/client";
-import {
-  isRecord,
-  parseErrorBody,
-  resolveApiError,
-} from "@/lib/api/error-message";
+import { parseErrorBody, resolveApiError } from "@/lib/api/error-message";
 import { modelApi } from "@/lib/api/model-api";
 import { notifyFailure, showGlobalNotification } from "@/lib/global-notification";
 import i18n from "@/lib/i18n/config";

@@ -1,7 +1,7 @@
 /**
  * 账户设置弹窗。
  * 展示当前登录用户的用户名（登录身份，不可修改）与存储用量，修改头像（经裁剪弹窗上传）
- * 与登录密码，保存后同步更新 auth store 中的用户信息与存储摘要。与模型 / 渠道配置无关。
+ * 与登录密码，保存后同步更新 entities/user 中的用户信息与存储摘要。与模型 / 渠道配置无关。
  */
 
 "use client";
@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { CameraOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,10 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { authApi } from "@/features/auth/api";
-import { useAuthStore } from "@/features/auth/store";
-import { toUserInfo } from "@/features/auth/user-cache";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
+import { type ProfilePatch, refreshStorage, updateProfile, useSessionUser, useUserStorage } from "@/entities/user";
 import { formatBytes } from "@/lib/utils/format";
 
 import AvatarCropModal from "./AvatarCropModal";
@@ -32,9 +30,8 @@ interface Props {
 export default function SettingsModal({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
-  const user = useAuthStore((s) => s.user);
-  const storage = useAuthStore((s) => s.storage);
-  const refreshStorage = useAuthStore((s) => s.refreshStorage);
+  const user = useSessionUser();
+  const storage = useUserStorage();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 头像以存储 key 为真相：提交 key，展示 URL 由渲染期派生
@@ -61,7 +58,7 @@ export default function SettingsModal({ open, onClose }: Props) {
   // 用量已变化（如其他标签页上传）时，仍能看到当前真实用量
   useEffect(() => {
     if (open) void refreshStorage();
-  }, [open, refreshStorage]);
+  }, [open]);
 
   // formatBytes 对 0 / null 返回空串：0 归一为 "0 B"；quotaBytes 为 null 即不限量
   const storageText = storage
@@ -71,7 +68,7 @@ export default function SettingsModal({ open, onClose }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const body: Record<string, string> = {};
+      const body: ProfilePatch = {};
       if (avatarKey && avatarKey !== user?.avatarKey) body.avatarKey = avatarKey;
       if (newPw.trim()) {
         if (!oldPw) { message.error(t("auth.oldPwRequired")); return; }
@@ -79,10 +76,9 @@ export default function SettingsModal({ open, onClose }: Props) {
         body.oldPassword = oldPw;
       }
       if (Object.keys(body).length === 0) { message.info(t("auth.nothingToSave")); return; }
-      const updated = await authApi.updateMe(body);
-      // 保存失败时 api() 抛 ApiError，由外层 catch 提示且不关弹窗
+      const updated = await updateProfile(body);
+      // 保存失败时命令抛 ApiError，由外层 catch 提示且不关弹窗
       if (!updated) { message.error(t("auth.saveFailed")); return; }
-      useAuthStore.setState({ user: toUserInfo(updated), storage: updated.storage });
       message.success(t("common.saved"));
       onClose();
     } catch (e: unknown) { message.error(e instanceof Error ? e.message : t("auth.saveFailed")); }

@@ -13,9 +13,9 @@
 
 ## 现状与动机（已验证事实）
 
-- `AudioWaveform` 以 `url: accessUrl` 创建 wavesurfer（`web/src/features/canvas/nodes/AudioWaveform.tsx:88-104`），wavesurfer 内部 `fetchBlob` 全量下载（`node_modules/wavesurfer.js/dist/wavesurfer.js:321-336`）后 `Decoder.decode` 解码（`:366-371`），解码期间同时持有 Blob 与 arrayBuffer 两份压缩字节；解码结果 `AudioBuffer` 常驻实例（wavesurfer 默认 `sampleRate: 8000`，`wavesurfer.js:29`，立体声约 3.8 MB/分钟，1 小时约 230 MB）。
+- 改造前：`AudioWaveform`（现位于 `web/src/components/media/AudioWaveform.tsx`）以 `url: accessUrl` 创建 wavesurfer，wavesurfer 内部 `fetchBlob` 全量下载（`node_modules/wavesurfer.js/dist/wavesurfer.js:321-336`）后 `Decoder.decode` 解码（`:366-371`），解码期间同时持有 Blob 与 arrayBuffer 两份压缩字节；解码结果 `AudioBuffer` 常驻实例（wavesurfer 默认 `sampleRate: 8000`，`wavesurfer.js:29`，立体声约 3.8 MB/分钟，1 小时约 230 MB）。
 - **播放必须等整个文件下载完**：wavesurfer 先 `fetchBlob` 再 `setSrc`（`:321-341`），无法像 `<audio src>` 那样按 Range 边下边播。
-- 实例重建依赖包含 `accessUrl` 与 `reloadToken`（`AudioWaveform.tsx:136`）：签名 URL 每次轮换都会 `destroy()` 并重新下载、重新解码。
+- 改造前：实例重建依赖包含 `accessUrl` 与 `reloadToken`，签名 URL 每次轮换都会 `destroy()` 并重新下载、重新解码。
 - `AudioClipStripPanel` 另建一个 wavesurfer 实例并再次全量下载解码（`web/src/features/canvas/editing/AudioClipStripPanel.tsx:142-157`，文件头注释已说明「节点内的实例跨组件共享不可行」）。
 - React Flow 未开启 `onlyRenderVisibleElements`（全仓库无该配置）：画布上每个音频节点都会下载并解码自己的文件，与是否可见无关。
 - `web/src` 目前没有任何 `AudioContext` / `decodeAudioData` / peaks 相关实现。
@@ -50,7 +50,7 @@
 ## 范围
 
 - 新增音频 peaks 服务与 IndexedDB 存储（`web/src/lib/audio-peaks/`，与 `lib/file-access/` 同为无业务语义的共享基础设施）：内存缓存 → IndexedDB → 解码三级取数，单飞与串行解码队列。
-- 改造 `web/src/features/canvas/nodes/AudioWaveform.tsx`：wavesurfer 只接收 `media` + `peaks` + `duration`；实例生命周期与访问地址解耦。
+- 改造 `web/src/components/media/AudioWaveform.tsx`：wavesurfer 只接收 `media` + `peaks` + `duration`；实例生命周期与访问地址解耦。
 - 改造 `web/src/features/canvas/editing/AudioClipStripPanel.tsx`：改走同一 peaks 服务与同一播放方式。
 - 视频编辑面板的进度跟随统一到同一 `useMediaProgress`（2026-10-28 用户确认后实施）：`ClipStripPanel` / `FrameStripPanel` 不再各自维护 rAF，时间源抽为 `web/src/features/canvas/hooks/use-video-time-source.ts`（身份稳定，避免每次渲染重启循环）。
 - `web/src/features/assets/components/AssetInspector.tsx` 复用 `AudioWaveform`，`web/src/features/canvas/nodes/AudioNode.tsx` 只传 props：两者随组件改造同步更新调用处——检查器仅把属性名改为 `audioRef`（无逻辑改动），节点增加回填时长的等值抑制（规则 4.6）。
@@ -197,7 +197,7 @@
 
 修改：
 
-- `web/src/features/canvas/nodes/AudioWaveform.tsx`：拆成「媒体元素与播放（地址同步、事件监听、卸载收尾）」「wavesurfer 实例（随 peaks 就绪创建，只做渲染）」「主题重绘」三部分；实例创建与主题重绘走共用工厂 `shared/audio-waveform-instance.ts`，「peaks 就绪才创建」这条硬约束与其生命周期由同一模块的 `useAudioWaveformInstance` 收口；移除 wavesurfer 的 `url` / `fetchParams` 选项，组件属性 `url` 更名 `audioRef`（它一直是逻辑引用值，与截取面板同名）；已知时长（可播 / seek / 进度）与显示时长（底部文本兜底）分开，按规则 5.3 的来源优先级；播放进度由 `useMediaProgress` 逐帧跟随，播放态镜像走共享 `useMediaPlaybackMirror`；`onReady` 按源去重且不做等值抑制（规则 4.6）；新增「波形不可用」占位态（不影响播放）。
+- `web/src/components/media/AudioWaveform.tsx`：拆成「媒体元素与播放（地址同步、事件监听、卸载收尾）」「wavesurfer 实例（随 peaks 就绪创建，只做渲染）」「主题重绘」三部分；实例创建与主题重绘走共用工厂 `web/src/components/media/audio-waveform-instance.ts`，「peaks 就绪才创建」这条硬约束与其生命周期由同一模块的 `useAudioWaveformInstance` 收口；移除 wavesurfer 的 `url` / `fetchParams` 选项，组件属性 `url` 更名 `audioRef`（它一直是逻辑引用值，与截取面板同名）；已知时长（可播 / seek / 进度）与显示时长（底部文本兜底）分开，按规则 5.3 的来源优先级；播放进度由 `useMediaProgress` 逐帧跟随，播放态镜像走共享 `useMediaPlaybackMirror`；`onReady` 按源去重且不做等值抑制（规则 4.6）；新增「波形不可用」占位态（不影响播放）。
 - `web/src/features/canvas/editing/AudioClipStripPanel.tsx`：同一改造，`ready` 与时长取自 peaks，波形实例走同一工厂与同一 Hook（固定白色）；进度跟随与循环约束共用 `useMediaProgress` 的同一个 rAF 循环；播放镜像走共享 `useMediaPlaybackMirror`，循环约束的 `timeupdate` 后备与 `ended` 续播作为 `extras` 放在同一事件处理内。
 - `web/src/features/assets/components/AssetInspector.tsx`：无逻辑改动；`AudioWaveform` 属性更名后调用处同步改为 `audioRef`（值仍是逻辑引用值，与规则 1.1 的输入一致）。
 - `web/src/features/canvas/nodes/AudioNode.tsx`：组件契约不变，仅增加消费方写入决策——回填 `duration` 前与当前值比较，等值时跳过 `updateNodeData`，避免无意义的画布重渲染（规则 4.6）。
@@ -208,7 +208,7 @@
 
 - 新增 peaks 服务单测：解码规格（8kHz / 512 桶 / 2 声道 / 时长）、结果形状只含 `channels` / `duration`、单飞、IDB 命中不发请求、外部 URL 不落盘、正常路径只解析一次地址、403 重描述一次、取数阶段非预期异常归为 `internal` 且不落终止记忆；新增持久层单测：openDB 失败、读 / 写 / 刷新 / 淘汰异常降级、记录形状与主键校验。
 - 新增 `use-media-progress` 单测：未激活 / 时间源未就绪（读取返回 `null`）不启动、卸载取消、阈值去重、每帧回调、进度回调先于每帧回调、回调身份变化不重启循环、读取函数身份变化视为换源并以新源当前值重启。
-- `web/src/__tests__/features/canvas/nodes/AudioWaveform.test.tsx`：断言创建参数含 `media` / `peaks` / `duration` 且不含 `url`；签名地址变化不重建实例、不重复解码；`reloadToken` 只触发 `load()`；`onReady` 按源一次、换源重报、与 prop 等值仍上报。
+- `web/src/__tests__/components/media/AudioWaveform.test.tsx`：断言创建参数含 `media` / `peaks` / `duration` 且不含 `url`；签名地址变化不重建实例、不重复解码；`reloadToken` 只触发 `load()`；`onReady` 按源一次、换源重报、与 prop 等值仍上报。
 - `web/src/__tests__/features/canvas/editing/AudioClipStripPanel.test.tsx`：同一契约。
 - `web/src/__tests__/test-utils/audio-fixtures.ts`：组件与 Hook 测试共用的峰值身份、峰值状态（`READY_PEAKS` / `LOADING_PEAKS`）、媒体元素捕获与 jsdom 媒体桩，避免多份测试各自维护。
 - `web/src/__tests__/test-utils/file-access-mock.ts`：`mutableFileAccessState(url)` 提供可改写的访问状态（`reset()` 回默认、`set()` 改单项），组件与 Hook 测试不再各自复制默认值。
@@ -291,11 +291,11 @@ Spec 已确认（2026-10-27）。实现已完成并通过静态检查与全部�
 - `web/src/lib/idb-cache.ts`：IndexedDB 缓存的公共骨架——打开失败退化为无持久化、写入后按索引游标做条数淘汰（`putAndTrim`）、淘汰本身失败只多留条目（峰值缓存与签名描述缓存共用）。
 - `web/src/__tests__/test-utils/audio-fixtures.ts`：音频组件与 Hook 测试共用的峰值身份、峰值状态（`READY_PEAKS` / `LOADING_PEAKS`）、媒体元素捕获与 jsdom 媒体桩。
 - `web/src/__tests__/test-utils/file-access-mock.ts`：`mutableFileAccessState(url)` 提供可改写的访问状态（`reset()` 回默认、`set()` 改单项），组件与 Hook 测试不再各自复制默认值。
-- `web/src/features/canvas/shared/audio-waveform-instance.ts`：节点与截取面板共用的 wavesurfer 实例工厂——只收 `{ media, peaks, duration }`，固定色（面板）或跟随容器主题前景色并在根 class 变化时重绘（节点）；同模块的 `useAudioWaveformInstance` 收口「peaks 就绪才创建」的硬约束与实例生命周期（换 peaks 重建、地址轮换不触碰），两个组件不再各写一份 effect；工厂与选项类型不对外导出（只有本模块的 Hook 消费），视觉选项按值参与依赖——调用方传模块常量不触发重建，按值变化则重建，不会静默沿用旧选项。
+- `web/src/components/media/audio-waveform-instance.ts`：节点与截取面板共用的 wavesurfer 实例工厂——只收 `{ media, peaks, duration }`，固定色（面板）或跟随容器主题前景色并在根 class 变化时重绘（节点）；同模块的 `useAudioWaveformInstance` 收口「peaks 就绪才创建」的硬约束与实例生命周期（换 peaks 重建、地址轮换不触碰），两个组件不再各写一份 effect；工厂与选项类型不对外导出（只有本模块的 Hook 消费），视觉选项按值参与依赖——调用方传模块常量不触发重建，按值变化则重建，不会静默沿用旧选项。
 
 修改：
 
-- `web/src/features/canvas/nodes/AudioWaveform.tsx`：wavesurfer 改以 `{ media, peaks, duration }` 创建，永不传 `url` / `fetchParams`，组件属性 `url` 更名 `audioRef`；播放、定位、进度全部直连媒体元素；峰值未就绪不创建实例；播放进度由 `useMediaProgress` 逐帧跟随；播放态镜像走共享 `useMediaPlaybackMirror` + `IDLE_PROGRESS_PLAYBACK`（与视频节点同一份空闲态与换源作废语义，事件 → 状态映射与截取面板共用）；峰值落定后按源只上报一次时长（规则 4.6 / 5.3）。
+- `web/src/components/media/AudioWaveform.tsx`：wavesurfer 改以 `{ media, peaks, duration }` 创建，永不传 `url` / `fetchParams`，组件属性 `url` 更名 `audioRef`；播放、定位、进度全部直连媒体元素；峰值未就绪不创建实例；播放进度由 `useMediaProgress` 逐帧跟随；播放态镜像走共享 `useMediaPlaybackMirror` + `IDLE_PROGRESS_PLAYBACK`（与视频节点同一份空闲态与换源作废语义，事件 → 状态映射与截取面板共用）；峰值落定后按源只上报一次时长（规则 4.6 / 5.3）。
 - `web/src/features/canvas/editing/AudioClipStripPanel.tsx`：同一改造；`ready` 与选区初始化改由 peaks 时长驱动；进度跟随与循环约束（`timeupdate` / `ended`）数据源改为媒体元素，共用同一个 rAF 循环，且循环只在播放中运行（暂停时不启动，规则 4.5）；播放镜像与节点波形共用 `useMediaPlaybackMirror`，循环约束与结束续播走其 `extras`；失败态归为一处 `failureKind`（描述失败 → 媒体加载失败 → 峰值不可用）；键盘微调与拖动共用同一个带末尾钳制的 `clipSeek`。
 - `web/src/features/canvas/shared/audio-playback-registry.ts`：注册类型由 `WaveSurfer` 收窄为 `{ getCurrentTime(): number; pause(): void }`，`pauseAudio` / `getAudioPlaybackTime` 调用方不变。
 - `AudioNode.tsx`：增加消费方等值抑制（回填时长与当前值相同时不写 `updateNodeData`）；`AssetInspector.tsx` 无逻辑改动，仅随属性更名改传 `audioRef`。
@@ -308,7 +308,7 @@ Spec 已确认（2026-10-27）。实现已完成并通过静态检查与全部�
 | `web/src/__tests__/lib/audio-peaks-store.test.ts` | openDB 失败时读 / 写 / 刷新全部降级且只尝试一次、读取 / 写入 / 刷新 / 淘汰异常不抛出、形状正确记录原样返回、形状不符或主键不一致按未命中、畸形记录刷新时不回写 |
 | `web/src/__tests__/lib/use-audio-peaks.test.ts` | 渲染期缓存命中、加载→就绪、换源立即作废旧结果、A→B→A 切回未就绪的源会重新订阅并落定（不永久停在 loading）、卸载不取消在途取数（不传中止信号、迟到结果照常落定）、unavailable 仍带探测时长 |
 | `web/src/__tests__/lib/use-audio-element.test.ts` | 脱离文档元素、卸载暂停+清空+load、新地址只写 src、`reloadToken` 触发一次 load、失败回合只重描述一次（新地址再失败即置位）、`loadedmetadata` 收敛失败态、重描述在途换源的竞态、同源地址作废（会话切换）清空 `src` 并 `load()` |
-| `web/src/__tests__/features/canvas/nodes/AudioWaveform.test.tsx` | 创建参数含 `media`/`peaks`/`duration` 且不含 `url`/`fetchParams`、peaks 未就绪不创建、地址轮换只改 `src`、主题重绘、失败态、节点已存时长只作底部显示（规则 5.3：媒体元数据到达才可播）、`onReady` 在 peaks 落定后每源只上报一次、与 prop 等值仍上报、换源重报、波形不可用时仍可播放并照常注册播放句柄（规则 4.5 / 5.2） |
+| `web/src/__tests__/components/media/AudioWaveform.test.tsx` | 创建参数含 `media`/`peaks`/`duration` 且不含 `url`/`fetchParams`、peaks 未就绪不创建、地址轮换只改 `src`、主题重绘、失败态、节点已存时长只作底部显示（规则 5.3：媒体元数据到达才可播）、`onReady` 在 peaks 落定后每源只上报一次、与 prop 等值仍上报、换源重报、波形不可用时仍可播放并照常注册播放句柄（规则 4.5 / 5.2） |
 | `web/src/__tests__/features/canvas/editing/AudioClipStripPanel.test.tsx` | 同一创建契约（固定白 / barWidth 3 / barGap 2）、峰值按逻辑引用值取、峰值不可用即不可操作、峰值未就绪不创建实例、地址轮换只改 `src` 不重建、`reloadToken` 只重载元素、StrictMode 双挂载后活元素仍被初始化（起点写入 + 自动试听，按「源 + 元素」记账） |
 | `web/src/__tests__/lib/use-media-progress.test.ts` | 未激活 / 时间源未就绪（读取返回 `null`）不启动循环、卸载取消在途帧、0.003s 阈值去重、`onFrame` 每帧回调且位于进度回调之后、回调身份变化不重启循环、读取函数身份变化视为换源并以新源当前值重启 |
 | `web/src/__tests__/lib/use-media-events.test.ts` | 挂载即订阅 / 卸载摘除、元素未就绪不抛错、订阅只建立一次且用最新闭包、后出现的回调不需要重新订阅、无回调的事件不抛错 |

@@ -26,7 +26,7 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 // 保存器涉及定时器与真实请求，测试内无需落盘
-vi.mock("@/features/project/save-manager", () => ({
+vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: {
     markDirty: vi.fn(),
     markDirtyImmediate: vi.fn(),

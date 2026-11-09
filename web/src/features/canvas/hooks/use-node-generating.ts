@@ -1,8 +1,8 @@
 "use client";
 
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import type { TaskBinding } from "@/features/canvas/types";
 import { isGenerating } from "@/lib/constants";
+import type { TaskBinding } from "@/lib/types/canvas";
 
 /**
  * 节点是否处于生成中（布尔原语订阅，三个生成面板共用）。

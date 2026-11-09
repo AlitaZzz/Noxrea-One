@@ -5,30 +5,60 @@
  * 构造端（缩放缓存、海报母版、雪碧图、预览代理）、归属解析端（ownership.ts）与删除联动枚举端
  * （backend.ts listDerivedArtifactKeys）共用同一模块——格式知识一旦分裂，构造端的漂移会被读路由的
  * fail-closed 静默化为「缓存未命中」（新产物 404）、被删除联动静默化为「漏删」，唯有同址 +
- * 往返测试能即时暴露。key 形态基础（内容键 stem）单点在 shared/url。
+ * 往返测试能即时暴露。key 形态基础（内容键 stem）单点在 shared/url；
+ * 档位类型由 `@server/core/metrics` 单一提供（与指标 `tier` 标签同一取值集）。
  */
 import {
   RESIZE_CACHE_VERSION,
   RESIZE_WIDTH_TIERS,
 } from "@noxrea/shared/media-tiers";
 import { isStorageKey, STORAGE_KEY_STEM_PATTERN, storageKeyStem } from "@noxrea/shared/url";
+import type { DerivedTier } from "@server/core/metrics";
+
+/**
+ * 档位 → 命名空间根前缀（不含版本段）。`as const satisfies Record<DerivedTier, string>`
+ * 保证新增档位时编译失败；`DERIVED_ROOT_PREFIXES` 直接由该映射的值派生，不维护第二份清单。
+ * 导出给删除联动（backend.ts）按命名空间列举 poster 版本前缀，避免再抄一份字面量。
+ */
+export const DERIVED_ROOT_PREFIX_BY_TIER = {
+  cache: "_cache/",
+  poster: "_posters/",
+  sprite: "_sprite/",
+  proxy: "_proxy/",
+} as const satisfies Record<DerivedTier, string>;
+
+/**
+ * 派生产物命名空间根清单（本地与对象存储同构；`_tmp` 是工作区临时区，不属对象命名空间，不在此列）。
+ * 由 `DERIVED_ROOT_PREFIX_BY_TIER` 派生：新增档位自动纳入，不维护第二份清单。
+ * 派生删除联动经 listDerivedArtifactKeys 覆盖全部根（specs/derived-deletion-linkage.md 规则 1）。
+ */
+export const DERIVED_ROOT_PREFIXES = Object.freeze(Object.values(DERIVED_ROOT_PREFIX_BY_TIER));
 
 /** 当前 `_cache` 命名空间根：版本段由共享常量生成，运行期只识别当前版本（不兼容旧版本） */
-const RESIZE_CACHE_ROOT = `_cache/v${RESIZE_CACHE_VERSION}`;
+const RESIZE_CACHE_ROOT = `${DERIVED_ROOT_PREFIX_BY_TIER.cache}v${RESIZE_CACHE_VERSION}`;
 
-/** 派生档位：四个命名空间与指标 `tier` 标签同一取值集（`@server/core/metrics` 的联合类型与此同构） */
-type DerivedTier = "cache" | "poster" | "sprite" | "proxy";
+/**
+ * 解析端形态（stem 捕获组 = 内嵌源键）与档位同址：与上方构造函数一一对应，同址维护。
+ * `Record<DerivedTier, ...>` 强制每个档位都有解析规则，新增档位时编译失败。
+ */
+const DERIVED_KEY_PATTERNS: Readonly<Record<DerivedTier, RegExp>> = {
+  cache: new RegExp(`^${RESIZE_CACHE_ROOT}/(?:\\d+)/(.+)\\.webp$`),
+  // 根前缀自带尾随 `/`，直接拼接版本/参数段，不再补分隔符
+  poster: new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.poster}v\\d+/(.+)\\.webp$`),
+  sprite: new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.sprite}(.+)_c\\d+v\\d+\\.webp$`),
+  proxy: new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.proxy}(.+)_w\\d+v\\d+\\.mp4$`),
+};
 
-/** 解析端形态（stem 捕获组 = 内嵌源键）与档位同址：与上方构造函数一一对应，同址维护 */
-const DERIVED_KEY_PATTERNS: ReadonlyArray<{ tier: DerivedTier; pattern: RegExp }> = [
-  { tier: "cache", pattern: new RegExp(`^${RESIZE_CACHE_ROOT}/(?:\\d+)/(.+)\\.webp$`) },
-  { tier: "poster", pattern: /^_posters\/v\d+\/(.+)\.webp$/ },
-  { tier: "sprite", pattern: /^_sprite\/(.+)_c\d+v\d+\.webp$/ },
-  { tier: "proxy", pattern: /^_proxy\/(.+)_w\d+v\d+\.mp4$/ },
-];
+/**
+ * `Object.entries` 丢失 `Record` 的键类型；`Record<DerivedTier, RegExp>` 的键域由类型保证，
+ * 在这里收口一次断言，避免循环处散落 cast。
+ */
+function derivedKeyEntries(): Array<[DerivedTier, RegExp]> {
+  return Object.entries(DERIVED_KEY_PATTERNS) as Array<[DerivedTier, RegExp]>;
+}
 
 function matchDerivedKey(key: string): { tier: DerivedTier; stem: string } | null {
-  for (const { tier, pattern } of DERIVED_KEY_PATTERNS) {
+  for (const [tier, pattern] of derivedKeyEntries()) {
     const m = pattern.exec(key);
     if (m) return { tier, stem: m[1] };
   }
@@ -42,17 +72,17 @@ export function cacheKeyOf(storageKey: string, tier: number): string {
 
 /** 视频海报母版：`_posters/v{version}/{源键去扩展名}.webp`（版本由海报特性持有） */
 export function posterMasterKey(storageKey: string, version: number): string {
-  return `_posters/v${version}/${storageKeyStem(storageKey)}.webp`;
+  return `${DERIVED_ROOT_PREFIX_BY_TIER.poster}v${version}/${storageKeyStem(storageKey)}.webp`;
 }
 
 /** 帧序列雪碧图：`_sprite/{源键去扩展名}_c{count}v{version}.webp`（帧数 + 参数版本段） */
 export function spriteKeyOf(sourceKey: string, count: number, version: number): string {
-  return `_sprite/${storageKeyStem(sourceKey)}_c${count}v${version}.webp`;
+  return `${DERIVED_ROOT_PREFIX_BY_TIER.sprite}${storageKeyStem(sourceKey)}_c${count}v${version}.webp`;
 }
 
 /** 预览代理视频：`_proxy/{源键去扩展名}_w{width}v{version}.mp4`（宽度 + 参数版本段） */
 export function proxyKeyOf(sourceKey: string, width: number, version: number): string {
-  return `_proxy/${storageKeyStem(sourceKey)}_w${width}v${version}.mp4`;
+  return `${DERIVED_ROOT_PREFIX_BY_TIER.proxy}${storageKeyStem(sourceKey)}_w${width}v${version}.mp4`;
 }
 
 /**
@@ -123,8 +153,8 @@ export function derivedCandidatesOf(
   }
 
   if (posterVersions === null) {
-    const posterAll = new RegExp(`^_posters/v\\d+/${stem}\\.webp$`);
-    candidates.push({ prefix: "_posters/", test: (k) => posterAll.test(k) });
+    const posterAll = new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.poster}v\\d+/${stem}\\.webp$`);
+    candidates.push({ prefix: DERIVED_ROOT_PREFIX_BY_TIER.poster, test: (k) => posterAll.test(k) });
   } else {
     for (const version of posterVersions) {
       const derivedKey = `${version}${stem}.webp`; // version 形如 "_posters/v1/"
@@ -132,9 +162,9 @@ export function derivedCandidatesOf(
     }
   }
 
-  const sprite = new RegExp(`^_sprite/${stem}_c\\d+v\\d+\\.webp$`);
-  candidates.push({ prefix: `_sprite/${shard}`, test: (k) => sprite.test(k) });
-  const proxy = new RegExp(`^_proxy/${stem}_w\\d+v\\d+\\.mp4$`);
-  candidates.push({ prefix: `_proxy/${shard}`, test: (k) => proxy.test(k) });
+  const sprite = new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.sprite}${stem}_c\\d+v\\d+\\.webp$`);
+  candidates.push({ prefix: `${DERIVED_ROOT_PREFIX_BY_TIER.sprite}${shard}`, test: (k) => sprite.test(k) });
+  const proxy = new RegExp(`^${DERIVED_ROOT_PREFIX_BY_TIER.proxy}${stem}_w\\d+v\\d+\\.mp4$`);
+  candidates.push({ prefix: `${DERIVED_ROOT_PREFIX_BY_TIER.proxy}${shard}`, test: (k) => proxy.test(k) });
   return candidates;
 }

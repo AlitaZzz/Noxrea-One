@@ -8,7 +8,7 @@
 import { type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { AssetFolder } from "@/features/assets/types";
+import type { AssetFolder } from "@/entities/asset";
 
 /** 根目录（个人资产库）在选择器里的哨兵值 */
 export const ROOT_FOLDER_ID = "__root__";

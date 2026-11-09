@@ -40,7 +40,7 @@ export function groupMembers(nodes: AnyNode[], groupId: string): AnyNode[] {
 
 /**
  * 空组即删：移除没有任何成员的组节点，返回过滤后的数组（无空组时原引用返回）。
- * 在成员归属减少的入口统一调用：drag stop 脱离/换组（InfiniteCanvas）、
+ * 在成员归属减少的入口统一调用：drag stop 脱离/换组（use-canvas-pointer）、
  * 成员删除（canvas-store.removeNodes）、重新编组后旧组变空（use-group-operations）。
  * 组的诞生自带成员，无合法空组阶段。
  */

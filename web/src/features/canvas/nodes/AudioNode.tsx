@@ -12,6 +12,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { AudioPlayerHandle } from "@/components/media/AudioWaveform";
 import { UploadOutlined } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import ConnectionSideRail from "@/features/canvas/controls/ConnectionSideRail";
 import { tryApplyAudioSpeedOnClient, tryExtractAudioClipOnClient } from "@/features/canvas/editing/client-media/client-video";
 import { resolveBusyLabelKey, useMediaEditTask } from "@/features/canvas/editing/use-media-edit-task";
 import { useNodeSelectionChange } from "@/features/canvas/hooks/use-node-selected";
-import { pauseAudio } from "@/features/canvas/shared/audio-playback-registry";
+import { pauseAudio, registerAudioPlayer } from "@/features/canvas/shared/audio-playback-registry";
 import LimeRing from "@/features/canvas/shared/LimeRing";
 import { markDirtyImmediate, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { type AudioNode as AudioNodeType, type AudioNodeData } from "@/features/canvas/types";
@@ -43,7 +44,7 @@ import GeneratingOverlay from "./GeneratingOverlay";
 import NodeTitle from "./NodeTitle";
 import UploadFailedOverlay from "./UploadFailedOverlay";
 
-const AudioWaveform = dynamic(() => import("./AudioWaveform"), { ssr: false });
+const AudioWaveform = dynamic(() => import("@/components/media/AudioWaveform"), { ssr: false });
 
 function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
   const { t } = useTranslation();
@@ -79,6 +80,12 @@ function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
   // 波形就绪：回填 duration 到节点数据（唯一真相），供标题栏与进度显示。
   // 波形组件每次挂载都会按源回调一次；时长已一致时不写，避免无意义的数据更新
   // 与画布重渲染（等值抑制属于消费方的写入决策，不是组件契约）
+  // 共享波形组件不感知节点体系：由画布适配层把播放句柄登记到节点级注册表
+  const registerPlayerForNode = useCallback(
+    (handle: AudioPlayerHandle) => registerAudioPlayer(id, handle),
+    [id],
+  );
+
   const handleAudioReady = useCallback((d: number) => {
     const value = d || 0;
     if (value === duration) return;
@@ -127,13 +134,13 @@ function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
           // 源已被替换：旧源的派生产物不再写入
           if (!expectSource(src)) return;
           const rangeLabel = `${formatTime(start)}-${formatTime(end)}`;
-          createAudioNodeFromRef(
-            id,
-            key,
-            t("clip.suffix", { range: rangeLabel }),
-            useCanvasStore.getState(),
-            { source: "derived" },
-          );
+          createAudioNodeFromRef({
+            sourceId: id,
+            ref: key,
+            labelSuffix: t("clip.suffix", { range: rangeLabel }),
+            storeApi: useCanvasStore.getState(),
+            extraNodeData: { source: "derived" },
+          });
           markDirtyImmediate();
         },
         errorKey: "error.clip.extract_failed",
@@ -170,13 +177,13 @@ function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
           // 源已被替换：旧源的派生产物不再写入
           if (!expectSource(src)) return;
           const speedLabel = `${Number(speed.toFixed(2))}x`;
-          createAudioNodeFromRef(
-            id,
-            key,
-            t("node.speedSuffix", { speed: speedLabel }),
-            useCanvasStore.getState(),
-            { source: "derived" },
-          );
+          createAudioNodeFromRef({
+            sourceId: id,
+            ref: key,
+            labelSuffix: t("node.speedSuffix", { speed: speedLabel }),
+            storeApi: useCanvasStore.getState(),
+            extraNodeData: { source: "derived" },
+          });
           markDirtyImmediate();
         },
         errorKey: "error.speed.failed",
@@ -257,8 +264,9 @@ function AudioNode({ id, data }: NodeProps<AudioNodeType>) {
         ) : hasAudio ? (
           <AudioWaveform
             audioRef={fileRefUrl(src)}
-            nodeId={id}
-            clipActive={clipActive}
+            registerPlayer={registerPlayerForNode}
+            controlsLocked={clipActive}
+            interactionClassName="nodrag"
             duration={duration}
             onReady={handleAudioReady}
           />

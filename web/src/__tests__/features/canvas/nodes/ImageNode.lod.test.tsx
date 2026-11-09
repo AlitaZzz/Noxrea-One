@@ -28,7 +28,7 @@ vi.mock("react-i18next", async (original) => ({
 vi.mock("@/components/ui/use-app-feedback", () => ({
   useAppFeedback: () => ({ notification: { error: vi.fn(), warning: vi.fn() } }),
 }));
-vi.mock("@/features/assets/store", () => ({ useAssetsStore: () => vi.fn() }));
+vi.mock("@/entities/asset", () => ({ addAsset: vi.fn() }));
 vi.mock("@/features/canvas/upload", () => ({
   useNodeUpload: () => vi.fn(),
   runMediaUpload: vi.fn(),

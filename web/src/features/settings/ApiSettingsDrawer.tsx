@@ -7,7 +7,7 @@
 
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import DestructiveConfirmModal from "@/components/ui/DestructiveConfirmModal";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import ApiSettingsForm from "@/features/settings/ApiSettingsForm";
 import ApiSettingsModels from "@/features/settings/ApiSettingsModels";
 import { useModelStore } from "@/lib/model-store";
@@ -127,17 +126,10 @@ function ConnectionInfo({ provider }: { provider: ModelProvider }) {
 function ApiSettingsDrawer({ open, onClose }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
-  const setModalOpen = useCanvasStore((s) => s.setModalOpen);
   const providers = useModelStore((s) => s.providers);
   const presets = useModelStore((s) => s.presets);
   const deleteProvider = useModelStore((s) => s.deleteProvider);
   const fetchModels = useModelStore((s) => s.fetchModels);
-
-  // Drawer 打开时阻止画布快捷键透传
-  useEffect(() => {
-    setModalOpen(open);
-    return () => setModalOpen(false);
-  }, [open, setModalOpen]);
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [view, setView] = useState<"detail" | "form">("detail");

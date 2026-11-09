@@ -1,6 +1,6 @@
 /**
  * 框选外框的批量连线轨道（仅输出方向）：≥2 个非组节点选中时，
- * 由 InfiniteCanvas 以 ViewportPortal 渲染在外框右缘，参与集 = 选中节点。
+ * 由 CanvasOverlays 以 ViewportPortal 渲染在外框右缘，参与集 = 选中节点。
  * 与节点轨道同一套两段式架构：透明条带（80px 命中区）+ 镂空圆点（静止于
  * 贴框缘 RAIL_DOT_EDGE_GAP，hover 条带内二维跟随），复用 .connection-rail /
  * .connection-rail-dot 样式与 use-rail-dot-follow。

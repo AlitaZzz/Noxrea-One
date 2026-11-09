@@ -30,9 +30,9 @@ import { getResizedWebP, getVideoPosterWebP } from "@server/services/storage/res
 import { getStorageBackend } from "@server/services/storage/service";
 
 /** 已通过凭据判定的读取请求（会话或能力凭据） */
-type GrantedReadCredential = Extract<FileReadCredential, { ok: true }>;
+export type GrantedReadCredential = Extract<FileReadCredential, { ok: true }>;
 
-type PreparedRead = {
+export type PreparedRead = {
   /** 请求的存储 key（原图或派生 key），附件名与流式 URL 以它为准 */
   requestedKey: string;
   /** 实际取字节的对象 key（`w` 派生命中时为派生 key） */
@@ -47,13 +47,13 @@ type PreparedRead = {
  * 读管线失败原因（语义即验收表，specs/storage-signed-direct-delivery.md 规则 2.4）。
  * 不带 Response：调用方按自己的响应形态映射（整响应或逐条错误码）。
  */
-type ReadFailure =
+export type ReadFailure =
   | { reason: "not_found" }
   | { reason: "invalid_path" }
   | { reason: "access_denied" }
   | { reason: "media_busy"; pool: MediaPoolName; scope: MediaPoolScope };
 
-type PreparedReadResult =
+export type PreparedReadResult =
   | { ok: true; read: PreparedRead }
   | { ok: false; failure: ReadFailure };
 

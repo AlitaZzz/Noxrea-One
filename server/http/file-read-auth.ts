@@ -9,13 +9,13 @@ import { authenticateRequest } from "@server/http/middleware/auth";
 import { verifyFileUrlSignature } from "@server/services/storage/file-url-signature";
 
 /** 无有效凭据：沿用会话鉴权生成的 401 响应（含 no-store） */
-interface UnauthenticatedRead {
+export interface UnauthenticatedRead {
   ok: false;
   sessionErrorResponse: Response;
 }
 
 /** 会话凭据：描述路由的唯一合法分支 */
-type SessionReadCredential =
+export type SessionReadCredential =
   | { ok: true; credential: "session"; userId: number }
   | UnauthenticatedRead;
 

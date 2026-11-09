@@ -16,6 +16,7 @@ import {
 } from "@/lib/file-access-store";
 import { currentAccountKey } from "@/lib/session-lifecycle";
 
+import { notifyAccessChanged } from "./change-signal";
 import type { AccessRequest, FileAccessDescriptor } from "./protocol";
 import { expiryOf, isPersistable, persistedKeyOf } from "./protocol";
 import { currentScope } from "./state";
@@ -70,16 +71,20 @@ export function hydratePersisted(): void {
   hydration = readPersistedDescriptors().then((records) => {
     if (currentScope() !== scopeAtStart || currentAccountKey() !== account) return;
     const stale: string[] = [];
+    let changed = false;
     const now = Date.now();
     for (const record of records) {
       // 载入期间写入的条目比磁盘快照新：内存副本是本会话的权威，既不覆盖也不删盘
       if (copies.has(record.cacheKey)) continue;
       if (record.scope === account && expiryOf(descriptorOfRecord(record)) > now) {
         copies.set(record.cacheKey, record);
+        changed = true;
       } else {
         stale.push(record.cacheKey);
       }
     }
+    // 载入完成即一批新命中：订阅方重新取快照后出图（水合阶段由 server snapshot 挡住）
+    if (changed) notifyAccessChanged();
     void deletePersistedDescriptors(stale);
   }).catch(() => {
     // 载入失败按「无持久化」处理：解析路径必须永远能继续（IndexedDB 是可选加速）
@@ -87,13 +92,18 @@ export function hydratePersisted(): void {
 }
 
 /**
- * 持久化条目的命中判定：只在签名形态、非下载、未过期时成立。
- * 作用域已在载入时校验，这里只判寿命（会话内时间在走）。
+ * 持久化条目的命中判定：只在账号匹配、签名形态、非下载、未过期时成立。
+ *
+ * 账号校验必须在命中点完成，而不是只依赖「会话切换会清空 copies」：会话切换先更新
+ * 账号、再依次重置各模块，中间的变更通知窗口里 copies 仍是旧账号的数据；若命中只
+ * 判寿命，旧账号的签名地址会被新会话读到。这里让副本自带归属校验，重置顺序就不再
+ * 是正确性前提。
  */
 export function persistedDescriptorOf(request: AccessRequest): FileAccessDescriptor | null {
   if (!isPersistable(request)) return null;
   const record = copies.get(persistedKeyOf(request));
   if (!record) return null;
+  if (record.scope !== currentAccountKey()) return null;
   const descriptor = descriptorOfRecord(record);
   return expiryOf(descriptor) > Date.now() ? descriptor : null;
 }
@@ -101,6 +111,10 @@ export function persistedDescriptorOf(request: AccessRequest): FileAccessDescrip
 /**
  * 写入持久化：仅签名描述、仅非下载。先记本会话的内存副本（后续解析立即命中），
  * 再异步落盘；没有账号身份时两处都不写。
+ *
+ * 不广播变更：调用方在同一写入定序里已先写缓存，缓存写入已经通知过订阅者；副本只是
+ * 缓存条目的设备镜像（批次结算见 `batch.settleDescriptor`）。在镜像处再通知会让
+ * 每条描述的通知翻倍，且订阅方读到的仍是同一份缓存结果。
  */
 export function persistDescriptor(request: AccessRequest, descriptor: FileAccessDescriptor): void {
   if (descriptor.delivery !== "signed" || !isPersistable(request)) return;
@@ -126,5 +140,6 @@ export function persistDescriptor(request: AccessRequest, descriptor: FileAccess
 export function resetPersisted(): void {
   copies = new Map();
   hydration = Promise.resolve();
+  notifyAccessChanged();
   void clearPersistedDescriptors();
 }

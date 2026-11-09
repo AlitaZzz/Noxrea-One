@@ -44,10 +44,10 @@ import { extOfName, mimeByExt } from "@server/services/storage/mime";
 import {
   addressingCandidates,
   baselineCapabilities,
-  type AddressingStyle,
   type StorageCapabilities,
   type StorageProvider,
 } from "@server/services/storage/providers";
+import type { AddressingStyle } from "@server/core/metrics";
 import { presignedWindow } from "@server/services/storage/signing";
 
 /** bucket 统一前缀归一化（去首尾斜杠）：前缀映射函数与后端构造共用单一实现 */

@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { uploadOne } from "@/features/canvas/upload";
+import { uploadOne } from "@/entities/asset";
 import { canvasToBlob } from "@/lib/utils/image-utils";
 
 interface Props {
@@ -123,7 +123,7 @@ export default function AvatarCropModal({ open, file, onDone, onClose }: Props) 
       const blob = await canvasToBlob(OUTPUT, OUTPUT, (ctx) => {
         ctx.drawImage(img, offset.x, offset.y, srcW, srcW, 0, 0, OUTPUT, OUTPUT);
       });
-      // 统一上传管道 raw sink：只取存储 key（URL 渲染期派生），不碰画布
+      // 统一上传出口 entities/asset.uploadOne：只取存储 key（URL 渲染期派生），不碰画布
       const result = await uploadOne(blob, "avatar.png", "derived");
       if (result?.key) { onDone(result.key); message.success(t("auth.avatarSaved")); }
       else message.error(t("auth.avatarFailed"));

@@ -10,6 +10,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MediaHoverPreview } from "@/components/media/MediaHoverPreview";
+import { ResolvedImage } from "@/components/media/ResolvedMedia";
 import { PictureOutlined, PlusOutlined, VideoCameraOutlined } from "@/components/ui/AppIcon";
 import { PauseCircleFilled, PlayCircleFilled } from "@/components/ui/AppIcon";
 import { WaveIcon } from "@/components/ui/AppIcon";
@@ -18,12 +20,8 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { ASSET_DRAG_TYPE } from "@/features/assets/add-asset";
-import type { AssetItem } from "@/features/assets/types";
-import { ResolvedImage } from "@/features/media/components/ResolvedMedia";
+import { ASSET_DRAG_TYPE, type AssetItem } from "@/entities/asset";
 import { resolveMediaUrlString } from "@/lib/file-access";
-
-import { AssetHoverPreview } from "./AssetHoverPreview";
 
 interface Props {
   asset: AssetItem;
@@ -153,7 +151,12 @@ export default function AssetCard({
 
   return (
     <Card className={`group gap-0 rounded-lg border-0 bg-transparent p-0 shadow-none transition-all ${dragging ? "opacity-50" : ""}`}>
-      <AssetHoverPreview asset={asset} enabled={showHoverPreview && !dragging && Boolean(asset.fileKey)}>
+      <MediaHoverPreview
+        name={asset.name}
+        mediaType={asset.mediaType}
+        fileKey={asset.fileKey}
+        enabled={showHoverPreview && !dragging && Boolean(asset.fileKey)}
+      >
         {/* 封面区：Card 只负责容器布局，主选择 / 插入行为由独立 Button 承担。 */}
         <div
           className={`relative aspect-square w-full overflow-hidden rounded-lg border bg-popover transition-colors ${selected ? "border-primary ring-2 ring-primary/20" : "border-border group-hover:border-ring"}`}
@@ -285,7 +288,7 @@ export default function AssetCard({
         )}
 
         </div>
-      </AssetHoverPreview>
+      </MediaHoverPreview>
 
       {/* 音频拖拽图像：仅作为 setDragImage 快照源，固定在视口外不影响布局 */}
       {draggable && isAudio && (

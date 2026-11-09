@@ -8,7 +8,7 @@
 import type { Readable } from "stream";
 
 import { isStorageKey } from "@noxrea/shared/url";
-import { derivedCandidatesOf } from "./derived-keys";
+import { DERIVED_ROOT_PREFIX_BY_TIER, derivedCandidatesOf } from "./derived-keys";
 import type { StorageCapabilities, StorageProvider } from "./providers";
 
 /** 直传在途暂存命名空间（staging/{userId}/{uuid}，归属编码在 key 里）；直传、staging 清扫、迁移/审计分类共用 */
@@ -21,13 +21,6 @@ export const STAGING_PREFIX = "staging/";
 export const STAGING_KEY_PATTERN = new RegExp(
   `^${STAGING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
 );
-
-/**
- * 派生产物命名空间前缀（本地与对象存储同构；迁移/审计分类与派生 TTL 清扫的根清单同源于此）。
- * `_tmp` 是工作区临时区，不属对象命名空间，不在此列（审计计数另行并入）。
- * 派生删除联动经 listDerivedArtifactKeys 覆盖全部四根（specs/derived-deletion-linkage.md 规则 1）。
- */
-export const DERIVED_ROOT_PREFIXES = ["_cache/", "_posters/", "_sprite/", "_proxy/"] as const;
 
 /**
  * 启动探测对象命名空间（specs/storage-provider-portability.md 规则 3.2）：
@@ -188,7 +181,7 @@ export async function listDerivedArtifactKeys(
   key: string,
 ): Promise<string[]> {
   if (!isStorageKey(key)) return [];
-  const posterVersions = (await backend.listCommonPrefixes?.("_posters/")) ?? null;
+  const posterVersions = (await backend.listCommonPrefixes?.(DERIVED_ROOT_PREFIX_BY_TIER.poster)) ?? null;
   const candidates = derivedCandidatesOf(key, posterVersions);
   const hits: string[] = [];
   for (const candidate of candidates) {

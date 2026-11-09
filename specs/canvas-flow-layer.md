@@ -80,7 +80,7 @@
 - `controls/DeletableEdge.tsx`：登记/注销，移除 FlowLines 挂载
 - `controls/EdgeFlow.tsx`：改用共享流形参数（仅预览）
 - `drag/drag-preview-session.ts`：发布/清除预览覆盖
-- `InfiniteCanvas.tsx`：挂载 `<CanvasFlowLayer />`
+- `root/CanvasSurface.tsx`：挂载 `<CanvasFlowLayer />`
 - `web/src/styles/globals.css`：图层与 canvas 定位规则
 
 删除：`FlowLines` 的 GLOW 死分支、`useEdgePath` 死函数、`REVERSE` 常量（恒 false）。
@@ -118,7 +118,7 @@
 
 实现：新增 `web/src/features/canvas/flow/`（`flow-taper` / `flow-registry` /
 `flow-renderer` / `CanvasFlowLayer`）；`DeletableEdge` 移除 `FlowLines` 挂载改为登记
-几何；`drag-preview-session` 发布/清除预览覆盖；`InfiniteCanvas` 挂载图层；
+几何；`drag-preview-session` 发布/清除预览覆盖；`CanvasSurface` 挂载图层；
 `globals.css` 图层定位。
 
 验证环境：生产构建（`next build` + `next start`）的 129 节点 / 124 边探测画布，
@@ -160,3 +160,5 @@
 
 - 2026-11-01 用户确认验收 3 视觉一致性并授权提交，实现提交 `a2588aee`，
   状态更新为「已实现」。
+- 2026-11-09 六轮评审修复（仅文档）：当前状态中的挂载点由 `InfiniteCanvas` 更正为
+  `root/CanvasSurface.tsx`，与实现清单一致；无代码与验收变更，状态保持「已实现」。

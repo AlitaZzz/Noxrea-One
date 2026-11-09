@@ -2,12 +2,12 @@
  * 资产库主弹窗，资产模块的容器与编排层。
  * 组合左侧空间 / 文件夹树、顶部分类页签与工具条、主体资产网格，
  * 统一处理分页加载、搜索筛选、批量选择与批量删除 / 移动 / 改类型、
- * 文件夹增删改，以及「插入画布」（经 createAssetNode 转成画布节点）。
+ * 文件夹增删改，以及「插入画布」（通过注入的 onInsertAsset 交给画布落位）。
  */
 
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CloseOutlined, DeleteOutlined, DownloadOutlined, FolderOutlined, PlusOutlined, SwapOutlined } from "@/components/ui/AppIcon";
@@ -23,16 +23,28 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TreeSelect } from "@/components/ui/tree-select";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
-import { createAssetNode } from "@/features/assets/add-asset";
-import { useAssetLibrary } from "@/features/assets/hooks/use-asset-library";
+import {
+  addAssetsBatch,
+  addFolder,
+  type AssetFolder,
+  type AssetItem,
+  type AssetScope,
+  type AssetType,
+  type CreateAssetInput,
+  removeAssetsBatch,
+  removeFolder,
+  renameFolder,
+  updateAsset,
+  updateAssetsBatch,
+  useAssetFolders,
+  useAssetLibrary,
+} from "@/entities/asset";
 import { normalizeFolderId, ROOT_FOLDER_ID, useFolderTree } from "@/features/assets/hooks/use-folder-tree";
 import { splitMatch, useTreeMatchTitle } from "@/features/assets/hooks/use-tree-match";
-import { computeRecursiveFolderCounts, selectChildFolders, useAssetsStore } from "@/features/assets/store";
-import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "@/features/assets/types";
-import { findFreePosition, getViewportCenter, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { ASSET_CATEGORIES } from "@/lib/constants";
 
 import { downloadAsset } from "../download";
+import { computeRecursiveFolderCounts, getFolderPath, selectGridFolders } from "../folders";
 import AssetBreadcrumb from "./AssetBreadcrumb";
 import AssetCreateDialog from "./AssetCreateDialog";
 import AssetGrid from "./AssetGrid";
@@ -42,28 +54,23 @@ import CreateFolderDialog from "./CreateFolderDialog";
 
 interface Props {
   open: boolean;
-  onClose: () => void;
+  onOpenChange: (open: boolean) => void;
+  /** 把单个资产插入画布；落位与历史由画布实现，本弹窗只负责提示。 */
+  onInsertAsset: (asset: AssetItem) => void;
+  /** 批量插入（多选 / 批量操作）。 */
+  onInsertAssets: (assets: AssetItem[]) => void;
 }
 
-function AssetsDialog({ open, onClose }: Props) {
+function AssetsDialog({ open, onOpenChange, onInsertAsset, onInsertAssets }: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
-  const folders = useAssetsStore((s) => s.folders);
-  const addAssetsBatch = useAssetsStore((s) => s.addAssetsBatch);
-  const addFolder = useAssetsStore((s) => s.addFolder);
-  const renameFolder = useAssetsStore((s) => s.renameFolder);
-  const updateAsset = useAssetsStore((s) => s.updateAsset);
-  const removeAssetsBatch = useAssetsStore((s) => s.removeAssetsBatch);
-  const removeFolder = useAssetsStore((s) => s.removeFolder);
-  const updateAssetsBatch = useAssetsStore((s) => s.updateAssetsBatch);
+  const folders = useAssetFolders();
 
   const gridRef = useRef<HTMLDivElement>(null);
 
   // 空间固定为个人库（当前只有该空间）；状态保留供查询链路使用，将来加回系统库时恢复切换即可。
   const [activeScope] = useState<AssetScope>("personal");
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
-  const getUncategorizedFolder = useAssetsStore((s) => s.getUncategorizedFolder);
-  const uncategorizedFolder = getUncategorizedFolder(activeScope);
   const [categories, setCategories] = useState<AssetType[]>([]);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -106,7 +113,7 @@ function AssetsDialog({ open, onClose }: Props) {
     loadMore: fetchNextPage,
     retry,
     removeItems,
-    setItems,
+    patchItems,
     appliedSearch,
   } = useAssetLibrary({
     enabled: open,
@@ -115,16 +122,6 @@ function AssetsDialog({ open, onClose }: Props) {
     search,
     categories,
   });
-
-  // 资产条目在视图外变更（画布收藏 / 取消收藏等）时失效重拉；弹窗关闭期间只记账，
-  // 重开时 enabled 的查询链路自然会取最新数据。
-  const libraryVersion = useAssetsStore((s) => s.libraryVersion);
-  const lastLibraryVersionRef = useRef(libraryVersion);
-  useEffect(() => {
-    if (libraryVersion === lastLibraryVersionRef.current) return;
-    lastLibraryVersionRef.current = libraryVersion;
-    if (open) reload();
-  }, [libraryVersion, open, reload]);
 
   // 搜索词或分类变化后旧勾选可能已不在结果中，在事件中清空，避免批量操作误带不可见项。
   const handleSearchChange = useCallback((value: string) => {
@@ -202,13 +199,9 @@ function AssetsDialog({ open, onClose }: Props) {
     if (selectedAssets.length !== 1) return undefined;
     const folderId = selectedAssets[0].folderId;
     if (!folderId) return t("asset.spacePersonal");
-    const names: string[] = [];
-    let cur = folders.find((f) => f.id === folderId);
-    while (cur) {
-      names.unshift(cur.kind === "uncategorized" ? t("asset.uncategorized") : cur.name);
-      const parentId = cur.parentId;
-      cur = parentId ? folders.find((f) => f.id === parentId) : undefined;
-    }
+    const names = getFolderPath(folders, folderId).map((folder) =>
+      folder.kind === "uncategorized" ? t("asset.uncategorized") : folder.name,
+    );
     return [t("asset.spacePersonal"), ...names].join(" / ");
   }, [selectedAssets, folders, t]);
 
@@ -216,18 +209,18 @@ function AssetsDialog({ open, onClose }: Props) {
     const ok = await updateAsset(asset.id, { tags });
     if (ok) {
       // 与重命名一致：写库成功后同步当前列表，翻页离开后以服务端数据为准。
-      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, tags } : item)));
+      patchItems([asset.id], { tags });
     }
     return ok;
-  }, [updateAsset, setItems]);
+  }, [patchItems]);
 
   const handleUpdatePrompt = useCallback(async (asset: AssetItem, prompt: string) => {
     const ok = await updateAsset(asset.id, { prompt });
     if (ok) {
-      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, prompt } : item)));
+      patchItems([asset.id], { prompt });
     }
     return ok;
-  }, [updateAsset, setItems]);
+  }, [patchItems]);
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -243,7 +236,7 @@ function AssetsDialog({ open, onClose }: Props) {
     setSelectedIds(new Set());
     setMultiSelectMode(false);
     return true;
-  }, [selectedIds, removeAssetsBatch, removeItems]);
+  }, [selectedIds, removeItems]);
 
   const handleSingleDeleteConfirm = useCallback(async () => {
     if (!deleteAsset) return false;
@@ -257,7 +250,7 @@ function AssetsDialog({ open, onClose }: Props) {
       return next;
     });
     return true;
-  }, [deleteAsset, removeAssetsBatch, removeItems]);
+  }, [deleteAsset, removeItems]);
 
   const handleBatchMove = useCallback(async (folderId: string) => {
     const ids = [...selectedIds];
@@ -281,7 +274,7 @@ function AssetsDialog({ open, onClose }: Props) {
     // 文件夹内列表：移动成功的项必然离开当前视图，本地剔除并补页；
     // 根目录是全量视图（跨文件夹搜索结果中这些项仍匹配），保留不动。
     if (activeFolderId !== null) await removeItems(ids);
-  }, [selectedIds, batchMoving, activeFolderId, folders, updateAssetsBatch, removeItems]);
+  }, [selectedIds, batchMoving, activeFolderId, folders, removeItems]);
 
   const handleBatchType = useCallback(async (type: AssetType) => {
     const ids = [...selectedIds];
@@ -297,22 +290,15 @@ function AssetsDialog({ open, onClose }: Props) {
     if (categories.length > 0 && !categories.includes(type)) {
       await removeItems(ids);
     } else {
-      setItems((prev) => prev.map((i) => (ids.includes(i.id) ? { ...i, type } : i)));
+      patchItems(ids, { type });
     }
-  }, [selectedIds, batchTypeSaving, categories, updateAssetsBatch, removeItems, setItems]);
+  }, [selectedIds, batchTypeSaving, categories, removeItems, patchItems]);
 
   // Current folder depth (max 2 levels allowed)
-  const currentFolderDepth = useMemo(() => {
-    if (!activeFolderId) return 0;
-    let depth = 0;
-    let id: string | undefined = activeFolderId;
-    while (id) {
-      depth++;
-      const f = folders.find((x) => x.id === id);
-      id = f?.parentId || undefined;
-    }
-    return depth;
-  }, [activeFolderId, folders]);
+  const currentFolderDepth = useMemo(
+    () => getFolderPath(folders, activeFolderId).length,
+    [activeFolderId, folders],
+  );
   const currentFolder = activeFolderId
     ? folders.find((folder) => folder.id === activeFolderId)
     : undefined;
@@ -321,13 +307,10 @@ function AssetsDialog({ open, onClose }: Props) {
   // 与抽屉共用同一套递归计数逻辑，避免目录数量展示不一致。
   const folderCounts = useMemo(() => computeRecursiveFolderCounts(folders), [folders]);
 
-  const gridFolders = useMemo<AssetFolder[]>(() => {
-    const childFolders = selectChildFolders(folders, activeScope, activeFolderId ?? undefined);
-    if (activeFolderId !== null) return childFolders;
-    return uncategorizedFolder
-      ? [{ ...uncategorizedFolder, name: t("asset.uncategorized") }, ...childFolders]
-      : childFolders;
-  }, [activeFolderId, activeScope, folders, uncategorizedFolder, t]);
+  const gridFolders = useMemo<AssetFolder[]>(
+    () => selectGridFolders(folders, activeScope, activeFolderId, t("asset.uncategorized")),
+    [activeFolderId, activeScope, folders, t],
+  );
 
   // 文件夹只在无分类筛选、无搜索词时参与网格。
   // 用生效搜索词（appliedSearch）而非原始输入：清空搜索时与资产列表同帧切换，避免两者短暂叠加。
@@ -351,27 +334,15 @@ function AssetsDialog({ open, onClose }: Props) {
   // --- Handlers ---
 
   const handleInsertCanvas = useCallback((asset: AssetItem) => {
-    const node = createAssetNode(asset, getViewportCenter(), findFreePosition);
-    // 离散插入：必定压栈
-    if (node) useCanvasStore.getState().addNodes([node], { forceHistory: true });
+    onInsertAsset(asset);
     message.success(t("asset.added"));
-  }, [message, t]);
+  }, [message, onInsertAsset, t]);
 
-  // 检查器批量插入：以视口中心为基准错位落位，避免多个节点完全重叠。
   const handleBatchInsert = useCallback((assets: AssetItem[]) => {
     if (assets.length === 0) return;
-    const center = getViewportCenter();
-    const nodes = assets
-      .map((asset, i) => createAssetNode(
-        asset,
-        { x: center.x + (i % 8) * 40, y: center.y + Math.floor(i / 8) * 40 },
-        findFreePosition,
-      ))
-      .filter((node): node is NonNullable<typeof node> => !!node);
-    // 批量插入是同一原子操作：必定压栈为一条撤销
-    if (nodes.length > 0) useCanvasStore.getState().addNodes(nodes, { forceHistory: true });
+    onInsertAssets(assets);
     message.success(t("asset.addedCount", { count: assets.length }));
-  }, [message, t]);
+  }, [message, onInsertAssets, t]);
 
   const handleCreateAssets = useCallback(
     async (inputs: CreateAssetInput[]) => {
@@ -383,7 +354,7 @@ function AssetsDialog({ open, onClose }: Props) {
       // 把结果交回上传弹窗，由其决定关闭与提示；失败时不再静默关闭。
       return result;
     },
-    [addAssetsBatch, reload],
+    [reload],
   );
 
   const handleCreateFolder = useCallback(
@@ -392,17 +363,17 @@ function AssetsDialog({ open, onClose }: Props) {
       const result = await addFolder(name, activeScope, parentId);
       return result.status;
     },
-    [addFolder, activeScope, activeFolderId],
+    [activeScope, activeFolderId],
   );
 
   // 素材重命名在检查器标题处内联完成，这里只负责持久化与本地列表同步。
   const handleRenameConfirm = useCallback(async (asset: AssetItem, name: string) => {
     const ok = await updateAsset(asset.id, { name });
     if (ok) {
-      setItems((prev) => prev.map((item) => (item.id === asset.id ? { ...item, name } : item)));
+      patchItems([asset.id], { name });
     }
     return ok;
-  }, [updateAsset, setItems]);
+  }, [patchItems]);
 
   const handleRenameFolder = useCallback((folder: AssetFolder) => {
     setRenamingFolder(folder);
@@ -424,7 +395,7 @@ function AssetsDialog({ open, onClose }: Props) {
       setFolderRenameError(t("asset.folderDuplicate"));
     }
     // failed 时 store 已弹出错误通知，弹窗保留便于重试。
-  }, [renamingFolder, folderRenameValue, folderRenameSaving, renameFolder, t]);
+  }, [renamingFolder, folderRenameValue, folderRenameSaving, t]);
 
   const handleDelete = useCallback((asset: AssetItem) => { setDeleteAsset(asset); }, []);
   const handleDeleteFolder = useCallback((folder: AssetFolder) => { setDeleteFolder(folder); }, []);
@@ -436,35 +407,22 @@ function AssetsDialog({ open, onClose }: Props) {
     if (!removed) return false;
     // 只有删除成功才把用户切回根目录；失败原因由 store 统一通知
     if (activeFolderId) {
-      let cur: string | null = activeFolderId;
-      let within = false;
-      while (cur) {
-        if (cur === deletedId) { within = true; break; }
-        cur = folders.find((f) => f.id === cur)?.parentId || null;
-      }
+      const within = getFolderPath(folders, activeFolderId).some((folder) => folder.id === deletedId);
       if (within) { setActiveFolderId(null); setSearch(""); }
     }
     clearSelection();
     return true;
-  }, [deleteFolder, removeFolder, activeFolderId, folders, clearSelection]);
+  }, [deleteFolder, activeFolderId, folders, clearSelection]);
 
   // Breadcrumb data
-  const breadCrumb = useMemo((): AssetFolder[] => {
-    if (!activeFolderId) return [];
-    const crumbs: AssetFolder[] = [];
-    let cur: string | undefined = activeFolderId;
-    while (cur) {
-      const f = folders.find((x) => x.id === cur);
-      if (!f) break;
-      crumbs.unshift(f);
-      cur = f.parentId || undefined;
-    }
-    return crumbs;
-  }, [activeFolderId, folders]);
+  const breadCrumb = useMemo(
+    () => getFolderPath(folders, activeFolderId),
+    [activeFolderId, folders],
+  );
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           className="asset-library-modal select-none sm:max-w-none w-[94vw] max-w-[1600px] gap-0 p-0 bg-card"
         >

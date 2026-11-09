@@ -166,7 +166,7 @@
 
 ### 4.6 单节点工具条抑制
 
-1. `selectedNodeIds.size >= 2` 时，`InfiniteCanvas` 不再为任何选中节点渲染通用 `NodeToolbarUI`。
+1. `selectedNodeIds.size >= 2` 时，`CanvasSurface` 不再为任何选中节点渲染通用 `NodeToolbarUI`。
 2. 媒体编辑面板（帧序列、片段截取、音频截取、打光、多视角、全景、标注、裁剪等）的渲染路径不变；这些面板是单目标编辑现场，正常不会与 ≥2 选区并存。
 3. 多选时组节点的颜色 / 组内布局入口不可用；用户单击该组进入单选后继续使用组节点工具条。这是 Phase 1 的已知取舍。
 4. 单选时完全保持现有 per-node 工具条行为，不改变其内容、位置或动作。
@@ -229,7 +229,7 @@
 ### 5.1 数据派生
 
 - 在 `web/src/features/canvas/shared/canvas-derived.ts` 增加 `selectionChromeBounds`，由全部选中节点的绝对坐标与 `measureNode` 计算，随 `nodes` 引用缓存。字段包含 `count`、`hasGroup`、原始并集 `bbox`、外框显隐 `frameVisible` 与工具条锚点 `containerBbox`。
-- `frameVisible` 与多选外框显隐同源：`InfiniteCanvas` 直接消费该字段，删除原先独立的选区扫描 memo。
+- `frameVisible` 与多选外框显隐同源：`CanvasSurface` 直接消费该字段，删除原先独立的选区扫描 memo。
 - 保留 `selectionFrame` 原语义与调用方不变；批量连线继续使用它。
 - 不新增 store 字段，不改变画布文档结构。
 
@@ -238,13 +238,13 @@
 - 新增 `web/src/features/canvas/controls/SelectionToolbar.tsx`：
   - 展示层 `SelectionToolbar`：接收计数、是否含组、选区签名与回调，渲染 `Card`。
   - 容器层 `SelectionToolbarLayer`：订阅选区、视口与包围盒，计算屏幕坐标并渲染浮层。
-- `web/src/features/canvas/InfiniteCanvas.tsx`：
+- `web/src/features/canvas/root/CanvasSurface.tsx`：
   - 用 `selectCanvasToolbarMode(showSelectionToolbars, selectionChromeBounds)` 得到唯一可见模式：`hidden` / `aggregate`（携带 `bounds`）/ `per-node`，不再在渲染层重复 `multiSelect = selectedNodeIds.size > 1` 阈值；
-  - `aggregate` 且无编辑现场时渲染 `SelectionToolbarLayer`；`per-node` 时保留 per-node 通用 `NodeToolbarUI`；
+  - 把 `toolbarMode` 交给 `CanvasOverlays`；`aggregate` 且无编辑现场时由 `root/overlays/GlobalOverlays.tsx` 渲染 `SelectionToolbarLayer`；`per-node` 时保留 per-node 通用 `NodeToolbarUI`；
   - `.hide-selection-rect` 直接使用 `canvasDerived.selectionChromeBounds?.frameVisible`，删除重复的选区扫描与 `every(isGroupNode)` 判断，保证外框显隐与工具条锚点同源；
   - 媒体编辑面板的独立 `RfNodeToolbar` 渲染块保持不变。
 - 工具条展示层接收 `selectionKey`，只作为「更多」菜单的 `key`：选区变化时菜单子树重挂载并关闭，展示层本身不重挂载，`aria-live` 计数节点保留。
-- 工具条层使用独立组件订阅视口，避免 `InfiniteCanvas` 因平移/缩放整体重渲染；锚点只在 idle 时参与跟随。
+- 工具条层使用独立组件订阅视口，避免 `CanvasSurface` 因平移/缩放整体重渲染；锚点只在 idle 时参与跟随。
 - 使用 `useViewport()` 或等效的 viewport transform 把 `containerBbox` 与 `bbox` 从 flow 坐标投影到画布容器坐标：前者用于定位，后者只用于判定与视口是否有交集；不把工具条放进随视口缩放的节点层。
 
 ### 5.3 复用现有动作
@@ -261,7 +261,7 @@
 
 - `web/src/__tests__/features/canvas/shared/canvas-derived.test.ts`：聚合包围盒包含组节点、成员绝对坐标、空选区、单选返回空。
 - `web/src/__tests__/features/canvas/controls/SelectionToolbar.test.tsx`：按钮显示矩阵（全非组 / 含组 / 混合 / 2 组）、计数、菜单项、Esc 行为、无自动聚焦。
-- `web/src/__tests__/features/canvas/InfiniteCanvas` 相关测试或等价集成测试：多选时不渲染 per-node 工具条、单选时保持原行为。由于 `InfiniteCanvas` 的依赖面过大，等价实现是把可见性规则抽成纯函数 `selectCanvasToolbarMode`，在 `canvas-derived.test.ts` 覆盖 `hidden` / `aggregate` / `per-node` 三种模式；渲染层只消费该结果。
+- `web/src/__tests__/features/canvas/root` 相关测试或等价集成测试：多选时不渲染 per-node 工具条、单选时保持原行为。由于 `CanvasSurface` 的依赖面过大，等价实现是把可见性规则抽成纯函数 `selectCanvasToolbarMode`，在 `canvas-derived.test.ts` 覆盖 `hidden` / `aggregate` / `per-node` 三种模式；渲染层只消费该结果。
 - `SelectionToolbar.test.tsx` 额外覆盖：选区变化关闭「更多」菜单但保留 `aria-live` 计数节点；工具条容器按视口宽度设置 `maxWidth`，配合 `flex-wrap` 不溢出。
 - 现有 `web/src/__tests__/features/canvas/hooks/use-group-operations.test.ts` 与 `web/src/__tests__/features/canvas/shared/group-layout.test.ts` 保持通过，证明未改变编组/布局语义。
 - 性能回归：129 节点 Ctrl+A 后只挂 1 条聚合工具条，per-node 工具条数量为 0；与 `specs/canvas-selection-chrome-scheduling.md` 记录的基线对比，不出现新的长任务回归。

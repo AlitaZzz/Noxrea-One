@@ -2,10 +2,10 @@
 
 import { type ReactNode, useEffect, useState } from "react";
 
+import { ResolvedHoverMedia } from "@/components/media/ResolvedHoverMedia";
 import { CloseOutlined } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { HoverCard, HoverCardTrigger } from "@/components/ui/hover-card";
-import { ResolvedHoverMedia } from "@/features/media/components/ResolvedHoverMedia";
 
 interface ReferenceHoverPreviewProps {
   children: ReactNode;

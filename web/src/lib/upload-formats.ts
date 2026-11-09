@@ -104,6 +104,29 @@ export async function loadUploadFormats(): Promise<UploadFormats> {
   }
 }
 
+/**
+ * 通配类型的扩展名兜底。
+ * 系统文件选择器按注册表匹配 MIME，而 mkv / mov / avi 等容器在部分系统上
+ * 未注册为 video/*，只写 "video/*" 会让这些文件在对话框里选不到，故补上扩展名。
+ * 扩展名清单来自本模块的上传格式单源。
+ */
+const WILDCARD_CATEGORY: Record<string, MediaCategory> = {
+  "image/*": "image",
+  "video/*": "video",
+  "audio/*": "audio",
+};
+
+/** 给 accept 中的通配类型补齐常见扩展名（已显式列出的保持不变） */
+export function expandAccept(accept: string): string {
+  const parts = accept.split(",").map((s) => s.trim()).filter(Boolean);
+  const formats = getUploadFormats();
+  const extras = parts.map((p) => {
+    const category = WILDCARD_CATEGORY[p];
+    return category ? formats[category].map((e) => `.${e}`).join(",") : undefined;
+  }).filter((v): v is string => Boolean(v));
+  return Array.from(new Set([...parts, ...extras])).join(",");
+}
+
 /** 按扩展名判定媒体类别；不在白名单内返回 null */
 function kindByExtension(ext: string): MediaCategory | null {
   const e = ext.toLowerCase();

@@ -45,7 +45,7 @@ class Flight<T> {
   }
 }
 
-interface SingleFlightOptions<T> {
+export interface SingleFlightOptions<T> {
   key: string;
   signal?: AbortSignal;
   /** 真正的生成动作；signal 在「全部等待者均已中止」时触发 */

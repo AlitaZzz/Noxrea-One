@@ -6,18 +6,20 @@
  * （规则 1.2 / 4.4）——否则就是把配置知识漏进业务层。
  */
 
+import type { AddressingStyle } from "@server/core/metrics";
+
 /** 支持方：`generic` 表示未知实现，寻址风格交由启动探测决定 */
 export type StorageProvider = "minio" | "aws" | "r2" | "oss" | "cos" | "generic";
 
-/** 寻址风格：path-style（`<host>/<bucket>/<key>`）与虚拟主机（`<bucket>.<host>/<key>`） */
-export type AddressingStyle = "path" | "virtual";
-
 /**
- * 进程级能力位（规则 4.1）：启动探测得出，运行期不变量（规则 3.8）。
+ * 存储能力记录（specs/storage-provider-portability.md 规则 4.1）。
  *
- * 只收「可能为假、且为假时改变行为」的位。预签名回读不在此列：它是探测致命项，
- * 不通过即启动失败，进入服务态的进程该位恒为真——一个恒真且无人分支的位只会
- * 让人以为存在降级路径。
+ * profile 提供基线、启动探测覆盖真实值，业务只读能力位。该记录属于存储装配域；
+ * metrics 侧只声明扁平的标签入参 `StorageProbeMetrics`，由 bootstrap 显式投影，
+ * 不反向拥有本类型（规则 3.8 约束的是标签集合，不是领域记录）。
+ *
+ * 只收「可能为假、且为假时改变行为」的位；预签名回读是探测致命项（不通过即
+ * 启动失败），进入服务态的进程该位恒为真，不在此列。
  */
 export interface StorageCapabilities {
   /** 实际生效的寻址风格（`generic` 由探测得出） */
@@ -28,7 +30,7 @@ export interface StorageCapabilities {
   browserCors: boolean;
 }
 
-interface StorageProviderProfile {
+export interface StorageProviderProfile {
   /**
    * 寻址候选，顺序即尝试顺序。已知 profile 只有一个候选（配错即刻暴露），
    * `generic` 先虚拟主机后 path-style（规则 1.3 / 1.6）。

@@ -22,7 +22,7 @@
 ## 现状盘点（已验证事实）
 
 - 所有 env 由 [server/core/config/index.ts](server/core/config/index.ts) 的 zod schema 一次性解析为单例，`getConfig()` 为**同步**读取；全部消费方在调用时读取，唯一的模块加载期读取是 `logger`（`LOG_LEVEL`）和 `storage/backends/local.ts`（`UPLOAD_DIR`）。
-- 启动顺序（[server/core/bootstrap.ts](server/core/bootstrap.ts)）：`loadConfig` → `applyPragmas` → `initGateway` → GC 调度；Prisma 连接依赖 `DATABASE_URL`，数据库层自己直接读 `LOG_LEVEL`。
+- 启动顺序（[server/bootstrap.ts](server/bootstrap.ts)）：`loadConfig` → 数据库连接串校验 → `initSettings` → 队列/限流初始化 → `initGateway` → 存储后端探测 → GC 调度；Prisma 连接依赖 `DATABASE_URL`，数据库层自己直接读 `LOG_LEVEL`。
 - 前端侧有三处直接读 env，不经后端：`web/next.config.ts`（`APP_NAME`、`SERVER_URL`、`UPLOAD_BATCH_MAX_MB` → `proxyClientMaxBodySize`）、`web/src/proxy.ts`（`AUTH_GATE_MODE`）、Dockerfile 构建参数 `APP_NAME`。
 - 现有 env 与代码默认值存在漂移：`.env.example` 中 `WORKER_STUCK_TIMEOUT=5`，代码默认与 entrypoint 为 `15`；`GC_GRACE_HOURS`、`GC_DRY_RUN`、`HTTP_BODY_IDLE_TIMEOUT`、`DOWNLOAD_TOTAL_TIMEOUT` 未在 `.env.example` 中出现。迁移后默认值只在注册表定义一处，该漂移自然消除。
 - `HTTP_TIMEOUT_ASYNC` 已核实为死配置：全仓（server / web / 脚本）仅 `services/agent/completion.ts` 使用 `scene: "async"`，且同时传入显式 `timeoutMs`；`fetchWithTimeout` 中 `timeoutMs ?? sceneTimeout`，显式值优先，场景值永不被取用。

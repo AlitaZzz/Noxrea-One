@@ -4,6 +4,7 @@
  * 异步轮询不再在进程内长驻——受理后由 BullMQ 延迟 tick 逐次驱动（见 worker/handler）。
  */
 
+import type { TerminalTaskStatus } from "@noxrea/shared";
 import { logEvent, errText } from "@server/core/logger/utils";
 import {
   fetchUpstream,
@@ -17,7 +18,7 @@ import { GenerationGateRejectedError } from "@server/services/tasks/failure";
 import type { ProtocolService } from "@server/services/protocols/base";
 
 export interface SubmitAndWaitResult {
-  status: "completed" | "failed" | "cancelled" | "async";
+  status: TerminalTaskStatus | "async";
   urls: string[];
   text?: string;
   error?: string;

@@ -4,6 +4,7 @@
  * 写入必须带请求序号：强制刷新与在途去重各自发起请求时可能并发，先发起的旧描述
  * 后返回不得覆盖后发起的新描述（否则重试拿回刚被判定失效的地址）。
  */
+import { notifyAccessChanged } from "./change-signal";
 import { expiryOf, type FileAccessDescriptor } from "./protocol";
 
 interface CacheEntry {
@@ -24,11 +25,15 @@ const cache = new Map<string, CacheEntry>();
 
 export function resetCache(): void {
   cache.clear();
+  notifyAccessChanged();
 }
 
 /**
  * 缓存条目读取（唯一的过期判定点）。默认不就地删除过期项：渲染期探测
  * （`peekMediaAccess`）可能被并发渲染调用，删除是副作用，留给解析路径或会话切换清理。
+ *
+ * 淘汰不通知订阅者：过期条目在读取时本就不可见；上界淘汰只影响之后的读取，已展示的
+ * 值由消费方的按源冻结持有。通知只标记「来源真相写入」，不标记「旧条目被丢弃」。
  */
 export function cachedDescriptorOf(
   cacheKey: string,
@@ -56,6 +61,7 @@ export function storeIfNewer(
   cache.delete(cacheKey);
   cache.set(cacheKey, { descriptor, seq, expiresAtMs: expiryOf(descriptor) });
   boundCache();
+  notifyAccessChanged();
   return true;
 }
 

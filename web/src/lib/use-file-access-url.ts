@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   type FileDelivery,
@@ -8,8 +8,11 @@ import {
   isManagedMediaValue,
   isTransientDescriptorFailure,
   peekMediaAccess,
+  type ResolvedMediaAccess,
   resolveMediaAccess,
+  subscribeAccessChanges,
 } from "@/lib/file-access";
+import { accessChangeVersion } from "@/lib/file-access/change-signal";
 import {
   backgroundRetryAt,
   proactiveRefreshAt,
@@ -61,6 +64,16 @@ type RefreshOutcome =
   | { type: "cancelled" };
 
 /**
+ * 服务端与水合首帧一律「未解析」（规范 1.2 / 2.1）：客户端缓存不得参与水合比较。
+ * 必须用 `useSyncExternalStore` 的 server snapshot 语义判定，不能拿 `typeof window`
+ * 或 effect 置真的 mounted 门闩替代——前者在客户端水合首帧同样为真，后者会让
+ * 纯客户端挂载也白闪一帧骨架。
+ */
+function getServerAccessSnapshot(): null {
+  return null;
+}
+
+/**
  * 托管媒体访问 Hook（specs/storage-signed-direct-delivery.md 规则 3）。
  *
  * 外部 http(s) / data: / blob: 原样返回；托管值经统一解析服务换取最终地址。
@@ -72,6 +85,53 @@ type RefreshOutcome =
  */
 export function useFileAccessUrl(value: string | null | undefined): FileAccessUrlState {
   const managed = !!value && isManagedMediaValue(value);
+  // 解析结果的快照：水合首帧取 server snapshot（未解析），水合切到客户端快照后
+  // 直接命中缓存出图。快照读取只读模块级缓存与提交期写入的冻结槽，不产生副作用。
+  //
+  // 快照的引用稳定性在这里产生，分两层：
+  // 1. 已提交的冻结槽：来源未变时冻结首次取到的地址。冻结是规则 3.8 的要求
+  //    （后台刷新只更新缓存与新鲜地址槽，不得替换已挂载元素的地址），也让全局通知
+  //    不会让无关媒体重渲染。冻结只在来源未变时有效：来源变化后的首次读取立即重建
+  //    （新来源未命中时为空），旧来源的地址不会残留到换回来的时候。
+  // 2. 提交前的派生快照：`peekMediaAccess` 每次派生新对象，而 getSnapshot 必须
+  //    返回稳定引用。按「来源 + 变更版本」缓存，版本变化即失效；被丢弃的渲染写入
+  //    的旧条目会在下一次读取时被版本校验淘汰，因此缓存值始终是（来源, 当前缓存
+  //    内容）的纯函数，不构成可观察状态。
+  // 冻结槽只在提交后的 effect / 会话事件里写入；解析层不保存第二份派生存储，
+  // 会话切换由下面的监听释放。
+  const committedAccess = useRef<{ source: string; access: ResolvedMediaAccess } | null>(null);
+  const derivedAccess = useRef<{
+    source: string;
+    version: number;
+    access: ResolvedMediaAccess | null;
+  } | null>(null);
+  const getAccessSnapshot = useCallback((): ResolvedMediaAccess | null => {
+    if (!managed || !value) return null;
+    const committed = committedAccess.current;
+    if (committed?.source === value) return committed.access;
+    const version = accessChangeVersion();
+    const derived = derivedAccess.current;
+    if (derived?.source === value && derived.version === version) return derived.access;
+    const access = peekMediaAccess(value);
+    derivedAccess.current = { source: value, version, access };
+    return access;
+  }, [managed, value]);
+  const cachedAccess = useSyncExternalStore(
+    subscribeAccessChanges,
+    getAccessSnapshot,
+    getServerAccessSnapshot,
+  );
+
+  // 提交后冻结本次来源的展示快照：已经展示（或本帧取到）的地址不再被后台刷新替换。
+  // 冻结只写 ref、不 setState——它不改变本次渲染输出，不触发额外渲染。
+  useEffect(() => {
+    if (!managed || !value) {
+      committedAccess.current = null;
+      return;
+    }
+    if (committedAccess.current?.source === value) return;
+    committedAccess.current = cachedAccess ? { source: value, access: cachedAccess } : null;
+  }, [managed, value, cachedAccess]);
   const [state, setState] = useState<ResolvedState | null>(null);
   // 失败按「源 + 尝试序号」记账：新源或新的 refresh 请求自动让旧失败态失效
   const [failedAttempt, setFailedAttempt] = useState<{ source: string; attempt: number } | null>(null);
@@ -96,24 +156,11 @@ export function useFileAccessUrl(value: string | null | undefined): FileAccessUr
   if (refreshRequest && refreshRequest.source !== value) setRefreshRequest(null);
   const attempt = refreshRequest && refreshRequest.source === value ? refreshRequest.tick : 0;
 
-  // 缓存命中在渲染期直接出图：stream 形态与 signed 缓存条目都无需再发描述请求，也不闪一帧骨架
-  if (managed && value && state?.source !== value) {
-    const peeked = peekMediaAccess(value);
-    if (peeked) {
-      setState({
-        source: value,
-        url: peeked.url,
-        delivery: peeked.delivery,
-        expiresAt: peeked.expiresAt,
-        refreshAt: peeked.refreshAt,
-      });
-    }
-  }
-
   // 账号切换：丢弃展示结果并重新解析（内存缓存已由解析服务清空）。
   // 重试闩锁同属会话作用域：新账号下同一逻辑源的失败是一次独立失败，享有一次重试
   useEffect(
     () => onSessionChange(() => {
+      committedAccess.current = null;
       setState(null);
       setFailedAttempt(null);
       setRefreshRequest(null);
@@ -144,7 +191,8 @@ export function useFileAccessUrl(value: string | null | undefined): FileAccessUr
       pendingRef.current.clear();
     };
 
-    // 渲染期缓存命中已出图（规则 3.4 / signed 缓存）：不重复描述
+    // 缓存已命中（规则 3.4 / signed 缓存）：不重复描述。
+    // 展示地址由外部快照提供且已按源冻结，后台刷新只更新缓存，不会替换已挂载地址。
     if (!forceRefresh && peekMediaAccess(source)) return;
 
     const controller = new AbortController();
@@ -179,12 +227,13 @@ export function useFileAccessUrl(value: string | null | undefined): FileAccessUr
     return () => controller.abort();
   }, [managed, value, scope, attempt]);
 
-  // 先判 state 非空：value 为空时 `state?.source === value` 也成立，直接读字段会崩
-  const signedState = state
-    && state.source === value
-    && state.delivery === "signed"
-    && state.expiresAt !== undefined
-    ? state
+  // 展示结果优先取已固定的 state；水合后、effect 固定前由外部快照补齐。
+  // 先判非空：value 为空时 `state?.source === value` 也成立，直接读字段会崩
+  const currentAccess = state?.source === value ? state : cachedAccess;
+  const signedState = currentAccess
+    && currentAccess.delivery === "signed"
+    && currentAccess.expiresAt !== undefined
+    ? currentAccess
     : null;
   const signedUrl = signedState?.url;
   const signedExpiresAt = signedState?.expiresAt;
@@ -295,7 +344,7 @@ export function useFileAccessUrl(value: string | null | undefined): FileAccessUr
     if (!value || !managed) return null;
     // delivery 未解析出来时（描述本身失败）不重试加载：重试加载只会再失败一次，
     // 用户可点的 refresh 才是那条路径的入口
-    const current = state?.source === value ? state : null;
+    const current = state?.source === value ? state : cachedAccess;
     if (current?.delivery !== "signed" || !current.url) return null;
     // 规则 3.8 的后台刷新已拿到更晚失效的地址：直接切过去，不再发描述请求。
     // 必须在重试闩锁之前判断——失败地址即使已用完预算，新地址仍应生效。
@@ -336,15 +385,14 @@ export function useFileAccessUrl(value: string | null | undefined): FileAccessUr
     if (outcome.type === "failed") return null;
     setReloadToken((token) => token + 1);
     return outcome.url;
-  }, [managed, requestRefresh, state, value]);
+  }, [cachedAccess, managed, requestRefresh, state, value]);
 
   if (!value) return { url: undefined, failed: false, refresh, retrySigned, reloadToken };
   if (!managed) return { url: value, failed: false, refresh, retrySigned, reloadToken };
 
-  const resolved = state?.source === value ? state : null;
   return {
-    url: resolved?.url,
-    delivery: resolved?.delivery,
+    url: currentAccess?.url,
+    delivery: currentAccess?.delivery,
     failed: failedAttempt?.source === value && failedAttempt.attempt === attempt,
     refresh,
     retrySigned,

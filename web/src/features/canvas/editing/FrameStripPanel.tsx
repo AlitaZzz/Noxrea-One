@@ -9,7 +9,7 @@
  * （含浏览器缓冲）前轨道禁用 scrub，只保留截取入口；雪碧图失败时时间轴改用
  * 代理的真实时长，不用浏览器读到的标称值（截断文件会虚报）。
  *
- * 挂载位置由 InfiniteCanvas 用 RfNodeToolbar(Position.Bottom) 决定：
+ * 挂载位置由 CanvasOverlays 的节点级浮层用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放，轨道尺寸始终稳定。
  */
 "use client";
@@ -27,14 +27,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { FRAME_TRACK_HEIGHT, FRAME_TRACK_WIDTH, useFrameSprite } from "@/features/canvas/hooks/use-frame-sprite";
 import { useProxyPlayback } from "@/features/canvas/hooks/use-proxy-playback";
 import { useVideoTimeSource } from "@/features/canvas/hooks/use-video-time-source";
+import { useCanvasInputBlocked } from "@/features/canvas/root/CanvasInputGateContext";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import { getVideoPlaybackTime, pauseVideo, seekVideo } from "@/features/canvas/shared/video-playback-registry";
-import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useMediaProgress } from "@/lib/use-media-progress";
 import { formatTime } from "@/lib/utils/format";
+import { clamp01 } from "@/lib/utils/number";
 
-import { clamp01, ratioFromClientX } from "./clip-range";
+import { ratioFromClientX } from "./clip-range";
 import { MediaRetryNotice } from "./MediaRetryNotice";
 import { demoteRetryNotice, proxyNoticeOf, ProxyNoticeTextOverlay } from "./ProxyNotice";
 import { resolveTrackDuration } from "./track-duration";
@@ -51,6 +52,7 @@ interface FrameStripPanelProps {
 
 function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
   const { t } = useTranslation();
+  const inputBlocked = useCanvasInputBlocked();
   // 媒体接口只接受存储 key：代理 / 抽帧都以此判定；外部 URL 仍可播放但不提供编辑
   const videoKey = storageKeyOf(videoRef);
   // 轨道缩略图：服务端出的整条雪碧图，拿不到时轨道退化为无缩略图形态；能否定位
@@ -132,10 +134,9 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       // 面板打开时可能有输入框持有焦点，方向键要留给它们
       if (isEditableTarget(e.target)) return;
-      // 上层弹窗打开时方向键归弹窗控件（与 useEscapeToClose 的 modalOpen 守卫一致），
+      // 上层浮层打开时方向键归浮层控件（与 useEscapeToClose 的输入门守卫一致），
       // 否则隐藏面板会抢走方向键、把弹窗里的滑杆等控件卡住
-      const st = useCanvasStore.getState();
-      if (st.modalOpen || st.directorOverlayOpen) return;
+      if (inputBlocked) return;
       e.preventDefault();
       const step = fps && fps > 0 ? 1 / fps : FALLBACK_FRAME_STEP;
       userDrivenRef.current = true;
@@ -143,7 +144,7 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canScrub, duration, fps]);
+  }, [canScrub, duration, fps, inputBlocked]);
 
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {

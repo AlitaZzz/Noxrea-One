@@ -238,6 +238,29 @@ describe("LocalStorageBackend.delete 派生产物清理", () => {
     await expect(fs.access(abs(`_sprite/${"e".repeat(32)}.webp`))).resolves.toBeUndefined();
   });
 
+  it("删除源文件时回收全部四个派生命名空间的空根目录", async () => {
+    // 独立根：其他用例会在 _cache/_sprite 留下其他源的文件，避免共享状态干扰
+    const isolatedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-storage-roots-"));
+    try {
+      const backend = new LocalStorageBackend(isolatedRoot);
+      const hash = "1".repeat(64);
+      await fs.mkdir(path.join(isolatedRoot, "8/11"), { recursive: true });
+      await fs.writeFile(path.join(isolatedRoot, `8/11/${hash}.bin`), "x");
+      // 四个派生根均为空（无任何派生文件）：删除任意源后一并回收
+      for (const dir of ["_cache", "_posters", "_sprite", "_proxy"]) {
+        await fs.mkdir(path.join(isolatedRoot, dir), { recursive: true });
+      }
+
+      await backend.delete(`8/11/${hash}.bin`);
+
+      for (const dir of ["_cache", "_posters", "_sprite", "_proxy"]) {
+        await expect(fs.access(path.join(isolatedRoot, dir)), dir).rejects.toMatchObject({ code: "ENOENT" });
+      }
+    } finally {
+      await fs.rm(isolatedRoot, { recursive: true, force: true });
+    }
+  });
+
   it("staging 源删除不触发派生枚举（门控短路），staging 源派生缓存由 TTL 兜底（规则 3）", async () => {
     const uuid = "123e4567-e89b-12d3-a456-426614174000";
     await fs.mkdir(path.dirname(abs(`staging/9/${uuid}`)), { recursive: true });
