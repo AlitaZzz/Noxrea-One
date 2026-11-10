@@ -182,6 +182,6 @@ code-review 审查与修复轮（2026-10-16，按「根因修复、行业成熟�
 - 轮十一日志中「雪碧图 / 代理改以 `isStorageKey` 判定」为历史表述，已就地补注其被 `storageKeyOf` 取代。
 - 验证：typecheck、lint:web（0 error，26 条既有 img 警告）、定向 49 + 4 用例、web test（131 文件 / 966 用例）、server 全量（89 文件 / 977 用例）串行通过。
 
-2026-11-08 文档对齐（工作区未提交）：画布账本字段清单按 `AGENTS.md` 十二.3.4 改为引用 [canvas-file-ref-ledger-coverage.md](canvas-file-ref-ledger-coverage.md) 业务规则 1（账本字段清单），不再在本文复制字段列表；规则归属不变，实现未改动。
+2026-11-08 文档对齐（已随 a2f521c0 提交）：画布账本字段清单按 `AGENTS.md` 十二.3.4 改为引用 [canvas-file-ref-ledger-coverage.md](canvas-file-ref-ledger-coverage.md) 业务规则 1（账本字段清单），不再在本文复制字段列表；规则归属不变，实现未改动。
 
-2026-11-09 根因修复（工作区未提交）：资产删除的账本与目录计数结算改为以 `DELETE ... RETURNING` 的实际删除集为唯一依据——先删行取得实际删除集，再按实际行清账本，最后按实际行聚合递减目录计数；删除谓词按 `(id, user_id)` 成对匹配，混合所有者的输入不会交叉命中。`crud/canvas.deleteProject` 同步改为先删项目行并持锁，再清理 `canvas` / `canvas_cover` 账本，避免并发保存写入孤儿引用。上文第三轮日志中的「清账本 → 删行」为修复前实现的历史记录，现行语义以本条为准。回归测试见 `server/__tests__/crud/asset-delete.test.ts` 与 `server/__tests__/crud/canvas.test.ts`。
+2026-11-09 根因修复（已随 a2f521c0 提交）：资产删除的账本与目录计数结算改为以 `DELETE ... RETURNING` 的实际删除集为唯一依据——先删行取得实际删除集，再按实际行清账本，最后按实际行聚合递减目录计数；删除谓词按 `(id, user_id)` 成对匹配，混合所有者的输入不会交叉命中。`crud/canvas.deleteProject` 同步改为先删项目行并持锁，再清理 `canvas` / `canvas_cover` 账本，避免并发保存写入孤儿引用。上文第三轮日志中的「清账本 → 删行」为修复前实现的历史记录，现行语义以本条为准。回归测试见 `server/__tests__/crud/asset-delete.test.ts` 与 `server/__tests__/crud/canvas.test.ts`。

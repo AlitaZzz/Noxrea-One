@@ -1,6 +1,6 @@
 /**
  * 服务启动引导。
- * 幂等初始化配置、数据库迁移、任务队列、网关等全局依赖，
+ * 幂等初始化配置、数据库连接校验、任务队列、网关等全局依赖，
  * 供 HTTP 服务与 Worker（BullMQ）在同进程中共用。
  */
 import { assertDatabaseUrl, describeDatabaseTarget } from "@server/core/database/connection-string";

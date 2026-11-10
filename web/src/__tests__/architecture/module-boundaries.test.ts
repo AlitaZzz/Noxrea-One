@@ -2,7 +2,8 @@
  * 前端模块边界（specs/web-module-contracts.md）。
  *
  * 用 TypeScript Compiler API 扫描 `web/src` 的模块引用，而不是正则：
- * 必须同时覆盖静态 `import`、`export ... from`、`import type`、动态 `import()` 与 `require()`。
+ * 必须同时覆盖静态 `import`、`export ... from`、`import type`、`import("...")` 类型引用、
+ * 动态 `import()`、`require()` 与 `import = require()`。
  * `@/` 别名与相对路径按真实文件解析；无法解析的内部说明符 fail-closed。
  *
  * 分层：app（app/providers/components/layout）、features/<name>、entities/<name>、
@@ -151,6 +152,25 @@ function collectImports(sourceFile: ts.SourceFile): ImportRecord[] {
     } else if (ts.isExportDeclaration(node)) {
       if (node.moduleSpecifier !== undefined && ts.isStringLiteralLike(node.moduleSpecifier)) {
         records.push({ specifier: node.moduleSpecifier.text, forwarding: true, exportAll: node.exportClause === undefined });
+      }
+    } else if (ts.isImportTypeNode(node)) {
+      // `import("...")` 在类型位置的 AST 是 ImportTypeNode，不是 CallExpression；
+      // 漏掉它会让类型-only 深导入绕过边界检查（web/AGENTS.md 八.2.4）。
+      const arg = node.argument;
+      if (ts.isLiteralTypeNode(arg) && ts.isStringLiteralLike(arg.literal)) {
+        records.push({ specifier: arg.literal.text, forwarding: false, exportAll: false });
+      } else {
+        records.push({ specifier: "<dynamic>", forwarding: false, exportAll: false });
+      }
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      // `import x = require("...")` 的 AST 是 ImportEqualsDeclaration。
+      const ref = node.moduleReference;
+      if (ts.isExternalModuleReference(ref)) {
+        if (ts.isStringLiteralLike(ref.expression)) {
+          records.push({ specifier: ref.expression.text, forwarding: false, exportAll: false });
+        } else {
+          records.push({ specifier: "<dynamic>", forwarding: false, exportAll: false });
+        }
       }
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       const [arg] = node.arguments;
@@ -457,6 +477,8 @@ describe("架构边界：检查器负例", () => {
     "__tests__/features/a/a.test.ts": 'import { a } from "@/features/a/a";\nexport const t = a;\n',
     "__tests__/components/cross.test.ts": 'import { internal } from "@/features/b/internal";\nexport const t = internal;\n',
     "__tests__/test-utils/helper.ts": 'import { internal } from "@/features/b/internal";\nexport const h = internal;\n',
+    "app/type-consumer.ts": 'export type T = import("@/features/b/internal").Internal;\n',
+    "app/import-equals.ts": 'import internal = require("@/features/b/internal");\nexport const value = internal;\n',
   });
 
   afterAll(() => {
@@ -470,6 +492,11 @@ describe("架构边界：检查器负例", () => {
     expect(has((v) => v.file === "features/b/index.ts" && v.rule === "layer")).toBe(true);
     expect(has((v) => v.file === "features/d/index.ts" && v.rule === "layer")).toBe(true);
     expect(has((v) => v.file === "app/page.ts" && v.rule === "deep-import")).toBe(true);
+  });
+
+  it("类型位置 import(...) 与 import = require 参与同一边界检查", () => {
+    expect(has((v) => v.file === "app/type-consumer.ts" && v.rule === "deep-import")).toBe(true);
+    expect(has((v) => v.file === "app/import-equals.ts" && v.rule === "deep-import")).toBe(true);
   });
 
   it("公共 API 禁止 export *、禁止转发其它模块，但允许外部包具名转发", () => {

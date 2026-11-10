@@ -634,6 +634,30 @@ export async function createAssetsBatch(
   });
 }
 
+/**
+ * 移动资产前锁定涉及的资产行（唯一入口）。
+ *
+ * 计数结算必须以锁内读到的 folderId 为准：并发移动/删除若在「读取旧目录」与
+ * 「更新资产行」之间提交，按调用前快照结算会对旧目录重复递减、给目标目录留下
+ * 无对应资产的计数。FOR UPDATE 让后到事务等待，读到的是前一事务提交后的行。
+ * ORDER BY id 固定批量加锁顺序，避免两个重叠批次互相等待成环。
+ */
+async function lockAssetRowsTx(
+  tx: DbTx,
+  userId: number,
+  ids: number[],
+): Promise<Array<{ id: number; folderId: number; scope: string }>> {
+  if (ids.length === 0) return [];
+  const rows = await tx.$queryRaw<Array<{ id: number; folder_id: number; scope: string }>>(Prisma.sql`
+    SELECT id, folder_id, scope
+    FROM asset_items
+    WHERE user_id = ${userId} AND id IN (${Prisma.join(ids)})
+    ORDER BY id
+    FOR UPDATE
+  `);
+  return rows.map((row) => ({ id: row.id, folderId: row.folder_id, scope: row.scope }));
+}
+
 export async function updateAsset(
   userId: number,
   id: number,
@@ -647,7 +671,7 @@ export async function updateAsset(
   }
 ) {
   return prisma.$transaction(async (tx) => {
-    const current = await tx.assetItem.findFirst({ where: { id, userId } });
+    const [current] = await lockAssetRowsTx(tx, userId, [id]);
     if (!current) throw new AssetOperationError("asset_not_found");
 
     const data: Prisma.AssetItemUpdateInput = { updatedAt: new Date() };
@@ -693,10 +717,7 @@ export async function updateAssetsBatch(
   updates: { folderId?: number | null; type?: string }
 ) {
   return prisma.$transaction(async (tx) => {
-    const currentItems = await tx.assetItem.findMany({
-      where: { id: { in: ids }, userId },
-      select: { id: true, folderId: true, scope: true },
-    });
+    const currentItems = await lockAssetRowsTx(tx, userId, ids);
     if (currentItems.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
 
     const data: Prisma.AssetItemUncheckedUpdateManyInput = { updatedAt: new Date() };
@@ -718,7 +739,10 @@ export async function updateAssetsBatch(
       }
 
       data.folderId = targetFolder.id;
-      await tx.assetItem.updateMany({ where: { id: { in: ids }, userId }, data });
+      const updated = await tx.assetItem.updateMany({ where: { id: { in: ids }, userId }, data });
+      if (updated.count !== currentItems.length) {
+        throw new AssetOperationError("asset_not_found");
+      }
 
       for (const [folderId, count] of oldFolderCounts) {
         await tx.assetFolder.update({
@@ -731,7 +755,10 @@ export async function updateAssetsBatch(
         data: { directCount: { increment: movedItems.length } },
       });
     } else {
-      await tx.assetItem.updateMany({ where: { id: { in: ids }, userId }, data });
+      const updated = await tx.assetItem.updateMany({ where: { id: { in: ids }, userId }, data });
+      if (updated.count !== currentItems.length) {
+        throw new AssetOperationError("asset_not_found");
+      }
     }
 
     return {

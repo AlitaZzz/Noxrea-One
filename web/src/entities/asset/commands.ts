@@ -4,7 +4,14 @@
  */
 import type { AddAssetsBatchResult } from "./store";
 import { useAssetsStore } from "./store";
-import type { AssetFolder, AssetItem, AssetScope, CreateAssetInput } from "./types";
+import type {
+  AssetBatchUpdate,
+  AssetFolder,
+  AssetItem,
+  AssetScope,
+  AssetUpdatePatch,
+  CreateAssetInput,
+} from "./types";
 
 export function initialize(): Promise<void> {
   return useAssetsStore.getState().initialize();
@@ -18,7 +25,7 @@ export function addAssetsBatch(inputs: CreateAssetInput[]): Promise<AddAssetsBat
   return useAssetsStore.getState().addAssetsBatch(inputs);
 }
 
-export function updateAsset(id: string, patch: Partial<AssetItem>): Promise<boolean> {
+export function updateAsset(id: string, patch: AssetUpdatePatch): Promise<boolean> {
   return useAssetsStore.getState().updateAsset(id, patch);
 }
 
@@ -32,7 +39,7 @@ export function unsaveAssetsByFileKeys(fileKeys: string[]): Promise<boolean> {
 
 export function updateAssetsBatch(
   ids: string[],
-  updates: Record<string, unknown>,
+  updates: AssetBatchUpdate,
 ): Promise<{ ok: boolean; total?: number }> {
   return useAssetsStore.getState().updateAssetsBatch(ids, updates);
 }

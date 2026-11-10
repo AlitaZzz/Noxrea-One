@@ -45,6 +45,21 @@ export interface AssetItem {
   sourceType?: string;
 }
 
+/** 资产单项更新可写字段；与 store 的实际映射一致，未列字段不允许静默传入。 */
+export interface AssetUpdatePatch {
+  name?: string;
+  type?: AssetType;
+  folderId?: string | null;
+  tags?: string[];
+  prompt?: string;
+}
+
+/** 资产批量更新可写字段；后端与 store 只支持 folderId / type。 */
+export interface AssetBatchUpdate {
+  folderId?: string | null;
+  type?: AssetType;
+}
+
 export interface CreateAssetInput {
   name: string;
   type: AssetType;

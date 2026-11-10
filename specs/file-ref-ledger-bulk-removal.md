@@ -67,4 +67,4 @@
 - 已实施：`removeSourceFileRefsBatchTx` 集合运算（每片 UPDATE + DELETE）、`removeSourceFileRefsTx` 委托批量实现；单来源/批量/跨分片/5 万规模回归已随测试基座迁移到真实 PostgreSQL（`file-ref-ledger-bulk.test.ts`，需 `TEST_DATABASE_URL`），2026-10-26 复跑 7/7 通过（5 万来源用例 16.8s 含插入与断言，事务本身未触发 P2028）；Web 分片提交与 `ASSET_BATCH_LIMIT` 已落地。
 - 2026-10-11 审查修复已通过 typecheck、lint、全量 server 测试。
 - 2026-10-26 用户验收确认，状态更新为「已实现」；实现代码已提交入库。
-- 2026-11-08 文档对齐实现（工作区未提交）：函数名与签名按现状更正为 `removeSourceFileRefsBatchTx` / `removeSourceFileRefsTx` / `replaceSourceFileRefsTx` / `adjustFileRefCountTx`；「函数签名不变」改为 `crud` 下沉后统一为 `(tx, …)`、由调用方在自己的事务内调用（`crud/asset.ts`、`crud/canvas.ts`）。移除语义与既有验收结论不变。
+- 2026-11-08 文档对齐实现（已随 a2f521c0 提交）：函数名与签名按现状更正为 `removeSourceFileRefsBatchTx` / `removeSourceFileRefsTx` / `replaceSourceFileRefsTx` / `adjustFileRefCountTx`；「函数签名不变」改为 `crud` 下沉后统一为 `(tx, …)`、由调用方在自己的事务内调用（`crud/asset.ts`、`crud/canvas.ts`）。移除语义与既有验收结论不变。

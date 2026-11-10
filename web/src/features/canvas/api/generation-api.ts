@@ -68,7 +68,6 @@ export interface TaskStatusEvent {
   config?: unknown;
 }
 
-/** 终态判断的单一谓词：SSE 推送与批量对账共用，终态集合取自共享契约 */
 /** 批量查询任务状态（对账兜底：页面重新可见 / 网络恢复时调用）。失败时抛 ApiError。 */
 export async function fetchTasksStatus(taskIds: string[]): Promise<TaskStatusEvent[]> {
   return api<TaskStatusEvent[]>("/api/generate/tasks/batch-status", {

@@ -197,10 +197,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     renameProject: (id, name) => {
       updateMetadata({
         id,
-        prev: get().projects.find((p) => p.id === id)?.name,
+        prev: get().projects.find((p) => p.id === id),
         patch: { name },
         optimistic: (p) => ({ ...p, name, updatedAt: Date.now() }),
-        rollback: (p, prevName) => ({ ...p, name: prevName }),
+        rollback: (p, prevProject) =>
+          prevProject
+            ? { ...p, name: prevProject.name, updatedAt: prevProject.updatedAt }
+            : p,
         errorKey: "project.rename_failed",
       });
     },

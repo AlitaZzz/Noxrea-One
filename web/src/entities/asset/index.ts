@@ -7,7 +7,15 @@
 
 // ── 类型 ──
 export type { AddAssetsBatchResult } from "./store";
-export type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "./types";
+export type {
+  AssetBatchUpdate,
+  AssetFolder,
+  AssetItem,
+  AssetScope,
+  AssetType,
+  AssetUpdatePatch,
+  CreateAssetInput,
+} from "./types";
 export type { RawUploadItem, RawUploadSummary } from "./upload";
 
 // ── 常量 ──

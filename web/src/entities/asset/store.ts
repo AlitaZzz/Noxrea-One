@@ -18,7 +18,15 @@ import {
   type AssetItemDto,
   type AssetSkippedDto,
 } from "./api";
-import type { AssetFolder, AssetItem, AssetScope, AssetType, CreateAssetInput } from "./types";
+import type {
+  AssetBatchUpdate,
+  AssetFolder,
+  AssetItem,
+  AssetScope,
+  AssetType,
+  AssetUpdatePatch,
+  CreateAssetInput,
+} from "./types";
 
 // --- Helpers ---
 
@@ -178,11 +186,11 @@ interface AssetsState {
 
   addAsset: (input: CreateAssetInput) => Promise<AssetItem | null>;
   addAssetsBatch: (inputs: CreateAssetInput[]) => Promise<AddAssetsBatchResult>;
-  updateAsset: (id: string, patch: Partial<AssetItem>) => Promise<boolean>;
+  updateAsset: (id: string, patch: AssetUpdatePatch) => Promise<boolean>;
   removeAssetsBatch: (ids: string[]) => Promise<{ ok: boolean; total?: number }>;
   /** 画布「取消收藏」：按 fileKey 删除个人库条目，并同步 knownAssetKeys。 */
   unsaveAssetsByFileKeys: (fileKeys: string[]) => Promise<boolean>;
-  updateAssetsBatch: (ids: string[], updates: Record<string, unknown>) => Promise<{ ok: boolean; total?: number }>;
+  updateAssetsBatch: (ids: string[], updates: AssetBatchUpdate) => Promise<{ ok: boolean; total?: number }>;
 
   addFolder: (name: string, scope: AssetScope, parentId?: string) => Promise<
     { status: "created"; folder: AssetFolder } | { status: "duplicate" } | { status: "failed" }
@@ -345,7 +353,11 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     const body: Record<string, unknown> = {};
     if (patch.name !== undefined) body.name = patch.name;
     if (patch.type !== undefined) body.type = patch.type;
-    if (patch.folderId !== undefined) body.folderId = toIntId(patch.folderId);
+    if (patch.folderId !== undefined) {
+      const folderId = patch.folderId === null ? null : toIntId(patch.folderId);
+      if (folderId === undefined) return false;
+      body.folderId = folderId;
+    }
     if (patch.tags !== undefined) body.tags = patch.tags;
     if (patch.prompt !== undefined) body.prompt = patch.prompt;
     if (Object.keys(body).length === 0) return false;
@@ -391,8 +403,12 @@ export const useAssetsStore = create<AssetsState>((set, get) => ({
     if (intIds.length === 0) return { ok: false };
 
     const body: Record<string, unknown> = {};
-    if ("folderId" in updates) body.folderId = toIntId(String(updates.folderId || "")) ?? null;
-    if ("type" in updates) body.type = updates.type;
+    if (updates.folderId !== undefined) {
+      const folderId = updates.folderId === null ? null : toIntId(updates.folderId);
+      if (folderId === undefined) return { ok: false };
+      body.folderId = folderId;
+    }
+    if (updates.type !== undefined) body.type = updates.type;
     if (Object.keys(body).length === 0) return { ok: false };
 
     return submitIdBatches(captureSession(), intIds, "asset.update_failed", (chunk) =>
