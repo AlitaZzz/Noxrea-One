@@ -1,5 +1,5 @@
 /**
- * 复制/粘贴/创建副本的连线语义回归测试。
+ * 复制/粘贴/创建副本的语义回归测试。
  *
  * 覆盖场景（画布：图片A → 图片B、图片A → 视频A → 文本C）：
  * 1. 单选视频A「创建副本」：副本保留上游外部连线（图片A → 视频A副本），
@@ -13,6 +13,8 @@
  * - 内部边的集内判定曾错用重映射后的副本 id 查 idMap（键为原 id），
  *   导致普通粘贴的内部边全部被误判为外部边丢弃——场景 3/4 即其回归防线。
  * - 副本模式曾把下游外部边一并还原（副本抢占原节点的下游消费者）——场景 1/5 防线。
+ * - 系统剪贴板曾把节点 JSON 作为 text/plain 写入，导致输入框收到 JSON；
+ *   现在非文本选择不写 text/plain，纯文本选择只写可读 plainText。
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -44,9 +46,15 @@ import {
   directorNode,
 } from "@/features/canvas/node-defaults";
 import {
+  CANVAS_CLIPBOARD_KIND,
+  CANVAS_CLIPBOARD_MIME,
+  CANVAS_CLIPBOARD_VERSION,
+  CANVAS_CLIPBOARD_WEB_MIME,
+  type CanvasClipboardPayload,
+} from "@/features/canvas/shared/canvas-clipboard-format";
+import {
   canUndoNow,
   clearSelection,
-  CLIPBOARD_NODE_MARKER,
   copySelection,
   deleteSelection,
   duplicateSelection,
@@ -56,11 +64,55 @@ import {
   redoAction,
   undoAction,
 } from "@/features/canvas/shared/canvas-edit-actions";
+import type { CanvasClipboardWriteResult } from "@/features/canvas/shared/canvas-system-clipboard";
 import { getLiveViewport, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
+
+class FakeBlob {
+  readonly type: string;
+  readonly content: string;
+
+  constructor(parts: BlobPart[], options?: { type?: string }) {
+    this.type = options?.type ?? "";
+    this.content = parts.map((part) => String(part)).join("");
+  }
+
+  text(): Promise<string> {
+    return Promise.resolve(this.content);
+  }
+}
+
+class FakeClipboardItem {
+  static supports: (type: string) => boolean = vi.fn(
+    (type: string) => type === CANVAS_CLIPBOARD_WEB_MIME,
+  );
+
+  readonly items: Record<string, FakeBlob>;
+
+  constructor(items: Record<string, FakeBlob>) {
+    this.items = items;
+  }
+}
+
+function stubSystemClipboard(write = vi.fn().mockResolvedValue(undefined)) {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { write, writeText } });
+  vi.stubGlobal("ClipboardItem", FakeClipboardItem);
+  vi.stubGlobal("Blob", FakeBlob);
+  FakeClipboardItem.supports = vi.fn((type: string) => type === CANVAS_CLIPBOARD_WEB_MIME);
+  return { write, writeText };
+}
+
+function writtenItem(write: ReturnType<typeof vi.fn>) {
+  return write.mock.calls[0]?.[0]?.[0] as FakeClipboardItem;
+}
+
+function systemPayloadOf(item: FakeClipboardItem): CanvasClipboardPayload {
+  return JSON.parse(item.items[CANVAS_CLIPBOARD_WEB_MIME].content) as CanvasClipboardPayload;
+}
 
 function makeNode(id: string, type: string, x: number, y: number): AnyNode {
   return { id, type, position: { x, y }, data: { label: id }, selected: false } as AnyNode;
@@ -69,6 +121,33 @@ function makeNode(id: string, type: string, x: number, y: number): AnyNode {
 function makeEdge(source: string, target: string): AnyEdge {
   return { id: `e-${source}-${target}`, source, target } as AnyEdge;
 }
+
+/** 通过真实工厂构造可通过系统载荷校验的节点 */
+function validNode(
+  factory: (position: { x: number; y: number }) => AnyNode,
+  id: string,
+  position = { x: 0, y: 0 },
+  data: Record<string, unknown> = {},
+): AnyNode {
+  const node = factory(position);
+  return { ...node, id, data: { ...node.data, label: id, ...data } } as AnyNode;
+}
+
+const validImage = (id: string, position = { x: 0, y: 0 }, data: Record<string, unknown> = {}) =>
+  validNode(createImageNode, id, position, data);
+const validText = (id: string, plainText = id, position = { x: 0, y: 0 }) =>
+  validNode(createTextNode, id, position, {
+    content: `<p>${plainText}</p>`,
+    plainText,
+  });
+const validVideo = (id: string, position = { x: 0, y: 0 }) =>
+  validNode(createVideoNode, id, position);
+const validAudio = (id: string, position = { x: 0, y: 0 }) =>
+  validNode(createAudioNode, id, position);
+const validDirector = (id: string, position = { x: 0, y: 0 }) =>
+  validNode(directorNode, id, position);
+const validGroup = (id: string, position = { x: 0, y: 0 }) =>
+  validNode((p) => createGroupNode(p, { width: 400, height: 300 }), id, position);
 
 /** 画布初始状态：图片A(0,0) → 图片B(200,0)；图片A → 视频A(0,200) → 文本C(200,200) */
 function seedCanvas(): void {
@@ -120,51 +199,211 @@ describe("复制：捕获任一端在选中集内的连线", () => {
     expect(clip.nodes.map((n) => (n.data as { label: string }).label)).toEqual(["imgA", "imgB"]);
     expect(clip.edges.map((e) => `${e.source}→${e.target}`)).toEqual(["imgA→imgB", "imgA→vidA"]);
   });
+
+  it("选中组时自动带上全部成员", () => {
+    const group = validGroup("group", { x: 100, y: 200 });
+    const memberA = { ...validImage("imgA", { x: 20, y: 40 }), parentId: "group" };
+    const memberB = { ...validImage("imgB", { x: 220, y: 40 }), parentId: "group" };
+    useCanvasStore.setState({
+      nodes: [group, memberA, memberB],
+      edges: [makeEdge("imgA", "imgB")],
+    });
+    select("group");
+    expect(copySelection()).toBe(true);
+    const clip = useSelectionStore.getState().clipboard!;
+    expect(clip.nodes.map((n) => n.id)).toEqual(["group", "imgA", "imgB"]);
+    expect(clip.nodes.filter((n) => n.parentId === "group")).toHaveLength(2);
+  });
+
+  it("内部剪贴板保存规范快照：剥离运行时字段与嵌套共享引用", () => {
+    const base = validImage("img", { x: 0, y: 0 }, {
+      taskBinding: { taskId: "task-1", status: "pending" },
+    });
+    useCanvasStore.setState({
+      nodes: [
+        {
+          ...base,
+          selected: true,
+          measured: { width: 320, height: 240 },
+          data: {
+            ...base.data,
+            upload: { uploading: true, previewUrl: "blob:http://x/1" },
+            rotation: 90,
+          },
+        } as AnyNode,
+      ],
+      edges: [],
+    });
+
+    expect(copySelection()).toBe(true);
+    const clip = useSelectionStore.getState().clipboard!;
+    expect(clip.nodes[0]).not.toHaveProperty("measured");
+    expect(clip.nodes[0].data).not.toHaveProperty("taskBinding");
+    expect(clip.nodes[0].data).not.toHaveProperty("upload");
+    expect(clip.nodes[0].data).not.toHaveProperty("rotation");
+
+    (clip.nodes[0].data as { genSettings: { refOrder: string[] } }).genSettings.refOrder.push("x");
+    const live = useCanvasStore.getState().nodes[0].data as { genSettings: { refOrder: string[] } };
+    expect(live.genSettings.refOrder).not.toContain("x");
+  });
 });
 
-describe("系统剪贴板：仅接受当前节点与连线结构", () => {
-  it.each([
-    { type: NODE_TYPE.TEXT, create: createTextNode },
-    { type: NODE_TYPE.IMAGE, create: createImageNode },
-    { type: NODE_TYPE.VIDEO, create: createVideoNode },
-    { type: NODE_TYPE.AUDIO, create: createAudioNode },
-    { type: NODE_TYPE.DIRECTOR, create: directorNode },
-    { type: NODE_TYPE.GROUP, create: (position: { x: number; y: number }) => createGroupNode(position, { width: 400, height: 300 }) },
-  ])("真实 $type 节点经过复制和系统粘贴后保留内容及设置", ({ type, create }) => {
-    const source = { ...create({ x: -100, y: -200 }), selected: true };
-    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
-    vi.stubGlobal("navigator", { clipboard: { writeText } });
-    useCanvasStore.setState({ nodes: [source], edges: [] });
-    expect(copySelection()).toBe(true);
-    const text = writeText.mock.calls[0][0];
-    useSelectionStore.setState({ clipboard: null });
+describe("上传失败节点：复制与创建副本只继承已落定内容", () => {
+  const failedUpload = {
+    uploading: false,
+    version: 1,
+    previewUrl: "blob:http://x/1",
+    error: { category: "network" as const, message: "网络错误", retryable: true },
+  };
 
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(true);
+  it("复制失败节点：内部快照与系统载荷都不含 upload", () => {
+    const failed = validImage("failed", { x: 0, y: 0 }, { upload: failedUpload });
+    useCanvasStore.setState({ nodes: [{ ...failed, selected: true }], edges: [] });
+    const { write } = stubSystemClipboard();
+
+    expect(copySelection()).toBe(true);
+
+    const clip = useSelectionStore.getState().clipboard!;
+    expect(clip.nodes[0].data).not.toHaveProperty("upload");
+    expect(systemPayloadOf(writtenItem(write)).nodes[0].data).not.toHaveProperty("upload");
+  });
+
+  it("创建副本：剥离上传会话，保留已落定 src；没有 src 时得到空占位节点", () => {
+    const withSrc = validImage("withSrc", { x: 0, y: 0 }, {
+      src: "/api/files/old.png",
+      upload: failedUpload,
+    });
+    const withoutSrc = validImage("withoutSrc", { x: 200, y: 0 }, {
+      src: "",
+      upload: failedUpload,
+    });
+    useCanvasStore.setState({ nodes: [withSrc, withoutSrc], edges: [] });
+    select("withSrc", "withoutSrc");
+
+    expect(duplicateSelection()).toBe(true);
+
+    const nodes = useCanvasStore.getState().nodes;
+    const withSrcCopy = nodes.findLast(
+      (n) => (n.data as { label?: string }).label === "withSrc",
+    ) as AnyNode;
+    const withoutSrcCopy = nodes.findLast(
+      (n) => (n.data as { label?: string }).label === "withoutSrc",
+    ) as AnyNode;
+
+    expect(withSrcCopy.id).not.toBe("withSrc");
+    expect((withSrcCopy.data as { src: string }).src).toBe("/api/files/old.png");
+    expect(withSrcCopy.data).not.toHaveProperty("upload");
+
+    expect(withoutSrcCopy.id).not.toBe("withoutSrc");
+    expect((withoutSrcCopy.data as { src: string }).src).toBe("");
+    expect(withoutSrcCopy.data).not.toHaveProperty("upload");
+  });
+});
+
+describe("系统剪贴板：规范载荷", () => {
+  it.each([
+    { type: NODE_TYPE.TEXT, node: validText("node", "内容") },
+    { type: NODE_TYPE.IMAGE, node: validImage("node") },
+    { type: NODE_TYPE.VIDEO, node: validVideo("node") },
+    { type: NODE_TYPE.AUDIO, node: validAudio("node") },
+    { type: NODE_TYPE.DIRECTOR, node: validDirector("node") },
+  ])("真实 $type 节点经过复制和系统粘贴后保留内容", ({ type, node }) => {
+    useCanvasStore.setState({ nodes: [{ ...node, selected: true }], edges: [] });
+    const { write } = stubSystemClipboard();
+    expect(copySelection()).toBe(true);
+    const payload = systemPayloadOf(writtenItem(write));
+    expect(payload.nodes).toHaveLength(1);
+    const canonical = payload.nodes[0];
+
+    useSelectionStore.setState({ clipboard: null });
+    expect(
+      pasteFromClipboardContent(
+        { payloadJson: JSON.stringify(payload), imageFiles: [], text: "" },
+        { x: 500, y: 500 },
+      ),
+    ).toBe(true);
 
     const copy = useCanvasStore.getState().nodes.at(-1)!;
-    expect(copy.id).not.toBe(source.id);
+    expect(copy.id).not.toBe(node.id);
     expect(copy.type).toBe(type);
     expect(copy.position).toEqual({ x: 500, y: 500 });
-    expect(copy.data).toEqual(source.data);
-    expect(copy.style).toEqual(source.style);
+    expect(copy.data).toEqual(canonical.data);
+    expect(copy.style).toEqual(canonical.style);
     expect(copy.selected).toBe(true);
     expect(useCanvasStore.getState().nodes[0].selected).toBe(false);
   });
 
-  it("复制输出的 JSON 可通过系统粘贴入口还原节点、布局和内部连线", () => {
-    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
-    vi.stubGlobal("navigator", { clipboard: { writeText } });
-    select("imgA", "imgB");
+  it("非文本选择不写 text/plain，节点 JSON 不进入可读文本", () => {
+    select("imgA");
+    const { write, writeText } = stubSystemClipboard();
     expect(copySelection()).toBe(true);
-    expect(writeText).toHaveBeenCalledTimes(1);
-    const text = writeText.mock.calls[0][0];
-    expect(text.startsWith(CLIPBOARD_NODE_MARKER)).toBe(true);
-    const payload = JSON.parse(text.slice(CLIPBOARD_NODE_MARKER.length));
-    expect(payload.nodes.map((n: AnyNode) => n.id)).toEqual(["imgA", "imgB"]);
-    expect(payload.edges.map((e: AnyEdge) => `${e.source}→${e.target}`)).toEqual(["imgA→imgB", "imgA→vidA"]);
-    useSelectionStore.setState({ clipboard: null });
 
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(true);
+    const item = writtenItem(write);
+    expect(Object.keys(item.items).sort()).toEqual(
+      [CANVAS_CLIPBOARD_WEB_MIME, "text/html"].sort(),
+    );
+    expect(item.items[CANVAS_CLIPBOARD_WEB_MIME].type).toBe(CANVAS_CLIPBOARD_MIME);
+    expect(item.items["text/html"].content).not.toContain("noxrea-nodes:");
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it("系统写入结果经回调交给调用方提示，不直接依赖全局消息", async () => {
+    select("imgA");
+    vi.stubGlobal("ClipboardItem", undefined);
+    vi.stubGlobal("navigator", { clipboard: undefined });
+
+    const result = await new Promise<CanvasClipboardWriteResult>((resolve) => {
+      expect(copySelection(resolve)).toBe(true);
+    });
+
+    expect(result).toEqual({ ok: false, reason: "unsupported" });
+  });
+
+  it("纯文本选择在 text/plain 与 HTML 中只提供可读 plainText", () => {
+    useCanvasStore.setState({
+      nodes: [
+        validText("t1", "第一段", { x: 0, y: 0 }),
+        validText("t2", "第二段", { x: 300, y: 0 }),
+      ],
+      edges: [],
+    });
+    select("t1", "t2");
+    const { write } = stubSystemClipboard();
+    expect(copySelection()).toBe(true);
+
+    const item = writtenItem(write);
+    expect(item.items["text/plain"].content).toBe("第一段\n\n第二段");
+    expect(item.items["text/plain"].content).not.toContain("noxrea.canvas-selection");
+    const html = item.items["text/html"].content;
+    expect(html).toContain("第一段<br><br>第二段");
+    expect(html).not.toContain("noxrea-nodes:");
+  });
+
+  it("系统载荷只含内部连线；粘贴恢复布局与内部边", () => {
+    useCanvasStore.setState({
+      nodes: [
+        validImage("imgA", { x: 0, y: 0 }),
+        validImage("imgB", { x: 200, y: 0 }),
+        validVideo("vidA", { x: 0, y: 200 }),
+        validText("textC", "C", { x: 200, y: 200 }),
+      ],
+      edges: [makeEdge("imgA", "imgB"), makeEdge("imgA", "vidA"), makeEdge("vidA", "textC")],
+    });
+    select("imgA", "imgB");
+    const { write } = stubSystemClipboard();
+    expect(copySelection()).toBe(true);
+    const payload = systemPayloadOf(writtenItem(write));
+    expect(payload.nodes.map((n) => n.id)).toEqual(["imgA", "imgB"]);
+    // imgA→vidA 的上游外部边只留在内部剪贴板，不进入系统载荷
+    expect(payload.edges.map((e) => `${e.source}→${e.target}`)).toEqual(["imgA→imgB"]);
+
+    useSelectionStore.setState({ clipboard: null });
+    expect(
+      pasteFromClipboardContent(
+        { payloadJson: JSON.stringify(payload), imageFiles: [], text: "" },
+        { x: 500, y: 500 },
+      ),
+    ).toBe(true);
 
     const aCopy = copyIdOf("imgA");
     const bCopy = copyIdOf("imgB");
@@ -176,102 +415,183 @@ describe("系统剪贴板：仅接受当前节点与连线结构", () => {
     expect(useSelectionStore.getState().clipboard?.nodes.map((n) => n.id)).toEqual(["imgA", "imgB"]);
   });
 
-  it("接受显式包含空连线数组的节点载荷", () => {
-    const text = CLIPBOARD_NODE_MARKER + JSON.stringify({
-      nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)],
-      edges: [],
-    });
-
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(true);
-
-    expect(useCanvasStore.getState().nodes).toHaveLength(5);
-    expect(useCanvasStore.getState().nodes.at(-1)?.position).toEqual({ x: 500, y: 500 });
-    expect(edgePairs()).toEqual(["imgA→imgB", "imgA→vidA", "vidA→textC"]);
-    expect(useSelectionStore.getState().clipboard?.edges).toEqual([]);
-  });
-
   it("保留分组成员的相对坐标，并重映射父组和内部连线", () => {
-    const text = CLIPBOARD_NODE_MARKER + JSON.stringify({
-      nodes: [
-        makeNode("group", NODE_TYPE.GROUP, 100, 200),
-        { ...makeNode("imgA", NODE_TYPE.IMAGE, 20, 40), parentId: "group" },
-        { ...makeNode("imgB", NODE_TYPE.IMAGE, 220, 40), parentId: "group" },
-      ],
+    const group = validGroup("group", { x: 100, y: 200 });
+    const memberA = { ...validImage("imgA", { x: 20, y: 40 }), parentId: "group" };
+    const memberB = { ...validImage("imgB", { x: 220, y: 40 }), parentId: "group" };
+    useCanvasStore.setState({
+      nodes: [group, memberA, memberB],
       edges: [makeEdge("imgA", "imgB")],
     });
+    // 只选组成员：父组不在选择范围时通过复制导出会被展平；这里先选组，
+    // 由选择快照自动带上成员，验证保留相对坐标的路径
+    select("group");
+    const { write } = stubSystemClipboard();
+    expect(copySelection()).toBe(true);
+    const payload = systemPayloadOf(writtenItem(write));
+    expect(payload.nodes.filter((n) => n.parentId === "group")).toHaveLength(2);
 
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(true);
+    useSelectionStore.setState({ clipboard: null });
+    expect(
+      pasteFromClipboardContent(
+        { payloadJson: JSON.stringify(payload), imageFiles: [], text: "" },
+        { x: 500, y: 500 },
+      ),
+    ).toBe(true);
 
     const groupCopy = copyIdOf("group");
     const aCopy = copyIdOf("imgA");
     const bCopy = copyIdOf("imgB");
-    const [group, a, b] = useCanvasStore.getState().nodes.slice(-3);
-    expect(group.position).toEqual({ x: 500, y: 500 });
+    const [copyGroup, a, b] = useCanvasStore.getState().nodes.slice(-3);
+    expect(copyGroup.position).toEqual({ x: 500, y: 500 });
     expect(a).toMatchObject({ parentId: groupCopy, position: { x: 20, y: 40 } });
     expect(b).toMatchObject({ parentId: groupCopy, position: { x: 220, y: 40 } });
     expect(edgePairs()).toContain(`${aCopy}→${bCopy}`);
   });
 
-  it("单独复制分组成员时粘贴为独立节点", () => {
-    const text = CLIPBOARD_NODE_MARKER + JSON.stringify({
-      nodes: [{ ...makeNode("img", NODE_TYPE.IMAGE, 20, 40), parentId: "group" }],
-      edges: [],
-    });
+  it("单独复制分组成员时按世界坐标展平，粘贴为独立节点", () => {
+    const group = validGroup("group", { x: 100, y: 200 });
+    const member = { ...validImage("img", { x: 20, y: 40 }), parentId: "group" };
+    useCanvasStore.setState({ nodes: [group, member], edges: [] });
+    select("img");
+    const { write } = stubSystemClipboard();
+    expect(copySelection()).toBe(true);
+    const payload = systemPayloadOf(writtenItem(write));
+    expect(payload.nodes[0].parentId).toBeUndefined();
+    expect(payload.nodes[0].position).toEqual({ x: 120, y: 240 });
 
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(true);
-
+    useSelectionStore.setState({ clipboard: null });
+    expect(
+      pasteFromClipboardContent(
+        { payloadJson: JSON.stringify(payload), imageFiles: [], text: "" },
+        { x: 500, y: 500 },
+      ),
+    ).toBe(true);
     const copy = useCanvasStore.getState().nodes.at(-1)!;
     expect(copy.position).toEqual({ x: 500, y: 500 });
     expect(copy.parentId).toBeUndefined();
   });
 
-  it("拒绝 JSON 数字溢出产生的非有限坐标", () => {
-    const nodes = useCanvasStore.getState().nodes;
-    const text = CLIPBOARD_NODE_MARKER +
-      '{"nodes":[{"id":"text","type":"text-node","position":{"x":1e400,"y":0},"data":{"label":"text"}}],"edges":[]}';
-
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(false);
-
-    expect(useCanvasStore.getState().nodes).toBe(nodes);
-    expect(useSelectionStore.getState().clipboard).toBeNull();
-  });
-
-  it.each([
-    { name: "旧节点数组", payload: [makeNode("text", NODE_TYPE.TEXT, 0, 0)] },
-    { name: "缺失连线字段", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)] } },
-    { name: "连线字段不是数组", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)], edges: null } },
-    { name: "节点字段不是数组", payload: { nodes: null, edges: [] } },
-    { name: "空节点列表", payload: { nodes: [], edges: [] } },
-    { name: "缺失节点坐标", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), position: {} }], edges: [] } },
-    { name: "非数值节点坐标", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), position: { x: "0", y: 0 } }], edges: [] } },
-    { name: "空节点数据", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), data: null }], edges: [] } },
-    { name: "节点数据不是对象", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), data: [] }], edges: [] } },
-    { name: "无效节点标题", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), data: { label: 1 } }], edges: [] } },
-    { name: "未知节点类型", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), type: "unknown-node" }], edges: [] } },
-    { name: "无效父节点 ID", payload: { nodes: [{ ...makeNode("text", NODE_TYPE.TEXT, 0, 0), parentId: 1 }], edges: [] } },
-    { name: "嵌套分组", payload: { nodes: [{ ...makeNode("group", NODE_TYPE.GROUP, 0, 0), parentId: "parent" }], edges: [] } },
-    { name: "父节点不是分组", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0), { ...makeNode("img", NODE_TYPE.IMAGE, 100, 0), parentId: "text" }], edges: [] } },
-    { name: "空节点 ID", payload: { nodes: [makeNode("", NODE_TYPE.TEXT, 0, 0)], edges: [] } },
-    { name: "重复节点 ID", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0), makeNode("text", NODE_TYPE.TEXT, 200, 0)], edges: [] } },
-    { name: "混合有效与无效节点", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0), null], edges: [] } },
-    { name: "无效连线", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)], edges: [null] } },
-    { name: "缺失连线 ID", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)], edges: [{ source: "text", target: "textC" }] } },
-    { name: "空连线端点", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)], edges: [makeEdge("", "text")] } },
-    { name: "自连线", payload: { nodes: [makeNode("text", NODE_TYPE.TEXT, 0, 0)], edges: [makeEdge("text", "text")] } },
-    { name: "空值", payload: null },
-    { name: "数字", payload: 1 },
-    { name: "字符串", payload: "text" },
-  ])("拒绝$name，不修改画布、内部剪贴板或降级为文本节点", ({ payload }) => {
-    useSelectionStore.getState().copySelected([makeNode("saved", NODE_TYPE.TEXT, 0, 0)], []);
+  it("拒绝非有限坐标，且不修改画布、内部剪贴板或降级为文本节点", () => {
     const nodes = useCanvasStore.getState().nodes;
     const edges = useCanvasStore.getState().edges;
+    useSelectionStore.getState().copySelected([validText("saved")], []);
     const clipboard = useSelectionStore.getState().clipboard;
-    const text = CLIPBOARD_NODE_MARKER + JSON.stringify(payload);
+    const json =
+      `{"kind":"${CANVAS_CLIPBOARD_KIND}","version":${CANVAS_CLIPBOARD_VERSION},` +
+      '"nodes":[{"id":"text","type":"text-node","position":{"x":1e400,"y":0},' +
+      '"data":{"label":"text","content":"","plainText":""}}],"edges":[]}';
 
-    expect(pasteFromClipboardContent({ imageFiles: [], text }, { x: 500, y: 500 })).toBe(false);
+    expect(
+      pasteFromClipboardContent({ payloadJson: json, imageFiles: [], text: "" }, { x: 500, y: 500 }),
+    ).toBe(false);
 
     expect(useCanvasStore.getState().nodes).toBe(nodes);
     expect(useCanvasStore.getState().edges).toBe(edges);
+    expect(useSelectionStore.getState().clipboard).toBe(clipboard);
+  });
+
+  it.each([
+    {
+      name: "错误 kind",
+      json: JSON.stringify({
+        kind: "other",
+        version: CANVAS_CLIPBOARD_VERSION,
+        nodes: [validText("t")],
+        edges: [],
+      }),
+    },
+    {
+      name: "错误 version",
+      json: JSON.stringify({
+        kind: CANVAS_CLIPBOARD_KIND,
+        version: 2,
+        nodes: [validText("t")],
+        edges: [],
+      }),
+    },
+    {
+      name: "空节点列表",
+      json: JSON.stringify({
+        kind: CANVAS_CLIPBOARD_KIND,
+        version: CANVAS_CLIPBOARD_VERSION,
+        nodes: [],
+        edges: [],
+      }),
+    },
+    {
+      name: "非法节点数据",
+      json: JSON.stringify({
+        kind: CANVAS_CLIPBOARD_KIND,
+        version: CANVAS_CLIPBOARD_VERSION,
+        nodes: [{ id: "t", type: NODE_TYPE.TEXT, position: { x: 0, y: 0 }, data: { label: "t" } }],
+        edges: [],
+      }),
+    },
+    {
+      name: "非法连线",
+      json: JSON.stringify({
+        kind: CANVAS_CLIPBOARD_KIND,
+        version: CANVAS_CLIPBOARD_VERSION,
+        nodes: [validText("t")],
+        edges: [{ id: "e", source: "t", target: "t" }],
+      }),
+    },
+  ])("非法载荷整包拒绝：$name", ({ json }) => {
+    const nodes = useCanvasStore.getState().nodes;
+    const edges = useCanvasStore.getState().edges;
+    useSelectionStore.getState().copySelected([validText("saved")], []);
+    const clipboard = useSelectionStore.getState().clipboard;
+
+    expect(
+      pasteFromClipboardContent({ payloadJson: json, imageFiles: [], text: "" }, { x: 500, y: 500 }),
+    ).toBe(false);
+
+    expect(useCanvasStore.getState().nodes).toBe(nodes);
+    expect(useCanvasStore.getState().edges).toBe(edges);
+    expect(useSelectionStore.getState().clipboard).toBe(clipboard);
+  });
+
+  it("旧 noxrea-nodes: 文本按普通文本创建文本节点，永不还原为节点", () => {
+    useCanvasStore.setState({ nodes: [], edges: [] });
+    const legacy =
+      "noxrea-nodes:" + JSON.stringify({ nodes: [validText("legacy")], edges: [] });
+
+    expect(
+      pasteFromClipboardContent({ imageFiles: [], text: legacy }, { x: 100, y: 200 }),
+    ).toBe(true);
+
+    const nodes = useCanvasStore.getState().nodes;
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].type).toBe(NODE_TYPE.TEXT);
+    expect((nodes[0].data as { plainText: string }).plainText).toBe(legacy);
+  });
+
+  it("系统写入被拒时内部剪贴板仍可粘贴，不产生未处理 rejection", async () => {
+    select("imgA");
+    stubSystemClipboard(vi.fn().mockRejectedValue(new Error("denied")));
+
+    expect(copySelection()).toBe(true);
+    expect(useSelectionStore.getState().clipboard?.nodes).toHaveLength(1);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(pasteClipboard({ x: 500, y: 500 })).toBe(true);
+    expect(useCanvasStore.getState().nodes).toHaveLength(5);
+  });
+});
+
+describe("创建副本不触碰系统与内部剪贴板", () => {
+  it("Ctrl+D 只修改画布，不覆盖系统剪贴板或已存在的内部快照", () => {
+    const { write, writeText } = stubSystemClipboard();
+    useSelectionStore.getState().copySelected([validText("sentinel")], []);
+    const clipboard = useSelectionStore.getState().clipboard;
+    select("imgA");
+
+    expect(duplicateSelection()).toBe(true);
+
+    expect(write).not.toHaveBeenCalled();
+    expect(writeText).not.toHaveBeenCalled();
     expect(useSelectionStore.getState().clipboard).toBe(clipboard);
   });
 });

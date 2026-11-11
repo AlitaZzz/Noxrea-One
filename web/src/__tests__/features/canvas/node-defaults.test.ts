@@ -49,7 +49,7 @@ describe("duplicateNode", () => {
     expect(copy.position).toEqual({ x: 30, y: 40 });
   });
 
-  it("上传失败的节点：保留失败原因，丢弃 blob 预览与进度", () => {
+  it("上传失败的节点：整字段剥离上传会话，不保留不可用的失败提示", () => {
     const node = createImageNode({ x: 0, y: 0 });
     node.data.upload = {
       uploading: true,
@@ -60,10 +60,23 @@ describe("duplicateNode", () => {
 
     const copy = duplicateNode(node, { x: 0, y: 0 }) as ImageNode;
 
-    expect(copy.data.upload?.error).toBeTruthy();
-    expect(copy.data.upload?.previewUrl).toBeUndefined();
-    expect(copy.data.upload?.uploading).toBe(false);
-    expect(copy.data.upload?.version).toBe(1);
+    // 重试上下文按原节点 id 保存，副本保留失败原因只会得到一个不可用的重试按钮
+    expect(copy.data.upload).toBeUndefined();
+    expect(copy.data.src).toBe("");
+  });
+
+  it("上传失败但已有 src：保留已落定内容，仍剥离上传会话", () => {
+    const node = createImageNode({ x: 0, y: 0 }, "/api/files/old.png");
+    node.data.upload = {
+      uploading: false,
+      version: 1,
+      error: { category: "network" as const, message: "网络错误", retryable: true },
+    };
+
+    const copy = duplicateNode(node, { x: 0, y: 0 }) as ImageNode;
+
+    expect(copy.data.src).toBe("/api/files/old.png");
+    expect(copy.data.upload).toBeUndefined();
   });
 
   it("组节点没有 taskBinding/upload 时复制仍然安全", () => {

@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { useCanvasClipboardFeedback } from "@/features/canvas/hooks/use-canvas-clipboard-feedback";
 import type { SelectionChromeBounds } from "@/features/canvas/shared/canvas-derived";
 import { copySelection, deleteSelection, duplicateSelection } from "@/features/canvas/shared/canvas-edit-actions";
 import type { Rect } from "@/features/canvas/shared/geometry";
@@ -213,6 +214,7 @@ interface SelectionToolbarLayerProps {
 }
 
 export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbarLayerProps) {
+  const notifyClipboardWrite = useCanvasClipboardFeedback();
   const viewport = useViewport();
   const viewportWidth = useStore((state) => state.width);
   const viewportHeight = useStore((state) => state.height);
@@ -266,8 +268,8 @@ export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbar
     duplicateSelection();
   }, []);
   const handleCopy = useCallback(() => {
-    copySelection();
-  }, []);
+    copySelection(notifyClipboardWrite);
+  }, [notifyClipboardWrite]);
   const handleDelete = useCallback(() => {
     deleteSelection();
   }, []);

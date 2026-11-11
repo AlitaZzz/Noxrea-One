@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
+import { useCanvasClipboardFeedback } from "@/features/canvas/hooks/use-canvas-clipboard-feedback";
 import {
   copyImageSrcToClipboard,
   copySelection,
@@ -39,15 +40,14 @@ import {
   isMediaEditorOpenState,
   pasteClipboard,
   pasteFromClipboardContent,
-  readSystemClipboard,
   redoAction,
   selectAllNodes,
   undoAction,
 } from "@/features/canvas/shared/canvas-edit-actions";
+import { readSystemClipboard } from "@/features/canvas/shared/canvas-system-clipboard";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useContextMenuStore } from "@/features/canvas/stores/context-menu-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
-import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import { createNodesFromFiles, pickFiles } from "@/features/canvas/upload";
 import { NODE_TYPE } from "@/lib/constants";
 import { MOD_KEY,modKey } from "@/lib/platform";
@@ -113,6 +113,7 @@ function renderMenuItems(items: CanvasMenuItem[], onSelect: (key: string) => voi
 function CanvasContextMenu(props: Props) {
   const { t } = useTranslation();
   const { message } = useAppFeedback();
+  const notifyClipboardWrite = useCanvasClipboardFeedback();
   const { x, y, visible, kind, hide } = useContextMenuStore();
   // 菜单坐标是屏幕坐标，粘贴落点需要的是画布坐标
   const { screenToFlowPosition } = useReactFlow();
@@ -144,23 +145,21 @@ function CanvasContextMenu(props: Props) {
     message.success(ok ? t("common.copied") : t("common.copyFailed"));
   };
 
-  /** 右键菜单「粘贴」：内部剪贴板优先；为空时主动读取系统剪贴板走智能粘贴
-      （clipboard.read 需浏览器一次授权，Firefox 降级 readText 只取文本） */
+  /** 右键菜单「粘贴」：系统剪贴板优先、内部兜底——后复制的内容不会被旧内部
+      快照覆盖。clipboard.read 需浏览器一次授权；Firefox 降级 readText 只取文本。
+      系统内容存在但无法粘贴（含非法 Noxrea 载荷）时明确提示，不回退旧内部内容。 */
   const handleMenuPaste = async () => {
     hide();
     const at = screenToFlowPosition({ x, y });
-    if ((useSelectionStore.getState().clipboard?.nodes.length ?? 0) > 0) {
-      pasteClipboard(at);
-      return;
-    }
     const content = await readSystemClipboard();
-    if (!content) {
-      message.info(t("common.clipboardReadFailed", { mod: MOD_KEY }));
+    if (content) {
+      if (!pasteFromClipboardContent(content, at)) {
+        message.info(t("common.pasteUnsupported"));
+      }
       return;
     }
-    if (!pasteFromClipboardContent(content, at)) {
-      message.info(t("common.pasteUnsupported"));
-    }
+    if (pasteClipboard(at)) return;
+    message.info(t("common.clipboardReadFailed", { mod: MOD_KEY }));
   };
 
   /** 右键菜单「上传」：打开系统文件选择器，选中的文件按右键落点批量创建节点 */
@@ -223,7 +222,7 @@ function CanvasContextMenu(props: Props) {
       case "fit": props.onResetView(); hide(); break;
       case "undo": undoAction(); hide(); break;
       case "redo": redoAction(); hide(); break;
-      case "copy": copySelection(); hide(); break;
+      case "copy": copySelection(notifyClipboardWrite); hide(); break;
       case "copyImage": void handleCopyImage(); break;
       case "duplicate": duplicateSelection(); hide(); break;
       case "delete": deleteSelection(); hide(); break;

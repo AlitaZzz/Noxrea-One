@@ -7,6 +7,8 @@
     "copy": "Copy",
     "copied": "Copied to clipboard",
     "copyFailed": "Copy failed",
+    "copyTooLarge": "Selection is too large. Copied to the in-app clipboard only.",
+    "copySystemUnavailable": "Could not write to the system clipboard. Copied to the in-app clipboard only.",
     "paste": "Paste",
     "info": "Info",
     "delete": "Delete",

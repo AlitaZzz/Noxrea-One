@@ -2,10 +2,14 @@
  * 画布编辑动作：复制 / 粘贴 / 全选 / 清空选中 / 删除 / 撤销 / 重做（操作目标为节点与连线）。
  *
  * 剪贴板语义分两层：
- * - 内部剪贴板（useSelectionStore）：复制节点写入，右键菜单「粘贴」消费，免权限；
- * - 系统剪贴板：复制节点同步写入带标记的节点 JSON、复制图片写入 PNG 位图；
- *   键盘 Ctrl+V 走原生 paste 事件免权限读取，按「图片 → 节点 JSON → 文本」
- *   智能分流；右键菜单在内部剪贴板为空时主动 read()（需一次授权）。
+ * - 内部剪贴板（useSelectionStore）：复制节点写入规范快照（含外部上游边），
+ *   创建副本与系统读取失败时消费，免权限；
+ * - 系统剪贴板：复制节点写入 Noxrea 自定义格式 + HTML 镜像（纯文本选择另写
+ *   text/plain），复制图片写入 PNG 位图。键盘 Ctrl+V 优先同步解析 paste
+ *   事件，事件看不到自定义格式时回退 read()；右键菜单主动 read()（需一次授权）。
+ *
+ * 节点 JSON 永不进入 text/plain：任何输入框、富文本与 Agent 输入区都只会
+ * 收到可读文本或空内容（见 specs/canvas-clipboard.md）。
  *
  * 抽成独立模块供键盘快捷键（use-canvas-keyboard）与画布菜单（CanvasContextMenu）共用，
  * 避免两处实现各自漂移；各动作返回是否实际执行，供调用方决定 preventDefault 等行为。
@@ -15,9 +19,23 @@
 import { runSuppressed } from "@/features/canvas/agent/user-action-tracker";
 import { cancelTidyAnimation } from "@/features/canvas/hooks/use-tidy-animation";
 import { createEdge, createTextNode, duplicateNode } from "@/features/canvas/node-defaults";
+import {
+  type CanvasClipboardEdge,
+  type CanvasClipboardNode,
+  createCanvasClipboardPayload,
+  parseCanvasClipboard,
+  sanitizeEdgeForClipboard,
+  sanitizeNodeForClipboard,
+  textOnlyPlainText,
+} from "@/features/canvas/shared/canvas-clipboard-format";
+import {
+  type CanvasClipboardWriteResult,
+  type ClipboardPasteContent,
+  writeCanvasClipboard,
+} from "@/features/canvas/shared/canvas-system-clipboard";
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
-import { isGroupMember, isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
+import { isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
 import { applySelection, updateSelection } from "@/features/canvas/shared/selection";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import type { CanvasState } from "@/features/canvas/stores/canvas-store";
@@ -28,8 +46,7 @@ import { useSelectionStore } from "@/features/canvas/stores/selection-store";
 import type { AnyEdge, AnyNode, MediaGenFields } from "@/features/canvas/types";
 import type { HistorySnapshot } from "@/features/canvas/types";
 import { createNodesFromFiles } from "@/features/canvas/upload";
-import { canConnect, isGenerating, LAYOUT_GAP, NODE_TYPE } from "@/lib/constants";
-import i18n from "@/lib/i18n/config";
+import { canConnect, isGenerating, LAYOUT_GAP } from "@/lib/constants";
 import { loadMediaImage } from "@/lib/load-media-image";
 
 /** 当前选中的节点 id */
@@ -74,8 +91,14 @@ export function isMediaEditorOpen(): boolean {
   return isMediaEditorOpenState(useCanvasStore.getState());
 }
 
-/** 复制到系统剪贴板的节点 JSON 前缀标记：粘贴时据此识别「我们复制的节点」 */
-export const CLIPBOARD_NODE_MARKER = "noxrea-nodes:";
+/** 规范化快照与 React Flow 节点模型的边界：载荷已按类型契约校验，运行时字段均可选 */
+function toCanvasNodes(nodes: CanvasClipboardNode[]): AnyNode[] {
+  return nodes as unknown as AnyNode[];
+}
+
+function toCanvasEdges(edges: CanvasClipboardEdge[]): AnyEdge[] {
+  return edges as unknown as AnyEdge[];
+}
 
 /**
  * 方向键移动选中节点（画布键盘 hook 的方向键分支调用）。
@@ -103,38 +126,104 @@ export function nudgeSelectedNodes(direction: { x: number; y: number }, factor: 
   return true;
 }
 
-/** 复制当前选中节点到画布剪贴板。@returns 是否实际执行了复制 */
-export function copySelection(): boolean {
+/**
+ * 选择快照：复制与创建副本的唯一选择口径。
+ *
+ * 1. 选中组自动展开全部直接成员；
+ * 2. 父组不在快照内的成员换算为世界坐标并删除 parentId（单独复制成员不会
+ *    按组内相对坐标错位）；
+ * 3. 生成规范节点/连线（只保留可迁移字段，剥离运行时与瞬时状态）；
+ * 4. 连线取任一端在选中集内的全部相关边：内部剪贴板据此还原上游关系，
+ *    系统载荷只取两端都在集内的边。
+ */
+function collectSelectionSnapshot(): {
+  nodes: CanvasClipboardNode[];
+  edges: CanvasClipboardEdge[];
+} | null {
   const selIds = getSelectedNodeIds();
-  if (selIds.length === 0) return false;
-  const nodes = useCanvasStore.getState().nodes;
-  // 选中组时自动带上其全部成员：复制组 = 复制整组内容（成员经粘贴重映射归新组）
+  if (selIds.length === 0) return null;
+  const state = useCanvasStore.getState();
+  const canvasNodes = state.nodes;
   const selSet = new Set(selIds);
   const selectedGroupIds = new Set(
-    nodes.filter((n) => isGroupNode(n) && selSet.has(n.id)).map((n) => n.id)
+    canvasNodes.filter((n) => isGroupNode(n) && selSet.has(n.id)).map((n) => n.id),
   );
   const expanded = selectedGroupIds.size
-    ? nodes.filter(
-        (n) => {
-          const parentId = memberParentId(n);
-          return selSet.has(n.id) || (parentId !== undefined && selectedGroupIds.has(parentId));
-        },
-      )
-    : nodes.filter((n) => selSet.has(n.id));
-  // 与复制集相关的连线一并入剪贴板（任一端在集内）：集内端点粘贴时重映射到
-  // 副本；副本模式只还原上游外部边（集外 source 指向原上游），下游外部边
-  // 与普通粘贴的外部边都不还原；跨标签页粘贴时集外 id 在目标画布不存在，
-  // 粘贴侧自然丢弃
-  const idSet = new Set(expanded.map((n) => n.id));
-  const relatedEdges = useCanvasStore
+    ? canvasNodes.filter((n) => {
+        const parentId = memberParentId(n);
+        return selSet.has(n.id) || (parentId !== undefined && selectedGroupIds.has(parentId));
+      })
+    : canvasNodes.filter((n) => selSet.has(n.id));
+  const expandedIds = new Set(expanded.map((n) => n.id));
+
+  // 防御损坏数据：空组不能进入载荷（导入侧会整包拒绝）。正常 store 不变量
+  // 下组必有成员，这里只影响已被破坏的现场
+  const memberCounts = new Map<string, number>();
+  for (const node of expanded) {
+    const parentId = memberParentId(node);
+    if (parentId !== undefined && expandedIds.has(parentId)) {
+      memberCounts.set(parentId, (memberCounts.get(parentId) ?? 0) + 1);
+    }
+  }
+  const exportable = expanded.filter(
+    (node) => !isGroupNode(node) || (memberCounts.get(node.id) ?? 0) > 0,
+  );
+  if (exportable.length === 0) return null;
+  const exportableIds = new Set(exportable.map((n) => n.id));
+  const canvasById = new Map(canvasNodes.map((n) => [n.id, n] as const));
+  const absoluteById = new Map(
+    toAbsoluteNodes(canvasNodes).map((n) => [n.id, n.position] as const),
+  );
+
+  const nodes = exportable.map((node) => {
+    const sanitized = sanitizeNodeForClipboard(node);
+    const parentId = memberParentId(node);
+    if (parentId !== undefined) {
+      const parent = canvasById.get(parentId);
+      if (!exportableIds.has(parentId) || !parent || !isGroupNode(parent)) {
+        // 父组不在复制范围（或归属数据已损坏）：展平为世界坐标
+        const absolute = absoluteById.get(node.id);
+        if (absolute) sanitized.position = { x: absolute.x, y: absolute.y };
+        delete sanitized.parentId;
+      }
+    }
+    return sanitized;
+  });
+
+  // 任一端在选中集内的连线都保留在内部快照；系统载荷由
+  // createCanvasClipboardPayload 过滤为两端都在载荷内的边
+  const edges = state.edges
+    .filter((edge) => expandedIds.has(edge.source) || expandedIds.has(edge.target))
+    .map(sanitizeEdgeForClipboard);
+
+  return { nodes, edges };
+}
+
+/**
+ * 复制当前选中节点到画布剪贴板。
+ * @param onSystemWriteResult 系统剪贴板写入结果回调（React 调用方经
+ *        useCanvasClipboardFeedback 提供统一提示）；内部剪贴板始终已更新。
+ * @returns 是否实际执行了复制
+ */
+export function copySelection(
+  onSystemWriteResult?: (result: CanvasClipboardWriteResult) => void,
+): boolean {
+  const snapshot = collectSelectionSnapshot();
+  if (!snapshot) return false;
+
+  // 内部剪贴板只保存规范快照（data 已深拷贝，不再共享 store 引用）
+  useSelectionStore
     .getState()
-    .edges.filter((e) => idSet.has(e.source) || idSet.has(e.target));
-  useSelectionStore.getState().copySelected(expanded, relatedEdges);
-  // 节点 JSON 同步写入系统剪贴板（带标记）：Ctrl+V 走原生 paste 事件可免权限读取，
-  // 并支持跨标签页还原节点。clipboard-write 在安全上下文默认放行，失败静默忽略。
-  void navigator.clipboard
-    ?.writeText(CLIPBOARD_NODE_MARKER + JSON.stringify({ nodes: expanded, edges: relatedEdges }))
-    .catch(() => {});
+    .copySelected(toCanvasNodes(snapshot.nodes), toCanvasEdges(snapshot.edges));
+
+  // 系统载荷只含内部连线；纯文本选择才附带可读 text/plain。
+  // writeCanvasClipboard 在首次 await 前同步调用 clipboard.write，保持用户手势。
+  const payload = createCanvasClipboardPayload(snapshot.nodes, snapshot.edges);
+  const plainText = textOnlyPlainText(snapshot.nodes);
+  void writeCanvasClipboard(payload, plainText).then(
+    (result) => onSystemWriteResult?.(result),
+    () => onSystemWriteResult?.({ ok: false, reason: "rejected" }),
+  );
   return true;
 }
 
@@ -144,20 +233,24 @@ export function copySelection(): boolean {
  * 偏移量取 LAYOUT_GAP（与整理/网格间距同约定）：节点尺寸普遍 200px+，
  * 偏移过小副本与原件几乎完全重叠；连续 Ctrl+D 时以副本为基准继续偏移，
  * 自然形成 LAYOUT_GAP 步进的斜向级联（Figma 同款行为）。
+ *
+ * 直接使用选择快照，不写系统剪贴板，也不修改已存在的内部剪贴板。
  * @returns 是否实际执行
  */
 export function duplicateSelection(): boolean {
-  const selIds = getSelectedNodeIds();
-  if (selIds.length === 0) return false;
-  const selSet = new Set(selIds);
-  const sel = useCanvasStore.getState().nodes.filter((n) => selSet.has(n.id));
+  const snapshot = collectSelectionSnapshot();
+  if (!snapshot) return false;
   // 落点基准取选中内容的绝对包围盒左上角（成员 position 是组内相对坐标）
-  const absSel = toAbsoluteNodes(sel);
+  const absSel = toAbsoluteNodes(toCanvasNodes(snapshot.nodes));
   const minX = Math.min(...absSel.map((n) => n.position.x));
   const minY = Math.min(...absSel.map((n) => n.position.y));
-  if (!copySelection()) return false;
   // 副本只保留上游连线（含集内边），下游外部连线不还原——副本是开新分支
-  return pasteClipboard({ x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP }, { includeExternalEdges: true });
+  return pasteNodes(
+    toCanvasNodes(snapshot.nodes),
+    toCanvasEdges(snapshot.edges),
+    { x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP },
+    { includeExternalEdges: true },
+  );
 }
 
 /**
@@ -204,68 +297,15 @@ export function pasteClipboard(
 }
 
 /**
- * 从系统剪贴板文本还原节点并粘贴：只接受 copySelection 写入的带标记 { nodes, edges } JSON。
- * 同时把解析结果同步进内部剪贴板，使右键菜单「粘贴」与后续行为保持一致。
- * @returns 是否识别并粘贴成功（非标记文本 / 解析失败返回 false）
+ * 从系统载荷 JSON 还原节点并粘贴：整包校验通过后才写入内部剪贴板与画布。
+ * 解析失败不产生任何副作用（画布、历史、内部剪贴板均不变）。
+ * @returns 是否识别并粘贴成功
  */
-export function pasteNodesFromClipboardJson(text: string, at: { x: number; y: number }): boolean {
-  if (!text.startsWith(CLIPBOARD_NODE_MARKER)) return false;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(CLIPBOARD_NODE_MARKER.length));
-  } catch {
-    return false;
-  }
-  if (
-    parsed === null ||
-    typeof parsed !== "object" ||
-    !("nodes" in parsed) ||
-    !Array.isArray(parsed.nodes) ||
-    !("edges" in parsed) ||
-    !Array.isArray(parsed.edges)
-  ) return false;
-  const nodes = parsed.nodes;
-  if (
-    nodes.length === 0 ||
-    !nodes.every(
-      (n): n is AnyNode =>
-        !!n &&
-        typeof n === "object" &&
-        typeof n.id === "string" &&
-        n.id.length > 0 &&
-        Object.values(NODE_TYPE).some((type) => type === n.type) &&
-        !!n.position &&
-        typeof n.position === "object" &&
-        Number.isFinite(n.position.x) &&
-        Number.isFinite(n.position.y) &&
-        !!n.data &&
-        typeof n.data === "object" &&
-        !Array.isArray(n.data) &&
-        typeof n.data.label === "string" &&
-        (n.parentId === undefined || (typeof n.parentId === "string" && n.parentId.length > 0)),
-    )
-  ) return false;
-  const nodeById = new Map(nodes.map((n) => [n.id, n]));
-  if (nodeById.size !== nodes.length) return false;
-  if (nodes.some((n) => {
-    if (n.parentId === undefined) return false;
-    const parent = nodeById.get(n.parentId);
-    return !isGroupMember(n, n.parentId) || (parent !== undefined && !isGroupNode(parent));
-  })) return false;
-
-  const edges = parsed.edges;
-  if (!edges.every(
-    (e): e is AnyEdge =>
-      !!e &&
-      typeof e === "object" &&
-      typeof e.id === "string" &&
-      e.id.length > 0 &&
-      typeof e.source === "string" &&
-      e.source.length > 0 &&
-      typeof e.target === "string" &&
-      e.target.length > 0 &&
-      e.source !== e.target,
-  )) return false;
+function pasteCanvasClipboardJson(json: string, at: { x: number; y: number }): boolean {
+  const parsed = parseCanvasClipboard(json);
+  if (!parsed.ok) return false;
+  const nodes = toCanvasNodes(parsed.payload.nodes);
+  const edges = toCanvasEdges(parsed.payload.edges);
   useSelectionStore.getState().copySelected(nodes, edges);
   return pasteNodes(nodes, edges, at);
 }
@@ -389,65 +429,31 @@ export function createTextNodeWithContent(text: string, at: { x: number; y: numb
 }
 
 /**
- * 智能粘贴核心：按「图片 → 节点 JSON → 文本 → 内部剪贴板兜底」顺序消费剪贴板内容。
+ * 智能粘贴核心：按「Noxrea 载荷 → 图片 → 非空文本 → 内部剪贴板兜底」顺序消费。
  * 键盘原生 paste 事件与右键菜单（主动读取系统剪贴板）共用此入口。
+ *
+ * 载荷存在但非法时整包拒绝：不降级为图片/文本，也不回退内部剪贴板。
  * @returns 是否实际执行了粘贴
  */
 export function pasteFromClipboardContent(
-  content: { imageFiles: File[]; text: string },
+  content: ClipboardPasteContent,
   at: { x: number; y: number }
 ): boolean {
+  if (content.payloadJson !== undefined) {
+    return pasteCanvasClipboardJson(content.payloadJson, at);
+  }
   if (content.imageFiles.length > 0) {
     void createNodesFromFiles(content.imageFiles, at);
     return true;
   }
   const text = content.text ?? "";
-  // 节点 JSON：解析失败时返回 false 且不降级为文本节点（内部 JSON 串贴成文本没有意义）
-  if (text.startsWith(CLIPBOARD_NODE_MARKER)) {
-    return pasteNodesFromClipboardJson(text, at);
-  }
   const trimmed = text.trim();
   if (trimmed) {
     createTextNodeWithContent(trimmed, at);
     return true;
   }
-  // 系统剪贴板无内容（如复制节点时写入系统剪贴板失败）：回退内部剪贴板
+  // 系统剪贴板无可用内容（空剪贴板 / 复制时系统写入失败）：回退内部剪贴板
   return pasteClipboard(at);
-}
-
-/**
- * 读取系统剪贴板内容（右键菜单粘贴用；键盘 paste 事件路径无需此函数、免权限）。
- * read() 需要剪贴板读取权限（浏览器弹一次授权），Firefox 不支持 read() 时
- * 降级 readText() 只取文本。全部失败返回 null，由调用方提示改用 Ctrl+V。
- */
-export async function readSystemClipboard(): Promise<{ imageFiles: File[]; text: string } | null> {
-  try {
-    if (navigator.clipboard?.read) {
-      const imageFiles: File[] = [];
-      let text = "";
-      for (const item of await navigator.clipboard.read()) {
-        const imageType = item.types.find((t) => t.startsWith("image/"));
-        if (imageType) {
-          const blob = await item.getType(imageType);
-          // 文件名会成为节点标题，走 i18n；扩展名按 MIME 推断供下游识别
-          const ext = imageType.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
-          const name = `${i18n.t("node.clipboardImage")}.${ext}`;
-          imageFiles.push(new File([blob], name, { type: imageType }));
-          continue;
-        }
-        if (item.types.includes("text/plain")) {
-          text = await (await item.getType("text/plain")).text();
-        }
-      }
-      return { imageFiles, text };
-    }
-    if (navigator.clipboard?.readText) {
-      return { imageFiles: [], text: await navigator.clipboard.readText() };
-    }
-  } catch {
-    // 权限被拒 / 浏览器不支持
-  }
-  return null;
 }
 
 /** 全选画布节点 */

@@ -26,6 +26,13 @@ vi.mock("react-i18next", async (importOriginal) => ({
   }),
 }));
 
+vi.mock("@/components/ui/use-app-feedback", () => ({
+  useAppFeedback: () => ({
+    message: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+    notification: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  }),
+}));
+
 // 展示层测试不触达真实画布动作；容器层只在 CanvasOverlays 中挂载。
 vi.mock("@/features/canvas/shared/canvas-edit-actions", () => ({
   copySelection: vi.fn(),

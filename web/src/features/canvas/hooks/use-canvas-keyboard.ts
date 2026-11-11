@@ -10,6 +10,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useEffect, useRef } from "react";
 
 import { useAppFeedback } from "@/components/ui/use-app-feedback";
+import { useCanvasClipboardFeedback } from "@/features/canvas/hooks/use-canvas-clipboard-feedback";
 import { useCanvasInputBlocked } from "@/features/canvas/root/CanvasInputGateContext";
 import { useCanvasPorts } from "@/features/canvas/root/CanvasPortsContext";
 import {
@@ -22,11 +23,13 @@ import {
   hasGeneratingNode,
   isMediaEditorOpen,
   nudgeSelectedNodes,
+  pasteClipboard,
   pasteFromClipboardContent,
   redoAction,
   selectAllNodes,
   undoAction,
 } from "@/features/canvas/shared/canvas-edit-actions";
+import { parsePasteEventContent, readSystemClipboard } from "@/features/canvas/shared/canvas-system-clipboard";
 import { isEditableTarget } from "@/features/canvas/shared/dom";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { EventNames } from "@/lib/constants";
@@ -37,6 +40,7 @@ import i18n from "@/lib/i18n/config";
  */
 export function useCanvasKeyboard() {
   const { message } = useAppFeedback();
+  const notifyClipboardWrite = useCanvasClipboardFeedback();
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
   const inputBlocked = useCanvasInputBlocked();
   const { onOpenShortcuts } = useCanvasPorts();
@@ -55,8 +59,10 @@ export function useCanvasKeyboard() {
   }, []);
 
   // ---- 智能粘贴：监听原生 paste 事件（免权限读取系统剪贴板） ----
-  // 内容判定顺序：图片 → 走上传管道建图片节点；我们复制的节点 JSON（带标记）
-  // → 还原节点（支持跨标签页）；普通文本 → 建文本节点；空 → 回退内部剪贴板。
+  // 同步可用内容优先级：带标记 HTML / Noxrea 载荷 → 图片 → 普通文本。
+  // Chrome 不把自定义 MIME 暴露给 paste 事件：事件没有任何标准内容时，
+  // 先 preventDefault，再在同一事件调用栈内启动 navigator.clipboard.read()
+  // 读取自定义格式；失败或为空回退内部剪贴板。
   // 输入框 / Tiptap 内的原生粘贴在监听器开头放行，不受影响。
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
@@ -78,12 +84,31 @@ export function useCanvasKeyboard() {
         ? screenToFlowPosition({ x: pointer.x, y: pointer.y })
         : screenToFlowPosition(center);
 
-      const imageFiles = [...e.clipboardData.items]
-        .filter((item) => item.type.startsWith("image/"))
-        .map((item) => item.getAsFile())
-        .filter((f): f is File => !!f);
-      const text = e.clipboardData.getData("text/plain") ?? "";
-      if (pasteFromClipboardContent({ imageFiles, text }, at)) e.preventDefault();
+      const content = parsePasteEventContent(e.clipboardData);
+      if (content.payloadJson !== undefined) {
+        // 载荷非法时同样吞掉事件：不降级为文本节点，也不触发内部剪贴板
+        e.preventDefault();
+        pasteFromClipboardContent(content, at);
+        return;
+      }
+      if (content.imageFiles.length > 0 || content.text.trim()) {
+        if (pasteFromClipboardContent(content, at)) e.preventDefault();
+        return;
+      }
+
+      // 事件里没有任何可用的标准内容：自定义 MIME 只有异步 read() 可见
+      e.preventDefault();
+      void readSystemClipboard()
+        .then((systemContent) => {
+          if (systemContent) {
+            pasteFromClipboardContent(systemContent, at);
+          } else {
+            pasteClipboard(at);
+          }
+        })
+        .catch(() => {
+          pasteClipboard(at);
+        });
     }
 
     window.addEventListener("paste", onPaste);
@@ -130,7 +155,7 @@ export function useCanvasKeyboard() {
         const textSelection = window.getSelection()?.toString() ?? "";
         if (selIds.length > 0 && !textSelection) {
           e.preventDefault();
-          copySelection();
+          copySelection(notifyClipboardWrite);
         }
       }
 
@@ -217,5 +242,5 @@ export function useCanvasKeyboard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoomIn, zoomOut, fitView, inputBlocked, message, onOpenShortcuts, resetViewport, screenToFlowPosition]);
+  }, [zoomIn, zoomOut, fitView, inputBlocked, message, notifyClipboardWrite, onOpenShortcuts, resetViewport, screenToFlowPosition]);
 }

@@ -167,39 +167,43 @@ const NODE_ID_PREFIX: Record<string, string> = {
   [NODE_TYPE.DIRECTOR]: "d",
 };
 
+/**
+ * 克隆节点供创建副本使用：深拷贝内容，剥离不属于副本的瞬时/结构状态。
+ * 系统剪贴板走独立的规范快照（canvas-clipboard-format），字段口径不同，不共用。
+ *
+ * - taskBinding：生成任务归属原节点，副本没有对应任务，保留会让副本永远
+ *   停在「生成中」遮罩，并连带全局禁用撤销 / 重做。
+ * - upload：上传进度、失败原因与 previewUrl（blob: URL）都属于原节点的
+ *   本地上传会话；重试上下文按原节点 id 保存，副本无法重试。保留失败原因
+ *   只会让副本显示一个不可用的失败/重试 UI，因此整字段剥离。有 src 的副本
+ *   保留已落定内容；没有 src 的失败节点副本成为空占位节点。
+ * - parentId：结构归属与几何绑定（相对坐标随归属失效），统一剥离；需要
+ *   归属的调用方（如整组粘贴）显式重映射到副本组，避免副本「串」到画布上
+ *   的原组（拖原组带着副本跑、原组成员计数虚增）。
+ *
+ * 已完成的静态内容（src / content / genSettings 等）保持不变。
+ */
+function cloneNodeForTransfer(
+  node: AnyNode
+): AnyNode & { data: Record<string, unknown> } {
+  const cloned = JSON.parse(JSON.stringify(node)) as AnyNode & { data: Record<string, unknown> };
+  delete cloned.parentId;
+  delete cloned.selected;
+  if (cloned.data) {
+    delete cloned.data.taskBinding;
+    // 上传会话（进度、失败原因、blob 预览）不能迁移：重试上下文按原节点 id
+    // 保存，副本无法重试；保留失败原因只会得到一个不可用的重试入口
+    delete cloned.data.upload;
+  }
+  return cloned;
+}
+
 export function duplicateNode(
   node: AnyNode,
   offset: { x: number; y: number }
 ): AnyNode {
   const prefix = NODE_ID_PREFIX[node.type] ?? node.type ?? "copy";
-  const cloned = JSON.parse(JSON.stringify(node)) as AnyNode & { data: Record<string, unknown> };
-  // 副本不继承「进行中」的瞬时状态：
-  // - taskBinding：生成任务归属原节点，副本没有对应任务，
-  //   保留会让副本永远停在「生成中」遮罩，并连带全局禁用撤销 / 重做。
-  // - upload：上传进度 / 失败原因与 previewUrl（blob: URL）同样属于原节点，
-  //   原节点上传结束后管道会 revoke 该 URL，副本会指向已回收的地址。
-  // - parentId：结构归属与几何绑定（相对坐标随归属失效），统一剥离；
-  //   需要归属的调用方（如整组粘贴）显式重映射到副本组，避免副本「串」到
-  //   画布上的原组（拖原组带着副本跑、原组成员计数虚增）。
-  // 已完成的静态内容（src / content / genSettings 等）保持不变。
-  delete cloned.parentId;
-  if (cloned.data) {
-    delete cloned.data.taskBinding;
-    const upload = cloned.data.upload as
-      | { uploading?: boolean; previewUrl?: string; error?: unknown }
-      | undefined;
-    if (upload) {
-      if (upload.error === undefined) {
-        // 上传中：进度与 blob 预览都属于原节点（结束后 previewUrl 会被 revoke），副本不能继承
-        delete cloned.data.upload;
-      } else {
-        // 上传失败：保留失败原因，副本仍显示「上传失败」提示；
-        // 但丢弃原节点的 blob 预览与进度（重试上下文已失效，预览也可能已被回收）
-        delete upload.previewUrl;
-        upload.uploading = false;
-      }
-    }
-  }
+  const cloned = cloneNodeForTransfer(node);
   return {
     ...cloned,
     id: uid(prefix),

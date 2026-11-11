@@ -97,6 +97,29 @@ describe("parseRatioValue", () => {
   });
 });
 
+describe("duplicate_node", () => {
+  it("上传失败节点副本不继承 upload 会话", () => {
+    const node = createImageNode(at);
+    node.data.upload = {
+      uploading: false,
+      version: 1,
+      error: { category: "network" as const, message: "网络错误", retryable: true },
+    };
+    useCanvasStore.setState({ nodes: [node], edges: [] });
+
+    const result = executeCanvasToolCall({
+      id: "call-1",
+      name: "duplicate_node",
+      args: { nodeId: node.id },
+    });
+
+    expect(result.failed).toBeFalsy();
+    const nodes = useCanvasStore.getState().nodes;
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1].data).not.toHaveProperty("upload");
+  });
+});
+
 describe("select_nodes", () => {
   function textNode(id: string, selected = false): AnyNode {
     return {
