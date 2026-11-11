@@ -144,8 +144,9 @@
     var(--brand-lime) 348deg,
     #fff 358deg,
     color-mix(in srgb, var(--brand-lime) 25%, transparent) 360deg;
-  /* 画布框选是领域状态，不属于 shadcn 控件主题。 */
-  --marquee-bg: rgba(231, 231, 236, 0.06);
+  /* 画布框选是领域状态，不属于 shadcn 控件主题。
+     拖拽框填充必须比已提交外框（GROUP_COLORS.default.fill，4%）更淡。 */
+  --marquee-bg: rgba(231, 231, 236, 0.03);
   --marquee-border: rgba(231, 231, 236, 0.38);
 }
 
@@ -609,6 +610,15 @@ body { font-size: 14px; background: var(--background); color: var(--foreground);
 .react-flow[data-interaction="dragging-nodes"] > .canvas-gesture-cursor {
   display: block;
   cursor: grabbing;
+}
+
+/* 连线层必须自成一个层叠上下文：React Flow 按端点节点层级抬高单条连线的
+   z-index——端点位于父节点内时为 1（子节点 z=1），选中连线再 +1000。若不隔离，
+   这些连线 SVG 会越过 DOM 顺序盖到流光 canvas（z-index auto）上，把流光头部
+   裁成两侧细边（组内连线看起来偏浅的根因）。隔离后连线层内部仍按 z-index
+   排序，整层保持在流光层之下。 */
+.react-flow__edges {
+  isolation: isolate;
 }
 
 /* ── 画布流光层 ──

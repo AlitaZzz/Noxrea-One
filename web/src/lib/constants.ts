@@ -272,16 +272,16 @@ export const GROUP_COLOR_KEYS = [
 export type GroupColorKey = (typeof GROUP_COLOR_KEYS)[number];
 
 export const GROUP_COLORS: Record<GroupColorKey, GroupColorPreset> = {
-  default: { border: "rgba(255,255,255,0.10)", fill: "rgba(255,255,255,0.10)" },
-  brown:   { border: "rgba(150,100,60,0.55)",  fill: "rgba(150,100,60,0.12)" },
-  blue:    { border: "rgba(22,119,255,0.55)",  fill: "rgba(22,119,255,0.12)" },
-  green:   { border: "rgba(52,199,89,0.55)",   fill: "rgba(52,199,89,0.12)" },
-  yellow:  { border: "rgba(250,219,20,0.55)",  fill: "rgba(250,219,20,0.12)" },
-  orange:  { border: "rgba(255,149,0,0.55)",   fill: "rgba(255,149,0,0.12)" },
-  red:     { border: "rgba(255,59,48,0.55)",   fill: "rgba(255,59,48,0.12)" },
-  purple:  { border: "rgba(114,46,209,0.55)",  fill: "rgba(114,46,209,0.12)" },
-  pink:    { border: "rgba(235,47,150,0.55)",  fill: "rgba(235,47,150,0.12)" },
-  cyan:    { border: "rgba(48,213,200,0.55)",  fill: "rgba(48,213,200,0.12)" },
+  default: { border: "rgba(255,255,255,0.10)", fill: "rgba(255,255,255,0.04)" },
+  brown:   { border: "rgba(150,100,60,0.55)",  fill: "rgba(150,100,60,0.06)" },
+  blue:    { border: "rgba(22,119,255,0.55)",  fill: "rgba(22,119,255,0.06)" },
+  green:   { border: "rgba(52,199,89,0.55)",   fill: "rgba(52,199,89,0.06)" },
+  yellow:  { border: "rgba(250,219,20,0.55)",  fill: "rgba(250,219,20,0.06)" },
+  orange:  { border: "rgba(255,149,0,0.55)",   fill: "rgba(255,149,0,0.06)" },
+  red:     { border: "rgba(255,59,48,0.55)",   fill: "rgba(255,59,48,0.06)" },
+  purple:  { border: "rgba(114,46,209,0.55)",  fill: "rgba(114,46,209,0.06)" },
+  pink:    { border: "rgba(235,47,150,0.55)",  fill: "rgba(235,47,150,0.06)" },
+  cyan:    { border: "rgba(48,213,200,0.55)",  fill: "rgba(48,213,200,0.06)" },
 };
 
 export const DEFAULT_GROUP_COLOR_KEY: GroupColorKey = "default";
