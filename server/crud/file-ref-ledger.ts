@@ -8,6 +8,7 @@ import type { DbTx } from "@server/core/database/transaction";
 import { hashFromStorageKey } from "@noxrea/shared/url";
 import type { FileHashCounts, FileRefSource, FileRefSourceType } from "@server/schemas/file-ref";
 import { adjustFileRefCountTx } from "./file";
+import { lockUserWriteTx } from "./user-write-lock";
 
 /** 按来源 ID 分批回收，避免单条语句参数过多、锁范围过大；5 万来源回归测试（10 个分片）覆盖该分片大小。 */
 const FILE_REF_SOURCE_CHUNK_SIZE = 5_000;
@@ -31,6 +32,10 @@ export async function replaceSourceFileRefsTx(
   source: FileRefSource,
   counts: FileHashCounts,
 ): Promise<void> {
+  // 账本写会改动 file_refs / file_objects，与资产写共享行资源；画布、头像等
+  // 非资产入口经此处获取同一用户锁（specs/asset-write-serialization.md R4）。
+  // 资产路径的入口事务已持锁，pg_advisory_xact_lock 可重入。
+  await lockUserWriteTx(tx, source.userId);
   const desired = normalizeCounts(counts);
   const oldRows = await tx.fileRef.findMany({
     where: {
@@ -129,6 +134,9 @@ export async function removeSourceFileRefsBatchTx(
   },
 ): Promise<void> {
   if (params.sourceIds.length === 0) return;
+
+  // 同上：先取用户锁再改动共享账本行，保证与资产写、其它来源写串行。
+  await lockUserWriteTx(tx, params.userId);
 
   for (let index = 0; index < params.sourceIds.length; index += FILE_REF_SOURCE_CHUNK_SIZE) {
     const sourceIds = params.sourceIds.slice(index, index + FILE_REF_SOURCE_CHUNK_SIZE);

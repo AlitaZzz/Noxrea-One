@@ -6,6 +6,7 @@
 import { prisma } from "@server/core/database/client";
 import { Prisma, type CanvasProject } from "@server/core/database/generated/client";
 import { withTransaction, type DbTx } from "@server/core/database/transaction";
+import { withUserWriteTx } from "./user-write-lock";
 import { newId } from "@server/utils/id";
 import { deriveCanvasSummary, toProjectSummary } from "@server/utils/canvas-summary";
 import { removeSourceFileRefsTx } from "./file-ref-ledger";
@@ -185,7 +186,7 @@ export async function getProjectRevision(id: string, userId: number): Promise<nu
 }
 
 export async function deleteProject(id: string, userId: number) {
-  return withTransaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     // 先删除项目行并持有行锁，再清理账本：并发保存/封面写要么先提交
     // （随后被本次清理按最新账本回收），要么在行删除后得到 P2025 而不会写账本。
     // 反过来先清账再删行会留下并发写入新插入的孤儿 file_refs。

@@ -10,11 +10,10 @@ import {
 import { Prisma, type AssetItem as AssetItemModel } from "@server/core/database/generated/client";
 import { prisma } from "@server/core/database/client";
 import type { DbTx } from "@server/core/database/transaction";
-import { ASSET_FOLDERS_UNCATEGORIZED_KEY } from "@server/core/database/constraint-names";
-import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { hashFromStorageKey, isFileRefValue } from "@noxrea/shared/url";
 import { replaceSourceFileRefTx, removeSourceFileRefsBatchTx } from "./file-ref-ledger";
 import { stringifyJson, parseJsonArray } from "./json-column";
+import { withUserWriteTx } from "./user-write-lock";
 
 
 /** Prisma 资产记录反序列化后的返回结构。 */
@@ -28,7 +27,6 @@ export class AssetOperationError extends Error {
     readonly code:
       | "folder_not_found"
       | "asset_not_found"
-      | "duplicate_file_key"
       | "invalid_file_key"
       | "uncategorized_folder_protected"
   ) {
@@ -227,7 +225,24 @@ function withMediaMeta<T extends { fileKey?: string | null }>(
   };
 }
 
-/** 获取（必要时创建）当前用户当前 scope 的固定「未分类」目录。 */
+/**
+ * 获取（必要时创建）当前用户当前 scope 的固定「未分类」目录。
+ *
+ * 并发首访不能用「find → create → catch 唯一冲突 → 同事务回读」：PostgreSQL 中
+ * 任一语句报错都会把事务置为 aborted，catch 里的回读必然以 25P02 失败，只能整体
+ * 回滚（曾导致 /api/assets/bootstrap 500）。这里改用原生 INSERT ... ON CONFLICT
+ * DO NOTHING，让冲突成为非错误路径：胜方插入后，败方插入空转，再由下一条
+ * findFirst 按 READ COMMITTED 的语句级快照读回胜方已提交行。
+ *
+ * 冲突目标必须与迁移 20261015213000 的部分唯一索引完全一致：
+ *   (user_id, scope) WHERE kind = 'uncategorized'
+ * Prisma schema 无法表达部分索引，因此使用手写 SQL。PostgreSQL 按列与谓词推断
+ * 冲突索引、不看索引名；索引缺失、失去唯一性或列/谓词定义变更会让该语句以
+ * 42P10 直接失败（fail-fast），单纯改名不影响推断（索引名由真实库测试锁定）。
+ * 回读必须复用同一 tx；INSERT 与回读也必须是两条独立语句（合成单条 CTE 时，
+ * 语句快照看不到并发事务随后提交的行）。
+ * uncategorized 目录禁止改名/删除，回读为 null 说明该不变量已被破坏。
+ */
 async function getOrCreateUncategorizedFolder(
   tx: DbTx,
   userId: number,
@@ -238,21 +253,33 @@ async function getOrCreateUncategorizedFolder(
   });
   if (existing) return existing;
 
-  try {
-    return await tx.assetFolder.create({
-      data: { userId, scope, name: "Uncategorized", kind: "uncategorized", parentId: null },
-    });
-  } catch (error) {
-    // 并发首访撞部分唯一索引（asset_folders_uncategorized_key，迁移 20261015213000）：
-    // 回读并发事务已建好的「未分类」目录
-    if (!isUniqueConstraintViolation(error, ASSET_FOLDERS_UNCATEGORIZED_KEY)) throw error;
+  await tx.$executeRaw`
+    INSERT INTO asset_folders (user_id, name, scope, kind)
+    VALUES (${userId}, ${"Uncategorized"}, ${scope}, 'uncategorized')
+    ON CONFLICT (user_id, scope) WHERE kind = 'uncategorized' DO NOTHING`;
 
-    const raced = await tx.assetFolder.findFirst({
-      where: { userId, scope, kind: "uncategorized" },
-    });
-    if (!raced) throw error;
-    return raced;
+  const created = await tx.assetFolder.findFirst({
+    where: { userId, scope, kind: "uncategorized" },
+  });
+  if (!created) {
+    throw new Error("uncategorized folder missing after conflict-tolerant insert");
   }
+  return created;
+}
+
+/**
+ * 在独立短事务中确保「未分类」目录已提交。
+ *
+ * 批量写事务可能持续数秒；目录 INSERT 若留在主事务内，胜方会持有未提交行直到
+ * 整批提交，并发首访的 ON CONFLICT 必须等待整个批次，超过 Prisma 交互式事务
+ * 默认 5s 时以 P2028 失败。批量入口在进入主事务前先调用本函数，把目录提前提交；
+ * 主事务内的 getOrCreateUncategorizedFolder 只走已存在行的 findFirst 快路径。
+ *
+ * 代价：主事务回滚时目录仍保留。未分类目录是固定不变量，首次访问也会创建它；
+ * 用短事务持有该行是并发首访不等待长事务的前提。
+ */
+async function ensureUncategorizedFolder(userId: number, scope = "personal") {
+  await prisma.$transaction((tx) => getOrCreateUncategorizedFolder(tx, userId, scope));
 }
 
 /** 校验目录归属与 scope，避免任意目录 ID 越权或跨库移动。 */
@@ -313,7 +340,7 @@ export async function createFolder(
   data: { name: string; scope?: string; parentId?: number | null }
 ) {
   const scope = data.scope ?? "personal";
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     await getOrCreateUncategorizedFolder(tx, userId, scope);
 
     if (data.parentId != null) {
@@ -337,7 +364,7 @@ export async function createFolder(
 }
 
 export async function updateFolder(userId: number, id: number, name: string) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const folder = await tx.assetFolder.findFirst({ where: { id, userId } });
     if (!folder) throw new AssetOperationError("folder_not_found");
     if (folder.kind === "uncategorized") {
@@ -353,7 +380,7 @@ export async function updateFolder(userId: number, id: number, name: string) {
 }
 
 export async function deleteFolder(userId: number, id: number) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const root = await tx.assetFolder.findFirst({ where: { id, userId } });
     if (!root) throw new AssetOperationError("folder_not_found");
     if (root.kind === "uncategorized") {
@@ -516,6 +543,65 @@ export async function getAsset(userId: number, id: number) {
   return withMediaMeta(deserializeAsset(item), metas);
 }
 
+/** 批量创建时单行插入的精确值域：默认值由调用方给出，原语不做业务默认。 */
+export interface NewAssetItemRow {
+  userId: number;
+  folderId: number;
+  scope: string;
+  fileKey: string | null;
+  sourceType: string;
+  name: string;
+  type: string;
+  mediaType: string;
+  description: string;
+  tags: string[];
+  prompt: string;
+}
+
+/** 单行插入结果：conflict 必带非空来源键（无来源键的空结果属于契约破坏，直接抛错）。 */
+export type InsertAssetItemRowResult =
+  | { status: "inserted"; item: AssetItemModel }
+  | { status: "conflict"; fileKey: string };
+
+/**
+ * 批量创建的单行插入原语：只有来源唯一索引 (user_id, scope, file_key) 的冲突被
+ * `ON CONFLICT DO NOTHING` 吸收为空结果，调用方按「已存在」跳过；其他唯一约束
+ * （如主键）仍抛错回滚，不会被误报为重复来源。
+ *
+ * 显式冲突目标必须与迁移 20261016090045 的唯一索引一致；索引列定义变更会让该
+ * 语句以 42P10 失败（fail-fast），而不是退化成吞掉任意唯一冲突。Prisma 的
+ * createManyAndReturn + skipDuplicates 不能指定冲突目标，故用原生 SQL。
+ *
+ * file_key 为 NULL 不参与唯一冲突，空结果只能说明索引契约被破坏（例如索引改为
+ * NULLS NOT DISTINCT），此时直接抛错而不是把它当成重复来源。
+ */
+export async function insertAssetItemRowTx(
+  tx: DbTx,
+  row: NewAssetItemRow,
+): Promise<InsertAssetItemRowResult> {
+  const [record] = await tx.$queryRaw<AssetItemModel[]>(Prisma.sql`
+    INSERT INTO asset_items
+      (user_id, folder_id, scope, file_key, source_type,
+       name, type, media_type, description, tags, prompt)
+    VALUES (
+      ${row.userId}, ${row.folderId}, ${row.scope}, ${row.fileKey},
+      ${row.sourceType}, ${row.name}, ${row.type},
+      ${row.mediaType}, ${row.description},
+      ${stringifyJson(row.tags)}, ${row.prompt}
+    )
+    ON CONFLICT (user_id, scope, file_key) DO NOTHING
+    RETURNING id, user_id AS "userId", folder_id AS "folderId", scope,
+              file_key AS "fileKey", source_type AS "sourceType", name, type,
+              media_type AS "mediaType", description, tags, prompt,
+              created_at AS "createdAt", updated_at AS "updatedAt"
+  `);
+  if (record) return { status: "inserted", item: record };
+  if (row.fileKey === null) {
+    throw new Error("source unique index skipped a row without a file key");
+  }
+  return { status: "conflict", fileKey: row.fileKey };
+}
+
 export async function createAssetsBatch(
   items: Array<{
     userId: number;
@@ -558,7 +644,18 @@ export async function createAssetsBatch(
     candidates.push(item);
   }
 
-  return prisma.$transaction(async (tx) => {
+  // 未分类目录必须在整批事务之外提交：批事务可能持续数秒，目录 INSERT 若留在
+  // 事务内会让并发首访等待整批，超过 Prisma 默认 5s 时以 P2028 失败。
+  const uncategorizedScopes = new Set(
+    candidates
+      .filter((item) => item.folderId == null)
+      .map((item) => item.scope ?? "personal"),
+  );
+  for (const scope of uncategorizedScopes) {
+    await ensureUncategorizedFolder(items[0].userId, scope);
+  }
+
+  return withUserWriteTx(items[0].userId, async (tx) => {
     const created: SerializedAssetItem[] = [];
     const uncategorizedByScope = new Map<string, number>();
 
@@ -589,21 +686,26 @@ export async function createAssetsBatch(
         if (folder.scope !== scope) throw new AssetOperationError("folder_not_found");
       }
 
-      const record = await tx.assetItem.create({
-        data: {
-          userId: item.userId,
-          name: item.name ?? "Untitled",
-          type: item.type ?? "other",
-          mediaType: item.mediaType ?? "",
-          description: item.description ?? "",
-          tags: stringifyJson(item.tags ?? []),
-          prompt: item.prompt ?? "",
-          folderId,
-          scope,
-          fileKey: item.fileKey ?? null,
-          sourceType: item.sourceType ?? "",
-        },
+      // 数据库是来源唯一性的最终裁决者（预检查只覆盖已提交行）：冲突按
+      // 「已存在」跳过，其他唯一约束仍让整批回滚。
+      const inserted = await insertAssetItemRowTx(tx, {
+        userId: item.userId,
+        folderId,
+        scope,
+        fileKey: item.fileKey ?? null,
+        sourceType: item.sourceType ?? "",
+        name: item.name ?? "Untitled",
+        type: item.type ?? "other",
+        mediaType: item.mediaType ?? "",
+        description: item.description ?? "",
+        tags: item.tags ?? [],
+        prompt: item.prompt ?? "",
       });
+      if (inserted.status === "conflict") {
+        skipped.push({ fileKey: inserted.fileKey, reason: "already_exists" });
+        continue;
+      }
+      const record = inserted.item;
       created.push(deserializeAsset(record));
       await tx.assetFolder.update({
         where: { id: folderId },
@@ -670,7 +772,7 @@ export async function updateAsset(
     prompt?: string;
   }
 ) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const [current] = await lockAssetRowsTx(tx, userId, [id]);
     if (!current) throw new AssetOperationError("asset_not_found");
 
@@ -716,7 +818,20 @@ export async function updateAssetsBatch(
   ids: number[],
   updates: { folderId?: number | null; type?: string }
 ) {
-  return prisma.$transaction(async (tx) => {
+  // 移入「未分类」时，目录必须在批量事务之外先提交：事务内的目录 INSERT 会被
+  // 持有到整批更新结束，并发首访可能等待超过 Prisma 默认 5s（P2028）。
+  if (updates.folderId === null) {
+    const targets = await prisma.assetItem.findMany({
+      where: { id: { in: ids }, userId },
+      select: { scope: true },
+    });
+    const scopes = [...new Set(targets.map((target) => target.scope))];
+    if (scopes.length === 1) {
+      await ensureUncategorizedFolder(userId, scopes[0]);
+    }
+  }
+
+  return withUserWriteTx(userId, async (tx) => {
     const currentItems = await lockAssetRowsTx(tx, userId, ids);
     if (currentItems.length !== new Set(ids).size) throw new AssetOperationError("asset_not_found");
 
@@ -769,7 +884,7 @@ export async function updateAssetsBatch(
 }
 
 export async function deleteAsset(userId: number, id: number) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const current = await tx.assetItem.findFirst({ where: { id, userId } });
     if (!current) throw new AssetOperationError("asset_not_found");
 
@@ -785,7 +900,7 @@ export async function deleteAsset(userId: number, id: number) {
 }
 
 export async function deleteAssetsBatch(userId: number, ids: number[]) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const currentItems = await tx.assetItem.findMany({
       where: { id: { in: ids }, userId },
       select: { id: true, scope: true, fileKey: true },
@@ -815,7 +930,7 @@ export async function deleteAssetsBatch(userId: number, ids: number[]) {
  * 宽松语义：无匹配条目也算成功（count = 0），方便前端幂等取消。
  */
 export async function deleteAssetsByFileKeys(userId: number, fileKeys: string[]) {
-  return prisma.$transaction(async (tx) => {
+  return withUserWriteTx(userId, async (tx) => {
     const currentItems = await tx.assetItem.findMany({
       where: { userId, scope: "personal", fileKey: { in: fileKeys } },
       select: { id: true, fileKey: true },
@@ -847,9 +962,7 @@ export async function listFileKeys(userId: number, scope = "personal") {
 /** 初始化资产库：固定目录、来源集合和总数一次返回。 */
 export async function getAssetLibrarySummary(userId: number, scope = "personal") {
   if (scope === "personal") {
-    await prisma.$transaction(async (tx) => {
-      await getOrCreateUncategorizedFolder(tx, userId, scope);
-    });
+    await ensureUncategorizedFolder(userId, scope);
   }
   const folders = await getFolders(userId, scope);
   const fileKeys = await listFileKeys(userId, scope);

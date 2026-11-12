@@ -5,7 +5,7 @@
  * （specs/auth-request-verification.md 规则 4）。旧密码校验与哈希由 HTTP 层完成。
  */
 import { invalidateAuthSnapshot } from "@server/core/auth/snapshot";
-import { withTransaction } from "@server/core/database/transaction";
+import { withUserWriteTx } from "@server/crud/user-write-lock";
 import { updateUserPasswordTx, type UpdatableUserFields } from "@server/crud/user";
 import { hasProfileFields, updateUserTx } from "@server/services/user/update-profile";
 
@@ -14,7 +14,7 @@ export async function changePassword(
   hashedPassword: string,
   profile: UpdatableUserFields = {},
 ) {
-  const user = await withTransaction(async (tx) => {
+  const user = await withUserWriteTx(id, async (tx) => {
     // 先写画像：头像校验失败会在写库前抛出，密码不会被单独提交
     if (hasProfileFields(profile)) {
       await updateUserTx(tx, id, profile);

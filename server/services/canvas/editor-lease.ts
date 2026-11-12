@@ -36,6 +36,7 @@
  * 临界区迁移到 Redis（INCR）或数据库，并把广播换成跨实例通道（如 Redis pub/sub）。
  * 本模块接口与调用方保持不变。
  */
+import { createKeyedGate } from "@server/core/keyed-gate";
 
 export type Emit = (event: string, data: unknown) => void;
 
@@ -179,7 +180,7 @@ export function isCurrentLease(projectId: string, token: unknown): boolean {
 // ==================== 每项目写临界区 ====================
 
 /**
- * 每项目写临界区（promise-tail 互斥，与前端 save-mutex 同款模式）。
+ * 每项目写临界区（进程内 keyed gate，条目生命周期见 core/keyed-gate）。
  *
  * 握手的「轮换租约 + 权威快照读」与内容写的「租约校验 + 事务」都必须经此
  * 临界区执行：两者不会交错。没有它，被接管的旧持有者的在途写可能「校验在
@@ -187,30 +188,22 @@ export function isCurrentLease(projectId: string, token: unknown): boolean {
  * 该窗口压缩为零（写要么整体先于握手、结果可见于快照，要么整体在后、被
  * 租约校验拒绝）。
  *
- * 条目生命周期（RR-03）：gate 完成后，仅当条目仍是自己写入的 tail 时才移除。
- * 期间若有新 gate 排队并覆盖条目，说明临界区仍有排队者，条目归新 tail 清理——
- * 身份比对保证绝不误删使用中的临界区队列（误删会让后续写入与前序并发）。
+ * 与其他进程内闸门嵌套时顺序固定为「项目闸门 → 用户闸门」；反向获取会在
+ * 进程内形成数据库看不到的等待环（specs/asset-write-serialization.md R5）。
  */
-const gates = new Map<string, Promise<void>>();
+const projectGates = createKeyedGate<string>();
 
 export function withProjectGate<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
-  const tail = gates.get(projectId) ?? Promise.resolve();
-  const run = tail.then(fn, fn);
-  const next = run.then(() => undefined, () => undefined);
-  gates.set(projectId, next);
-  void next.then(() => {
-    if (gates.get(projectId) === next) gates.delete(projectId);
-  });
-  return run;
+  return projectGates.run(projectId, fn);
 }
 
 /** 在途 / 待清理的项目 gate 条目数（测试观察口：RR-03 泄漏防护，生产路径不调用） */
 export function gateCount(): number {
-  return gates.size;
+  return projectGates.size();
 }
 
 /** 测试辅助：清空全部房间与临界区状态 */
 export function resetCanvasPresence(): void {
   rooms.clear();
-  gates.clear();
+  projectGates.clear();
 }

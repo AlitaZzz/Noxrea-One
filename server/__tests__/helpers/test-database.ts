@@ -10,6 +10,7 @@
  */
 import { Client } from "pg";
 
+import type { PrismaClient } from "../../core/database/generated/client";
 import {
   assertDistinctDatabaseTargets,
   parsePostgresDatabaseTarget,
@@ -109,4 +110,22 @@ export async function setupTestDatabase(): Promise<() => Promise<void>> {
       }
     }
   };
+}
+
+/**
+ * 删除测试用户及其资产数据。
+ *
+ * asset_items.folder_id 对 asset_folders 是 ON DELETE RESTRICT：直接删 user 时
+ * users 上的级联触发器会先删目录，而资产行仍在，RESTRICT 非延迟检查立即报
+ * 23503 并回滚整个 DELETE。必须先删资产条目再删目录。全部使用 deleteMany，
+ * 目标行不存在时也不抛错，清理失败不会被静默吞掉。
+ */
+export async function deleteTestUser(prisma: PrismaClient, userId: number): Promise<void> {
+  await prisma.fileRef.deleteMany({ where: { userId } });
+  await prisma.fileObject.deleteMany({ where: { userId } });
+  await prisma.assetItem.deleteMany({ where: { userId } });
+  await prisma.assetFolder.deleteMany({ where: { userId } });
+  // generation_tasks.user_id 是 RESTRICT（schema 未声明 onDelete），同样需要先删。
+  await prisma.generationTask.deleteMany({ where: { userId } });
+  await prisma.user.deleteMany({ where: { id: userId } });
 }

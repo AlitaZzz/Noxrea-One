@@ -28,7 +28,7 @@ vi.mock("@server/crud/asset", () => ({
   getAssetLibrarySummary: vi.fn(),
 }));
 
-import { deleteAssetsBatch } from "@server/crud/asset";
+import { createAssetsBatch, deleteAssetsBatch } from "@server/crud/asset";
 import { router } from "@server/http/routes/assets";
 
 beforeEach(() => {
@@ -59,6 +59,25 @@ describe("GET /api/assets/items limit 校验", () => {
   it("不传 limit 时 limit 字段为 undefined（CRUD 层取默认值）", async () => {
     await router.request("/api/assets/items");
     expect(mocks.getAssets).toHaveBeenCalledWith(expect.objectContaining({ limit: undefined }));
+  });
+});
+
+describe("POST /api/assets/items 单条重复语义", () => {
+  it("CRUD 返回空 items（来源已存在）时仍返回 409", async () => {
+    const fileKey = `1/aa/${"a".repeat(64)}.png`;
+    vi.mocked(createAssetsBatch).mockResolvedValueOnce({
+      items: [],
+      counters: { folders: {}, total: 0 },
+      skipped: [{ fileKey, reason: "already_exists" }],
+    });
+
+    const res = await router.request("/api/assets/items", {
+      method: "POST",
+      body: JSON.stringify({ name: "dup", fileKey }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe("assets.duplicate_file_key");
   });
 });
 

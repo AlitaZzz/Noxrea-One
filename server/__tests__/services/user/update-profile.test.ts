@@ -37,7 +37,7 @@ import { updateUser, UserAvatarKeyError } from "@server/services/user/update-pro
 
 const HASH = "a".repeat(64);
 const AVATAR_KEY = `7/${HASH.slice(0, 2)}/${HASH}.png`;
-const TX = { name: "tx" };
+const TX = { name: "tx", $queryRaw: vi.fn(async () => []) };
 const userRow = { id: 7, isActive: true, tokenVersion: 3 };
 
 beforeEach(() => {

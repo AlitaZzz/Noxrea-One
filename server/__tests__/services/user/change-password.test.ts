@@ -33,7 +33,7 @@ import { changePassword } from "@server/services/user/change-password";
 
 /** 用户行：失效入参取的是写入后的行，因此每行都带 id / isActive / tokenVersion */
 const userRow = { id: 7, isActive: true, tokenVersion: 3 };
-const TX = { name: "tx" };
+const TX = { name: "tx", $queryRaw: vi.fn(async () => []) };
 
 beforeEach(() => {
   vi.clearAllMocks();

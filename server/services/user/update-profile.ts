@@ -6,7 +6,8 @@
  */
 import { hashFromStorageKey } from "@noxrea/shared/url";
 import type { User } from "@server/core/database/generated/client";
-import { withTransaction, type DbTx } from "@server/core/database/transaction";
+import type { DbTx } from "@server/core/database/transaction";
+import { withUserWriteTx } from "@server/crud/user-write-lock";
 import { invalidateAuthSnapshot } from "@server/core/auth/snapshot";
 import { hasFileObjectTx } from "@server/crud/file";
 import { replaceSourceFileRefTx } from "@server/crud/file-ref-ledger";
@@ -79,7 +80,7 @@ export async function updateUserTx(
 }
 
 export async function updateUser(id: number, data: UpdatableUserFields) {
-  const user = await withTransaction((tx) => updateUserTx(tx, id, data));
+  const user = await withUserWriteTx(id, (tx) => updateUserTx(tx, id, data));
 
   // 账号状态变更必须在提交后覆盖鉴权快照（specs/auth-request-verification.md 规则 4.2）；
   // 画像字段（头像 / 主题 / 语言）不参与鉴权判定，不触发失效

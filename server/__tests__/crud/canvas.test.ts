@@ -39,6 +39,7 @@ const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 const key = (hash: string) => `1/${hash.slice(0, 2)}/${hash}.png`;
 const TX = {
+  $queryRaw: async () => [],
   canvasProject: {
     findFirst: mocks.findFirst,
     create: mocks.create,

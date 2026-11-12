@@ -39,7 +39,7 @@ import {
 const HASH_A = "a".repeat(64);
 const HASH_B = "b".repeat(64);
 const key = (hash: string) => `1/${hash.slice(0, 2)}/${hash}.png`;
-const TX = { name: "tx" };
+const TX = { name: "tx", $queryRaw: vi.fn(async () => []) };
 
 const row = {
   id: "p1",

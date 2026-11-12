@@ -5,8 +5,6 @@
 import { ASSET_BATCH_LIMIT } from "@noxrea/shared/asset";
 import { Hono } from "hono";
 import { z } from "zod";
-import { ASSET_ITEMS_USER_SCOPE_FILE_KEY } from "@server/core/database/constraint-names";
-import { isUniqueConstraintViolation } from "@server/core/database/errors";
 import { authenticateRequest } from "@server/http/middleware/auth";
 import {
   folderCreateSchema,
@@ -42,13 +40,7 @@ const router = new Hono();
 
 /** 将 CRUD 层业务错误统一转换为 HTTP 错误码，避免事务细节泄漏到路由层。 */
 function handleAssetError(error: unknown): Response | null {
-  if (isFileKeyUniqueError(error)) {
-    return failCode(409, "assets.duplicate_file_key");
-  }
   if (!(error instanceof AssetOperationError)) return null;
-  if (error.code === "duplicate_file_key") {
-    return failCode(409, "assets.duplicate_file_key");
-  }
   if (error.code === "invalid_file_key") {
     return failCode(400, "assets.invalid_file_key");
   }
@@ -59,11 +51,6 @@ function handleAssetError(error: unknown): Response | null {
     return failCode(404, "assets.folder_not_found");
   }
   return failCode(404, "assets.asset_not_found");
-}
-
-/** 判断唯一约束冲突是否来自资产来源引用；避免把目录唯一冲突误报为来源重复。 */
-function isFileKeyUniqueError(error: unknown): boolean {
-  return isUniqueConstraintViolation(error, ASSET_ITEMS_USER_SCOPE_FILE_KEY);
 }
 
 // ════════ Folders ════════

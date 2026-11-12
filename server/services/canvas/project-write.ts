@@ -7,7 +7,8 @@
  * - 内容与封面在同一事务内落库，`null` 表示清空封面，纯改名不触碰封面账本。
  */
 import { hashFromStorageKey } from "@noxrea/shared/url";
-import { withTransaction, type DbTx } from "@server/core/database/transaction";
+import type { DbTx } from "@server/core/database/transaction";
+import { withUserWriteTx } from "@server/crud/user-write-lock";
 import {
   getProjectRevision,
   getProjectRowForWriteTx,
@@ -138,7 +139,7 @@ async function withContentWriteTx<T>(
     if (baseRevision === undefined) {
       throw new Error("canvas content write requires baseRevision");
     }
-    return withTransaction(async (tx) => {
+    return withUserWriteTx(userId, async (tx) => {
       const row = await getProjectRowForWriteTx(tx, id, userId);
       if (!row) return null;
       if (row.revision !== baseRevision) {
@@ -158,7 +159,7 @@ export async function updateProject(
   // 改名 / 封面是元数据：不递增 revision、不参与编辑权，无需进临界区。
   const { canvasData } = data;
   if (canvasData === undefined) {
-    return withTransaction(async (tx) => {
+    return withUserWriteTx(userId, async (tx) => {
       const row = await getProjectRowForWriteTx(tx, id, userId);
       if (!row) return null;
       return writeProjectRowWithLedgersTx(tx, userId, row, {

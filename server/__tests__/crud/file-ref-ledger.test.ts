@@ -93,8 +93,13 @@ function makeTx() {
       return { count: before - rows.length };
     }),
     $executeRaw: vi.fn(async () => 0),
+    $queryRaw: vi.fn(async () => []),
   };
-  const tx = { fileRef, $executeRaw: fileRef.$executeRaw } as unknown as Prisma.TransactionClient;
+  const tx = {
+    fileRef,
+    $executeRaw: fileRef.$executeRaw,
+    $queryRaw: fileRef.$queryRaw,
+  } as unknown as Prisma.TransactionClient;
   return { rows, fileRef, tx };
 }
 
@@ -166,9 +171,10 @@ describe("replaceSourceFileRefsTx", () => {
 });
 
 describe("removeSourceFileRefsBatchTx", () => {
-  it("空来源列表直接返回，不触发任何 SQL", async () => {
+  it("空来源列表直接返回，不获取用户锁、不触发任何 SQL", async () => {
     const { fileRef, tx } = makeTx();
     await removeSourceFileRefsBatchTx(tx, { userId: 1, sourceType: "canvas", sourceIds: [] });
+    expect(fileRef.$queryRaw).not.toHaveBeenCalled();
     expect(fileRef.$executeRaw).not.toHaveBeenCalled();
   });
   // 单来源/批量移除的语义与规模回归在真实 PostgreSQL 库上验证（$executeRaw 无法在内存 mock 上验证）：
