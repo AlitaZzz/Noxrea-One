@@ -40,7 +40,7 @@
 
 - `server/crud` 与 `server/services` 当前都没有导入 `@server/http`。问题集中在 `crud ↔ services` 与 `core → services`。
 - 事务现状：`server/crud` 与 `server/services` 共 19 处 `prisma.$transaction`（`crud` 18 处，`services/storage/gc.ts` 1 处；计数按实际调用点，不按文件数）；另有 `server/core/settings/index.ts` 1 处，不属于本 Spec 的 `crud`/`services` 统计范围。没有统一的 `withTransaction` 包装或 `TransactionClient` 命名约定，事务内原语（如 `deleteAssetItemsTx`、账本函数）靠手工传递 `Prisma.TransactionClient`。
-- 错误现状：`AssetOperationError`（`crud/asset`）、`CanvasRevisionConflictError` / `CanvasCoverKeyError` / `CanvasLeaseLostError`（`crud/canvas`）、`UserAvatarKeyError`（`crud/user`）分别由路由映射；`UserAvatarKeyError` 映射 422，`CanvasRevisionConflictError` / `CanvasLeaseLostError` 映射 409，`CanvasCoverKeyError` 映射 422，`AssetOperationError` 按 code 映射 400/403/404/409。
+- 错误现状：`AssetOperationError`（`crud/asset`）、`CanvasRevisionConflictError` / `CanvasCoverKeyError` / `CanvasLeaseLostError`（`crud/canvas`）、`UserAvatarKeyError`（`crud/user`）分别由路由映射；`UserAvatarKeyError` 映射 422，`CanvasRevisionConflictError` / `CanvasLeaseLostError` 映射 409，`CanvasCoverKeyError` 映射 422，`AssetOperationError` 按 code 映射 400/403/404；重复来源的 409 `assets.duplicate_file_key` 由单条创建路由对 CRUD 返回空 items 直接返回，不属于该错误类。
 - 路由测试现状：`server/__tests__/http/routes/{assets,canvas}.test.ts` 直接 mock/import crud 的错误类与写函数；写用例上移后，这些 mock 路径与断言必须同步迁移。
 - `server/core/bootstrap.ts` 导入 `services/worker/queue`、`services/worker/worker`，并动态导入 `services/gateway/registry`、`services/storage/service`、`services/storage/workspace`、`services/storage/gc`；唯一调用方是 `server/index.ts`。
 - `http/routes/assets.ts` 将 `AssetOperationError` 映射为 HTTP 错误；`crud/asset.ts` 在目录不存在、受保护目录、资产不存在、非法文件 key 等事务内不变量处抛出该错误。`deleteAssetItemsTx` 是资产删除的事务内辅助函数。
@@ -233,7 +233,7 @@
 
 | 错误类 | 当前抛出层 | 迁移后归属 | HTTP 映射 | 约束 |
 | --- | --- | --- | --- | --- |
-| `AssetOperationError` | `crud/asset` | `crud/asset`（不变） | `routes/assets.ts`：`duplicate_file_key` 409、`invalid_file_key` 400、`uncategorized_folder_protected` 403、`folder_not_found` 404、其余 `asset_not_found` 404 | 聚合内不变量；类名与 code 不变 |
+| `AssetOperationError` | `crud/asset` | `crud/asset`（不变） | `routes/assets.ts`：`invalid_file_key` 400、`uncategorized_folder_protected` 403、`folder_not_found` 404、其余 `asset_not_found` 404；重复来源 409 `assets.duplicate_file_key` 由单条创建的空 items 分支直接返回，不属于本错误类 | 聚合内不变量；类名不变，code 不含 `duplicate_file_key` |
 | `CanvasRevisionConflictError` | `crud/canvas` | `services/canvas/project-write` | 409 `canvas.project_revision_conflict`，携带 `revision` | 写用例错误；类名/映射不变 |
 | `CanvasLeaseLostError` | `crud/canvas` | `services/canvas/project-write` | 409 `canvas.project_revision_conflict`，有 revision 时携带 | 同上；无 revision 时省略 ctx |
 | `CanvasCoverKeyError` | `crud/canvas` | `services/canvas/project-write` | 422 `common.invalid_request` | 同上 |
@@ -331,7 +331,7 @@
 5. `crud/canvas` 不再导入 `editor-lease`、`extract-hashes`、`project-summary` 或任何 `services` 模块；更新写用例位于 `services/canvas/project-write.ts`，创建/读/删除与账本维护保留在 `crud/canvas`；增量合并位于 `server/utils/canvas-delta.ts`，`project-write` 只通过 `getProjectRowForWriteTx` / `updateProjectRowTx` / `getProjectRevision` 读写画布行。
 6. `crud/user` 不再导入 `file-ref-ledger`、`ownership` 或 `invalidateAuthSnapshot`；`updateUser` 位于 `services/user/update-profile.ts`，`changePassword` 位于 `services/user/change-password.ts`。
 7. `crud/task` 不再导入 `event-bus` 或 `watcher`；终态写库原语与事件编排分离，`crud/task` 只写库。
-8. `AssetOperationError` 与 `deleteAssetItemsTx` 仍在 `crud/asset`，HTTP 映射不变；`crud/asset` 无 `services` 导入。
+8. `AssetOperationError` 与 `deleteAssetItemsTx` 仍在 `crud/asset`，HTTP 映射与错误表一致；重复来源 409 由单条创建的空 items 分支直接返回，不属于该错误类；`crud/asset` 无 `services` 导入。
 9. 新增架构测试通过，并能在故意添加违规导入时失败：至少覆盖「未登记符号」「`import type` 未登记」「namespace/default 导入」「无法解析的动态 `import()`」四类负例。`http → crud` 白名单为按路由文件 + 符号的显式闭集，覆盖全部 7 个引用 `crud` 的路由文件；白名单外调用会失败。
 10. 现有服务端测试全部通过；迁移后的测试位于对应层目录，断言未削弱。
 11. `npx tsc --noEmit`、`npm run lint`、`npx vitest run`（单 worker、串行）通过。
@@ -392,3 +392,4 @@
 - 2026-11-09 七轮评审修复补充（工作区未提交）：`FileRefSourceType` / `FileHashCounts` / `FileRefSource` 移至 `server/schemas/file-ref.ts`（文件引用值域契约层），`crud/file-ref-ledger.ts` 只保留验收 23 规定的四个事务原语导出，公开签名引用外部已导出类型，满足验收 23 与 24 的共同约束。验证：typecheck / lint / 全量 server 与 web 测试同上一行通过。状态保持「已确认」，实现代码未提交。
 - 2026-11-09 删除顺序根因修复（工作区未提交，跨 Spec 记录）：`crud/canvas.deleteProject` 的写集合顺序由「先清账本、后删项目行」调整为「先删项目行并持锁、后清 `canvas` / `canvas_cover` 账本」，用于关闭并发保存写入孤儿 `file_refs` 的窗口；事务边界、隔离级别与超时不变，验收 21 的项目删除 + 账本同事务回滚仍成立。该调整属于迁移完成后的后续根因修复，不是本期迁移的写顺序变更；证据与回归测试见 [storage-reference-key-unification.md](storage-reference-key-unification.md) 当前状态 2026-11-09 条目与 `server/__tests__/crud/canvas.test.ts`。规则 6 的迁移约束语义不变。
 - 2026-11-09 用户确认全部验收标准通过并指示将状态改为「已实现」；实现代码随本次提交入库。
+- 2026-11-12 错误契约同步（实现提交 `96ee9c9c`）：`AssetOperationError` 的 code 集合移除 `duplicate_file_key`；该 409 改由单条创建路由对 CRUD 返回空 items 直接返回，批量创建由数据库 `ON CONFLICT` 裁决并按已存在跳过。错误分类表、验收 8 与「其它已确认事实」已同步；验证见 `asset-write-serialization.md` 验证记录。状态保持「已实现」；本次 Spec 文档更新待提交。
