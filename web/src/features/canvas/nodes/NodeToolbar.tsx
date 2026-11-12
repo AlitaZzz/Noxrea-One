@@ -53,7 +53,7 @@ import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import PresetMenuContent from "@/features/canvas/shared/PresetMenuContent";
 import { usePromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,GROUP_COLOR_KEYS, GROUP_COLORS, NODE_TYPE } from "@/lib/constants";
+import { DEFAULT_GROUP_COLOR_KEY, EventNames, getGroupColor,getGroupSurfaceBackground, GROUP_COLOR_KEYS, GROUP_COLORS, NODE_TYPE } from "@/lib/constants";
 
 /**
  * 节点是否有可供工具条操作的内容。
@@ -228,7 +228,9 @@ function GroupColorPicker({ nodeId, current }: { nodeId: string; current: string
               className="relative size-[26px] rounded-full p-0 transition-transform hover:scale-110"
               style={{
                 border: `2px solid ${preset.border}`,
-                background: isDefault ? "transparent" : preset.fill,
+                // 色板预览使用与组节点相同的不透明表面；default 也显示默认组表面，
+                // 斜线只表示「无额外色相」，不再用透明背景代替表面
+                background: getGroupSurfaceBackground(key),
                 boxShadow: selected ? `0 0 0 2px var(--card), 0 0 0 3px ${preset.border}` : "none",
               }}
             >

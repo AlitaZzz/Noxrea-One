@@ -6,6 +6,8 @@
  * ——见 specs/canvas-flow-layer.md。流形参数是唯一实现：`buildFlowPattern`，
  * 这里传 100 等价原来的 `pathLength={100}` 归一化。
  */
+import { useStore } from "@xyflow/react";
+
 import { EDGE_FLOW_COLOR } from "@/lib/constants";
 
 import { buildFlowPattern, FLOW_CYCLE_DURATION_MS } from "../flow/flow-taper";
@@ -15,6 +17,10 @@ const PREVIEW_PATH_LENGTH = 100;
 
 export function FlowLines({ path }: { path: string }) {
   const { layers } = buildFlowPattern(PREVIEW_PATH_LENGTH);
+  // 流光线宽是屏幕量（flow-taper）：预览 SVG 位于被 viewport 缩放的容器内，
+  // 按 1/zoom 换算成世界坐标，缩放时与画布流光层保持同一屏幕宽度。
+  const zoom = useStore((state) => state.transform[2]);
+  const worldPerScreen = 1 / zoom;
 
   return (
     <g>
@@ -26,7 +32,7 @@ export function FlowLines({ path }: { path: string }) {
           pathLength={PREVIEW_PATH_LENGTH}
           fill="none"
           stroke={EDGE_FLOW_COLOR}
-          strokeWidth={layer.width}
+          strokeWidth={layer.width * worldPerScreen}
           strokeLinecap="round"
           strokeDasharray={`${layer.dash} ${layer.gap}`}
           opacity={layer.opacity}

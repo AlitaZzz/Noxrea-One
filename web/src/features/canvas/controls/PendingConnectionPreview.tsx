@@ -9,7 +9,7 @@
 
 import { getBezierPath, Position, ViewportPortal } from "@xyflow/react";
 
-import { EDGE_BASE_COLOR } from "@/lib/constants";
+import { EDGE_BASE_STYLE } from "@/lib/constants";
 
 import { FlowLines } from "./EdgeFlow";
 
@@ -40,7 +40,7 @@ export default function PendingConnectionPreview({ from, to, fromPosition }: Pro
         <path
           d={edgePath}
           fill="none"
-          style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }}
+          style={EDGE_BASE_STYLE}
         />
         <FlowLines path={edgePath} />
       </svg>

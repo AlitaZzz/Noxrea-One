@@ -10,7 +10,9 @@
  * - 拖到已有节点 → buildFanoutPairs / buildFanInPairs 批量建对，任一参与
  *   节点与对端类型不可连即整体拒绝，候选对交父级 onConnect 完成建边与去重；
  * - 拖到空白 → 与单节点连线一致，弹出「创建连接节点」菜单，批量接驳；
- * - 拖回参与集内（自己的成员/选中节点）或移动过小 → 取消。
+ * - 拖回参与集内（自己的成员/选中节点）或移动过小 → 取消；只有越过误触阈值
+ *   才进入 connecting（单击不触发组表面降透明）。
+ * - 只跟踪起始指针：多指触控时其他指针的 move/up/cancel 不参与本次拖拽。
  * 拖动中的预览为束线：每个参与节点近端边缘正中出一根流光线汇到指针（与松手
  * 每节点建一条边一致，不画从 Handle 出发的单线）。
  * 拖动中的目标反馈与节点轨道拖线同款（connection-tilt 倾斜/毛玻璃），
@@ -19,7 +21,7 @@
  */
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   buildFanInPairs,
@@ -33,6 +35,9 @@ import type { AnyNode } from "@/features/canvas/types";
 import { applyConnectionTilt, clearConnectionTilt } from "./connection-tilt";
 
 export type BatchDirection = "output" | "input";
+
+/** 进入拖拽的位移阈值（px）：与松手误触判定同源，单击不进入 connecting。 */
+const DRAG_START_THRESHOLD_PX = 4;
 
 /** 束线预览：每根线从各参与节点近端边缘正中出发，汇到指针位置（画布坐标） */
 export interface BatchDragPreview {
@@ -69,27 +74,46 @@ export function useBatchConnectDrag({
   screenToFlowPosition,
 }: Params) {
   const [preview, setPreview] = useState<BatchDragPreview | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  /** 当前会话的结束函数；只清理非 React 副作用，消费者卸载时据此结束会话。 */
+  const endSessionRef = useRef<(() => void) | null>(null);
+
+  // 拖拽中消费者可能被卸载（Escape 清空选区、组节点删除等）：必须结束会话，
+  // 否则残留的 window 监听会在卸载后按落点调用 onConnect / onConnectToBlank。
+  // 卸载只结束会话，不重置组件本地状态（预览随组件一起销毁）。
+  useEffect(() => () => endSessionRef.current?.(), []);
 
   function startDrag(e: React.PointerEvent) {
     // 重入保护：多指触控时第二个 pointerdown 会覆盖 dragRef 并叠加第二套
     // window 监听，首次 pointerup 即误清整个拖拽状态——已有拖拽进行中则忽略
     if (dragRef.current) return;
+    // 只接受主指针的左键：右键/中键按下不进入拖拽，也不拦截浏览器默认行为
+    if (!e.isPrimary || e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
     const participantIds = getParticipantIds();
     // 束线起点在参与节点的近端边缘：扇出走右缘、扇入走左缘
     const anchorSide = direction === "output" ? "right" : "left";
-    dragRef.current = { startX: e.clientX, startY: e.clientY };
-    onDragStart();
-    const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n] as const));
-    const sources = participantIds
-      .map((id) => nodeById.get(id))
-      .flatMap((n) => {
-        const a = n ? nodeEdgeAnchor(n, anchorSide, nodeById) : null;
-        return a ? [a] : [];
-      });
-    setPreview({ sources, to: screenToFlowPosition({ x: e.clientX, y: e.clientY }) });
+    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
+
+    /** 越过误触阈值后才真正进入拖拽：此时才进入 connecting、生成预览束线 */
+    let started = false;
+    /** 进入拖拽会话（connecting）；与预览束线分离，pointerup 补判时只需状态成对 */
+    function enterConnecting() {
+      started = true;
+      onDragStart();
+    }
+    function beginDrag(to: { x: number; y: number }) {
+      enterConnecting();
+      const nodeById = new Map(useCanvasStore.getState().nodes.map((n) => [n.id, n] as const));
+      const sources = participantIds
+        .map((id) => nodeById.get(id))
+        .flatMap((n) => {
+          const a = n ? nodeEdgeAnchor(n, anchorSide, nodeById) : null;
+          return a ? [a] : [];
+        });
+      setPreview({ sources, to });
+    }
 
     /** 按方向构建候选对（反馈与松手建边共用，保证口径一致） */
     function buildPairs(participants: AnyNode[], hit: AnyNode): { source: string; target: string }[] {
@@ -118,31 +142,80 @@ export function useBatchConnectDrag({
       applyConnectionTilt({ id: hit.id, box }, to, connectable ? "ok" : "blocked");
     }
 
-    /** 结束拖拽的统一清理：摘监听、清预览线与倾斜反馈、复位交互状态 */
-    const cleanupDrag = () => {
+    /**
+     * 结束会话：只做非 React 副作用——摘监听、清除倾斜、复位 dragRef 与结束函数
+     * 引用，进入过 connecting 时补 onDragEnd。返回本次调用是否真正结束了会话。
+     * pointerup / pointercancel / 失键 move / 组件卸载都会触发，必须幂等。
+     */
+    let ended = false;
+    function endSession(): boolean {
+      if (ended) return false;
+      ended = true;
+      endSessionRef.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
-      setPreview(null);
       clearConnectionTilt();
       dragRef.current = null;
-      onDragEnd();
+      // 只有真正开始的拖拽才需要复位 connecting——单击不应触发状态往返
+      if (started) onDragEnd();
+      return true;
+    }
+    /**
+     * 事件路径的统一清理：结束会话并清空预览。预览是组件本地状态，卸载路径
+     * 不经过这里——组件已不存在，无需也不应重置。
+     */
+    const cleanupDrag = () => {
+      if (endSession()) setPreview(null);
     };
     const onMove = (ev: PointerEvent) => {
+      const drag = dragRef.current;
+      // 只跟踪起始指针：多指触控时其他手指的 move 不参与本次拖拽
+      if (!drag || ev.pointerId !== drag.pointerId) return;
+      // 起始左键已松开（例如左右键和弦后先松左键）：按取消处理，
+      // 避免预览继续跟随、或最终由非左键的 pointerup 提交
+      if ((ev.buttons & 1) === 0) {
+        cleanupDrag();
+        return;
+      }
+      // 未越过误触阈值：不进入 connecting、不画预览束线
+      if (!started) {
+        const moved = Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY);
+        if (moved < DRAG_START_THRESHOLD_PX) return;
+      }
       const to = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
-      setPreview((p) => (p ? { ...p, to } : p));
+      if (started) {
+        setPreview((p) => (p ? { ...p, to } : p));
+      } else {
+        beginDrag(to);
+      }
       feedbackAt(to);
     };
     const onUp = (ev: PointerEvent) => {
       const drag = dragRef.current;
-      cleanupDrag();
-      if (!drag) return;
+      // 其他指针的抬起不结束本次拖拽
+      if (!drag || ev.pointerId !== drag.pointerId) return;
+      // pointerup 只在最后一个按键松开时触发；非左键收尾（如左右键和弦后
+      // 松开右键）视为取消，不按落点建边/弹菜单
+      if (ev.button !== 0) {
+        cleanupDrag();
+        return;
+      }
 
-      // 移动过小视为误触，取消（避免单击 Handle 就弹菜单）
       const moved = Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY);
-      if (moved < 4) return;
+      // 移动过小视为误触，取消（避免单击 Handle 就弹菜单）
+      if (moved < DRAG_START_THRESHOLD_PX) {
+        cleanupDrag();
+        return;
+      }
 
       const to = screenToFlowPosition({ x: ev.clientX, y: ev.clientY });
+      // 快速甩动可能把越过阈值的位移合并进 pointerup（最后一次 move 仍在
+      // 阈值内）：补进 connecting 会话，保持 onDragStart/onDragEnd 成对且不丢连接。
+      // 手势立即结束，不生成预览束线。
+      if (!started) enterConnecting();
+      cleanupDrag();
+
       const hit = findNodeAtFlowPoint(useCanvasStore.getState().nodes, to);
 
       if (hit && !participantIds.includes(hit.id)) {
@@ -159,11 +232,17 @@ export function useBatchConnectDrag({
         onConnectToBlank(participantIds, to, { x: ev.clientX, y: ev.clientY }, direction);
       }
     };
-    // 触摸被系统中断（pointercancel）：只清理，不按落点处理——否则预览线与倾斜反馈会残留在画面上
-    const onCancel = () => cleanupDrag();
+    // 触摸被系统中断（pointercancel）：只清理，不按落点处理——否则预览线与倾斜反馈会残留在画面上；
+    // 其他指针的 cancel 不影响本次拖拽
+    const onCancel = (ev: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || ev.pointerId !== drag.pointerId) return;
+      cleanupDrag();
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
+    endSessionRef.current = endSession;
   }
 
   return { startDrag, preview };

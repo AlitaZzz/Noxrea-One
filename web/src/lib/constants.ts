@@ -201,13 +201,40 @@ export const insetHandleCenter = (position: string | undefined, x: number, y: nu
 export const DEFAULT_NODE_COLOR = "#c7f43d";
 
 /**
- * 连线（管道）本体色：中性灰，用 CSS 变量以跟随明暗主题。
- * 与流光色 EDGE_FLOW_COLOR 分离是刻意的——底线若与流光同色，
+ * 连线（管道）本体色：主题前景色，用 CSS 变量以跟随明暗主题。
+ * 与即梦一致：连线继承文本主色（暗色近白、亮色近黑），以 16% 不透明度绘制。
+ * 已建立连线（常态与强调态）与拖拽/待创建预览共用该色——本体只有一种外观，
+ * 强调与「正在连线」只叠加 EDGE_FLOW_COLOR 流光，不改变本体。
+ * 与流光色分离是刻意的——底线若与流光同色，
  * 流光的水滴形状会被淹没看不出来。
  * 连线不画箭头：方向由流光水滴的朝向表达（未选中时无流光，靠节点布局与句柄方位判断）。
- * 已建立连线与连线预览的渲染共用此处；主题色不写入项目数据。
+ * 连线与预览的视觉常量统一定义在此；主题色不写入项目数据。
  */
-export const EDGE_BASE_COLOR = "var(--muted-foreground)";
+export const EDGE_BASE_COLOR = "var(--foreground)";
+/**
+ * 连线（含拖拽/待创建预览）的屏幕不透明度，所有状态共用。
+ * 与即梦常态连线一致（16%）：全不透明的连线在暗色画布上过重，
+ * 会让连线变成视觉噪音；强调与预览保持该不透明度，只叠加流光。
+ */
+export const EDGE_BASE_OPACITY = 0.16;
+/**
+ * 连线本体在屏幕上的目标宽度（CSS 像素）。
+ * 连线 SVG 位于被 viewport CSS transform 缩放的容器内，`non-scaling-stroke`
+ * 不会抵消 HTML 祖先的缩放（Chrome 实测）；画布按 1/zoom 把该值换算成世界
+ * 坐标写入 CSS 变量，所有连线本体统一读取，缩放时保持 1 屏幕像素。
+ */
+export const EDGE_BASE_STROKE_WIDTH = 1;
+export const EDGE_BASE_STROKE_WIDTH_VAR_NAME = "--canvas-edge-base-stroke-width";
+export const EDGE_BASE_STROKE_WIDTH_VAR = `var(${EDGE_BASE_STROKE_WIDTH_VAR_NAME}, ${EDGE_BASE_STROKE_WIDTH}px)`;
+/**
+ * 连线本体（已建立连线、拖拽预览、待创建预览）共用的 SVG 样式。
+ * 三个调用点统一读取，避免同一组属性在多处独立维护。
+ */
+export const EDGE_BASE_STYLE = {
+  stroke: EDGE_BASE_COLOR,
+  strokeWidth: EDGE_BASE_STROKE_WIDTH_VAR,
+  opacity: EDGE_BASE_OPACITY,
+} as const;
 /** 节点之间连线上的动态流光色，固定使用品牌青柠以保持画布语义一致。 */
 export const EDGE_FLOW_COLOR = "#c7f43d";
 
@@ -256,13 +283,15 @@ export function getNodeColor(type: string | undefined): string {
 }
 
 // ── 分组节点配色 ──
-// 分组节点的可选配色，用于视觉归类。每个色项提供边框色与填充色，
-// 填充色为低透明度以免遮挡组内节点。data.color 仅存储 key，便于后续统一调整色板。
+// 分组节点的可选配色，用于视觉归类。每个色项提供色板描边色与表面叠色；
+// 组表面 = 不透明组底色 --canvas-group-bg + 16% 叠色（对齐即梦
+// canvas-node-background-default / canvas-group-color-fill，见
+// getGroupSurfaceBackground）。data.color 仅存储 key，便于后续统一调整色板。
 export interface GroupColorPreset {
-  /** 边框 / 标题图标色 */
+  /** 色板描边 / 勾选色 */
   border: string;
-  /** 内部填充色（低透明度） */
-  fill: string;
+  /** 组表面叠色（原始色相）；default 无叠色 */
+  tint?: string;
 }
 
 export const GROUP_COLOR_KEYS = [
@@ -272,22 +301,39 @@ export const GROUP_COLOR_KEYS = [
 export type GroupColorKey = (typeof GROUP_COLOR_KEYS)[number];
 
 export const GROUP_COLORS: Record<GroupColorKey, GroupColorPreset> = {
-  default: { border: "rgba(255,255,255,0.10)", fill: "rgba(255,255,255,0.04)" },
-  brown:   { border: "rgba(150,100,60,0.55)",  fill: "rgba(150,100,60,0.06)" },
-  blue:    { border: "rgba(22,119,255,0.55)",  fill: "rgba(22,119,255,0.06)" },
-  green:   { border: "rgba(52,199,89,0.55)",   fill: "rgba(52,199,89,0.06)" },
-  yellow:  { border: "rgba(250,219,20,0.55)",  fill: "rgba(250,219,20,0.06)" },
-  orange:  { border: "rgba(255,149,0,0.55)",   fill: "rgba(255,149,0,0.06)" },
-  red:     { border: "rgba(255,59,48,0.55)",   fill: "rgba(255,59,48,0.06)" },
-  purple:  { border: "rgba(114,46,209,0.55)",  fill: "rgba(114,46,209,0.06)" },
-  pink:    { border: "rgba(235,47,150,0.55)",  fill: "rgba(235,47,150,0.06)" },
-  cyan:    { border: "rgba(48,213,200,0.55)",  fill: "rgba(48,213,200,0.06)" },
+  default: { border: "rgba(255,255,255,0.10)" },
+  brown:   { border: "rgba(150,100,60,0.55)",  tint: "#96643c" },
+  blue:    { border: "rgba(22,119,255,0.55)",  tint: "#1677ff" },
+  green:   { border: "rgba(52,199,89,0.55)",   tint: "#34c759" },
+  yellow:  { border: "rgba(250,219,20,0.55)",  tint: "#fadb14" },
+  orange:  { border: "rgba(255,149,0,0.55)",   tint: "#ff9500" },
+  red:     { border: "rgba(255,59,48,0.55)",   tint: "#ff3b30" },
+  purple:  { border: "rgba(114,46,209,0.55)",  tint: "#722ed1" },
+  pink:    { border: "rgba(235,47,150,0.55)",  tint: "#eb2f96" },
+  cyan:    { border: "rgba(48,213,200,0.55)",  tint: "#30d5c8" },
 };
 
 export const DEFAULT_GROUP_COLOR_KEY: GroupColorKey = "default";
 
 export function getGroupColor(key?: string): GroupColorPreset {
   return GROUP_COLORS[(key as GroupColorKey)] ?? GROUP_COLORS[DEFAULT_GROUP_COLOR_KEY];
+}
+
+/** 组表面叠色比例：对齐即梦 --opacity-canvas-group-color-fill（16%）。 */
+const GROUP_SURFACE_TINT_PERCENT = 16;
+
+/**
+ * 组节点表面背景：不透明组底色 + 可选的 16% 配色叠层。
+ *
+ * 对齐即梦 canvas-node-background-default / canvas-group-color-fill：
+ * 组表面必须不透明，画布点阵与下层内容不能透出；彩色组也以不透明底色打底，
+ * 只在表面叠加色相。明暗色值由 globals.css 的 --canvas-group-bg 提供。
+ */
+export function getGroupSurfaceBackground(key?: string): string {
+  const preset = getGroupColor(key);
+  return preset.tint
+    ? `color-mix(in srgb, ${preset.tint} ${GROUP_SURFACE_TINT_PERCENT}%, var(--canvas-group-bg))`
+    : "var(--canvas-group-bg)";
 }
 
 // ── 画布自定义事件名（原 event-names.ts，合并至此） ──

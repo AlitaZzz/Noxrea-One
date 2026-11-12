@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildFlowPattern, FLOW_CYCLE_DURATION_MS } from "@/features/canvas/flow/flow-taper";
 
 describe("buildFlowPattern", () => {
-  it("pathLength=100 时与迁移前 SVG 参数完全一致", () => {
+  it("pathLength=100 时按当前流形参数生成分层", () => {
     const { cycle, layers } = buildFlowPattern(100);
 
     expect(cycle).toBe(50);
@@ -14,7 +14,7 @@ describe("buildFlowPattern", () => {
     expect(tail.dash).toBeCloseTo(27.3);
     expect(tail.gap).toBeCloseTo(22.7);
     expect(tail.offsetFrom).toBeCloseTo(0);
-    expect(tail.width).toBeCloseTo(0.6);
+    expect(tail.width).toBeCloseTo(0.3);
     expect(tail.opacity).toBeCloseTo(0.6);
     expect(tail.drift).toBe(-50);
 
@@ -22,7 +22,7 @@ describe("buildFlowPattern", () => {
     expect(head.dash).toBeCloseTo(13);
     expect(head.gap).toBeCloseTo(37);
     expect(head.offsetFrom).toBeCloseTo(-14.3);
-    expect(head.width).toBe(4);
+    expect(head.width).toBe(2);
     expect(head.opacity).toBe(1);
     expect(head.drift).toBe(-50);
   });

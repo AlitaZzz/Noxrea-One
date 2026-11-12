@@ -88,11 +88,21 @@
   --sidebar-ring: oklch(0.708 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* 画布底色与点阵：对齐即梦 --dreamina-color-canvas-bg / canvas-dot-grid */
+  --canvas-bg: #f5f5f5;
+  --canvas-dot-color: rgb(115 115 115 / 45%);
+  /* 组节点表面：对齐即梦 --dreamina-color-canvas-node-background-default（不透明） */
+  --canvas-group-bg: #ededed;
 }
 
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
+  /* 画布底色与点阵：对齐即梦 canvas-bg #0d0d0d / 白 20% 点阵 */
+  --canvas-bg: #0d0d0d;
+  --canvas-dot-color: rgb(255 255 255 / 20%);
+  /* 组节点表面：对齐即梦 canvas-node-background-default（深色 #161616，不透明） */
+  --canvas-group-bg: #161616;
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --node-surface-start: #222222;
@@ -145,9 +155,12 @@
     #fff 358deg,
     color-mix(in srgb, var(--brand-lime) 25%, transparent) 360deg;
   /* 画布框选是领域状态，不属于 shadcn 控件主题。
-     拖拽框填充必须比已提交外框（GROUP_COLORS.default.fill，4%）更淡。 */
+     拖拽框填充必须比已提交外框（--selection-frame-bg，4%）更淡。 */
   --marquee-bg: rgba(231, 231, 236, 0.03);
   --marquee-border: rgba(231, 231, 236, 0.38);
+  /* 已提交多选外框的填充：独立的半透明中性色。组表面是不透明色，
+     直接复用会盖住框内节点；保持与旧实现相同的 4% 白。 */
+  --selection-frame-bg: rgb(255 255 255 / 4%);
 }
 
 /* Tailwind v4 names used by shadcn-style components. */
@@ -248,9 +261,10 @@
   display: block;
 }
 /* 松手后的多选外框：边框改回实线——虚线读作「进行中」，实线读作「已成结果」，
-   靠线型区分两个阶段；填充与圆角对齐组节点（GROUP_COLORS.default.fill、
-   rounded-lg = var(--radius)），让「框选出来的容器」和「编组后的容器」在创建时
-   视觉一致。选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
+   靠线型区分两个阶段；圆角对齐组节点（rounded-lg = var(--radius)），让
+   「框选出来的容器」和「编组后的容器」轮廓一致。填充使用独立的半透明
+   --selection-frame-bg：组表面已是不透明色，直接复用会盖住框内节点。
+   选中语义由节点自身的 --ring 描边承担，大框不再用强调色。 */
 .react-flow__nodesselection-rect {
   background: var(--selection-frame-bg) !important;
   border: 1px solid var(--marquee-border) !important;
@@ -264,6 +278,15 @@
 /* Shared node body styles — selected / unselected border */
 .node-body {
   outline: 1px solid var(--border);
+}
+/* 组表面：GroupNode 按配色把不透明底色 / 16% 叠色写入 --group-surface。
+   拖线期间只把背景降到 20%，标题与描边保持不透明（对齐即梦
+   .is-connecting 的 opacity-canvas-group-connection-preview）。 */
+.node-body.canvas-group-surface {
+  background: var(--group-surface);
+}
+.react-flow[data-connecting] .node-body.canvas-group-surface {
+  background: color-mix(in srgb, var(--group-surface) 20%, transparent);
 }
 .node-surface {
   background: linear-gradient(to bottom right, var(--node-surface-start), var(--node-surface-end));
@@ -287,7 +310,7 @@
    先隐藏，否则会与预览叠加、松手时闪断。:not([data-marquee-hit]) 让已被预览命中
    的旧选中节点继续显示预览描边。
    旧选中的关联连线同样由 store 派生强调（DeletableEdge 的 isHighlighted 与显式
-   选中的边）：压回常态描边并隐藏流光层，否则旧连线强调会在预览期间单独残留。
+   选中的边）：隐藏流光层，否则旧连线强调会在预览期间单独残留。
    data-marquee-active 在提交帧绘制前移除（syncRenderedNodes 的 useLayoutEffect），
    提交结果与预览高亮不受影响。 */
 .react-flow[data-marquee-active] .react-flow__node.selected:not([data-marquee-hit]) .node-body {
@@ -297,10 +320,6 @@
 }
 .react-flow[data-marquee-active] .react-flow__nodesselection-rect {
   display: none;
-}
-/* 2 为 DeletableEdge 的常态描边宽度（强调态 2.5）；!important 用于压过组件内联样式 */
-.react-flow[data-marquee-active] .react-flow__edge-path {
-  stroke-width: 2 !important;
 }
 .react-flow[data-marquee-active] .canvas-flow-layer {
   display: none;

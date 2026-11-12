@@ -6,6 +6,7 @@
 "use client";
 
 import type { NodeProps } from "@xyflow/react";
+import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 
@@ -14,7 +15,7 @@ import GroupConnectRail from "@/features/canvas/controls/GroupConnectRail";
 import { getGroupMembership } from "@/features/canvas/shared/canvas-derived";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { GroupNode as GroupNodeType } from "@/features/canvas/types";
-import { getGroupColor,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING } from "@/lib/constants";
+import { getGroupSurfaceBackground,GROUP_NODE_MIN_HEIGHT,GROUP_NODE_MIN_WIDTH,GROUP_NODE_PADDING } from "@/lib/constants";
 
 import AgentGhostOverlay from "./AgentGhostOverlay";
 import NodeTitle from "./NodeTitle";
@@ -62,8 +63,6 @@ function GroupNode({ id, data }: NodeProps<GroupNodeType>) {
   const dynMinWidth = Math.max(GROUP_NODE_MIN_WIDTH, childMaxX + GROUP_NODE_PADDING);
   const dynMinHeight = Math.max(GROUP_NODE_MIN_HEIGHT, childMaxY + GROUP_NODE_PADDING);
 
-  const colorPreset = getGroupColor(data.color);
-
   return (
     <div className="group relative w-full h-full flex flex-col">
       {/* Title */}
@@ -82,14 +81,17 @@ function GroupNode({ id, data }: NodeProps<GroupNodeType>) {
         }
       />
 
-      {/* Body — 填充随配色变化，选中描边沿用 node-body（由包装层选中类驱动，与 ImageNode 一致）。
-          标题栏留在 body 之外：组标题是框外标签，不进入组的可见框。 */}
+      {/* Body — 不透明组表面随配色叠色（画布点阵不得透出），选中描边沿用 node-body
+          （由包装层选中类驱动，与 ImageNode 一致）。
+          标题栏留在 body 之外：组标题是框外标签，不进入组的可见框。
+          表面色经 --group-surface 交给 CSS：拖线期间只降背景不透明度，
+          描边不受影响（见 globals.css 的 canvas-group-surface 规则）。 */}
       <div
         className={`
-          node-body flex-1 rounded-lg pointer-events-none
+          node-body canvas-group-surface flex-1 rounded-lg pointer-events-none
           ${dragOver ? "node-drag-over" : ""}
         `}
-        style={{ background: colorPreset.fill }}
+        style={{ "--group-surface": getGroupSurfaceBackground(data.color) } as CSSProperties}
       />
 
       {agentGhost && <AgentGhostOverlay />}

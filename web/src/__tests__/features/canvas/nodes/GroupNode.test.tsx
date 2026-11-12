@@ -43,15 +43,19 @@ vi.mock("@/features/canvas/nodes/NodeTitle", async () => {
  * 框选外框通过四边 40px 内边距与组 body 对齐；若把 body 改成
  * absolute inset-0，标题会被并入组的可见框，框选/编组两框虽然等高但语义错误。
  */
+function renderGroup(color: string) {
+  const props = nodeViewProps<typeof GroupNode>("group-1", "group-node", {
+    label: "",
+    color,
+  });
+  return render(<GroupNode {...props} />);
+}
+
 describe("GroupNode 可见框", () => {
   afterEach(cleanup);
 
   it("body 只占标题栏以下，标题留在框外", () => {
-    const props = nodeViewProps<typeof GroupNode>("group-1", "group-node", {
-      label: "",
-      color: "default",
-    });
-    const { container } = render(<GroupNode {...props} />);
+    const { container } = renderGroup("default");
 
     const body = container.querySelector(".node-body");
     const title = container.querySelector('[data-testid="node-title"]');
@@ -61,5 +65,29 @@ describe("GroupNode 可见框", () => {
     expect(body).not.toHaveClass("absolute");
     expect(title).not.toHaveClass("z-10");
     expect(title?.nextElementSibling).toBe(body);
+  });
+});
+
+/** 组表面必须不透明：画布点阵与下层内容不得透出（对齐即梦组节点表面）。 */
+describe("GroupNode 表面", () => {
+  afterEach(cleanup);
+
+  it("默认配色使用不透明组底色", () => {
+    const { container } = renderGroup("default");
+    const body = container.querySelector<HTMLElement>(".node-body");
+
+    expect(body).toHaveClass("canvas-group-surface");
+    expect(body?.style.getPropertyValue("--group-surface")).toBe("var(--canvas-group-bg)");
+    // 背景由 CSS 读取 --group-surface；内联 background 会盖住拖线降透明规则
+    expect(body?.style.background).toBe("");
+  });
+
+  it("彩色配色在组底色上叠 16% 色相", () => {
+    const { container } = renderGroup("blue");
+    const body = container.querySelector<HTMLElement>(".node-body");
+
+    expect(body?.style.getPropertyValue("--group-surface")).toBe(
+      "color-mix(in srgb, #1677ff 16%, var(--canvas-group-bg))"
+    );
   });
 });

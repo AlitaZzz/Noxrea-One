@@ -6,7 +6,7 @@
 
 - 2026-10-22 用户要求「先按 `?w=` 的方案写个 Spec，要符合行业前沿、成熟的技术方案」。本 Spec 仅定义方案与验收口径，未修改任何业务代码；「已确认」状态只能由用户设置。
 - 2026-10-22 用户确认六项推荐方案：档位扩展、共享档位模块、EXIF auto-orient + `_cache v2` + `rv`、v1 只覆盖 PNG/JPEG、200 ms/25% 滞回/重量 3-2-1-容量 4、暂不做低档位预热。
-- 2026-10-24 用户决策删除 `rv`（从未进入提交）：版本段只在服务端对象 key，`signed` 形态自然失效；`stream` 形态的失效边界写入 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 6.5 作为已知边界。
+- 2026-10-24 用户决策删除 `rv`（从未进入提交）：版本段只在服务端对象 key，`signed` 形态自然失效；`stream` 形态的失效边界写入 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 6.5「`stream` 路径的版本失效边界（方案 B，已知边界）」作为已知边界。
 - 2026-10-22 用户要求按「行业成熟、无向后兼容、从根因解决」审核本 Spec。本版据此移除 v1 双读/双删兼容，改为一次性清理；补充缩放降档中止在途高档位、部署顺序与 CDN 缓存键约束、画质/色彩验收、APNG/外链等边界，并明确版本升级流程。
 - 2026-10-23 用户确认本修订版（含审核补充 1–4）并授权按「实施顺序」开始实现。
 
@@ -76,7 +76,7 @@
   - `CanvasImage` 增加 LOD 开关与自然宽度入参，实现换档期间旧图占位；`ImageNode` 接入。
   - `ImageLoadScheduler` 增加按任务重量计费的并发容量。
   - LOD 资格判定与图片任务重量计算；相关组件与单测更新。**实施订正（2026-10-25）**：这两项是画布领域策略，最终落在 `features/canvas/shared/image-lod.ts`，而不是本节原先写的 `lib/file-url.ts`——`web/AGENTS.md` 规定 `lib` 为无领域知识的底层，LOD 资格（`.png/.jpg/.jpeg`）与档位计费属于画布域。`file-url.ts` 只保留通用 URL 工具（`hasManagedStorageKey`、`managedFileWidthOf`）。
-- 关联 Spec 回写（确认后执行）：`media-processing-concurrency.md` 的档位表/上限、`canvas-image-http-url-rendering.md` 的 URL 派生规则、`canvas-media-loading-skeleton.md` 的换档占位说明、`derived-deletion-linkage.md` / `file-access-ownership.md` 的 `_cache` 版本键形态。
+- 关联 Spec 回写（已于 2026-10-23 完成）：`media-processing-concurrency.md` 的档位表/上限、`canvas-image-http-url-rendering.md` 的 URL 派生规则、`canvas-media-loading-skeleton.md` 的换档占位说明、`derived-deletion-linkage.md` / `file-access-ownership.md` 的 `_cache` 版本键形态。
 
 ## 非目标
 
@@ -84,16 +84,17 @@
 - 不支持动画源（GIF / 动态 WebP）的 LOD；它们继续使用原图，避免把动画压成静态首帧。静态 WebP 在 v1 也按保守策略走原图，属于已知覆盖缺口（见「异常与边界」）。多帧 PNG（APNG）无法由扩展名区分，由服务端识别后回退原图（规则 8.8），不会冻结首帧。
 - 不引入 `next/image`、`srcset`、客户端 `canvas`/WebCodecs 缩放或 Figma 式分块渲染。
 - 不改变导出、标注、裁剪、网格拆分、下载、预览浮层、生成参考图等使用原图的路径。
-- 不调整 React Flow 的视口裁剪、背景点阵、MiniMap。`.connection-rail-dot` 的常驻 `will-change` 与节点标题的量宽开销原列为「另立任务」，已于 2026-10-24 单独处理（见「后续性能补充」），不改变本 Spec 的 LOD 规则。
+- 不调整 React Flow 的视口裁剪与 MiniMap；背景点阵由 `canvas-dot-grid.md` 另行记录（该 Spec 待用户确认、代码未提交，实机视觉待走查），本 Spec 不定义点阵规则。`.connection-rail-dot` 的常驻 `will-change` 与节点标题的量宽开销原列为「另立任务」，已于 2026-10-24 单独处理（见「后续性能补充」），不改变本 Spec 的 LOD 规则。
 - 不做服务端低档位预热、后台批量回填或 CDN 接入（冷缓存首次访问的取舍见下文；预热已确认暂不做）。
 - 不新增数据库表、不改节点数据结构、不改保存/恢复/SSE 契约。
 
 ## 与现有 Spec 的关系
 
-- `canvas-image-http-url-rendering.md` 规则 7 要求「预热与渲染使用同一 URL」；本 Spec 改变 URL 的派生方式（加 `?w=`），但保持该规则不变。确认后在该 Spec 补充 LOD URL 的派生说明。
-- `media-processing-concurrency.md` 规则 8.1 的 8 档/上限 1280 由本 Spec 的 12 档/上限 2560 取代；确认后回写档位表、归一化上限与相关测试描述，其余媒体池/单飞/删除语义不变。
-- `canvas-media-loading-skeleton.md` 的骨架规则继续有效，但「换档不闪骨架」是新增的显示状态：仅首次加载、逻辑源变化、上传预览使用骨架；确认后在该 Spec 增加交叉引用。
-- `derived-deletion-linkage.md` 与 `file-access-ownership.md` 的 `_cache` 键形态需同步更新为 v2 单形态：解析/归属/删除联动只识别 v2；旧的无版本缓存由一次性迁移清理，不保留双读/双删。确认后回写规则与往返测试说明。
+- `canvas-image-http-url-rendering.md` 规则 7 要求「预热与渲染使用同一 URL」；本 Spec 改变 URL 的派生方式（加 `?w=`），但保持该规则不变。已于 2026-10-23 在该 Spec 补充 LOD URL 的派生说明（规则 8）。
+- 背景点阵视觉由 `canvas-dot-grid.md` 单独记录（待确认、代码未提交、实机视觉待走查）；本 Spec 不定义点阵规则，图片 LOD 规则不变。
+- `media-processing-concurrency.md` 规则 8.1 的 8 档/上限 1280 由本 Spec 的 12 档/上限 2560 取代；已于 2026-10-23 回写档位表、归一化上限与相关测试描述（规则 8.1），其余媒体池/单飞/删除语义不变。
+- `canvas-media-loading-skeleton.md` 的骨架规则继续有效，但「换档不闪骨架」是新增的显示状态：仅首次加载、逻辑源变化、上传预览使用骨架；已于 2026-10-23 在该 Spec 增加交叉引用（规则 10）。
+- `derived-deletion-linkage.md` 与 `file-access-ownership.md` 的 `_cache` 键形态需同步更新为 v2 单形态：解析/归属/删除联动只识别 v2；旧的无版本缓存由一次性迁移清理，不保留双读/双删。已于 2026-10-23 回写规则与往返测试说明。
 - `canvas-video-poster-first.md` 不受影响：视频海报仍为 `?w=1280`。
 
 ## 业务规则
@@ -183,8 +184,8 @@
    - 旧键由部署迁移一次性清理（见「部署与迁移」）；清理前它们只是不可达的存储占用，不会被新请求命中。
    - 客户端不感知内部键形态；`signed` 形态下版本段随对象 key 进入最终地址，浏览器缓存键随之变化（见规则 1.3）；`stream` 形态的失效边界见 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 规则 6.5。
    - 版本升级的原因：缩放处理语义改变（auto-orient），不能继续复用可能方向错误的旧文件。
-   - 版本段只存在于服务端对象 key；客户端 URL 只带 `w`，不追加版本参数，因此部署后画布外的既有缩略图 URL 不变（`signed` 形态由对象 key 变化自然回源；`stream` 形态按规则 6.5 的边界接受旧缓存）。
-4. `DERIVED_KEY_PATTERNS` 只识别 `_cache/v2/...`；`derivedCandidatesOf` 只枚举 v2 档位前缀；`ownership` 只解析 v2。未来升级版本时，提升共享 `RESIZE_CACHE_VERSION`、先部署服务端、再一次性清理上一版本，不把旧版本加入运行期枚举清单；任何「同时兼容 N 个版本」的写法都视为架构退化。升级不改变客户端 URL（版本段在服务端），因此无需前后端发布顺序约束；`stream` 形态的浏览器旧字节边界见规则 6.5。
+   - 版本段只存在于服务端对象 key；客户端 URL 只带 `w`，不追加版本参数，因此部署后画布外的既有缩略图 URL 不变（`signed` 形态由对象 key 变化自然回源；`stream` 形态按 `storage-signed-direct-delivery.md` 规则 6.5 的边界接受旧缓存）。
+4. `DERIVED_KEY_PATTERNS` 只识别 `_cache/v2/...`；`derivedCandidatesOf` 只枚举 v2 档位前缀；`ownership` 只解析 v2。未来升级版本时，提升共享 `RESIZE_CACHE_VERSION`、先部署服务端、再一次性清理上一版本，不把旧版本加入运行期枚举清单；任何「同时兼容 N 个版本」的写法都视为架构退化。升级不改变客户端 URL（版本段在服务端），因此不存在 URL 版本错配；新档位依赖服务端先支持，部署顺序见「部署与迁移」；`stream` 形态的浏览器旧字节边界见 `storage-signed-direct-delivery.md` 规则 6.5。
 5. 视频海报档位与图片共用 `_cache` 与 `v2` 命名空间；海报母版来自 ffmpeg 抽帧，v2 重新生成不改变既有海报语义（本次 auto-orient 只加在图片缩放管线 `produceImageWebP`）。海报母版参数变化会改变档位内容；本次以 `RESIZE_CACHE_VERSION` 作为 `_cache` 的统一失效版本，未来不得只 bump `POSTER_VERSION` 而保留旧档位；若海报要独立演进，必须把 master version 纳入档位 key。
 6. 503 / 429、`Retry-After`、媒体池过载语义不变；LOD 不引入「过载回退原图」的旁路。
 7. 冷缓存首次访问：每个档位仍要从原图解码一次；NAS 2 核仅为开发观测，不作为设计上限，公网多实例下由媒体池/共享存储横向扩展。可能出现图片逐步出现（骨架持续数秒）；本 Spec 要求**帧率不受影响**，不把首次填充时间作为硬性门槛，按部署实测记录即可。预热已确认暂不做（见「已确认决策」）。
@@ -259,9 +260,9 @@
   - 上传预览分支不开启。
 - `VideoNode.tsx`：不开启 LOD（继续 `?w=1280`）。
 - `image-load-scheduler.ts`：
-  - `acquire` 增加可选重量（默认 1）；`active` 改为活跃重量。
+  - `acquire` 后通过 `lease.setWeight` 认领任务重量（consumer 默认 1）；`active` 改为活跃重量。
   - 共享 job 的重量取 consumer 最大值；其余调度逻辑不变。
-- `use-canvas-image.ts`：接收可选任务重量并传给 `scheduler.acquire`；接收 `suspend`，为真时把 lease 优先级置 `null`（复用现有中止语义），为假时恢复按视口计算的优先级；URL/重量不变时不新增重新加载。
+- `use-canvas-image.ts`：接收可选任务重量并在单独 effect 中调用 `lease.setWeight`；接收 `suspend`，为真时把 lease 优先级置 `null`（复用现有中止语义），为假时恢复按视口计算的优先级；URL/重量不变时不新增重新加载。
 - `lib/file-url.ts`：
   - `withManagedFileWidth` 只构造逻辑 URL（`?w=`），不追加版本参数。
   - 提供通用 URL 工具：`hasManagedStorageKey`（托管键域判定）与 `managedFileWidthOf`（读取 `?w=` 档位）。二者不含 LOD 语义，可被任意消费方复用。
@@ -306,7 +307,7 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 
 ## 部署与迁移（无向后兼容）
 
-1. **发布顺序：服务端先升级。** 客户端 URL 只带 `w`，不含版本段，因此不存在「新前端 URL 命中旧服务端 v1 字节」的错配：`signed` 形态的最终地址由服务端按对象 key 签发，旧服务端只会签出 v1 对象；`stream` 形态下旧服务端写 v1、新服务端写 v2，浏览器按 URL 缓存（URL 不变）可能短期持有旧字节——由规则 6.5 的已知边界接受，不做前后端顺序约束。仍建议服务端先全量升级，使新请求全部落到 v2 派生。
+1. **发布顺序：服务端先升级。** 客户端 URL 只带 `w`，不含版本段，因此不存在「新前端 URL 命中旧服务端 v1 字节」的错配：`signed` 形态的最终地址由服务端按对象 key 签发，旧服务端只会签出 v1 对象；`stream` 形态下旧服务端写 v1、新服务端写 v2，浏览器按 URL 缓存（URL 不变）可能短期持有旧字节——由 `storage-signed-direct-delivery.md` 规则 6.5 的已知边界接受。部署上服务端先全量升级，使新请求全部落到 v2 派生；不需要 URL 兼容层，但新档位依赖服务端先支持。
 2. **一次性清理旧缓存。** 服务端全量升级到 v2 后，执行一次迁移：删除 `_cache/` 下旧的无版本档位目录 `_cache/{64,112,200,300,320,400,480,1280}/`（仅这些历史档位前缀；不得触碰 `_cache/v2/`、`_posters/`、`_sprite/`、`_proxy/`、`_tmp/` 与源文件）。迁移必须：
    - 后端无关（本地存储与 S3 都通过存储后端 list/delete 实现）；
    - 幂等（重复执行无副作用），多实例只执行一次或并发安全；
@@ -316,7 +317,7 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 3. **CDN/反向代理缓存键。** 部署层必须按完整 URL（含查询串）缓存：`?w=` 不同档位必须形成不同缓存键。`signed` 形态的最终地址是带 `X-Amz-*` 的预签名 URL，天然按对象 key 分区；跨用户共享 CDN 缓存另立 Spec。
 4. **版本升级流程。** 任何改变缩放像素语义的参数（auto-orient、quality、算法、档位含义、海报母版参数）都必须提升共享 `RESIZE_CACHE_VERSION`；流程固定为：提升常量 → 服务端全量发布 → 清理上一版本缓存。运行期只识别当前版本，不保留双版本分支。
 5. **回滚。** 回滚到旧代码不保证复用旧缓存；按同一流程清理当前版本并让旧版本重新生成，避免两代缓存混用。回滚不是兼容层，不改变「只识别当前版本」的约束。
-6. **旧 URL 不做兼容。** 版本段在服务端对象 key，客户端 URL 形态不变；`signed` 形态下旧派生对象（v1）只占存储、不再被新请求命中；`stream` 形态下浏览器可能短期持有旧字节（规则 6.5）。不保留旧 URL 兼容分支。
+6. **旧 URL 不做兼容。** 版本段在服务端对象 key，客户端 URL 形态不变；`signed` 形态下旧派生对象（v1）只占存储、不再被新请求命中；`stream` 形态下浏览器可能短期持有旧字节（`storage-signed-direct-delivery.md` 规则 6.5）。不保留旧 URL 兼容分支。
 
 ## 异常与边界
 
@@ -384,7 +385,7 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 - 发布顺序：服务端 v2 全量完成后才发布前端；验证新前端请求只命中 v2 派生缓存。
 - 迁移：旧 8 档目录被删除，v2/海报/雪碧图/代理/源文件保留，重复执行幂等；本地与 S3 各一次。
 - CDN/反代：缓存键包含完整查询串，不同 `?w=` 档位不共享缓存条目。
-- `stream` 形态版本边界：提升 `RESIZE_CACHE_VERSION` 后，确认服务端新请求读 v2；浏览器旧字节按规则 6.5 接受，不演练「版本感知 URL」。
+- `stream` 形态版本边界：提升 `RESIZE_CACHE_VERSION` 后，确认服务端新请求读 v2；浏览器旧字节按 `storage-signed-direct-delivery.md` 规则 6.5 接受，不演练「版本感知 URL」。
 - 服务端容量（部署环境，不以 NAS 单机为上限）：按目标并发首次访问跑一轮；记录档位生成 p95、媒体池排队、503/429 比例；不得 OOM/崩溃，过载必须是可重试的 503/429。具体并发按部署容量设定并记录。
 
 ## 实施顺序（确认后）
@@ -411,7 +412,7 @@ LOD 上线后，低缩放全节点可见时的拖动仍在两处产生与图片�
 3. **缩放手势降档中止**：未就绪图片在缩小手势中若在途档位高于实时目标，立即中止，结算后重载；已就绪图片保留旧图。
 4. **边界与验收补充**：APNG 服务端回退原图；外链/静态 WebP 不享受 LOD；右键另存为当前档位；增加画质/ICC 色彩验收与同源多档位重复解码风险记录。
 
-以上 1–4 是对原六项决策的修订/补充，不改变目标与范围；若用户确认，Spec 状态由用户改为「已确认」后按实施顺序执行。
+以上 1–4 是对原六项决策的修订/补充，不改变目标与范围；该修订版已于 2026-10-23 由用户确认并执行（见「当前状态」）。
 
 ## 当前状态
 

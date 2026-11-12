@@ -1,6 +1,7 @@
 /**
  * 拖拽连接时的自定义预览线组件。
- * 渲染中性灰贝塞尔预览线（与已建立连线同色），并叠加绿色管道流光动画；
+ * 渲染与已建立连线同源的贝塞尔预览线（EDGE_BASE_COLOR + 16% 不透明度），
+ * 并叠加绿色管道流光动画——本体只有一种外观，流光表达「正在连线」；
  * 发起节点处于多选集合时，其余选中节点各补一根束线汇到同一终点（扇出预览，
  * 与松手「每选中节点建一条边」一致）；
  * 同时驱动目标节点的倾斜/可行性反馈（流动描边 = 可连，毛玻璃 = 不可连，见 ./connection-tilt.ts）。
@@ -15,7 +16,7 @@ import { buildNodeIndex } from "@/features/canvas/shared/group-bounds";
 import { isGroupNode } from "@/features/canvas/shared/group-membership";
 import { findNodeAtFlowPoint, getNodeBox, nodeEdgeAnchor } from "@/features/canvas/shared/node-hit-test";
 import { getLiveViewport, useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { EDGE_BASE_COLOR, insetHandleCenter } from "@/lib/constants";
+import { EDGE_BASE_STYLE, insetHandleCenter } from "@/lib/constants";
 
 import { applyConnectionTilt, clearConnectionTilt } from "./connection-tilt";
 import { FlowLines } from "./EdgeFlow";
@@ -150,11 +151,17 @@ export default function ConnectionFlowLine({
 
   return (
     <>
-      <BaseEdge path={edgePath} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
+      <BaseEdge
+        path={edgePath}
+        style={EDGE_BASE_STYLE}
+      />
       <FlowLines path={edgePath} />
       {bundlePaths.map((p, i) => (
         <Fragment key={i}>
-          <BaseEdge path={p} style={{ stroke: EDGE_BASE_COLOR, strokeWidth: 2 }} />
+          <BaseEdge
+            path={p}
+            style={EDGE_BASE_STYLE}
+          />
           <FlowLines path={p} />
         </Fragment>
       ))}

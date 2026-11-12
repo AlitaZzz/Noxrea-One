@@ -11,8 +11,6 @@
 import "@xyflow/react/dist/style.css";
 
 import {
-  Background,
-  BackgroundVariant,
   type Edge,
   ReactFlow,
   useReactFlow,
@@ -28,8 +26,10 @@ import type { AssetItem } from "@/entities/asset";
 import { createAssetNode } from "@/features/canvas/assets/create-asset-node";
 import AlignmentGuides from "@/features/canvas/controls/AlignmentGuides";
 import { BatchConnectContext } from "@/features/canvas/controls/BatchConnectContext";
+import { CanvasDotGrid } from "@/features/canvas/controls/CanvasDotGrid";
 import ConnectionFlowLine from "@/features/canvas/controls/ConnectionFlowLine";
 import DeletableEdge from "@/features/canvas/controls/DeletableEdge";
+import { EdgeBaseWidthVariable } from "@/features/canvas/controls/EdgeBaseWidthVariable";
 import { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
 import CanvasFlowLayer from "@/features/canvas/flow/CanvasFlowLayer";
 import { useCanvasConnections } from "@/features/canvas/hooks/use-canvas-connections";
@@ -56,7 +56,6 @@ import { findFreePosition, getCanvasProjectId, markDirtyImmediate, takeCanvasSna
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
 import {
-  GROUP_COLORS,
   GROUP_NODE_PADDING,
   RAIL_CONNECT_RADIUS,
   RAIL_DOT,
@@ -79,12 +78,16 @@ const RF_EDGE_TYPES = {
 // 内联对象字面量会让 React Flow 的 props 比较全部失效。
 const RF_PRO_OPTIONS = { hideAttribution: true };
 const RF_DEFAULT_EDGE_OPTIONS = { type: "deletable", animated: false };
-// 画布领域常量注入 React Flow 根节点，供 globals.css 的选择外框规则读取：
-// 外框 padding 与组 body padding 同源，填充色与组节点默认配色同源。
+// 画布领域常量注入 React Flow 根节点，供 globals.css 的样式规则读取：
+// 外框 padding 与组 body padding 同源。
+// 选择外框填充不走这里：组表面已改为不透明，外框需要独立的半透明 token，
+// 由 globals.css 的 --selection-frame-bg 提供。
 const RF_STYLE = {
   "--rail-dot-size": `${RAIL_DOT}px`,
   "--group-node-padding": `${GROUP_NODE_PADDING}px`,
-  "--selection-frame-bg": GROUP_COLORS.default.fill,
+  // React Flow 暗色主题自带 #141414 画布底色，会盖住应用背景；
+  // 画布底色统一由 --canvas-bg 提供（与即梦 canvas-bg 对齐）。
+  "--xy-background-color": "var(--canvas-bg)",
 } as CSSProperties;
 
 interface CanvasSurfaceProps {
@@ -442,7 +445,11 @@ function CanvasSurface({ slots }: CanvasSurfaceProps) {
         connectionLineComponent={ConnectionFlowLine}
         defaultEdgeOptions={RF_DEFAULT_EDGE_OPTIONS}
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} color="var(--input)" />
+        {/* 画布点阵：参数与即梦 canvas-dot-grid 对齐，低缩放时整层隐藏 */}
+        <CanvasDotGrid />
+
+        {/* 连线本体的 1/zoom 宽度补偿：连线与其预览共用同一 CSS 变量 */}
+        <EdgeBaseWidthVariable />
 
         {/* 连线流光层：容器插入视口节点层之前（连线之上、节点之下），流光由帧循环绘制 */}
         <CanvasFlowLayer />

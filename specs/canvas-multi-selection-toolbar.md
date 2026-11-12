@@ -1,12 +1,13 @@
 # 画布多选聚合工具条
 
-状态：已实现（Phase 1，2026-11-03；Phase 2 未实现，需另行确认）
+状态：已实现（Phase 1，2026-11-03；Phase 2 未实现，需另行确认）。2026-11-11/12
+的组表面与批量连线增量为未提交改动，见第 9 节。
 
 > 本 Spec 覆盖 Phase 1（本次实现）与 Phase 2（多选布局，后续扩展）。Phase 2 仅记录设计方向，不作为本次验收范围，需另行确认后才能实现。
 
 ## 1. 背景与证据
 
-### 1.1 现状（已验证事实，读源码确认）
+### 1.1 现状（2026-11-02 拆分前快照，读源码确认；`InfiniteCanvas.tsx` 已于 `a2f521c0` 删除，当前入口为 `root/CanvasSurface.tsx` / `root/overlays/GlobalOverlays.tsx`）
 
 1. **多选时每个节点各挂一条工具条**：`web/src/features/canvas/InfiniteCanvas.tsx:1366` 遍历 `selectedNodeIds`，为每个选中节点渲染一条 `RfNodeToolbar` + `NodeToolbarUI`。选中 3 个节点就是 3 条；选中 129 个就是 129 条。
 2. **选区装饰只在空闲态显示**：`web/src/features/canvas/hooks/use-canvas-interaction.ts` 的 `showSelectionChrome = interaction.mode === "idle"` 是调查时唯一的可见性真相源。框选会话激活即进入 `box-selecting` 并隐藏装饰；调查时 `MarqueeSession.commit()` 只写入选区、不派发交互动作，因此框选松手后状态仍停留在 `box-selecting`，直到下一次点击才回到 `idle`——并非「松手即回到 idle」。这是聚合工具条「松手后出现」必须先拆分交互状态的原因（见 4.1 与第 9 节）。
@@ -83,7 +84,7 @@
 
 - 新增聚合工具条组件与渲染层。
 - 新增“所有选中节点（含组）”的选区包围盒派生，并统一多选外框显隐与工具条锚点（`bbox` / `frameVisible` / `containerBbox`），区别于现有只服务批量连线的 `selectionFrame`。
-- 聚合工具条显示规则：选中节点数 ≥2 且交互为 idle。
+- 聚合工具条显示规则：选中节点数 ≥2 且交互已提交（idle 或 box-selected）。
 - 工具条按钮：计数、编组 / 解组、创建副本、更多（复制 / 删除）。
 - 多选时抑制所有 per-node 通用工具条；媒体编辑面板等独立渲染路径不变。
 - 工具条的锚点、屏幕固定尺寸、视口钳制、平移/缩放跟随。
@@ -98,7 +99,9 @@
 - 对齐、分布、堆叠。
 - 单选节点工具条的任何行为调整。
 - 组节点的颜色、组内布局在多选工具条中的入口。
-- 框选手势本身、`selectionFrame` 与 `BatchConnectHandle` 的行为调整。
+- 框选手势本身与 `selectionFrame` 的行为调整；批量连线拖拽会话（含
+  `BatchConnectHandle` / `GroupConnectRail`）的规则见
+  `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
 - 画布数据结构、数据库、服务端接口或存储格式变更。
 
 ## 4. 业务规则
@@ -220,9 +223,10 @@
 4. 颜色、边框、焦点、悬停状态全部使用主题 token；明暗主题下均需验证对比度。
 5. 不使用硬编码颜色、内联遮罩或第三方图标库；图标从 `components/ui` 出口获取。
 6. 现有 `node.group`、`node.groupWithCount`、`shortcuts.group`、`shortcuts.desc.group` 的中文值同步改为“编组”，不保留旧叫法；英文保持 `Group`。
-7. 选区外框与组节点视觉对齐：拖拽框与持久外框统一使用 `var(--radius)` 圆角（与组 body 的 `rounded-lg` 同源，当前为 10px）；持久外框填充使用与 `GROUP_COLORS.default.fill` 相同的中性色（新增画布领域 token），拖拽框保持更淡的 `--marquee-bg` 与虚线，保留「进行中 / 已提交」的阶段区分；两者边框继续使用 `--marquee-border`，保证外框在组填充之上仍可辨认。
+7. 选区外框与组节点视觉对齐：拖拽框与持久外框统一使用 `var(--radius)` 圆角（与组 body 的 `rounded-lg` 同源，当前为 10px）；持久外框填充使用独立的半透明中性 token `--selection-frame-bg`（4% 白），不复用组表面（`--canvas-group-bg`，不透明，复用会盖住框内节点）；拖拽框保持更淡的 `--marquee-bg` 与虚线，保留「进行中 / 已提交」的阶段区分；两者边框继续使用 `--marquee-border`，保证外框在组填充之上仍可辨认。
 8. 组节点的可见框与框选外框对齐：编组几何是成员并集向外扩 `GROUP_NODE_PADDING`(40px)，组标题栏（`NODE_TITLE_HEIGHT`=28px）留在组 body 之外，因此组节点顶边 = 成员并集顶 − (28 + 40) = −68px，组 body 的可见顶边 = 成员并集顶 − 40px。框选外框采用同一口径：四边均外扩 40px（`padding: 40px; margin: -40px`）。这样框选提交后立即编组时，两框的可见顶边、底边、左右边完全重合；组标题保持在框外，不进入组的填充/描边/选中环。工具条锚点 `containerBbox` 与可见框分离：其顶部为可见框 40px 再加标题带 28px（合计 68px），让工具条落在未来组标题的上方，不与标题重叠。
 9. 统一边距（2026-11-02，用户确认「编组之后，里面的内容距离四周应该和布局之后一样，包括框选的时候」）：编组、组内布局、框选统一为「标题带在 body 外 + body 四边 40px」。编组创建改为 `groupY = minY - NODE_TITLE_HEIGHT - GROUP_NODE_PADDING`、`groupH = unionH + NODE_TITLE_HEIGHT + GROUP_NODE_PADDING * 2`，成员绝对位置不动，组框向上多扩 28px；组内布局的 `LAYOUT_ORIGIN.y = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING` 已是目标口径，不改；框选外框改为四边 40px。该决策取代此前「顶部 12px、刻意不对称、不追求四边 40px」的取舍。旧组不自动迁移，执行一次组内布局后归一为 40px。refit 的顶部扩张同样计入标题带：成员探出组顶时按 `memberY − NODE_TITLE_HEIGHT − GROUP_NODE_PADDING` 计算新组顶，使成员落到 body 顶缘下方 40px；左/右/底部仍按 40px。
+10. 组表面与拖线态：组 body 常态背景为 `--group-surface`，视觉上不透明（默认组取 `--canvas-group-bg`，彩色组为 `color-mix(in srgb, tint 16%, var(--canvas-group-bg))`，见 `getGroupSurfaceBackground`）；`.react-flow[data-connecting]` 期间背景改为 `color-mix(in srgb, var(--group-surface) 20%, transparent)`，标题与描边保持不透明。该规则对齐即梦 `.is-connecting ... opacity-canvas-group-connection-preview`（`opacity: .2`）；拖线态对点阵可见性的影响见 `canvas-dot-grid.md` 规则 6「组表面上的点阵可见性」。
 
 ## 5. 技术影响
 
@@ -244,7 +248,7 @@
   - `.hide-selection-rect` 直接使用 `canvasDerived.selectionChromeBounds?.frameVisible`，删除重复的选区扫描与 `every(isGroupNode)` 判断，保证外框显隐与工具条锚点同源；
   - 媒体编辑面板的独立 `RfNodeToolbar` 渲染块保持不变。
 - 工具条展示层接收 `selectionKey`，只作为「更多」菜单的 `key`：选区变化时菜单子树重挂载并关闭，展示层本身不重挂载，`aria-live` 计数节点保留。
-- 工具条层使用独立组件订阅视口，避免 `CanvasSurface` 因平移/缩放整体重渲染；锚点只在 idle 时参与跟随。
+- 工具条层使用独立组件订阅视口，避免 `CanvasSurface` 因平移/缩放整体重渲染；工具条可见的已提交态（idle 或 box-selected）均随视口重算锚点，仅框选/拖动进行中隐藏、不参与逐帧跟随。
 - 使用 `useViewport()` 或等效的 viewport transform 把 `containerBbox` 与 `bbox` 从 flow 坐标投影到画布容器坐标：前者用于定位，后者只用于判定与视口是否有交集；不把工具条放进随视口缩放的节点层。
 
 ### 5.3 复用现有动作
@@ -318,9 +322,9 @@
 
 ### 7.4 回归
 
-- [x] 单选工具条内容与位置不变（`NodeToolbar.tsx` 未修改；单视频节点实测 404×50、9 个按钮）。
+- [x] 单选工具条内容与位置不变（`NodeToolbar.tsx` 的单选工具条未修改；组色板预览随 2026-11-11 组表面对齐增量调整，见当前状态；单视频节点实测 404×50、9 个按钮）。
 - [x] 工具条、组节点工具条、节点类型标签与快捷键面板统一显示“编组”，不再出现旧叫法（`common.group`、`node.group`、`node.groupWithCount`、`shortcuts.group`、`shortcuts.desc.group` 均为“编组”；`director.group` 的“打组”属于导演模块的独立功能，不在画布术语范围）。
-- [x] 批量连线右缘按钮不变，且不与聚合工具条重叠（`BatchConnectHandle.tsx` 未修改；实测批量轨道 28×28 @ (1069,370)，聚合工具条 313×50 @ (818,642)，无交集）。
+- [x] 批量连线右缘按钮不变，且不与聚合工具条重叠（`BatchConnectHandle.tsx` 未修改；实测批量轨道 28×28 @ (1069,370)，聚合工具条 313×50 @ (818,642)，无交集；拖拽会话规则见 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」）。
 - [x] 编组/解组快捷键、Ctrl+D、Delete、右键菜单行为不变（`use-canvas-keyboard.ts` 未修改；右键菜单差异仅为创建副本图标 `PlusSquareOutlined` → `DuplicateIcon`，无行为变化）。
 - [x] 框选提交后立即编组：框选外框与组 body 可见框四边对齐、尺寸一致（四边均 40px）；组标题保持在框外，仍可编辑、可拖动。
 - [x] 现有 `canvas-derived`、`use-group-operations`、`group-layout`、`NodeToolbar` 测试通过（canvas 全量 100 文件 / 940 用例通过，含新增回归）。
@@ -344,6 +348,7 @@
 ## 9. 当前状态
 
 - 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 设计与确认未开始，不在本次范围。
+- 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码未提交，整体未达到「已实现」条件。本增量依赖的 `canvas-batch-connect-drag.md` 仍为「待确认」；确认前该增量不构成本 Spec 的已实现范围。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
 - 已完成：现状与即梦对照调查；Phase 1 方案、按钮矩阵、边界与验收标准；第 8 节全部决策确认；术语统一为“编组”；统一边距决策确认。
 - Phase 1 实现（2026-11-02 实现，2026-11-03 提交 `e6fc53ad`）：
   - `web/src/features/canvas/shared/canvas-derived.ts` 新增 `selectionChromeBounds`：全部选中节点（含组）的绝对包围盒、计数与是否含组，与 `selectionFrame` 并列且不改变其语义。
@@ -352,7 +357,7 @@
   - 新增 `canvas.selection.count` 中英文文案；`common.group`、`node.group`、`node.groupWithCount`、`shortcuts.group`、`shortcuts.desc.group` 的中文统一为“编组”。
   - 「更多」触发器不使用 `Tooltip`：Radix Tooltip 会在焦点回到触发器时打开并用 `preventDefault` 吞掉下一次 Esc，破坏「第一次 Esc 关菜单、第二次 Esc 清空选区」；改用 `title` + `aria-label`。
   - 根因修复（2026-11-02，用户反馈「现在看不到工具条」）：框选提交不派发交互动作，模式停留在 `box-selecting`，聚合工具条被 `showSelectionChrome` 门控掉。交互状态机新增稳定态 `box-selected` 与动作 `selection-commit`；`MarqueeSession.commit()` 在写入选区后派发 `selection-commit`；`use-canvas-interaction` 新增 `showSelectionToolbars = idle | box-selected` 供 per-node 与聚合工具条共用，`showSelectionChrome` 保持 idle-only 供生成面板使用；拖动节点时 `prev` 记录并恢复 `box-selected`。回归覆盖：`marquee-session.test.ts` 断言提交派发、`canvas-store.test.ts` 断言状态迁移、`use-canvas-interaction.test.ts` 断言两套可见性谓词。
-  - 容器口径统一（2026-11-02，用户确认「按方案改」）：`selectionChromeBounds` 新增 `frameVisible` 与 `containerBbox`；`InfiniteCanvas` 用 `frameVisible` 控制 `.hide-selection-rect`，删除重复的选区扫描；聚合工具条改锚 `containerBbox`（普通多选 = 节点并集 + 40px，全组选区 = 组并集；可见框顶部 12px 与工具条标题让位见下两条）；多选外框圆角改为 `var(--radius)`（与组 body 的 `rounded-lg` 同源），持久外框填充对齐 `GROUP_COLORS.default.fill`。
+  - 容器口径统一（2026-11-02，用户确认「按方案改」）：`selectionChromeBounds` 新增 `frameVisible` 与 `containerBbox`；`InfiniteCanvas` 用 `frameVisible` 控制 `.hide-selection-rect`，删除重复的选区扫描；聚合工具条改锚 `containerBbox`（普通多选 = 节点并集 + 40px，全组选区 = 组并集；可见框顶部 12px 与工具条标题让位见下两条）；多选外框圆角改为 `var(--radius)`（与组 body 的 `rounded-lg` 同源），持久外框填充对齐 `GROUP_COLORS.default.fill`（2026-11-11 已解耦为独立 token，见下条）。
   - 组可见框对齐（2026-11-02，用户确认「框选减去标题高度」）：组标题保留在 body 之外；框选外框改为顶部 12px（40 − `NODE_TITLE_HEIGHT` 28）、左右/底部 40px，`containerBbox` 顶部同步为 12px（工具条标题让位见下条）。框选提交后立即编组时两框可见边缘重合，标题不进入组的填充/描边/选中环；`GroupNode` 的 body 结构不变（`flex-1`）。（该口径已被 2026-11-02「统一边距」决策取代，见下条）
   - 工具条标题让位（2026-11-02，用户确认「顶部和工具栏之间加上一个标题的高度」）：可见框保持顶部 12px；`containerBbox` 顶部改为 40px（可见框 12 + `NODE_TITLE_HEIGHT` 28），工具条相对可见框的顶部间距为 12px + 28px×zoom，编组后组标题不与工具条重叠；左右/底部仍为 40px。（该口径已被 2026-11-02「统一边距」决策取代：可见框改为四边 40px，`containerBbox` 顶部 68px；工具条相对可见框的间距仍为 12px + 28px×zoom）
   - 主行动作图标（2026-11-02，用户反馈「编组的图标没显示出来，还有创建副本的图标也没有显示」）：编组 / 解组 / 创建副本按钮由纯文字改为图标 + 文字；编组用 `GroupIcon`、解组用 `UngroupIcon`、创建副本用 `DuplicateIcon`，全部从 `components/ui/AppIcon` 出口获取；图标 `aria-hidden`，按钮可访问名称仍由文字提供。
@@ -372,7 +377,7 @@
   - 聚合工具条展示层不再用 React key 重挂载：`selectionKey` 只作为「更多」菜单的 `key`，选区变化时菜单重挂载关闭，`aria-live` 计数节点保留；测试断言选区变化后计数 DOM 节点同一。
   - 工具条 `h-[50px]` + 单行不换行改为 `min-h-[50px]` + `flex-wrap`，容器按视口宽度设置 `maxWidth`；删除「视口窄时横向溢出」的已知边界。
   - 选区并集循环抽为 `unionBounds`；`multiSelect` 阈值抽为 `selectCanvasToolbarMode`，`InfiniteCanvas` 只消费模式结果。
-  - 框选外框的 padding/填充改由 `RF_STYLE` 注入 `--group-node-padding` / `--selection-frame-bg`，与 `GROUP_NODE_PADDING`、`GROUP_COLORS.default.fill` 同源，删除 CSS/TS 双份字面量。
+  - 框选外框的 padding/填充改由 `RF_STYLE` 注入 `--group-node-padding` / `--selection-frame-bg`，与 `GROUP_NODE_PADDING`、`GROUP_COLORS.default.fill` 同源，删除 CSS/TS 双份字面量。（2026-11-11 组表面改为不透明后，填充改由 globals 独立 token 提供，见下条）
 - 代码审查根因修复（2026-11-03，`/code-review` 已提交代码 `e6fc53ad`，修复已提交 `247d6515`）：
   - 统一组 body 顶部内缩：新增 `GROUP_BODY_TOP_INSET = NODE_TITLE_HEIGHT + GROUP_NODE_PADDING`，编组创建、refit 与组内布局共用；编组创建与组内布局再共用 `groupRectFromContent`，删除重复的「标题带 + 内边距」推导。
   - 聚合工具条可见性改按选区并集判定：`computeSelectionToolbarPlacement` 拆为 `visibleBounds`（`bbox`，交集判定）与 `anchorBounds`（`containerBbox`，定位），修复选区完全离开视口、但标题带或外框内边距仍与视口相交时工具条仍显示的问题。
@@ -382,6 +387,8 @@
   - 回归：`canvas-derived.test.ts` 更新 `containerBbox` 断言；`SelectionToolbar.test.tsx` 改为 `anchorBounds` + `visibleBounds`，新增「仅锚点与视口相交时隐藏」与「定位取锚点、可见性取选区并集」两条用例。
 - 已执行（2026-11-03，代码审查根因修复）：定向回归 3 文件 / 32 用例通过（`canvas-derived` 8、`SelectionToolbar` 19、`use-canvas-interaction` 5）；canvas 全量 100 文件 / 942 用例通过（单 worker，串行）；变更文件 ESLint 0 error；web `tsc --noEmit` 通过。浏览器实机走查未在本次修复后重跑。
 - Phase 2 设计与确认未开始。
+- 组表面视觉对齐即梦（2026-11-11，用户确认「按即梦对齐」）：组 body 由半透明 `GROUP_COLORS.fill` 改为不透明表面——默认组 `--canvas-group-bg`（暗 `#161616` / 亮 `#ededed`），彩色组 `color-mix(in srgb, tint 16%, var(--canvas-group-bg))`；`GROUP_COLORS` 移除 `fill`、新增可选 `tint`，新增 `getGroupSurfaceBackground`（`web/src/lib/constants.ts`），`GroupNode` 与颜色选择色板复用。组表面不透明后，持久多选外框填充不再从组填充派生，改由 `globals.css` 的 `--selection-frame-bg` 独立提供（保持旧值 4% 白），`CanvasSurface` 的 `RF_STYLE` 不再注入该变量；规则 4.10.7 同步更新。回归：`GroupNode.test.tsx` 补默认/彩色表面用例，新增 `group-surface.test.ts` 覆盖全部色板字面量、未知 key 与 globals.css 的 token 契约（组底色为不透明 6 位 hex、选择外框不复用组表面）；`NodeToolbar.test.tsx` 补色板预览用例（default 与蓝色均使用不透明组表面）。web 全量 219 文件 / 1758 用例通过（单 worker，串行），`tsc --noEmit` 与变更文件 ESLint 通过。现场验证（dev 目标，2026-11-11）：暗色组 body 计算 `rgb(22, 22, 22)`、亮色 `rgb(237, 237, 237)`，均 `opacity: 1`；`color-mix` 蓝/黄色探针在暗亮两主题下均解析为不透明 `color(srgb …)`；`--selection-frame-bg` 解析为 `#ffffff0a`（4% 白）。组颜色选择器现场打开验证：弹层 10 个色板，default 计算 `rgb(22, 22, 22)`，蓝色 `color(srgb 0.0862745 0.147137 0.232471)`（≈`rgb(22, 38, 59)`），均不透明；验证后关闭弹层、清除选中（选中数回到 0）。未覆盖：当前画布无彩色组，彩色组 body 仅由单测断言内联表达式、浏览器侧用同表达式探针验证解析；明暗切换采用 colorMode + `<html>` 类同步模拟（与既有验证口径一致）；验证时缩放约 0.26（18 × 0.26 < 8），点阵按 LOD 未挂载（点阵规则见 `canvas-dot-grid.md`），点阵被组表面遮挡的最终视觉与真实多选外框均未现场观察（仅由不透明计算样式与层叠关系推断）。
+- 组表面拖线预览对齐即梦（2026-11-12，用户确认「一起对齐」）：`GroupNode` 的 body 不再内联 `background`，改为写入 `--group-surface`；正常态背景由 `.node-body.canvas-group-surface` 读取该变量，`.react-flow[data-connecting]` 期间改为 `color-mix(in srgb, var(--group-surface) 20%, transparent)`。只降低背景不透明度，标题与描边保持不透明，对齐即梦 `.is-connecting ... opacity-canvas-group-connection-preview`（`opacity: .2`）；规则见 4.10.10「组表面与拖线态」。回归：`GroupNode.test.tsx` 断言 `canvas-group-surface` 类、`--group-surface` 取值与无内联 background；`group-surface.test.ts` 新增 CSS 契约（正常态读变量、拖线态 20%、不使用元素 opacity）。定向 2 文件 / 9 用例、`tsc --noEmit`、变更文件 ESLint 通过。现场验证（dev 目标，2026-11-12）：手动给 `.react-flow` 加 `data-connecting` 后，暗色组 body 背景由 `rgb(22, 22, 22)` 变为 `color(srgb 0.0862745 0.0862745 0.0862745 / 0.2)`（同色 20% alpha），描边颜色不变、body/组 `opacity` 均为 1；亮色由 `rgb(237, 237, 237)` 变为 `color(srgb 0.929412 0.929412 0.929412 / 0.2)`；彩色探针 `color(srgb 0.0862745 0.147137 0.232471)` 在拖线态变为同色 `/ 0.2`；移除属性后恢复。验证期间 dev 页面因全局 CSS HMR 重载，已恢复原视口并确认 133 节点 / 66 边数据完整。真实指针拖线未能在后台标签页复现（`visibilityState=hidden`，CDP 受信鼠标事件未启动连接）；`data-connecting` 由交互状态机写入，已有 `use-canvas-interaction` 单测覆盖。审查根因修复（2026-11-12）：批量连接轨道（`GroupConnectRail` / `BatchConnectHandle`）原在 pointerdown 即调用 `onDragStart`，右键/中键或未越过 4px 的单击也会进入 connecting，使全部组表面短暂降到 20%；修复后的会话规则统一由 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」定义，本条目只保留修复与验证结论。回归：`use-batch-connect-drag.test.ts` 扩至 15 用例，新增右键/非主指针不拦截默认行为、阈值前 pointercancel、4px 边界只进入一次、其他指针不驱动/终止、非左键 pointerup 取消、左键松开取消、远距离 pointerup 补判等断言；定向 1 文件 / 15 用例、`tsc --noEmit` 与变更文件 ESLint 通过，web 全量 219 文件 / 1767 用例通过（单 worker，串行）。现场验证（dev 目标，2026-11-12，向组连接轨道派发 JS `PointerEvent` 驱动真实 React 处理器）：主键 pointerdown 后 `data-connecting` 不存在、组背景保持 `rgb(22, 22, 22)`；位移 2px 仍不进入；位移 8px 后 `data-connecting=true`、组背景变为同色 `/ 0.2`；其他指针的 cancel/move/up 不改变 connecting；左键松开（buttons 只剩右键位）与右键 pointerup 均取消并恢复背景；结束时 133 节点 / 66 边不变、无菜单。
 
 ## 10. 后续阶段（不在本次范围）
 

@@ -3,9 +3,9 @@
  * 连线端点恒落在节点边缘垂直正中：xyflow 给出的坐标在轨道上，按方位收回轨道宽
  * 即达节点边缘（见 constants.ts 的注释）。
  * 交互三态：
- * - 常态：2px 中性灰
- * - 强调（hover / 选中 / 关联节点选中）：加粗 + 管道流光。hover 服务于辨认
- *   连线走向，选中是它的驻留版。
+ * - 常态：1px 屏幕宽、16% 不透明度的主题前景色（与即梦常态一致）
+ * - 强调（hover / 选中 / 关联节点选中）：本体外观保持不变，只叠加管道流光。
+ *   hover 服务于辨认连线走向，选中是它的驻留版。
  * - 删除按钮：跟随 hover 指针，指针停稳约 1s 后出现在指针在连线上的投影位置
  *   （不脱离连线），指针在连线或按钮上移动都持续跟随；沿线移动会重置驻留计时
  *   （4px 内的微动视为静止），滚轮缩放/平移后按指针位置重新投影。指针移到
@@ -33,7 +33,7 @@ import { removeFlowEdge, setFlowEdge } from "@/features/canvas/flow/flow-registr
 import { getCanvasDerived } from "@/features/canvas/shared/canvas-derived";
 import { computeEdgePath } from "@/features/canvas/shared/edge-geometry";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
-import { EDGE_BASE_COLOR } from "@/lib/constants";
+import { EDGE_BASE_STYLE } from "@/lib/constants";
 
 /** 删除按钮的出现延迟（驻留时长）：指针在连线上停稳 1s 才出现；沿线移动会重置计时 */
 const DELETE_BUTTON_DELAY_MS = 1000;
@@ -105,7 +105,7 @@ export default function DeletableEdge(props: EdgeProps) {
     getCanvasDerived(s.nodes, s.edges).highlightedEdgeIds.has(id));
   const isConnected = isHighlighted || selected;
 
-  // hover 与选中/高亮共用同一强调样式（见头注释三态说明）
+  // hover 与选中/高亮共用同一强调判定（只决定是否登记流光，见头注释三态说明）
   const [hovered, setHovered] = useState(false);
   const [buttonHovered, setButtonHovered] = useState(false);
   // 拖拽/平移中指针扫过不触发 hover（buttons!==0），避免动画随拖拽路径闪烁
@@ -230,10 +230,7 @@ export default function DeletableEdge(props: EdgeProps) {
         <BaseEdge
           id={id}
           path={edgePath}
-          style={{
-            strokeWidth: emphasized ? 2.5 : 2,
-            stroke: EDGE_BASE_COLOR,
-          }}
+          style={EDGE_BASE_STYLE}
         />
       </g>
 

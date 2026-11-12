@@ -100,7 +100,9 @@ export function createFlowRenderer(canvas: HTMLCanvasElement, readViewport: () =
       );
       for (const layer of drawable.pattern.layers) {
         context.globalAlpha = layer.opacity;
-        context.lineWidth = layer.width;
+        // layer.width 是屏幕像素；上下文已按 zoom 缩放（setTransform），
+        // 除以 zoom 才能让描边在屏幕上保持恒定宽度（与预览 FlowLines 同一口径）
+        context.lineWidth = layer.width / viewport.zoom;
         context.setLineDash([layer.dash, layer.gap]);
         context.lineDashOffset = layer.offsetFrom + layer.drift * phase;
         context.stroke();

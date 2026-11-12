@@ -19,14 +19,14 @@
 //   长短 → FLOW_SEGMENT_FILL（0~1，头部段占一格的比例，越大流光越长、间隔越小）
 //   拖尾 → FLOW_TAPER_STRETCH（拖尾相对头部的拉长倍数，1 = 无拖尾、前后等粗）
 //   收细 → FLOW_TAPER_RATIO（0~1，尾端线宽相对头部的比例，越小尾巴越尖）
-//   粗细 → FLOW_WIDTH（头部线宽，需略大于连线本身，否则会被连线淹没）
+//   粗细 → FLOW_WIDTH（头部线宽，屏幕像素；连线本体 1px，头部取 2px 形成层次）
 // 只在模块内使用：调参直接改这里的值，不对外导出（导出即无人引用的公共 API）。
 const FLOW_DURATION_S = 3.2;
 const FLOW_SEGMENT_COUNT = 2;
 const FLOW_SEGMENT_FILL = 0.26;
 const FLOW_TAPER_STRETCH = 2.1;
 const FLOW_TAPER_RATIO = 0.15;
-const FLOW_WIDTH = 4;
+const FLOW_WIDTH = 2;
 
 // ── 流光几何细节（通常无需改动）──
 // 显式标注 number：否则会被推导成字面量，下方除零保护判断会被 TS 判为永假
@@ -60,9 +60,8 @@ export interface FlowPattern {
 /**
  * 按路径长度生成流光分层。
  *
- * `pathLength = 100` 时与迁移前 `FlowLines` 的 SVG 参数完全一致：
- * cycle = 50、headLen = 13、tailLen = 27.3、每层 dash 由 13 递增到 27.3、
- * 宽度由 4 收细到 0.6、不透明度由 1 衰减到 0.6。
+ * `pathLength = 100` 时：cycle = 50、headLen = 13、tailLen = 27.3、
+ * 每层 dash 由 13 递增到 27.3、宽度由 2 收细到 0.3、不透明度由 1 衰减到 0.6。
  */
 export function buildFlowPattern(length: number): FlowPattern {
   const cycle = length / FLOW_SEGMENT_COUNT;

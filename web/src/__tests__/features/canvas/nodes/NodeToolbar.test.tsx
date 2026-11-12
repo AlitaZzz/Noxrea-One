@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NodeToolbar from "@/features/canvas/nodes/NodeToolbar";
+import { GROUP_COLOR_KEYS } from "@/lib/constants";
 
 interface NodeFixture {
   id: string;
@@ -158,5 +159,26 @@ describe("NodeToolbar creation menu", () => {
     fireEvent.keyDown(screen.getByRole("button", { name: "Character views Reference" }), { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(trigger));
     await waitFor(() => expect(screen.getByRole("tooltip")).toHaveTextContent("node.creation"));
+  });
+});
+
+describe("NodeToolbar group color picker", () => {
+  it("previews the opaque group surface for default and colored swatches", async () => {
+    const { container, unmount } = renderNode("group-node", { color: "blue" });
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
+    expect(trigger).not.toBeNull();
+
+    fireEvent.click(trigger!);
+    await waitFor(() =>
+      expect(document.querySelectorAll("button.rounded-full")).toHaveLength(GROUP_COLOR_KEYS.length)
+    );
+
+    const swatches = Array.from(document.querySelectorAll<HTMLButtonElement>("button.rounded-full"));
+    expect(swatches[0].style.background).toBe("var(--canvas-group-bg)");
+    const blue = swatches[GROUP_COLOR_KEYS.indexOf("blue")];
+    expect(blue.style.background).toBe(
+      "color-mix(in srgb, #1677ff 16%, var(--canvas-group-bg))"
+    );
+    unmount();
   });
 });

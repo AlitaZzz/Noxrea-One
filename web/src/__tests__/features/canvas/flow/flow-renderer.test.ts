@@ -87,11 +87,11 @@ describe("createFlowRenderer", () => {
     setFlowEdge("e1", { curve, length: 100 });
     const renderer = createFlowRenderer(canvas, () => viewport);
 
-    // 首帧：无前值，相位不动；每帧 6 层，头层最后画（dash 13、宽 4）
+    // 首帧：无前值，相位不动；每帧 6 层，头层最后画（dash 13、宽 2）
     raf.frame(0);
     expect(strokes).toHaveLength(6);
     const headOffset = () => strokes[strokes.length - 1].offset;
-    expect(strokes[strokes.length - 1].width).toBe(4);
+    expect(strokes[strokes.length - 1].width).toBe(2);
     expect(headOffset()).toBeCloseTo(-14.3);
 
     // +16ms → 相位 0.01，dashoffset 前进 drift(-50) × 0.01 = -0.5
@@ -105,6 +105,24 @@ describe("createFlowRenderer", () => {
 
     renderer.destroy();
     expect(raf.pending).toBe(0);
+  });
+
+  it("流光线宽按屏幕像素恒定，不随缩放变粗变细", () => {
+    const raf = stubTimedRaf();
+    setFlowEdge("e1", { curve, length: 100 });
+
+    for (const zoom of [0.1, 0.5, 1, 2, 5]) {
+      const { canvas, strokes } = createFakeCanvas();
+      const renderer = createFlowRenderer(canvas, () => ({ ...viewport, zoom }));
+      raf.frame(0);
+
+      // 画布盒抵消视口变换；lineWidth 仍在按 zoom 缩放的上下文里，乘回 zoom 即屏幕像素
+      expect(canvas.style.transform).toBe(`translate(0px, 0px) scale(${1 / zoom})`);
+      expect(strokes[0].width * zoom).toBeCloseTo(0.3);
+      expect(strokes[strokes.length - 1].width * zoom).toBeCloseTo(2);
+
+      renderer.destroy();
+    }
   });
 
   it("画布盒抵消视口变换，后备缓冲按视口尺寸分配", () => {

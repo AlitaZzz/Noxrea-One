@@ -34,7 +34,7 @@
 - 每次 `setNodes` 都产生新的 `nodes` 引用：`getCanvasDerived` 的 `derivedCache` 与 `getGroupMembership` 的 `membershipCache` 均按引用失效（`shared/canvas-derived.ts`），节点索引、选中集、选中框、全边高亮扫描、rail 宽度与组成员关系每帧全量重建。
 - `InfiniteCanvas` 订阅 `s.nodes`；受控 React Flow 在 props 引用变化后于被动 effect 中 `adoptUserNodes`（O(N) lookup 拷贝），`renderedNodes` 订阅再触发一轮节点树渲染。即每个指针帧至少两轮 React 提交。
 - **尺寸回传形成第二条写链**：store 尺寸变化 → wrapper 尺寸变化 → React Flow `useResizeObserver` 调 `updateNodeInternals(updates, force: true)` → 内部 lookup 替换并发出 `dimensions` 变更（不含 `setAttributes`）→ `handleNodesChange` 把 `dimensions` 归入 `otherChanges`（`hooks/use-canvas-node-changes.ts:78-84`）→ `applyNodeChanges` 写入 `measured` → 再次 `setNodes`。因此一次指针移动可能产生两次 store 写入与额外的 React 提交。
-- 结论：缩放卡顿与框选/拖动同源——「每个指针帧写受控 store 并触发两轮 React 提交」；组缩放还叠加 O(N) 归一化、派生/成员关系重建与大面积半透明组体逐帧重绘。本 Spec 消除写 store 与 React 提交链，不消除组体自身的布局/重绘成本。
+- 结论：缩放卡顿与框选/拖动同源——「每个指针帧写受控 store 并触发两轮 React 提交」；组缩放还叠加 O(N) 归一化、派生/成员关系重建与大面积组体逐帧重绘。本 Spec 消除写 store 与 React 提交链，不消除组体自身的布局/重绘成本。
 
 ### 3. React Flow 机制（12.12，已验证）
 
@@ -71,7 +71,7 @@
 - 新增其它角的缩放手柄或宽高比锁定交互；当前无调用方。
 - 采用 React Flow 内建 `NodeResizer`：手柄视觉、命中与交互契约保持不变。
 - 修改 store schema、持久化数据、接口契约或引入新依赖。
-- 消除组体大面积半透明区域的布局/重绘成本（CSS 层面的单独议题）。
+- 消除组体大面积区域的布局/重绘成本（CSS 层面的单独议题；2026-11-11 起组表面改为不透明色，但大面积重绘成本不变）。
 
 ## 业务规则
 
