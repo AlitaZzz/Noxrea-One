@@ -13,6 +13,7 @@ interface PointerInit {
   pointerId?: number;
   clientX?: number;
   button?: number;
+  isPrimary?: boolean;
 }
 
 function pointerEvent(type: string, init: PointerInit): MouseEvent {
@@ -26,11 +27,18 @@ function pointerEvent(type: string, init: PointerInit): MouseEvent {
     configurable: true,
     value: init.pointerId ?? 1,
   });
+  // jsdom 的 MouseEvent 没有 isPrimary：默认按主指针构造，额外手指显式传 false
+  Object.defineProperty(event, "isPrimary", {
+    configurable: true,
+    value: init.isPrimary ?? true,
+  });
   return event;
 }
 
-export function firePointerDown(target: Element, init: PointerInit = {}): void {
-  fireEvent(target, pointerEvent("pointerdown", init));
+export function firePointerDown(target: Element, init: PointerInit = {}): MouseEvent {
+  const event = pointerEvent("pointerdown", init);
+  fireEvent(target, event);
+  return event;
 }
 
 export function fireWindowPointerMove(clientX: number, pointerId = 1): void {

@@ -1,13 +1,15 @@
 /**
- * 画布编辑面板的 window 指针会话收尾。
+ * 画布编辑面板的 window 指针会话。
  *
- * pointerup / pointercancel 不是可靠的会话结束信号：窗口失焦（切标签页、
+ * 启动资格：拖拽会话只接受主指针左键；右键 / 中键 / 触摸的额外手指不归面板
+ * 处理，调用方应在 preventDefault / stopPropagation 之前返回，让事件走正常
+ * 浏览器或画布路径。
+ *
+ * 收尾：pointerup / pointercancel 不是可靠的会话结束信号——窗口失焦（切标签页、
  * Alt+Tab、窗口外松手）后浏览器可能不再派发二者。只靠指针事件收尾会让拖拽
- * 会话残留——回到窗口后未按键的 pointermove 仍会继续拖动，过期会话还会在
- * 下一次 pointerup 上按旧落点补提交。
- *
- * 所有编辑面板的拖拽会话统一在 window 上监听 blur 并按取消收尾；注册与
- * 按函数身份移除只写一处，避免各会话各自漏掉某条收尾路径。
+ * 会话残留：回到窗口后未按键的 pointermove 仍会继续拖动，过期会话还会在
+ * 下一次 pointerup 上按旧落点补提交。所有编辑面板的拖拽会话统一在 window 上
+ * 监听 blur 并按取消收尾；注册与按函数身份移除只写一处。
  */
 
 export interface WindowPointerSessionHandlers {
@@ -17,6 +19,14 @@ export interface WindowPointerSessionHandlers {
   onCancel: (event: PointerEvent) => void;
   /** 窗口失焦：浏览器可能不再补发 pointerup / pointercancel，会话必须自行收尾。 */
   onBlur: () => void;
+}
+
+/** 拖拽会话的起始资格：只接受主指针左键。 */
+export function isPrimaryLeftPointerDown(event: {
+  isPrimary: boolean;
+  button: number;
+}): boolean {
+  return event.isPrimary && event.button === 0;
 }
 
 /** 挂载一次拖拽会话的 window 监听，返回按函数身份移除的清理函数。 */

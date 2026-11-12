@@ -182,4 +182,31 @@ describe("帧序列面板失焦收尾", () => {
     flush();
     expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 1);
   });
+
+  it("只接受主指针左键：右键与额外手指不建立拖拽会话", () => {
+    const { container } = renderPanel();
+    flush();
+    vi.clearAllMocks();
+
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+
+    const rightClick = firePointerDown(track, { clientX: 100, button: 2 });
+    expect(rightClick.defaultPrevented).toBe(false);
+    fireWindowPointerMove(900);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    const extraFinger = firePointerDown(track, { clientX: 100, isPrimary: false });
+    expect(extraFinger.defaultPrevented).toBe(false);
+    fireWindowPointerMove(900);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    // 主指针左键仍正常起拖，并继续拦截面板内事件
+    const primary = firePointerDown(track, { clientX: 300 });
+    expect(primary.defaultPrevented).toBe(true);
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 3);
+  });
 });

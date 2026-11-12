@@ -39,7 +39,7 @@ import { resolveTrackDuration } from "./track-duration";
 import { TrackNotice } from "./TrackNotice";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
-import { startWindowPointerSession } from "./window-pointer-session";
+import { isPrimaryLeftPointerDown, startWindowPointerSession } from "./window-pointer-session";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -227,6 +227,8 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       tick 判定越界立即折回入点，表现成「微调出点就从头播放」。按下与拖动共用 */
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {
+      // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
+      if (!isPrimaryLeftPointerDown(e)) return;
       e.preventDefault();
       e.stopPropagation();
       // 雪碧图或代理未就绪、或初始化尚未写入真实区间：时间轴与画面都不可信
@@ -305,6 +307,8 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
   const handleHandleDown = useCallback(
     (which: "in" | "out") =>
       (e: React.PointerEvent) => {
+        // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
+        if (!isPrimaryLeftPointerDown(e)) return;
         e.preventDefault();
         e.stopPropagation();
         // 与轨道拖动同一守卫：初始化窗口内起拖会以默认区间 {0,1} 被覆写
@@ -486,6 +490,8 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       画面连续 scrub 到新区间的入点帧（与拖手柄一致），松手后恢复循环播放 */
   const handleBandDown = useCallback(
     (e: React.PointerEvent) => {
+      // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
+      if (!isPrimaryLeftPointerDown(e)) return;
       e.preventDefault();
       e.stopPropagation();
       // 与轨道拖动同一守卫：初始化窗口内平移会以默认区间 {0,1} 起拖、随后被覆写

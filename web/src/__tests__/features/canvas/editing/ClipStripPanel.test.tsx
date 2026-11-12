@@ -176,4 +176,37 @@ describe("片段截取面板失焦收尾", () => {
     expect(seekNodeId).toBe("n1");
     expect(seekTime).toBeCloseTo(1, 5);
   });
+
+  it("只接受主指针左键：右键与额外手指不建立拖拽会话", async () => {
+    const { container, track } = await renderPanel();
+    const handles = container.querySelectorAll<HTMLElement>('[class*="w-3.5"]');
+    const band = container.querySelector<HTMLElement>('[class*="cursor-grab"]')!;
+
+    const rightClick = firePointerDown(track, { clientX: 100, button: 2 });
+    expect(rightClick.defaultPrevented).toBe(false);
+    fireWindowPointerMove(900);
+    fireWindowPointerUp(900);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    const extraFinger = firePointerDown(handles[0], { clientX: 100, isPrimary: false });
+    expect(extraFinger.defaultPrevented).toBe(false);
+    fireWindowPointerMove(900);
+    fireWindowPointerUp(900);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    const bandRightClick = firePointerDown(band, { clientX: 100, button: 2 });
+    expect(bandRightClick.defaultPrevented).toBe(false);
+    fireWindowPointerMove(900);
+    fireWindowPointerUp(900);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    // 主指针左键仍正常起拖，并继续拦截面板内事件
+    const primary = firePointerDown(track, { clientX: 300 });
+    expect(primary.defaultPrevented).toBe(true);
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 3);
+  });
 });

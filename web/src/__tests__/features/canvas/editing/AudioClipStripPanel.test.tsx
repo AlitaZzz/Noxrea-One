@@ -296,6 +296,40 @@ describe("拖动会话的窗口失焦收尾", () => {
   });
 });
 
+describe("起始指针过滤", () => {
+  it("只接受主指针左键：右键与额外手指不定位、不改选区、不恢复", async () => {
+    const { container } = renderPanel();
+    await waitFor(() =>
+      expect(container.querySelectorAll('[class*="w-3.5"]')).toHaveLength(2),
+    );
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+    vi.clearAllMocks();
+
+    const band = container.querySelector<HTMLElement>('[class*="cursor-grab"]')!;
+    const handle = container.querySelectorAll<HTMLElement>('[class*="w-3.5"]')[0];
+
+    const rightClick = firePointerDown(band, { clientX: 50, button: 2 });
+    expect(rightClick.defaultPrevented).toBe(false);
+    fireWindowPointerUp(50);
+    expect(media!.currentTime).toBe(0);
+    expect(mocks.resume).not.toHaveBeenCalled();
+
+    const extraFinger = firePointerDown(handle, { clientX: 100, isPrimary: false });
+    expect(extraFinger.defaultPrevented).toBe(false);
+    fireWindowPointerUp(100);
+    expect(media!.currentTime).toBe(0);
+    expect(mocks.resume).not.toHaveBeenCalled();
+
+    // 主指针左键仍正常定位、恢复试听，并继续拦截面板内事件
+    const primary = firePointerDown(band, { clientX: 100 });
+    expect(primary.defaultPrevented).toBe(true);
+    fireWindowPointerUp(100);
+    expect(media!.currentTime).toBeCloseTo(1.9, 5);
+    expect(mocks.resume).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("StrictMode 双挂载（开发态元素重建）", () => {
   afterEach(() => {
     vi.mocked(getAudioPlaybackTime).mockReturnValue(0);

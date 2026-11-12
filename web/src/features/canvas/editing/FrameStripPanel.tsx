@@ -40,7 +40,7 @@ import { MediaRetryNotice } from "./MediaRetryNotice";
 import { demoteRetryNotice, proxyNoticeOf, ProxyNoticeTextOverlay } from "./ProxyNotice";
 import { resolveTrackDuration } from "./track-duration";
 import useEscapeToClose from "./use-escape-to-close";
-import { startWindowPointerSession } from "./window-pointer-session";
+import { isPrimaryLeftPointerDown, startWindowPointerSession } from "./window-pointer-session";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -155,6 +155,8 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
 
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {
+      // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
+      if (!isPrimaryLeftPointerDown(e)) return;
       // 禁用态也拦住事件：轨道在节点 HUD 内，不能让按下穿透成画布拖动
       e.preventDefault();
       e.stopPropagation();

@@ -43,7 +43,7 @@ import { clamp01 } from "@/lib/utils/number";
 import { clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
-import { startWindowPointerSession } from "./window-pointer-session";
+import { isPrimaryLeftPointerDown, startWindowPointerSession } from "./window-pointer-session";
 
 /** 面板波形绘制高度（wavesurfer canvas）：轨道总高 40+16=56px 与视频截取
     面板的轨道（h-14）对齐，两个面板上下相邻时高度一致 */
@@ -305,6 +305,8 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
   // 区间更新读 clipLoopRef 镜像（最新值）。
   const clipStartDrag = useCallback(
     (which: "in" | "out" | "track" | "band", e: React.PointerEvent) => {
+      // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
+      if (!isPrimaryLeftPointerDown(e)) return;
       e.preventDefault();
       e.stopPropagation();
       if (!operable) return;

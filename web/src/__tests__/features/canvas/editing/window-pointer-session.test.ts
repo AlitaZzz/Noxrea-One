@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
- * 编辑面板 window 指针会话：四条收尾路径必须成套注册，失焦按取消收尾。
+ * 编辑面板 window 指针会话：只接受主指针左键启动，四条收尾路径必须成套注册。
  *
  * 回归点：只注册 pointerup / pointercancel 时，窗口失焦后浏览器可能不再补发
- * 二者，拖拽会话残留并在回到窗口后继续跟随未按键的移动。
+ * 二者，拖拽会话残留并在回到窗口后继续跟随未按键的移动；右键 / 中键 /
+ * 额外手指则不应建立会话。
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -13,7 +14,10 @@ import {
   fireWindowPointerMove,
   fireWindowPointerUp,
 } from "@/__tests__/test-utils/pointer-events";
-import { startWindowPointerSession } from "@/features/canvas/editing/window-pointer-session";
+import {
+  isPrimaryLeftPointerDown,
+  startWindowPointerSession,
+} from "@/features/canvas/editing/window-pointer-session";
 
 function createHandlers() {
   return {
@@ -23,6 +27,15 @@ function createHandlers() {
     onBlur: vi.fn(),
   };
 }
+
+describe("isPrimaryLeftPointerDown", () => {
+  it("只接受主指针左键；右键、中键与额外手指不建立会话", () => {
+    expect(isPrimaryLeftPointerDown({ isPrimary: true, button: 0 })).toBe(true);
+    expect(isPrimaryLeftPointerDown({ isPrimary: true, button: 1 })).toBe(false);
+    expect(isPrimaryLeftPointerDown({ isPrimary: true, button: 2 })).toBe(false);
+    expect(isPrimaryLeftPointerDown({ isPrimary: false, button: 0 })).toBe(false);
+  });
+});
 
 describe("startWindowPointerSession", () => {
   it("注册四条 window 监听：move / up / cancel / blur 各收到一次", () => {
