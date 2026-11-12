@@ -13,6 +13,7 @@ import {
   firePointerDown,
   fireWindowBlur,
   fireWindowPointerMove,
+  fireWindowPointerUp,
   stubElementRect,
 } from "@/__tests__/test-utils/pointer-events";
 import { stubRaf } from "@/__tests__/test-utils/raf";
@@ -110,5 +111,75 @@ describe("帧序列面板失焦收尾", () => {
     firePointerDown(track, { clientX: 300 });
     flush();
     expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 3);
+  });
+
+  it("失焦时取消尚未执行的 rAF seek：取消后不得再按最后移动位置定位", () => {
+    const { container } = renderPanel();
+    flush();
+    vi.clearAllMocks();
+
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+
+    // 最后一次移动已写入 ratio，但 rAF 尚未执行——此时失焦
+    firePointerDown(track, { clientX: 100 });
+    fireWindowBlur();
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+  });
+
+  it("多指并发只建立一个会话：第二根指针不驱动播放头，也不覆盖首指针收尾", () => {
+    const { container } = renderPanel();
+    flush();
+    vi.clearAllMocks();
+
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+
+    firePointerDown(track, { clientX: 100, pointerId: 1 });
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 1);
+
+    vi.clearAllMocks();
+    // 第二根指针按下：已有会话时不得建立第二套监听或改写播放头
+    firePointerDown(track, { clientX: 900, pointerId: 2 });
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    fireWindowPointerMove(900, 2);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+
+    // 首指针仍驱动当前会话
+    fireWindowPointerMove(500, 1);
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 5);
+
+    // 其他指针的 pointerup 不得结束会话
+    fireWindowPointerUp(500, 2);
+    fireWindowPointerMove(700, 1);
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 7);
+
+    // 首指针松手后会话才结束
+    fireWindowPointerUp(700, 1);
+    vi.clearAllMocks();
+    fireWindowPointerMove(800, 1);
+    flush();
+    expect(mocks.seekVideo).not.toHaveBeenCalled();
+  });
+
+  it("正常松手不取消最后一次挂起的 seek", () => {
+    const { container } = renderPanel();
+    flush();
+    vi.clearAllMocks();
+
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+
+    firePointerDown(track, { clientX: 100 });
+    fireWindowPointerUp(100);
+    flush();
+    expect(mocks.seekVideo).toHaveBeenLastCalledWith("n1", 1);
   });
 });

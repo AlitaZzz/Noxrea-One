@@ -87,8 +87,14 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     playable: proxyPlayable,
   } = proxyPlayback;
   const trackRef = useRef<HTMLDivElement>(null);
-  // 拖动结束与组件卸载都要摘掉 window 监听：面板可能在拖动途中被卸载
+  // 拖动结束与组件卸载都要摘掉 window 监听并取消挂起的 seek：面板可能在拖动途中被卸载
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  // 当前拖动占用的指针 id：并发第二根指针不得启动第二个会话，否则两套 onMove
+  // 互相打架、dragCleanupRef 相互覆盖（与视频片段 / 音频片段面板同一守卫）
+  const dragPointerRef = useRef<number | null>(null);
+  // 预览 seek 的 rAF 句柄：取消收尾必须撤销尚未执行的 seek，否则回到窗口后
+  // 仍会按最后移动位置 seekVideo，违背「取消不提交最后位置」的收尾语义
+  const seekRafRef = useRef(0);
   useEffect(() => () => dragCleanupRef.current?.(), []);
   // 打开瞬间的播放位置作为播放头初始位置，之后不再随节点播放变化
   const initialTimeRef = useRef<number | null>(null);
@@ -153,28 +159,49 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
       e.preventDefault();
       e.stopPropagation();
       if (!canScrub) return;
+      const pointerId = e.pointerId;
+      if (dragPointerRef.current !== null) return;
+      dragPointerRef.current = pointerId;
       const next = ratioFromClientX(trackRef.current, e.clientX);
       if (next !== null) setRatioByUser(next);
       const onMove = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
         ev.preventDefault();
         const r = ratioFromClientX(trackRef.current, ev.clientX);
         if (r !== null) setRatioByUser(r);
       };
       let detach = () => {};
-      // pointercancel / 窗口失焦都按取消收尾：失焦后浏览器可能不再派发
-      // pointerup，残留会话会让未按键的移动继续搓擦播放头，并挂起节点时间跟随
       const cleanup = () => {
         detach();
+        dragPointerRef.current = null;
         dragCleanupRef.current = null;
       };
-      const onUp = () => cleanup();
+      // pointercancel / 窗口失焦都按取消收尾：失焦后浏览器可能不再派发
+      // pointerup，残留会话会让未按键的移动继续搓擦播放头，并挂起节点时间跟随。
+      // 取消必须同时撤销尚未执行的 rAF seek；ratio 更新可能已入队而 effect 尚未
+      // 执行，故先清用户驱动标记，避免 effect 在会话结束后补排一次 seek
+      const cancelDrag = () => {
+        userDrivenRef.current = false;
+        cancelAnimationFrame(seekRafRef.current);
+        seekRafRef.current = 0;
+        cleanup();
+      };
+      const onUp = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        cleanup();
+      };
+      const onCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        cancelDrag();
+      };
       detach = startWindowPointerSession({
         onMove,
         onUp,
-        onCancel: cleanup,
-        onBlur: cleanup,
+        onCancel,
+        onBlur: cancelDrag,
       });
-      dragCleanupRef.current = cleanup;
+      // 卸载也走取消收尾：撤销挂起 seek，而不是只摘监听
+      dragCleanupRef.current = cancelDrag;
     },
     [canScrub, setRatioByUser],
   );
@@ -222,6 +249,7 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
     if (!ready || !canScrub || !userDrivenRef.current) return;
     userDrivenRef.current = false;
     const raf = requestAnimationFrame(() => seekVideo(nodeId, ratio * duration));
+    seekRafRef.current = raf;
     return () => cancelAnimationFrame(raf);
   }, [ready, canScrub, nodeId, ratio, duration]);
 

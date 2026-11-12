@@ -288,9 +288,11 @@ describe("拖动会话的窗口失焦收尾", () => {
     fireWindowPointerMove(900);
     expect(media!.currentTime).toBeCloseTo(1.9, 5);
 
-    // 入点被钳在出点前（最小区间 0.5s）：0.3 收敛到 0.173684…，即 3.3s
-    firePointerDown(container.querySelectorAll<HTMLElement>('[class*="w-3.5"]')[0], { clientX: 300 });
-    expect(media!.currentTime).toBeCloseTo(3.3, 5);
+    // 重新抓取点放在 5%（0.95s）：若失焦会话未被清除，残留 move 900 会把入点
+    // 钳到出点前（3.3s），重抓会被 dragPointerRef 拒绝；期望值必须与残留值不同，
+    // 否则断言无法区分「会话已取消」与「同值巧合」
+    firePointerDown(container.querySelectorAll<HTMLElement>('[class*="w-3.5"]')[0], { clientX: 50 });
+    expect(media!.currentTime).toBeCloseTo(0.95, 5);
   });
 });
 
