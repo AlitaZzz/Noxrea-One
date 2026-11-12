@@ -1,6 +1,6 @@
 # 画布编辑面板的 window 指针会话（Editing Panel Pointer Sessions）
 
-状态：待确认（2026-11-12 创建；用户要求根因修复帧序列 / 视频片段 / 音频片段三个编辑面板丢失 `pointerup` 后的失焦残留。主体修复已提交为 `ea0083d9`；审查发现的 Frame 重入 / 挂起 seek 与本轮文档修正为未提交工作区改动；长期契约待用户确认）
+状态：待确认（2026-11-12 创建；用户要求根因修复帧序列 / 视频片段 / 音频片段三个编辑面板丢失 `pointerup` 后的失焦残留。主体修复已提交为 `ea0083d9`；审查发现的 Frame 重入 / 挂起 seek 与本轮文档修正已提交为 `416e3ea5`；长期契约待用户确认）
 
 ## 目标
 
@@ -155,8 +155,8 @@
 ## 当前状态
 
 - 状态：待确认。规则 1–4 已实现；主体修复已提交 `ea0083d9`，本轮审查修复
-  （Frame 重入 / `pointerId` / 挂起 rAF seek、音频用例可证伪性）为未提交工作区
-  改动。自动化验证通过，真实浏览器失焦路径未验证。
+  （Frame 重入 / `pointerId` / 挂起 rAF seek、音频用例可证伪性）已提交为
+  `416e3ea5`。自动化验证通过，真实浏览器失焦路径未验证。
 - 实现（2026-11-12，用户要求「根因修复编辑面板的同类失焦问题」）：
   - 新增 `window-pointer-session.ts`，四条 window 监听与按函数身份移除只写一处；
     三个面板的 5 个会话全部改用该原语，不再各自维护监听子集。
@@ -168,16 +168,17 @@
     挂起节点时间跟随并让未按键移动继续搓擦；`ClipStripPanel` /
     `AudioClipStripPanel` 的 `dragPointerRef` 残留会锁死后续拖动，过期会话还会在
     下一次 `pointerup` 上按旧落点补提交（回归用例已复现）。
-  - 审查修复（本轮，未提交）：`FrameStripPanel` 补 `dragPointerRef` 重入守卫与
-    `pointerId` 过滤；挂起 seek 的 rAF 句柄收回 `seekRafRef`，取消路径先清用户
-    驱动标记再撤销 rAF，正常 `pointerup` 不撤销；卸载改存 `cancelDrag`。音频
-    手柄用例的重新抓取点改到 5%，使断言与失焦残留值可区分。
+  - 审查修复（本轮，已提交 `416e3ea5`）：`FrameStripPanel` 补
+    `dragPointerRef` 重入守卫与 `pointerId` 过滤；挂起 seek 的 rAF 句柄收回
+    `seekRafRef`，取消路径先清用户驱动标记再撤销 rAF，正常 `pointerup` 不撤销；
+    卸载改存 `cancelDrag`。音频手柄用例的重新抓取点改到 5%，使断言与失焦残留值
+    可区分。
 - 测试：共享原语新增 2 例、Frame 4 例、Clip 3 例、音频新增 2 例；先红后绿验证见
   验收 3；定向 4 文件 / 23 例、`editing` 目录 + `SelectionToolbar` +
   `module-boundaries` 12 文件 / 91 例通过；`tsc --noEmit` 与变更文件 ESLint 无错误。
 - 遗留：三个面板均未过滤起始键（`button` / `isPrimary`）；批量连线仍自行注册
   四条 window 监听（见异常 6）；元素级 capture 面板未审计；真实窗口失焦与真实
-  指针序列未现场验证；本轮审查修复未提交。
+  指针序列未现场验证。
 - 来源：`client-video-editing.md` 与 `canvas-audio-peaks-cache.md` 的
   2026-11-12 当前状态条目引用本 Spec 规则 1–4「会话建立 / 正常收尾 /
   取消收尾 / 卸载收尾」。
