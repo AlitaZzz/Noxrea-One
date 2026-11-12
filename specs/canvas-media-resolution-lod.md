@@ -84,14 +84,14 @@
 - 不支持动画源（GIF / 动态 WebP）的 LOD；它们继续使用原图，避免把动画压成静态首帧。静态 WebP 在 v1 也按保守策略走原图，属于已知覆盖缺口（见「异常与边界」）。多帧 PNG（APNG）无法由扩展名区分，由服务端识别后回退原图（规则 8.8），不会冻结首帧。
 - 不引入 `next/image`、`srcset`、客户端 `canvas`/WebCodecs 缩放或 Figma 式分块渲染。
 - 不改变导出、标注、裁剪、网格拆分、下载、预览浮层、生成参考图等使用原图的路径。
-- 不调整 React Flow 的视口裁剪与 MiniMap；背景点阵由 `canvas-dot-grid.md` 另行记录（该 Spec 待用户确认、代码未提交，实机视觉待走查），本 Spec 不定义点阵规则。`.connection-rail-dot` 的常驻 `will-change` 与节点标题的量宽开销原列为「另立任务」，已于 2026-10-24 单独处理（见「后续性能补充」），不改变本 Spec 的 LOD 规则。
+- 不调整 React Flow 的视口裁剪与 MiniMap；背景点阵由 `canvas-dot-grid.md` 另行记录（该 Spec 待用户确认，代码已随 `ce08456f` 提交，实机视觉待走查），本 Spec 不定义点阵规则。`.connection-rail-dot` 的常驻 `will-change` 与节点标题的量宽开销原列为「另立任务」，已于 2026-10-24 单独处理（见「后续性能补充」），不改变本 Spec 的 LOD 规则。
 - 不做服务端低档位预热、后台批量回填或 CDN 接入（冷缓存首次访问的取舍见下文；预热已确认暂不做）。
 - 不新增数据库表、不改节点数据结构、不改保存/恢复/SSE 契约。
 
 ## 与现有 Spec 的关系
 
 - `canvas-image-http-url-rendering.md` 规则 7 要求「预热与渲染使用同一 URL」；本 Spec 改变 URL 的派生方式（加 `?w=`），但保持该规则不变。已于 2026-10-23 在该 Spec 补充 LOD URL 的派生说明（规则 8）。
-- 背景点阵视觉由 `canvas-dot-grid.md` 单独记录（待确认、代码未提交、实机视觉待走查）；本 Spec 不定义点阵规则，图片 LOD 规则不变。
+- 背景点阵视觉由 `canvas-dot-grid.md` 单独记录（待确认、代码已随 `ce08456f` 提交、实机视觉待走查）；本 Spec 不定义点阵规则，图片 LOD 规则不变。
 - `media-processing-concurrency.md` 规则 8.1 的 8 档/上限 1280 由本 Spec 的 12 档/上限 2560 取代；已于 2026-10-23 回写档位表、归一化上限与相关测试描述（规则 8.1），其余媒体池/单飞/删除语义不变。
 - `canvas-media-loading-skeleton.md` 的骨架规则继续有效，但「换档不闪骨架」是新增的显示状态：仅首次加载、逻辑源变化、上传预览使用骨架；已于 2026-10-23 在该 Spec 增加交叉引用（规则 10）。
 - `derived-deletion-linkage.md` 与 `file-access-ownership.md` 的 `_cache` 键形态需同步更新为 v2 单形态：解析/归属/删除联动只识别 v2；旧的无版本缓存由一次性迁移清理，不保留双读/双删。已于 2026-10-23 回写规则与往返测试说明。

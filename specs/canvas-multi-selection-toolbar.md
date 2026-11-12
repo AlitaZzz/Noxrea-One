@@ -1,7 +1,8 @@
 # 画布多选聚合工具条
 
 状态：已实现（Phase 1，2026-11-03；Phase 2 未实现，需另行确认）。2026-11-11/12
-的组表面与批量连线增量为未提交改动，见第 9 节。
+的组表面与批量连线增量为独立增量，已随 `ce08456f` 提交但尚未达到「已实现」条件，
+见第 9 节。
 
 > 本 Spec 覆盖 Phase 1（本次实现）与 Phase 2（多选布局，后续扩展）。Phase 2 仅记录设计方向，不作为本次验收范围，需另行确认后才能实现。
 
@@ -348,7 +349,7 @@
 ## 9. 当前状态
 
 - 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 设计与确认未开始，不在本次范围。
-- 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码未提交，整体未达到「已实现」条件。本增量依赖的 `canvas-batch-connect-drag.md` 仍为「待确认」；确认前该增量不构成本 Spec 的已实现范围。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
+- 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码已随 `ce08456f` 提交；整体未达到「已实现」条件。本增量依赖的 `canvas-batch-connect-drag.md` 仍为「待确认」；确认前该增量不构成本 Spec 的已实现范围。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
 - 已完成：现状与即梦对照调查；Phase 1 方案、按钮矩阵、边界与验收标准；第 8 节全部决策确认；术语统一为“编组”；统一边距决策确认。
 - Phase 1 实现（2026-11-02 实现，2026-11-03 提交 `e6fc53ad`）：
   - `web/src/features/canvas/shared/canvas-derived.ts` 新增 `selectionChromeBounds`：全部选中节点（含组）的绝对包围盒、计数与是否含组，与 `selectionFrame` 并列且不改变其语义。

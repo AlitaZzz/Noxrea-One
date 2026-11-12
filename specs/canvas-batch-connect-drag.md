@@ -1,6 +1,6 @@
 # 画布批量连线拖拽会话（Batch Connect Drag）
 
-状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；代码未提交；整体未达到「已实现」条件，待用户确认本 Spec）
+状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；代码已随 `ce08456f` 提交；整体未达到「已实现」条件，待用户确认本 Spec）
 
 ## 目标
 
@@ -169,8 +169,8 @@
 ## 当前状态
 
 - 状态：待确认；规则 1–6 均已实现，自动化验证通过（定向 18 用例），现场验证已覆盖
-  `GroupConnectRail` 与 `BatchConnectHandle` 组件级，代码未提交（2026-11-12）；整体
-  未达到「已实现」条件。
+  `GroupConnectRail` 与 `BatchConnectHandle` 组件级，代码已随 `ce08456f` 提交
+  （2026-11-12）；整体未达到「已实现」条件。
 - 组件卸载清理（2026-11-12，用户要求修复）：hook 以 `endSessionRef` 持有会话结束
   函数（只做非 React 副作用），`useEffect` 卸载时调用；事件路径 `cleanupDrag` =
   `endSession` + 清空预览，卸载路径不触达组件状态。`endSession` 以会话级标记保证
