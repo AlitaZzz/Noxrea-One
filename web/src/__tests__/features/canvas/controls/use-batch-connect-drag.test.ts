@@ -3,7 +3,7 @@
  *
  * 覆盖扇出/扇入建对、空白处创建连接节点、误触阈值（含 connecting 延后）、
  * 非左键过滤、多指指针隔离、pointerup 位移补判、拖回参与集取消、
- * pointercancel 清理、组件卸载清理与重入保护。CanvasSurface 只负责把该 hook 接到
+ * pointercancel / 窗口失焦清理、组件卸载清理与重入保护。CanvasSurface 只负责把该 hook 接到
  * BatchConnectContext / 轨道组件，行为口径以本测试为准。
  */
 // @vitest-environment jsdom
@@ -141,6 +141,13 @@ function pointerCancel(pointerId = 1): void {
   });
 }
 
+/** 窗口失焦：浏览器可能不再派发 pointerup / pointercancel，会话必须自行收尾。 */
+function windowBlur(): void {
+  act(() => {
+    window.dispatchEvent(new Event("blur"));
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getState.mockImplementation(() => ({ nodes, edges: [] }));
@@ -254,6 +261,63 @@ describe("useBatchConnectDrag", () => {
     expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
     expect(mocks.clearConnectionTilt).toHaveBeenCalled();
     expect(ctx.result.current.preview).toBeNull();
+  });
+
+  it("窗口失焦：按取消处理，后续 pointerup 不提交", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+    expect(ctx.onDragStart).toHaveBeenCalledTimes(1);
+    expect(ctx.result.current.preview).not.toBeNull();
+
+    windowBlur();
+
+    expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
+    expect(ctx.result.current.preview).toBeNull();
+    expect(mocks.clearConnectionTilt).toHaveBeenCalled();
+
+    // 失焦后 pointerup 仍可能才到达：不得按落点补提交
+    pointerUp(20, 0);
+    expect(ctx.onConnect).not.toHaveBeenCalled();
+    expect(ctx.onConnectToBlank).not.toHaveBeenCalled();
+    expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("阈值前窗口失焦：不进入 connecting，后续 pointerup 也不提交", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(2, 0);
+    windowBlur();
+
+    expect(ctx.onDragStart).not.toHaveBeenCalled();
+    expect(ctx.onDragEnd).not.toHaveBeenCalled();
+    expect(ctx.result.current.preview).toBeNull();
+
+    pointerUp(400, 0);
+    expect(ctx.onConnect).not.toHaveBeenCalled();
+    expect(ctx.onConnectToBlank).not.toHaveBeenCalled();
+  });
+
+  it("窗口失焦后可重新开始拖拽", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+    windowBlur();
+    expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+    pointerUp(20, 0);
+
+    expect(ctx.onDragStart).toHaveBeenCalledTimes(2);
+    expect(ctx.onDragEnd).toHaveBeenCalledTimes(2);
+    expect(ctx.onConnect).toHaveBeenCalledWith([{ source: "a", target: "t" }]);
   });
 
   it("越过阈值前的 pointercancel：不进入 connecting，也不复位", () => {
@@ -410,12 +474,14 @@ describe("useBatchConnectDrag", () => {
 
       const registered = addListener.mock.calls
         .filter(([type]) =>
-          type === "pointermove" || type === "pointerup" || type === "pointercancel")
+          type === "pointermove" || type === "pointerup" || type === "pointercancel"
+          || type === "blur")
         .map(([type, listener]) => [type, listener] as const);
       expect(registered.map(([type]) => type)).toEqual([
         "pointermove",
         "pointerup",
         "pointercancel",
+        "blur",
       ]);
 
       // Escape 清空选区 / 组节点删除等会在拖拽中卸载消费者

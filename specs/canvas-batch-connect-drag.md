@@ -1,6 +1,6 @@
 # 画布批量连线拖拽会话（Batch Connect Drag）
 
-状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；代码已随 `ce08456f` 提交；整体未达到「已实现」条件，待用户确认本 Spec）
+状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理与窗口失焦收尾；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；主体代码已随 `ce08456f` 提交，窗口失焦修复为未提交增量；整体未达到「已实现」条件，待用户确认本 Spec）
 
 ## 目标
 
@@ -8,8 +8,8 @@
    提供同一套批量连线拖拽语义，避免两处各写一套指针会话。
 2. 单击、右键/中键、多指误触不进入 connecting，不触发组表面降透明
    （`[data-connecting]`）。
-3. 指针序列异常收尾（失键、非左键 pointerup、pointercancel）按取消处理，不误建边、
-   不误弹创建菜单。
+3. 指针序列异常收尾（失键、非左键 pointerup、pointercancel、窗口失焦）按取消处理，
+   不误建边、不误弹创建菜单。
 4. 松手建边/弹菜单与拖动中的目标反馈使用同一候选对口径。
 
 ## 范围
@@ -79,11 +79,15 @@
    - 命中参与集内节点 → 取消，不建边、不弹菜单；
    - 未命中 → `onConnectToBlank` 携带参与集、画布坐标、屏幕坐标与方向。
 6. `pointercancel` 只清理，不按落点提交。
+7. 窗口失焦（`blur`）只清理，不按落点提交：失焦后浏览器可能不再派发 `pointerup` /
+   `pointercancel`，会话必须自行收尾，避免 `data-connecting` 常驻、重入锁残留与
+   过期会话在下次点击时补提交。
 
 ### 6. 清理
 
-1. 会话结束（`endSession`）只执行非 React 副作用：移除 window 监听、清除倾斜、
-   清空 `dragRef` 并注销当前会话的结束函数。
+1. 会话结束（`endSession`）只执行非 React 副作用：按函数身份移除 window 监听
+   （`pointermove` / `pointerup` / `pointercancel` / `blur`）、清除倾斜、清空
+   `dragRef` 并注销当前会话的结束函数。
 2. 事件路径的 `cleanupDrag` = `endSession` + 清空预览状态；预览属于组件本地状态，
    卸载路径不得重置（组件已不存在）。
 3. `endSession` 必须幂等：以会话级标记保证重复调用只生效一次；正常事件路径下只
@@ -104,7 +108,7 @@
 - `web/src/features/canvas/shared/node-hit-test.ts`、`shared/connection-rules.ts`：
   命中与候选对口径。
 - 测试：`web/src/__tests__/features/canvas/controls/use-batch-connect-drag.test.ts`
-  （18 用例）。
+  （21 用例）。
 
 ## 异常与边界
 
@@ -119,14 +123,17 @@
 8. 拖回参与集：取消。
 9. 平台边界：`buttons` 位在触控笔/异常平台的真机行为尚未验证；单测用普通对象、
    `MouseEvent` 与 `Event` 模拟指针事件，未使用真实 `PointerEvent`。
+10. 窗口失焦 / pointerup 丢失：`blur` 按取消收尾；失焦后返回画布不会恢复原会话，
+    需重新起手。该路径由 `blur` 监听保证，不依赖浏览器补发 `pointerup`。
 
 ## 验收标准
 
-1. 定向测试 18 用例通过：扇出/扇入建对、空白弹菜单、`<4px` 误触、拖回参与集取消、
-   pointercancel（阈值前后）、4px 边界只进入一次、其他指针隔离、非左键 pointerup
-   取消、失键 move 取消、快速甩动补判、拖拽中卸载清理（含阈值前与会话结束后幂等）、
-   重入保护、右键/非主指针不拦截。测试未断言规则 4 的 ok/blocked 倾斜、规则 3.4 的
-   左右锚点、规则 1.4 的参与集冻结与异常 4 的其他指针 `pointercancel`，见第 4 条。
+1. 定向测试 21 用例通过：扇出/扇入建对、空白弹菜单、`<4px` 误触、拖回参与集取消、
+   pointercancel（阈值前后）、窗口失焦（阈值前后、失焦后重入）、4px 边界只进入一次、
+   其他指针隔离、非左键 pointerup 取消、失键 move 取消、快速甩动补判、拖拽中卸载
+   清理（含阈值前与会话结束后幂等）、重入保护、右键/非主指针不拦截。测试未断言规则 4
+   的 ok/blocked 倾斜、规则 3.4 的左右锚点、规则 1.4 的参与集冻结与异常 4 的其他指针
+   `pointercancel`，见第 4 条。
 2. 现场验证（2026-11-12，dev，向组连接轨道派发 JS `PointerEvent` 驱动真实 React
    处理器）：主键 pointerdown 后不进入 connecting、组背景保持不透明；位移 2px 不
    进入；8px 后 `data-connecting=true`、组背景降到 20%；其他指针的 cancel/move/up
@@ -165,12 +172,14 @@
 2. 触控笔/异常平台的 `buttons` 行为是否需要补充真机验证。
 3. 拖拽中卸载清理（规则 6.5）已按用户 2026-11-12 指示实现并补回归用例；是否作为
    长期契约随第 1 条一并确认。
+4. 窗口失焦取消（规则 5.7）已按用户 2026-11-12 指示根因修复并补回归用例；是否作为
+   长期契约随第 1 条一并确认。
 
 ## 当前状态
 
-- 状态：待确认；规则 1–6 均已实现，自动化验证通过（定向 18 用例），现场验证已覆盖
-  `GroupConnectRail` 与 `BatchConnectHandle` 组件级，代码已随 `ce08456f` 提交
-  （2026-11-12）；整体未达到「已实现」条件。
+- 状态：待确认；规则 1–6 均已实现，自动化验证通过（定向 21 用例），现场验证已覆盖
+  `GroupConnectRail` 与 `BatchConnectHandle` 组件级，主体代码已随 `ce08456f` 提交
+  （2026-11-12）；窗口失焦修复为未提交增量；整体未达到「已实现」条件。
 - 组件卸载清理（2026-11-12，用户要求修复）：hook 以 `endSessionRef` 持有会话结束
   函数（只做非 React 副作用），`useEffect` 卸载时调用；事件路径 `cleanupDrag` =
   `endSession` + 清空预览，卸载路径不触达组件状态。`endSession` 以会话级标记保证
@@ -179,9 +188,19 @@
 - 现场走查（2026-11-12，`BatchConnectHandle` 组件级）：正常批量连线 0 → 2；拖拽中
   Escape 卸载后松手到目标节点不建边、不弹菜单；卸载后重新拖线 2 → 4；无页面异常。
   证据见验收 6，临时项目已删除。
+- 窗口失焦收尾（2026-11-12，用户要求根因修复丢失 `pointerup`）：原会话只依赖
+  `pointerup` / `pointercancel` 收尾；窗口失焦（切标签页、Alt+Tab、窗口外松手）后
+  浏览器可能不再派发这两个事件，导致 connecting（`data-connecting`）常驻、重入锁
+  残留，且过期会话会在下一次 `pointerup` 时按落点补提交（回归用例已复现误提交）。
+  修复为监听 window `blur` 并按取消收尾，与 marquee 的失焦取消一致；批量连线的
+  提交即建边，落点语义不可信，不做 resize 式的末帧提交。新增 3 条回归用例
+  （阈值后失焦、阈值前失焦、失焦后重新起手），并确认修复前 3 条均失败、修复后通过。
+  本次修复为工作区改动，尚未提交；修复后复跑 canvas controls 11 文件 / 64 用例与
+  `GroupNode` 3 用例通过；真机窗口失焦路径未现场复现（单测用合成 `Event("blur")`
+  验证）。
 - 实现：`use-batch-connect-drag.ts` 作为唯一实现；`BatchConnectHandle` 与
   `GroupConnectRail` 共用。
-- 验证：定向 18 用例、`tsc --noEmit`、变更文件 ESLint 通过（含 `endSession` /
+- 验证：定向 21 用例、`tsc --noEmit`、变更文件 ESLint 通过（含 `endSession` /
   `cleanupDrag` 拆分后的复跑）；web 全量 219 文件 / 1770 用例三轮分别 1759、1768、
   1759 通过，失败集中在与本次改动无关的媒体/URL 真实计时器用例（`HoverCard`、
   `ResolvedHoverMedia`、`MediaAccessError`、`UseFileAccessUrl`、

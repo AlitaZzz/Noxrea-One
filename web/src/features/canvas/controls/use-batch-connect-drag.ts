@@ -13,6 +13,8 @@
  * - 拖回参与集内（自己的成员/选中节点）或移动过小 → 取消；只有越过误触阈值
  *   才进入 connecting（单击不触发组表面降透明）。
  * - 只跟踪起始指针：多指触控时其他指针的 move/up/cancel 不参与本次拖拽。
+ * - 窗口失焦（blur）按取消处理：失焦后浏览器可能不再派发 pointerup /
+ *   pointercancel，会话必须自行收尾，避免 connecting 常驻与过期会话补提交。
  * 拖动中的预览为束线：每个参与节点近端边缘正中出一根流光线汇到指针（与松手
  * 每节点建一条边一致，不画从 Handle 出发的单线）。
  * 拖动中的目标反馈与节点轨道拖线同款（connection-tilt 倾斜/毛玻璃），
@@ -145,7 +147,7 @@ export function useBatchConnectDrag({
     /**
      * 结束会话：只做非 React 副作用——摘监听、清除倾斜、复位 dragRef 与结束函数
      * 引用，进入过 connecting 时补 onDragEnd。返回本次调用是否真正结束了会话。
-     * pointerup / pointercancel / 失键 move / 组件卸载都会触发，必须幂等。
+     * pointerup / pointercancel / 窗口失焦 / 失键 move / 组件卸载都会触发，必须幂等。
      */
     let ended = false;
     function endSession(): boolean {
@@ -155,6 +157,7 @@ export function useBatchConnectDrag({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("blur", onBlur);
       clearConnectionTilt();
       dragRef.current = null;
       // 只有真正开始的拖拽才需要复位 connecting——单击不应触发状态往返
@@ -239,9 +242,14 @@ export function useBatchConnectDrag({
       if (!drag || ev.pointerId !== drag.pointerId) return;
       cleanupDrag();
     };
+    // 窗口失焦（切标签页 / Alt+Tab / 窗口外松手）：浏览器可能不再派发
+    // pointerup / pointercancel，按取消处理——批量连线的提交即建边，落点
+    // 语义已不可信，与 marquee 的失焦取消一致；不做 resize 式的末帧提交。
+    const onBlur = () => cleanupDrag();
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("blur", onBlur);
     endSessionRef.current = endSession;
   }
 
