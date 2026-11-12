@@ -5,7 +5,7 @@
  * 面板与节点同样解耦：波形实例只用 `{ media, peaks, duration }` 创建、永不传
  * `url`；峰值按逻辑引用值取；峰值不可用时面板不可操作。
  */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +17,13 @@ import {
   TEST_PEAKS,
 } from "@/__tests__/test-utils/audio-fixtures";
 import { mutableFileAccessState } from "@/__tests__/test-utils/file-access-mock";
+import {
+  firePointerDown,
+  fireWindowBlur,
+  fireWindowPointerMove,
+  fireWindowPointerUp,
+  stubElementRect,
+} from "@/__tests__/test-utils/pointer-events";
 import { makeStorageKey } from "@/__tests__/test-utils/storage-fixtures";
 import AudioClipStripPanel from "@/features/canvas/editing/AudioClipStripPanel";
 import { getAudioPlaybackTime } from "@/features/canvas/shared/audio-playback-registry";
@@ -237,6 +244,53 @@ describe("波形实例创建契约（规则 5.2）", () => {
 
     expect(load).toHaveBeenCalledTimes(1);
     expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("拖动会话的窗口失焦收尾", () => {
+  it("亮带原地点击前失焦：取消点击定位与恢复，过期 pointerup 不再 seek / play", async () => {
+    const { container } = renderPanel();
+    await waitFor(() => expect(container.querySelector('[class*="cursor-grab"]')).toBeTruthy());
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+    vi.clearAllMocks();
+
+    const band = container.querySelector<HTMLElement>('[class*="cursor-grab"]')!;
+    firePointerDown(band, { clientX: 50 });
+    fireWindowBlur();
+    // band 取消时定位与恢复都还没发生：补一次恢复，避免卡在 blocked 提示
+    expect(mocks.resumeIfBlocked).toHaveBeenCalledTimes(1);
+
+    fireWindowPointerUp(50);
+    expect(media!.currentTime).toBe(0);
+    expect(mocks.resume).not.toHaveBeenCalled();
+
+    // 拖动守卫已清除：新的亮带点击仍正常定位并恢复试听
+    firePointerDown(band, { clientX: 100 });
+    fireWindowPointerUp(100);
+    expect(media!.currentTime).toBeCloseTo(1.9, 5);
+    expect(mocks.resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("拖入手柄时失焦：未按键的移动不再改选区与播放头，随后可重新抓取", async () => {
+    const { container } = renderPanel();
+    await waitFor(() =>
+      expect(container.querySelectorAll('[class*="w-3.5"]')).toHaveLength(2),
+    );
+    const track = container.querySelector<HTMLElement>('[class*="cursor-ew-resize"]')!;
+    stubElementRect(track);
+    vi.clearAllMocks();
+
+    firePointerDown(container.querySelectorAll<HTMLElement>('[class*="w-3.5"]')[0], { clientX: 100 });
+    expect(media!.currentTime).toBeCloseTo(1.9, 5);
+
+    fireWindowBlur();
+    fireWindowPointerMove(900);
+    expect(media!.currentTime).toBeCloseTo(1.9, 5);
+
+    // 入点被钳在出点前（最小区间 0.5s）：0.3 收敛到 0.173684…，即 3.3s
+    firePointerDown(container.querySelectorAll<HTMLElement>('[class*="w-3.5"]')[0], { clientX: 300 });
+    expect(media!.currentTime).toBeCloseTo(3.3, 5);
   });
 });
 

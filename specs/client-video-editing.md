@@ -309,3 +309,4 @@
 以上未验证项不改变状态：本 Spec 维持「已确认」，「已实现」由用户设置。
 
 - 2026-11-08 派生工厂参数形状更新：本 Spec 2026-10-22 审查处置中「维持 `createVideoNodeFromRef` 位置参数」与「两种派生工厂位置参数顺序不同」的表述已过时；三个 `*FromRef` 工厂现均接收单一参数对象，`options` 统一收在 `CreateDerivedNodeParams`。当前契约见 [web-module-contracts.md](web-module-contracts.md) 规则 9（派生节点工厂与提交出口）。
+- 2026-11-12 编辑面板指针会话失焦收尾（用户要求根因修复）：`FrameStripPanel` 与 `ClipStripPanel` 的拖拽会话原先只监听指针事件（帧面板甚至没有 `pointercancel`），窗口失焦后浏览器可能不再派发 `pointerup` / `pointercancel`，导致未按键的移动继续搓擦播放头、`dragPointerRef` 锁死后续拖动、过期会话在下一次 `pointerup` 上按旧落点补提交。修复为共享 `window-pointer-session.ts` 统一注册 `pointermove` / `pointerup` / `pointercancel` / `blur`，失焦按取消收尾（复用既有 `cancelDrag` / `cleanup`，不提交最后位置）。该跨面板契约由 [canvas-editing-panel-pointer-sessions.md](canvas-editing-panel-pointer-sessions.md) 规则 1「会话建立」–规则 4「卸载收尾」定义，本 Spec 的客户端管线规则不变。回归：`FrameStripPanel.test.tsx` 1 例、`ClipStripPanel.test.tsx` 3 例与共享原语 2 例；移除 `blur` 监听后 4 例失败，恢复后通过。改动尚未提交，真实浏览器窗口失焦路径未验证。

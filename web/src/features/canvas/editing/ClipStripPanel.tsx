@@ -39,6 +39,7 @@ import { resolveTrackDuration } from "./track-duration";
 import { TrackNotice } from "./TrackNotice";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
+import { startWindowPointerSession } from "./window-pointer-session";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -264,10 +265,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         latest = r;
         scrub(r);
       };
+      let detach = () => {};
       const cleanup = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onCancel);
+        detach();
         dragPointerRef.current = null;
         dragCleanupRef.current = null;
       };
@@ -288,16 +288,15 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         setDragging(null);
         finishDragPreview(which, latest * duration);
       };
-      // pointercancel 是被系统接管而取消的手势：收尾但不做定位，scrub 已 pause
-      // 的播放按拖动前状态还回，否则取消一次就永久静音
+      // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
+      // scrub 已 pause 的播放按拖动前状态还回，否则取消一次就永久静音
       const onCancel = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         cancelDrag();
       };
+      const onBlur = () => cancelDrag();
+      detach = startWindowPointerSession({ onMove, onUp, onCancel, onBlur });
       dragCleanupRef.current = cancelDrag;
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onCancel);
     },
     [rangeInitialized, duration, nodeId, setHandle, seekPreview, finishDragPreview, resumeIfBlocked, resume],
   );
@@ -338,10 +337,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
           latest = r;
           scrub(r);
         };
+        let detach = () => {};
         const cleanup = () => {
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", onUp);
-          window.removeEventListener("pointercancel", onCancel);
+          detach();
           dragPointerRef.current = null;
           dragCleanupRef.current = null;
         };
@@ -361,15 +359,15 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
           if (latest !== null) finishDragPreview(which, latest * duration);
           else if (wasPlayingRef.current) resume();
         };
-        // pointercancel：收尾但不做定位，scrub 已 pause 的播放按拖动前状态还回
+        // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
+        // scrub 已 pause 的播放按拖动前状态还回
         const onCancel = (ev: PointerEvent) => {
           if (ev.pointerId !== pointerId) return;
           cancelDrag();
         };
+        const onBlur = () => cancelDrag();
+        detach = startWindowPointerSession({ onMove, onUp, onCancel, onBlur });
         dragCleanupRef.current = cancelDrag;
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-        window.addEventListener("pointercancel", onCancel);
       },
     [rangeInitialized, duration, nodeId, setHandle, seekPreview, finishDragPreview, resume, resumeIfBlocked],
   );
@@ -519,10 +517,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         loopStateRef.current = { inRatio: latestIn, outRatio: latestIn + width };
         seekPreview(latestIn * duration);
       };
+      let detach = () => {};
       const cleanup = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onCancel);
+        detach();
         dragPointerRef.current = null;
         dragCleanupRef.current = null;
       };
@@ -541,15 +538,15 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         setDragging(null);
         finishDragPreview("in", latestIn * duration);
       };
-      // pointercancel：收尾但不做定位，scrub 已 pause 的播放按拖动前状态还回
+      // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
+      // scrub 已 pause 的播放按拖动前状态还回
       const onCancel = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         cancelDrag();
       };
+      const onBlur = () => cancelDrag();
+      detach = startWindowPointerSession({ onMove, onUp, onCancel, onBlur });
       dragCleanupRef.current = cancelDrag;
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onCancel);
     },
     [rangeInitialized, duration, nodeId, seekPreview, finishDragPreview, resume],
   );

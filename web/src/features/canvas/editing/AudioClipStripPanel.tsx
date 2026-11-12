@@ -43,6 +43,7 @@ import { clamp01 } from "@/lib/utils/number";
 import { clampBandPan, computeInitialRange, isOutsideLoopRange, isRangeLongEnough, MIN_RANGE_S, ratioFromClientX } from "./clip-range";
 import useEscapeToClose from "./use-escape-to-close";
 import usePlaybackBlocked from "./use-playback-blocked";
+import { startWindowPointerSession } from "./window-pointer-session";
 
 /** 面板波形绘制高度（wavesurfer canvas）：轨道总高 40+16=56px 与视频截取
     面板的轨道（h-14）对齐，两个面板上下相邻时高度一致 */
@@ -363,10 +364,9 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
         const r = ratioFromClientX(trackRef.current, ev.clientX);
         if (r !== null) applyAt(r);
       };
+      let detach = () => {};
       const cleanup = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onCancel);
+        detach();
         dragPointerRef.current = null;
         dragCleanupRef.current = null;
         setClipDragging(null);
@@ -383,16 +383,18 @@ export default function AudioClipStripPanel({ nodeId, audioRef, onClose }: Audio
           resume();
         }
       };
-      // pointercancel 是被系统接管而取消的手势：收尾但不执行点击定位。
+      // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不执行点击定位。
       // band 模式取消时定位与恢复都还没发生：补一次恢复，避免卡在 blocked 提示
-      const onCancel = (ev: PointerEvent) => {
-        if (ev.pointerId !== pointerId) return;
+      const cancelDrag = () => {
         cleanup();
         if (mode === "band") resumeIfBlocked();
       };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-      window.addEventListener("pointercancel", onCancel);
+      const onCancel = (ev: PointerEvent) => {
+        if (ev.pointerId !== pointerId) return;
+        cancelDrag();
+      };
+      const onBlur = () => cancelDrag();
+      detach = startWindowPointerSession({ onMove, onUp, onCancel, onBlur });
       dragCleanupRef.current = cleanup;
     },
     [operable, clipSeek, duration, setClipHandle, resumeIfBlocked, resume],

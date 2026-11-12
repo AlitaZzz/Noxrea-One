@@ -40,6 +40,7 @@ import { MediaRetryNotice } from "./MediaRetryNotice";
 import { demoteRetryNotice, proxyNoticeOf, ProxyNoticeTextOverlay } from "./ProxyNotice";
 import { resolveTrackDuration } from "./track-duration";
 import useEscapeToClose from "./use-escape-to-close";
+import { startWindowPointerSession } from "./window-pointer-session";
 
 /** 拿不到真实帧率时的回退步进（秒）：小于常见帧率的一帧，保证不会跳过帧 */
 const FALLBACK_FRAME_STEP = 1 / 50;
@@ -159,15 +160,21 @@ function FrameStripPanel({ nodeId, videoRef, onClose }: FrameStripPanelProps) {
         const r = ratioFromClientX(trackRef.current, ev.clientX);
         if (r !== null) setRatioByUser(r);
       };
+      let detach = () => {};
+      // pointercancel / 窗口失焦都按取消收尾：失焦后浏览器可能不再派发
+      // pointerup，残留会话会让未按键的移动继续搓擦播放头，并挂起节点时间跟随
       const cleanup = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
+        detach();
         dragCleanupRef.current = null;
       };
       const onUp = () => cleanup();
+      detach = startWindowPointerSession({
+        onMove,
+        onUp,
+        onCancel: cleanup,
+        onBlur: cleanup,
+      });
       dragCleanupRef.current = cleanup;
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
     },
     [canScrub, setRatioByUser],
   );
