@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AssetItem } from "@/entities/asset";
 import CanvasAgentDrawer from "@/features/canvas/agent/components/AgentDrawer";
 import CanvasAgentRuntimeBridge from "@/features/canvas/agent/Runtime";
 import { createAssetNode } from "@/features/canvas/assets/create-asset-node";
 import CanvasExplorer from "@/features/canvas/explorer/CanvasExplorer";
+import { saveManager } from "@/features/canvas/persistence/save-manager";
 import CanvasMediaLoadingProvider from "@/features/canvas/shared/CanvasMediaLoadingProvider";
 import {
   findFreePosition,
@@ -84,6 +85,12 @@ export default function CanvasRoot({
   );
 
   const inputGate = inputBlocked || modalOpen;
+
+  // owner 在 SPA 路由切换后仍残留；离开确认只属于画布路由，由挂载/卸载界定。
+  useEffect(() => {
+    saveManager.setUnloadPromptEligible(true);
+    return () => saveManager.setUnloadPromptEligible(false);
+  }, []);
 
   return (
     <CanvasPortsContext.Provider value={ports}>

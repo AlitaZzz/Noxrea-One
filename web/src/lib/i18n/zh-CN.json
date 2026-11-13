@@ -145,6 +145,13 @@
     "agentRestoring": "restoring canvas…",
     "selection": {
       "count": "{{count}} 个节点"
+    },
+    "save": {
+      "blocked": "登录已失效，保存暂停",
+      "offline": "网络异常，保存已暂停",
+      "saving": "保存中",
+      "unsaved": "未保存",
+      "saved": "已保存"
     }
   },
   "node": {
@@ -607,10 +614,6 @@
     "title": "会话已过期",
     "content": "此画布已在其他标签页或浏览器中打开，请刷新页面以继续编辑。",
     "reload": "刷新页面"
-  },
-  "offline": {
-    "label": "网络异常，离线待保存",
-    "tooltip": "网络异常，请检查网络连接后重试"
   },
   "file": {
     "uploadFailed": "上传失败",

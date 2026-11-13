@@ -201,6 +201,20 @@ function createCanvasDataDelta(base: CanvasData, current: CanvasData): CanvasDat
   return delta;
 }
 
+/**
+ * 保存相位：SaveManager 既有字段的纯函数派生，供项目工具条卡片内的保存状态指示器订阅。
+ * unknown = 无所有者或基线未建立；expired / blocked / offline 为保存停用态；
+ * saving = 在途或有补存排队；unsaved = 有未落库改动；saved = 当前快照已落库。
+ */
+export type CanvasSavePhase =
+  | "unknown"
+  | "expired"
+  | "blocked"
+  | "offline"
+  | "saving"
+  | "unsaved"
+  | "saved";
+
 class SaveManager {
   private dirty = false;
   private saving = false;
@@ -234,6 +248,20 @@ class SaveManager {
   private dirtySince: number | null = null;
   /** 当前项目最近一次确认落库的画布快照，仅用于卸载增量请求。 */
   private persistedCanvas: { projectId: string; data: CanvasData } | null = null;
+  /** 派发保存时的所有者；用于相位归属过滤与卸载提示。 */
+  private savingProjectId: string | null = null;
+  /**
+   * 画布内容代际：每次 resetForProjectSwitch 递增。
+   * projectId 无法区分同一项目的前后两个会话（A→B→A、A→项目列表→A），
+   * 上一会话在途保存的迟到 409 / 401 / 失败必须按代际丢弃，
+   * 不得污染重进后新会话的相位、基线与 dirty。
+   */
+  private sessionEpoch = 0;
+  /** 相位订阅者；只在相位变化时通知。 */
+  private statusListeners = new Set<() => void>();
+  private lastPhase: CanvasSavePhase = "unknown";
+  /** 画布路由是否活跃：/login、/project 等非画布页面不得弹离开确认。 */
+  private unloadPromptEligible = false;
 
   // ==================== 公开接口 ====================
 
@@ -266,6 +294,7 @@ class SaveManager {
     }
     this.pendingDelay = Math.min(this.pendingDelay, delay);
     this.resetTimer(delay);
+    this.publishSavePhase();
   }
 
   /**
@@ -283,6 +312,9 @@ class SaveManager {
     this.authBlocked = false;
     this.dirtySince = null;
     this.pendingSave = null;
+    // 在途请求仍由 saving / savePromise 标识；旧会话的派发所有者与响应归属不得留给新会话
+    this.savingProjectId = null;
+    this.sessionEpoch += 1;
     this.pendingDelay = SAVE_DELAY;
     this.persistedCanvas = null;
     if (this.saveTimer) {
@@ -296,6 +328,7 @@ class SaveManager {
     if (clearExpired) {
       useSessionExpiredStore.getState().resetExpired();
     }
+    this.publishSavePhase();
   }
 
   /**
@@ -312,6 +345,7 @@ class SaveManager {
     // 显式 flush 是重新尝试的时机：会话可能已经恢复。
     // 若仍是 401，save() 会重新置位 authBlocked，循环立即收敛，不会空转重试。
     this.authBlocked = false;
+    this.publishSavePhase();
     // 整体截止时间：等待中（saving）不消耗重试次数，若只按次数收敛，
     // 保存迟迟不结束时会退化成「每 5s 重试一次」的无限循环。
     // 每次等待取「单次上限 5s」与剩余预算的较小值，同时约束单次与总耗时。
@@ -351,6 +385,7 @@ class SaveManager {
     // 页面仍存活：每次进入后台都是一次重试机会（cookie 可能已由其他标签页刷新）
     this.authBlocked = false;
     this.flush({ keepalive: false, skipUnauthorized: true });
+    this.publishSavePhase();
   }
 
   /** 握手采纳服务端快照后建立增量保存基线。 */
@@ -358,7 +393,10 @@ class SaveManager {
     if (getCanvasProjectId() !== projectId) return;
     // 握手成功 = 会话与编辑权均有效，解除 401 暂停
     this.authBlocked = false;
+    // 首先建立页面生命周期监听：基线建立前发生的离线/卸载事件不能丢失。
+    this.registerFlushOnce();
     this.persistedCanvas = { projectId, data: cloneCanvasData(buildCanvasData()) };
+    this.publishSavePhase();
   }
 
   /**
@@ -375,6 +413,44 @@ class SaveManager {
     // 卸载前最后一次机会：会话可能已恢复，携带 dirty 再尝试一次
     this.authBlocked = false;
     this.flush({ keepalive: true, skipUnauthorized: true });
+    this.publishSavePhase();
+  }
+
+  /** 纯函数派生当前保存相位；订阅方通过 getSavePhase 读取。 */
+  getSavePhase = (): CanvasSavePhase => {
+    const projectId = getCanvasProjectId();
+    if (!projectId) return "unknown";
+    if (this.expired) return "expired";
+    if (this.authBlocked) return "blocked";
+    if (this.offline) return "offline";
+    if (this.isSaveOwnedBy(projectId)) return "saving";
+    if (this.dirty) return "unsaved";
+    if (this.persistedCanvas?.projectId === projectId) return "saved";
+    return "unknown";
+  };
+
+  subscribeSavePhase = (listener: () => void): (() => void) => {
+    this.statusListeners.add(listener);
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  };
+
+  /**
+   * 同一租约重新握手成功：只解除 401 暂停。
+   * 事件必须归属当前画布所有者；旧项目的迟到握手不得解除新项目的会话阻塞。
+   * 不覆盖持久化基线（当前内容可能比服务端新），不自动发起保存；
+   * 内容仍 dirty 时由下一次编辑或显式 flush 走既有重试路径。
+   */
+  notifySessionValid(projectId: string): void {
+    if (getCanvasProjectId() !== projectId) return;
+    this.authBlocked = false;
+    this.publishSavePhase();
+  }
+
+  /** 画布路由活跃性由组合根维护：非画布页面不得因残留 owner 弹离开确认。 */
+  setUnloadPromptEligible(active: boolean): void {
+    this.unloadPromptEligible = active;
   }
 
   /** 兜底保存的公共实现 */
@@ -446,16 +522,19 @@ class SaveManager {
     // 内容无主（画布未加载）时没有可保存对象，保持 dirty 等待加载完成。
     const projectId = getCanvasProjectId();
     if (!projectId) return;
+    const sessionEpoch = this.sessionEpoch;
     const canvasData = buildCanvasData();
     this.dirty = false;
     this.saving = true;
+    this.savingProjectId = projectId;
     this.savePromise = new Promise((r) => { this.resolveSave = r; });
+    this.publishSavePhase();
 
     try {
       // 网络段进入写互斥锁：与项目重命名共用同一条串行通道，
       // baseRevision 在锁内发请求前一刻读取，同页 409 从构造上不可能发生。
       await runProjectWrite(() =>
-        this.saveToApi(projectId, canvasData, { keepalive, skipUnauthorized }),
+        this.saveToApi(projectId, canvasData, { keepalive, skipUnauthorized, sessionEpoch }),
       );
     } catch (e) {
       // 页面卸载时浏览器拒绝超出 keepalive 配额的请求是确定性边界，
@@ -463,24 +542,30 @@ class SaveManager {
       if (!(e instanceof KeepaliveBodyTooLargeError) && !(e instanceof SaveUnauthorizedError)) {
         console.error("[SaveManager] save failed:", e);
       }
-      // 失败的对象属于派发时锁定的项目；所有者已切换就不再把 dirty 记到新项目头上
-      if (getCanvasProjectId() === projectId) {
+      // 失败的对象属于派发时锁定的项目与代际；已切换项目或同一项目已重进时，
+      // 都不再把 dirty 记到新会话头上
+      if (this.isCurrentSession(projectId, sessionEpoch)) {
         this.dirty = true;
       }
       if (e instanceof SaveUnauthorizedError) {
         // 401 不是「已处理」：保留 dirty，停止自动重试，等下一次编辑 / flush / 握手。
         // 非 skipUnauthorized 路径的全局失效流程已由 apiRaw 触发；这里只负责不再丢改动。
-        this.authBlocked = true;
-        this.pendingSave = null;
-        this.pendingDelay = SAVE_DELAY;
-        if (getCanvasProjectId() === projectId) {
+        // 归属过滤：响应到达前已切换项目 / 已重进同一项目时，旧请求的 401 不得把
+        // 新画布置为 blocked；新会话若确实未登录，它自己的保存/握手会得到 401。
+        // 此时继续走下方收尾逻辑，让新会话在旧请求在途期间产生的补存诉求得到处理。
+        if (this.isCurrentSession(projectId, sessionEpoch)) {
+          this.authBlocked = true;
+          this.pendingSave = null;
+          this.pendingDelay = SAVE_DELAY;
           console.warn("[SaveManager] save unauthorized; canvas changes stay dirty");
+          return;
         }
-        return;
       }
     } finally {
       this.saving = false;
       this.resolveSave?.();
+      if (!this.pendingSave) this.savingProjectId = null;
+      this.publishSavePhase();
     }
 
     if (this.pendingSave) {
@@ -494,6 +579,7 @@ class SaveManager {
       this.pendingDelay = SAVE_DELAY_IMMEDIATE;
       this.resetTimer(this.pendingDelay);
       this.pendingDelay = SAVE_DELAY;
+      this.publishSavePhase();
       return;
     }
 
@@ -505,13 +591,19 @@ class SaveManager {
       this.dirtySince = null;
     }
     this.pendingDelay = SAVE_DELAY;
+    this.publishSavePhase();
   }
 
   private async saveToApi(
     projectId: string,
     canvasData: CanvasData,
-    opts: { keepalive: boolean; skipUnauthorized: boolean },
+    opts: { keepalive: boolean; skipUnauthorized: boolean; sessionEpoch: number },
   ): Promise<void> {
+    // 写锁内发送前再校验代际：save() 派发后可能先被其他写请求堵在队列里，
+    // 期间项目切换 / 同一项目重进会换上新会话的租约与 revision。
+    // 旧快照若携带新凭据发出，会被服务端接受并覆盖刚采纳的内容，响应端的
+    // 代际过滤无法挽回，因此必须在发送前放弃。
+    if (!this.isCurrentSession(projectId, opts.sessionEpoch)) return;
     // 文件引用账本的重算由服务端权威判定（updateProject 内比较新旧画布引用），
     // 前端不再携带引用指纹，避免客户端 bug 影响服务端账本正确性。
     // 每次更新都携带保存前的版本与编辑权租约令牌（fencing token）；服务端
@@ -565,7 +657,7 @@ class SaveManager {
         if (typeof conflictRevision === "number") {
           updateProjectRevision(projectId, conflictRevision);
         }
-        if (getCanvasProjectId() === projectId) {
+        if (this.isCurrentSession(projectId, opts.sessionEpoch)) {
           this.markExpired();
         }
         return;
@@ -575,9 +667,9 @@ class SaveManager {
 
     // 服务端更新成功必然 revision + 1；本地同步后下一次保存才能携带正确版本。
     updateProjectRevision(projectId, baseRevision + 1);
-    // 基线是「当前画布」的单槽快照：旧项目的在途保存晚到不得覆盖新项目的基线，
-    // 否则新画布卸载时取不到增量基线，超限请求只能失败。
-    if (getCanvasProjectId() === projectId) {
+    // 基线是「当前画布」的单槽快照：旧项目、或同一项目上一会话的在途保存晚到
+    // 都不得覆盖当前基线，否则新画布卸载时取不到增量基线，超限请求只能失败。
+    if (this.isCurrentSession(projectId, opts.sessionEpoch)) {
       this.persistedCanvas = { projectId, data: cloneCanvasData(canvasData) };
     }
   }
@@ -592,6 +684,7 @@ class SaveManager {
       this.saveTimer = null;
     }
     useSessionExpiredStore.getState().markExpired();
+    this.publishSavePhase();
   }
 
   /**
@@ -599,15 +692,54 @@ class SaveManager {
    * 取得，本窗口尚未撞 409。与 409 路径同等收尾——停用全部保存路径，
    * 避免过期弹窗出现后仍发出必 409 的保存请求。
    */
-  notifyEvicted(): void {
+  notifyEvicted(projectId: string): void {
+    const owner = getCanvasProjectId();
+    // 旧项目的迟到驱逐不得把新画布置为过期；owner 尚未建立时保留全局过期语义
+    if (owner !== null && owner !== projectId) return;
     this.markExpired();
+  }
+
+  /** 在途保存或排队补存是否属于当前项目。 */
+  private isSaveOwnedBy(projectId: string): boolean {
+    return this.savingProjectId === projectId && (this.saving || this.pendingSave !== null);
+  }
+
+  /**
+   * 响应归属：派发时的项目与代际都必须仍是当前画布。
+   * 仅比较 projectId 无法区分同一项目的前后两个会话，上一会话在途请求的
+   * 迟到 409 / 401 / 失败会污染重进后的新会话。
+   */
+  private isCurrentSession(projectId: string, sessionEpoch: number): boolean {
+    return this.sessionEpoch === sessionEpoch && getCanvasProjectId() === projectId;
+  }
+
+  /** 只在相位真正变化时通知订阅者，避免无关状态更新触发组件重渲染。 */
+  private publishSavePhase(): void {
+    const phase = this.getSavePhase();
+    if (phase === this.lastPhase) return;
+    this.lastPhase = phase;
+    for (const listener of this.statusListeners) listener();
+  }
+
+  /**
+   * 是否存在「离开会丢失」的本地改动。
+   * 编辑权过期时内容已无处可写，由过期弹窗处理，不弹离开确认；
+   * 非画布路由（owner 可能残留）不得弹窗。
+   */
+  private hasUnsafeLocalChanges(): boolean {
+    if (!this.unloadPromptEligible) return false;
+    const projectId = getCanvasProjectId();
+    if (!projectId || this.expired) return false;
+    if (this.dirty) return true;
+    return this.isSaveOwnedBy(projectId);
   }
 
   /** 全局只注册一次页面生命周期与网络状态监听 */
   private registerFlushOnce(): void {
     if (this.registered) return;
-    this.registered = true;
     if (typeof window === "undefined") return;
+    // 先落位再采样：首次调用方可能在采样与挂载之间同步触发事件。
+    this.registered = true;
 
     // 校正初始在线状态（SSR / 首屏时 navigator 可能尚未就绪）
     this.offline = typeof navigator !== "undefined" && navigator.onLine === false;
@@ -634,7 +766,15 @@ class SaveManager {
     window.addEventListener("pagehide", (event) => {
       if (!event.persisted) this.flushOnUnload();
     });
-    window.addEventListener("beforeunload", () => this.flushOnUnload());
+    window.addEventListener("beforeunload", (event) => {
+      // 先判定再 flush：flushOnUnload 会同步把 dirty 置 false，判定必须在其之前。
+      // pagehide / visibilitychange 从不弹确认，只有真正可取消的 beforeunload 弹。
+      if (this.hasUnsafeLocalChanges()) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+      this.flushOnUnload();
+    });
 
     // 离线暂停自动保存：清掉已排的定时器，避免离线瞬间再触发一次必失败的请求
     window.addEventListener("offline", () => {
@@ -643,6 +783,7 @@ class SaveManager {
         clearTimeout(this.saveTimer);
         this.saveTimer = null;
       }
+      this.publishSavePhase();
     });
 
     // 恢复在线立即补存：dirty 且未在保存中则直接保存
@@ -651,6 +792,7 @@ class SaveManager {
       if (this.dirty && !this.saving) {
         void this.save(false);
       }
+      this.publishSavePhase();
     });
   }
 }

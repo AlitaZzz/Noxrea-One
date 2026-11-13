@@ -29,7 +29,7 @@ export function handleEvictEvent(
   if (revision !== undefined) {
     updateProjectRevision(projectId, revision);
   }
-  saveManager.notifyEvicted();
+  saveManager.notifyEvicted(projectId);
 }
 
 /**
@@ -68,14 +68,19 @@ export function handleCanvasHandshake(
   const held = getCanvasLease(projectId);
   if (held !== null) {
     updateProjectRevision(projectId, project.revision);
-    if (held === lease) return "adopted";
+    if (held === lease) {
+      // 同一租约重连：服务端快照可能落后于本页内存（断线期间的本地改动，
+      // 或 401 暂停期间的 dirty 内容），只解除会话暂停，绝不覆盖基线 / 内容。
+      saveManager.notifySessionValid(projectId);
+      return "adopted";
+    }
 
     // 令牌不同 = 服务端发生过 fresh join 轮换 = 编辑权曾易主。本页可能错过
     // evict（断线窗口恰逢他人 fresh join、房间超宽限重建后重连），令牌轮换
     // 只证明「编辑权曾离开本页」，不能证明本页内存画布仍对应当前租约的权威
     // 快照——绝不静默续接：与 evict 同等收尾（同步版本 + notifyEvicted），
     // 过期弹窗引导刷新，刷新后槽位为空、重走采纳路径以服务端为准。
-    saveManager.notifyEvicted();
+    saveManager.notifyEvicted(projectId);
     return "expired";
   }
 

@@ -466,3 +466,122 @@ describe("SaveManager 401 语义", () => {
     warnSpy.mockRestore();
   });
 });
+
+describe("SaveManager save phase", () => {
+  it("同一租约重新握手只解除 401，不自动保存、不建立新基线", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.saveProjectRaw.mockResolvedValueOnce({ ok: false, status: 401 });
+
+    saveManager.markDirty();
+    await saveManager.flushAndWait();
+    expect(saveManager.getSavePhase()).toBe("blocked");
+
+    const calls = mocks.saveProjectRaw.mock.calls.length;
+    const listener = vi.fn();
+    const unsubscribe = saveManager.subscribeSavePhase(listener);
+
+    // 旧项目 / 迟到事件的会话有效性通知不得解除当前画布的阻塞
+    saveManager.notifySessionValid("p2");
+    expect(saveManager.getSavePhase()).toBe("blocked");
+    expect(listener).not.toHaveBeenCalled();
+
+    // 当前项目：解除阻塞并按真实相位变化通知一次
+    saveManager.notifySessionValid("p1");
+    expect(saveManager.getSavePhase()).toBe("unsaved");
+    expect(listener).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    // 不自动发请求；内容仍 dirty，等下一次编辑 / 显式 flush
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(calls);
+    expect(mocks.revision).toBe(7);
+    unsubscribe();
+    warnSpy.mockRestore();
+  });
+
+  it("无基线时重新握手不会把当前内容伪装成已保存", () => {
+    expect(saveManager.getSavePhase()).toBe("unknown");
+    saveManager.notifySessionValid("p1");
+    expect(saveManager.getSavePhase()).toBe("unknown");
+  });
+
+  it("相位随防抖派发在 unsaved → saving → saved 间迁移，整周期一次 PUT", async () => {
+    saveManager.setBaselineFromCurrent("p1");
+    expect(saveManager.getSavePhase()).toBe("saved");
+
+    saveManager.markDirty();
+    expect(saveManager.getSavePhase()).toBe("unsaved");
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(2_000);
+    expect(saveManager.getSavePhase()).toBe("saving");
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1);
+
+    await drainMicrotasks();
+    expect(saveManager.getSavePhase()).toBe("saved");
+  });
+
+  it("5xx 回到 unsaved 并保持 dirty 重试，不出现 saved", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.saveProjectRaw.mockResolvedValueOnce({ ok: false, status: 500 });
+    saveManager.setBaselineFromCurrent("p1");
+
+    saveManager.markDirty();
+    vi.advanceTimersByTime(2_000);
+    await drainMicrotasks();
+
+    expect(saveManager.getSavePhase()).toBe("unsaved");
+    expect(mocks.revision).toBe(7);
+
+    // 下一次重试仍按既有防抖延迟，不紧密重试
+    vi.advanceTimersByTime(1_999);
+    await drainMicrotasks();
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  it("409 进入 expired 且不再派发保存", async () => {
+    mocks.saveProjectRaw.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: "canvas_revision_conflict" }),
+    });
+
+    saveManager.markDirty();
+    await saveManager.flushAndWait();
+    expect(saveManager.getSavePhase()).toBe("expired");
+
+    const calls = mocks.saveProjectRaw.mock.calls.length;
+    saveManager.markDirty();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(calls);
+  });
+
+  it("相同相位重复发布不通知，相位变化各通知一次", () => {
+    const listener = vi.fn();
+    const unsubscribe = saveManager.subscribeSavePhase(listener);
+
+    saveManager.setBaselineFromCurrent("p1");
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    saveManager.setBaselineFromCurrent("p1");
+    saveManager.markDirty();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    saveManager.markDirty();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    saveManager.resetForProjectSwitch();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("notifySessionValid 不覆盖持久化基线", () => {
+    saveManager.setBaselineFromCurrent("p1");
+    const internals = saveManager as unknown as { persistedCanvas: unknown };
+    const baseline = internals.persistedCanvas;
+    expect(baseline).not.toBeNull();
+
+    saveManager.notifySessionValid("p1");
+    expect(internals.persistedCanvas).toBe(baseline);
+  });
+});

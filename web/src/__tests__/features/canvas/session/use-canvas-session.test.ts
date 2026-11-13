@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   clearHistory: vi.fn(),
   runSuppressed: vi.fn(),
   notifyEvicted: vi.fn(),
+  notifySessionValid: vi.fn(),
   setBaselineFromCurrent: vi.fn(),
   updateProjectRevision: vi.fn(),
   upsertProjectSummary: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("@/features/canvas/agent/user-action-tracker", () => ({
 vi.mock("@/features/canvas/persistence/save-manager", () => ({
   saveManager: {
     notifyEvicted: (...args: unknown[]) => mocks.notifyEvicted(...args),
+    notifySessionValid: (...args: unknown[]) => mocks.notifySessionValid(...args),
     setBaselineFromCurrent: (...args: unknown[]) => mocks.setBaselineFromCurrent(...args),
   },
 }));
@@ -100,6 +102,7 @@ describe("画布会话事件处理", () => {
 
       expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 5);
       expect(mocks.notifyEvicted).toHaveBeenCalledTimes(1);
+      expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
     });
 
     it("无 revision / 非数字 revision：仍停用保存，但不写版本", () => {
@@ -108,6 +111,8 @@ describe("画布会话事件处理", () => {
 
       expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
       expect(mocks.notifyEvicted).toHaveBeenCalledTimes(2);
+      expect(mocks.notifyEvicted).toHaveBeenNthCalledWith(1, "p1");
+      expect(mocks.notifyEvicted).toHaveBeenNthCalledWith(2, "p1");
     });
   });
 
@@ -132,8 +137,9 @@ describe("画布会话事件处理", () => {
       expect(mocks.setBaselineFromCurrent).toHaveBeenCalledWith("p1");
       expect(mocks.clearHistory).toHaveBeenCalledTimes(1);
       expect(getCanvasLease("p1")).toBe(42);
-      // 采纳路径是取得编辑权，不是被驱逐
+      // 采纳路径是取得编辑权，不是被驱逐 / 恢复会话
       expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      expect(mocks.notifySessionValid).not.toHaveBeenCalled();
       // 采纳路径不按「重连版本同步」写版本
       expect(mocks.updateProjectRevision).not.toHaveBeenCalled();
     });
@@ -167,6 +173,7 @@ describe("画布会话事件处理", () => {
 
       // 协议错误 ≠ 编辑权变更：不触发驱逐联动，由连接层按传输失败收敛
       expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      expect(mocks.notifySessionValid).not.toHaveBeenCalled();
       // 非法载荷不产生任何 entity / canvas 状态写入
       expect(mocks.upsertProjectSummary).not.toHaveBeenCalled();
       expect(mocks.restoreFromProject).not.toHaveBeenCalled();
@@ -181,6 +188,8 @@ describe("画布会话事件处理", () => {
 
       expect(mocks.upsertProjectSummary).not.toHaveBeenCalled();
       expect(mocks.restoreFromProject).not.toHaveBeenCalled();
+      expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      expect(mocks.notifySessionValid).not.toHaveBeenCalled();
       expect(getCanvasLease("p1")).toBeNull();
     });
 
@@ -251,6 +260,10 @@ describe("画布会话事件处理", () => {
       expect(mocks.restoreFromProject).not.toHaveBeenCalled(); // 保护本地未保存编辑
       expect(mocks.clearHistory).not.toHaveBeenCalled();
       expect(mocks.notifyEvicted).not.toHaveBeenCalled();
+      // 同租约重连：只解除 401 暂停，不覆盖基线；归属项目必须随事件传入
+      expect(mocks.notifySessionValid).toHaveBeenCalledWith("p1");
+      // 重连误重建增量基线会让后续 keepalive 增量丢失，必须保持“只清除暂停”语义
+      expect(mocks.setBaselineFromCurrent).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -263,7 +276,9 @@ describe("画布会话事件处理", () => {
 
       expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 9);
       expect(mocks.notifyEvicted).toHaveBeenCalledTimes(1);
-      // 绝不静默续接：不恢复内容、不重置历史、不重新采纳
+      expect(mocks.notifyEvicted).toHaveBeenCalledWith("p1");
+      // 令牌轮换不是会话恢复：不解除暂停、不恢复内容、不重置历史、不重新采纳
+      expect(mocks.notifySessionValid).not.toHaveBeenCalled();
       expect(mocks.restoreFromProject).not.toHaveBeenCalled();
       expect(mocks.clearHistory).not.toHaveBeenCalled();
       expect(mocks.upsertProjectSummary).not.toHaveBeenCalled();

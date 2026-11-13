@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   updateProjectRevision: vi.fn(),
   markSessionExpired: vi.fn(),
   resetSessionExpired: vi.fn(),
+  runProjectWrite: vi.fn(),
   revisions: {} as Record<string, number>,
   canvasProjectId: "p1" as string | null,
   snapshotNodes: [] as Array<Record<string, unknown>>,
@@ -45,7 +46,7 @@ vi.mock("@/entities/project", () => ({
     mocks.updateProjectRevision(id, rev);
     mocks.revisions[id] = Math.max(mocks.revisions[id] ?? 1, rev);
   },
-  runProjectWrite: <T,>(fn: () => Promise<T>) => fn(),
+  runProjectWrite: <T,>(fn: () => Promise<T>) => mocks.runProjectWrite(fn) as Promise<T>,
 }));
 
 vi.mock("@/lib/api/error-message", () => ({
@@ -89,6 +90,7 @@ function resetSaveState() {
     saveTimer: ReturnType<typeof setTimeout> | null;
     dirtySince: number | null;
     pendingDelay: number;
+    savingProjectId: string | null;
   };
   s.dirty = false;
   s.saving = false;
@@ -96,6 +98,7 @@ function resetSaveState() {
   s.dirtySince = null;
   s.pendingDelay = 2000;
   s.offline = false;
+  s.savingProjectId = null;
   for (const k of Object.keys(mocks.revisions)) delete mocks.revisions[k];
 }
 
@@ -111,6 +114,8 @@ describe("SaveManager 并发保存", () => {
     vi.clearAllMocks();
     mocks.canvasProjectId = "p1";
     mocks.snapshotNodes = [{ id: "n1", data: {} }];
+    // 默认写锁直通；队列时序用例按需改写成可控挂起
+    mocks.runProjectWrite.mockImplementation((fn: () => Promise<unknown>) => fn());
     resetSaveState();
     // 默认已通过握手取得编辑权；专项用例自行改写租约状态
     setCanvasLease("p1", 42);
@@ -339,6 +344,7 @@ describe("SaveManager 并发保存", () => {
     const st = saveManager as unknown as { dirty: boolean; saveTimer: unknown };
     expect(st.dirty).toBe(false);
     expect(st.saveTimer).toBeNull();
+    expect(saveManager.getSavePhase()).toBe("unknown");
 
     // 状态已清空：后续不会再派发旧内容的保存
     mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
@@ -346,10 +352,95 @@ describe("SaveManager 并发保存", () => {
     expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["成功", { ok: true, status: 200 }],
+    ["409", { ok: false, status: 409, json: async () => ({ error: "canvas_revision_conflict" }) }],
+    ["401", { ok: false, status: 401 }],
+    ["500", { ok: false, status: 500 }],
+  ])("resetForProjectSwitch：同项目重进后，上一会话的迟到 %s 响应不影响新画布", async (_label, response) => {
+    const first = gatedResponse();
+    mocks.saveProjectRaw.mockImplementationOnce(() => first.gate.then(() => response));
+
+    saveManager.markDirty();
+    const p = priv.save(false);
+    await vi.waitFor(() => expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1));
+
+    // A → B → A：旧 A 请求仍在途，新 A 会话完成握手并建立基线。
+    // 新基线内容与旧派发快照不同，用于锁住“迟到成功不得覆盖基线”。
+    mocks.canvasProjectId = "p2";
+    saveManager.resetForProjectSwitch();
+    mocks.canvasProjectId = "p1";
+    saveManager.resetForProjectSwitch();
+    mocks.snapshotNodes = [{ id: "n-new", data: {} }];
+    saveManager.setBaselineFromCurrent("p1");
+
+    // 派发所有者属于上一个 A 会话；新 A 基线已建立，不得显示 saving
+    expect(saveManager.getSavePhase()).toBe("saved");
+
+    first.release();
+    await p;
+
+    // 迟到响应属于上一会话：无论成功、409、401 还是 5xx，都不得改变新会话状态
+    const st = saveManager as unknown as {
+      dirty: boolean;
+      expired: boolean;
+      authBlocked: boolean;
+      persistedCanvas: { data: { nodes: Array<{ id: string }> } } | null;
+    };
+    expect(st.dirty).toBe(false);
+    expect(st.expired).toBe(false);
+    expect(st.authBlocked).toBe(false);
+    // 成功变体的唯一代际副作用是基线回写：必须仍是新会话基线，而非旧派发快照
+    expect(st.persistedCanvas?.data.nodes[0]?.id).toBe("n-new");
+    expect(mocks.markSessionExpired).not.toHaveBeenCalled();
+    expect(saveManager.getSavePhase()).toBe("saved");
+  });
+
+  it("排队中的旧会话保存不会在重进后携带新租约发出", async () => {
+    let release!: () => void;
+    mocks.runProjectWrite.mockImplementationOnce((fn: () => Promise<unknown>) => {
+      // 写锁回调由用例手动放行：此前请求尚未发出
+      return new Promise<void>((resolve, reject) => {
+        release = () => {
+          fn().then(() => resolve(), reject);
+        };
+      });
+    });
+
+    saveManager.markDirty();
+    const p = priv.save(false);
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+
+    // A → B → A：旧保存仍在写锁队列中，新会话取得新租约并建立基线
+    mocks.canvasProjectId = "p2";
+    saveManager.resetForProjectSwitch();
+    mocks.canvasProjectId = "p1";
+    saveManager.resetForProjectSwitch();
+    setCanvasLease("p1", 99);
+    saveManager.setBaselineFromCurrent("p1");
+
+    release();
+    await p;
+
+    // 旧快照不得携带新会话的租约 / revision 发出，否则会覆盖刚采纳的服务端内容
+    expect(mocks.saveProjectRaw).not.toHaveBeenCalled();
+    expect(saveManager.getSavePhase()).toBe("saved");
+  });
+
+  it("旧项目迟到 evict 不把新画布置为过期", () => {
+    mocks.canvasProjectId = "p2";
+
+    saveManager.notifyEvicted("p1");
+
+    const st = saveManager as unknown as { expired: boolean };
+    expect(st.expired).toBe(false);
+    expect(saveManager.getSavePhase()).toBe("unknown");
+  });
+
   it("resetForProjectSwitch：同项目恢复（clearExpired:false）不冲掉 evict 置的过期态", async () => {
     // 场景：画布加载在途时收到 evict（编辑权被其他页面实例取得），
     // 随后服务端数据恢复完成——过期态必须保留，弹窗不能闪现即消
-    saveManager.notifyEvicted();
+    saveManager.notifyEvicted("p1");
     expect((saveManager as unknown as { expired: boolean }).expired).toBe(true);
 
     saveManager.resetForProjectSwitch({ clearExpired: false });
@@ -375,6 +466,7 @@ describe("SaveManager 并发保存", () => {
 
     const s = saveManager as unknown as { dirty: boolean };
     expect(s.dirty).toBe(true);
+    expect(saveManager.getSavePhase()).toBe("unsaved");
   });
 
   it("在途保存失败且已切换项目：失败不记到新项目头上", async () => {
@@ -390,6 +482,7 @@ describe("SaveManager 并发保存", () => {
     // 保存请求在途时切换到新项目 p2
     mocks.canvasProjectId = "p2";
     saveManager.resetForProjectSwitch();
+    expect(saveManager.getSavePhase()).toBe("unknown");
 
     first.release();
     await p;
@@ -398,6 +491,7 @@ describe("SaveManager 并发保存", () => {
     const st = saveManager as unknown as { dirty: boolean; saveTimer: unknown };
     expect(st.dirty).toBe(false);
     expect(st.saveTimer).toBeNull();
+    expect(saveManager.getSavePhase()).toBe("unknown");
   });
 
   it("过期态随画布切换重置：保存通道恢复可用，UI 弹窗状态解除", async () => {
@@ -411,16 +505,69 @@ describe("SaveManager 并发保存", () => {
     await priv.save(false);
     const s = saveManager as unknown as { expired: boolean };
     expect(s.expired).toBe(true);
+    expect(saveManager.getSavePhase()).toBe("expired");
 
     saveManager.resetForProjectSwitch();
     expect(s.expired).toBe(false);
     expect(mocks.resetSessionExpired).toHaveBeenCalled();
+    expect(saveManager.getSavePhase()).toBe("unknown");
 
     // 过期解除后保存通道恢复
     mocks.saveProjectRaw.mockResolvedValue({ ok: true, status: 200 });
     saveManager.markDirty();
     await priv.save(false);
     expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(2);
+    expect(saveManager.getSavePhase()).toBe("saved");
+  });
+
+  it("401 迟到（响应前已切换项目）：会话阻塞归属旧项目，不毒化新画布", async () => {
+    const first = gatedResponse();
+    mocks.saveProjectRaw.mockImplementation(() =>
+      first.gate.then(() => ({ ok: false, status: 401 })),
+    );
+
+    saveManager.markDirty();
+    const p = priv.save(false);
+    await vi.waitFor(() => expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1));
+
+    mocks.canvasProjectId = "p2";
+    saveManager.resetForProjectSwitch();
+
+    first.release();
+    await p;
+
+    // 401 属于旧项目的在途请求，不得把新画布置为 blocked
+    expect(saveManager.getSavePhase()).toBe("unknown");
+    expect((saveManager as unknown as { authBlocked: boolean }).authBlocked).toBe(false);
+  });
+
+  it("旧项目 401 迟到不吞掉新项目的补存诉求", async () => {
+    const first = gatedResponse();
+    let calls = 0;
+    mocks.saveProjectRaw.mockImplementation(() => {
+      calls += 1;
+      return calls === 1
+        ? first.gate.then(() => ({ ok: false, status: 401 }))
+        : Promise.resolve({ ok: true, status: 200 });
+    });
+
+    saveManager.markDirty();
+    const p = priv.save(false);
+    await vi.waitFor(() => expect(calls).toBe(1));
+
+    mocks.canvasProjectId = "p2";
+    setCanvasLease("p2", 43);
+    saveManager.resetForProjectSwitch();
+    saveManager.markDirty();
+    saveManager.flushOnHide();
+    // 旧项目的写请求仍在途，补存诉求排在新项目名下
+    expect(saveManager.getSavePhase()).toBe("unsaved");
+
+    first.release();
+    await p;
+
+    expect(saveManager.getSavePhase()).toBe("unsaved");
+    await vi.waitFor(() => expect(calls).toBe(2));
   });
 
   it("409 迟到（响应前已切换项目）：冲突归属旧项目，不毒化新画布", async () => {
@@ -447,6 +594,7 @@ describe("SaveManager 并发保存", () => {
     // 冲突属于旧项目：同步其版本即可，过期态不落到新画布上
     expect(mocks.updateProjectRevision).toHaveBeenCalledWith("p1", 5);
     expect(mocks.markSessionExpired).not.toHaveBeenCalled();
+    expect(saveManager.getSavePhase()).toBe("unknown");
     const st = saveManager as unknown as { expired: boolean; dirty: boolean };
     expect(st.expired).toBe(false);
     expect(st.dirty).toBe(false);

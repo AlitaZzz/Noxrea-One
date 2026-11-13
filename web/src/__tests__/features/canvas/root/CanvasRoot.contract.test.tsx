@@ -33,6 +33,7 @@ vi.mock("@/features/canvas/stores/canvas-store", () => ({
   getViewportCenter: () => ({ x: 0, y: 0 }),
 }));
 
+import { saveManager } from "@/features/canvas/persistence/save-manager";
 import { useCanvasPorts } from "@/features/canvas/root/CanvasPortsContext";
 import CanvasRoot from "@/features/canvas/root/CanvasRoot";
 import type { CanvasPorts, CanvasSlots, CanvasSurfaceSlots } from "@/features/canvas/root/contracts";
@@ -97,6 +98,18 @@ describe("CanvasRoot 公共契约", () => {
     expect(surfaceSlots.userMenu).toBe(slots.userMenu);
     expect(surfaceSlots).not.toHaveProperty("assetBrowser");
     expect(surfaceSlots).not.toHaveProperty("assetsDialog");
+  });
+
+  it("挂载期间启用离开确认资格，卸载后恢复", () => {
+    const spy = vi.spyOn(saveManager, "setUnloadPromptEligible");
+    const { unmount } = render(<CanvasRoot projectId="p1" ports={ports} slots={makeSlots()} />);
+
+    expect(spy).toHaveBeenCalledWith(true);
+
+    unmount();
+
+    expect(spy).toHaveBeenLastCalledWith(false);
+    spy.mockRestore();
   });
 
   it("useCanvasPorts 在 Provider 之外 fail-closed", () => {

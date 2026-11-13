@@ -145,6 +145,13 @@
     "agentRestoring": "restoring canvas…",
     "selection": {
       "count": "{{count}} nodes"
+    },
+    "save": {
+      "blocked": "Sign-in expired — saving paused",
+      "offline": "Network error — saving paused",
+      "saving": "Saving",
+      "unsaved": "Unsaved",
+      "saved": "Saved"
     }
   },
   "node": {
@@ -607,10 +614,6 @@
     "title": "Session expired",
     "content": "This canvas is open in another tab or browser. Refresh the page to continue editing.",
     "reload": "Refresh page"
-  },
-  "offline": {
-    "label": "Offline — pending save",
-    "tooltip": "Offline, please check your network connection and try again"
   },
   "file": {
     "uploadFailed": "Upload failed",
