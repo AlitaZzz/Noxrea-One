@@ -164,6 +164,7 @@ function makeGlobalProps(overrides: Partial<Parameters<typeof GlobalOverlays>[0]
     editingNodeId: null,
     editingTextNodeId: null,
     selectionKey: "",
+    layoutUnitCount: 2,
     toolbarMode: { kind: "hidden" } as CanvasToolbarMode,
     selectionFrame: null,
     batchConnectAnchor: null,

@@ -53,6 +53,7 @@ import {
   type CanvasClipboardPayload,
 } from "@/features/canvas/shared/canvas-clipboard-format";
 import {
+  arrangeSelection,
   canUndoNow,
   clearSelection,
   copySelection,
@@ -864,6 +865,103 @@ describe("方向键微调入栈", () => {
 
     expect(undoAction()).toBe(true);
     expect(useCanvasStore.getState().nodes.find((n) => n.id === "imgA")!.position).toEqual(before);
+  });
+});
+
+describe("选区布局：arrangeSelection", () => {
+  beforeEach(() => {
+    useHistoryStore.getState().clear();
+  });
+
+  function seedLayoutSelection() {
+    const group = validGroup("group", { x: 0, y: 0 });
+    const member = {
+      ...validImage("member", { x: 20, y: 40 }),
+      parentId: "group",
+    };
+    const top = validImage("top", { x: 800, y: 0 });
+    useCanvasStore.setState({
+      nodes: [group, member, top],
+      edges: [makeEdge("member", "top")],
+    });
+    select("group", "member", "top");
+    return { group, member, top };
+  }
+
+  it("只写单元位置，保持成员相对坐标、组框、数据、连线和选区", () => {
+    const { group, member } = seedLayoutSelection();
+    const before = useCanvasStore.getState();
+    const edgesBefore = before.edges;
+    const memberBefore = before.nodes.find((n) => n.id === member.id)!;
+    const groupBefore = before.nodes.find((n) => n.id === group.id)!;
+
+    expect(arrangeSelection("horizontal")).toBe(true);
+
+    const after = useCanvasStore.getState();
+    const groupAfter = after.nodes.find((n) => n.id === group.id)!;
+    const memberAfter = after.nodes.find((n) => n.id === member.id)!;
+    const topAfter = after.nodes.find((n) => n.id === "top")!;
+
+    expect(groupAfter.position).not.toEqual(groupBefore.position);
+    expect(topAfter.position.x).toBeGreaterThan(groupAfter.position.x);
+    expect(memberAfter).toBe(memberBefore);
+    expect(memberAfter.position).toEqual(memberBefore.position);
+    expect(groupAfter.style).toEqual(groupBefore.style);
+    expect(after.edges).toBe(edgesBefore);
+    expect(after.nodes.filter((n) => n.selected).map((n) => n.id).sort()).toEqual([
+      "group",
+      "member",
+      "top",
+    ]);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+  });
+
+  it("撤销恢复布局前位置，重做恢复布局结果", () => {
+    const { group, top } = seedLayoutSelection();
+    const before = useCanvasStore.getState();
+    const groupBefore = before.nodes.find((n) => n.id === group.id)!.position;
+    const topBefore = before.nodes.find((n) => n.id === top.id)!.position;
+
+    expect(arrangeSelection("vertical")).toBe(true);
+    const afterArrange = useCanvasStore.getState();
+    const groupAfter = afterArrange.nodes.find((n) => n.id === group.id)!.position;
+    const topAfter = afterArrange.nodes.find((n) => n.id === top.id)!.position;
+
+    expect(undoAction()).toBe(true);
+    const undone = useCanvasStore.getState();
+    expect(undone.nodes.find((n) => n.id === group.id)!.position).toEqual(groupBefore);
+    expect(undone.nodes.find((n) => n.id === top.id)!.position).toEqual(topBefore);
+
+    expect(redoAction()).toBe(true);
+    const redone = useCanvasStore.getState();
+    expect(redone.nodes.find((n) => n.id === group.id)!.position).toEqual(groupAfter);
+    expect(redone.nodes.find((n) => n.id === top.id)!.position).toEqual(topAfter);
+  });
+
+  it("已排好的选区再次布局不压历史、不标 dirty", () => {
+    seedLayoutSelection();
+    expect(arrangeSelection("grid")).toBe(true);
+    const afterFirst = useCanvasStore.getState().nodes;
+    const undoLength = useHistoryStore.getState().undoStack.length;
+
+    expect(arrangeSelection("grid")).toBe(false);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(undoLength);
+    expect(useCanvasStore.getState().nodes).toBe(afterFirst);
+  });
+
+  it("不足两个布局单元时不写入", () => {
+    const group = validGroup("group", { x: 0, y: 0 });
+    const member = {
+      ...validImage("member", { x: 20, y: 40 }),
+      parentId: "group",
+    };
+    useCanvasStore.setState({ nodes: [group, member], edges: [] });
+    select("member");
+    const nodesBefore = useCanvasStore.getState().nodes;
+
+    expect(arrangeSelection("horizontal")).toBe(false);
+    expect(useCanvasStore.getState().nodes).toBe(nodesBefore);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(0);
   });
 });
 

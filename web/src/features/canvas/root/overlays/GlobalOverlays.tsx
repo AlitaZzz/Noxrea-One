@@ -24,6 +24,8 @@ export interface GlobalOverlaysProps {
   editingNodeId: string | null;
   editingTextNodeId: string | null;
   selectionKey: string;
+  /** 布局单元数；只在聚合工具条可渲染时计算，< 2 时隐藏「整理」入口 */
+  layoutUnitCount: number;
   toolbarMode: CanvasToolbarMode;
   selectionFrame: SelectionFrame | null;
   batchConnectAnchor: { x: number; y: number } | null;
@@ -40,6 +42,7 @@ export function GlobalOverlays({
   editingNodeId,
   editingTextNodeId,
   selectionKey,
+  layoutUnitCount,
   toolbarMode,
   selectionFrame,
   batchConnectAnchor,
@@ -63,6 +66,7 @@ export function GlobalOverlays({
           <SelectionToolbarLayer
             bounds={toolbarMode.bounds}
             selectionKey={selectionKey}
+            layoutUnitCount={layoutUnitCount}
           />
         )}
 

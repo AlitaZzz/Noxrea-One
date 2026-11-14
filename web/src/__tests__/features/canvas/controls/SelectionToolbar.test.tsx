@@ -8,6 +8,8 @@ import {
   SelectionToolbar,
   SelectionToolbarLayer,
 } from "@/features/canvas/controls/SelectionToolbar";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
+import { SELECTION_LAYOUT_SMART_MAX_UNITS } from "@/lib/constants";
 
 // 容器层只依赖 Panel 的挂载点、视口变换与视口尺寸；展示层测试同样走这份轻量替身。
 vi.mock("@xyflow/react", () => ({
@@ -20,8 +22,12 @@ vi.mock("@xyflow/react", () => ({
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({
-    t: (key: string, options?: { count?: number }) =>
-      options?.count === undefined ? key : `${key}:${options.count}`,
+    t: (key: string, options?: { count?: number; limit?: number }) =>
+      options?.count !== undefined
+        ? `${key}:${options.count}`
+        : options?.limit !== undefined
+          ? `${key}:${options.limit}`
+          : key,
     i18n: { language: "en" },
   }),
 }));
@@ -35,6 +41,7 @@ vi.mock("@/components/ui/use-app-feedback", () => ({
 
 // 展示层测试不触达真实画布动作；容器层只在 CanvasOverlays 中挂载。
 vi.mock("@/features/canvas/shared/canvas-edit-actions", () => ({
+  arrangeSelection: vi.fn(),
   copySelection: vi.fn(),
   deleteSelection: vi.fn(),
   duplicateSelection: vi.fn(),
@@ -50,8 +57,11 @@ interface ToolbarHarnessProps {
   count?: number;
   hasGroup?: boolean;
   selectionKey?: string;
+  canLayout?: boolean;
+  smartLayoutDisabled?: boolean;
   onGroup?: () => void;
   onUngroup?: () => void;
+  onLayout?: (mode: CanvasLayoutMode) => void;
   onDuplicate?: () => void;
   onCopy?: () => void;
   onDelete?: () => void;
@@ -61,8 +71,11 @@ function ToolbarHarness({
   count = 3,
   hasGroup = false,
   selectionKey = "a",
+  canLayout = false,
+  smartLayoutDisabled = false,
   onGroup = vi.fn(),
   onUngroup = vi.fn(),
+  onLayout = vi.fn(),
   onDuplicate = vi.fn(),
   onCopy = vi.fn(),
   onDelete = vi.fn(),
@@ -72,13 +85,23 @@ function ToolbarHarness({
       count={count}
       hasGroup={hasGroup}
       selectionKey={selectionKey}
+      canLayout={canLayout}
+      smartLayoutDisabled={smartLayoutDisabled}
       onGroup={onGroup}
       onUngroup={onUngroup}
+      onLayout={onLayout}
       onDuplicate={onDuplicate}
       onCopy={onCopy}
       onDelete={onDelete}
     />
   );
+}
+
+async function openLayoutMenu() {
+  const trigger = screen.getByRole("button", { name: "common.organize" });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  await act(async () => {});
+  await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
 }
 
 async function openMoreMenu() {
@@ -142,6 +165,82 @@ describe("SelectionToolbar", () => {
       button.getAttribute("aria-label") ?? button.textContent,
     );
     expect(names).toEqual(["common.group", "common.duplicate", "common.moreActions"]);
+  });
+
+  it("hides 整理 when there are fewer than two layout units and shows it otherwise", () => {
+    const { rerender } = render(<ToolbarHarness canLayout={false} />);
+    expect(screen.queryByRole("button", { name: "common.organize" })).toBeNull();
+
+    rerender(<ToolbarHarness canLayout />);
+    expect(screen.getByRole("button", { name: "common.organize" })).toBeInTheDocument();
+  });
+
+  it("places 整理 between group actions and duplicate in keyboard order", () => {
+    const { container } = render(<ToolbarHarness canLayout />);
+    const names = Array.from(container.querySelectorAll("button")).map((button) =>
+      button.getAttribute("aria-label") ?? button.textContent,
+    );
+    expect(names).toEqual([
+      "common.group",
+      "common.organize",
+      "common.duplicate",
+      "common.moreActions",
+    ]);
+  });
+
+  it("offers the four layout modes in Jimeng order and invokes onLayout", async () => {
+    const onLayout = vi.fn();
+    render(<ToolbarHarness canLayout onLayout={onLayout} />);
+
+    await openLayoutMenu();
+    const items = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    expect(items).toEqual([
+      "node.gridLayout",
+      "node.smartLayout",
+      "node.horizontalLayout",
+      "node.verticalLayout",
+    ]);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "node.smartLayout" }));
+    expect(onLayout).toHaveBeenCalledWith("smart");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  it("disables smart layout above the measured unit limit and shows the reason", async () => {
+    const onLayout = vi.fn();
+    render(<ToolbarHarness canLayout smartLayoutDisabled onLayout={onLayout} />);
+
+    await openLayoutMenu();
+    const smart = screen.getByRole("menuitem", { name: "node.smartLayout" });
+    expect(smart).toHaveAttribute("data-disabled");
+    expect(
+      screen.getByText(`common.smartLayoutLimit:${SELECTION_LAYOUT_SMART_MAX_UNITS}`),
+    ).toBeInTheDocument();
+
+    fireEvent.click(smart);
+    expect(onLayout).not.toHaveBeenCalled();
+  });
+
+  it("closes the layout menu when the selection changes", async () => {
+    mockToolbarRect();
+    const bounds = {
+      count: 2,
+      hasGroup: false,
+      bbox: { x: 100, y: 100, width: 200, height: 100 },
+      frameVisible: true,
+      containerBbox: { x: 60, y: 32, width: 280, height: 208 },
+    };
+
+    const { rerender } = render(
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={2} />,
+    );
+    await act(async () => {});
+    await openLayoutMenu();
+
+    rerender(
+      <SelectionToolbarLayer bounds={bounds} selectionKey="b" layoutUnitCount={2} />,
+    );
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
   it("invokes the primary actions without duplicating their implementations", () => {
@@ -227,7 +326,7 @@ describe("SelectionToolbar", () => {
     };
 
     const { rerender } = render(
-      <SelectionToolbarLayer bounds={bounds} selectionKey="a" />,
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={2} />,
     );
     await act(async () => {});
     const liveRegion = screen.getByText("canvas.selection.count:2");
@@ -235,9 +334,59 @@ describe("SelectionToolbar", () => {
 
     // 选区签名变化 → 「更多」菜单按 key 重挂载并关闭；展示层不重挂载，
     // aria-live 节点必须保留，否则计数变化对读屏不可见。
-    rerender(<SelectionToolbarLayer bounds={bounds} selectionKey="b" />);
+    rerender(<SelectionToolbarLayer bounds={bounds} selectionKey="b" layoutUnitCount={2} />);
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     expect(screen.getByText("canvas.selection.count:2")).toBe(liveRegion);
+  });
+
+  it("hides 整理 at the container layer when layoutUnitCount is below two", async () => {
+    mockToolbarRect();
+    const bounds = {
+      count: 2,
+      hasGroup: false,
+      bbox: { x: 100, y: 100, width: 200, height: 100 },
+      frameVisible: true,
+      containerBbox: { x: 60, y: 32, width: 280, height: 208 },
+    };
+
+    const { rerender } = render(
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={1} />,
+    );
+    await act(async () => {});
+    expect(screen.queryByRole("button", { name: "common.organize" })).toBeNull();
+
+    rerender(
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={2} />,
+    );
+    expect(screen.getByRole("button", { name: "common.organize" })).toBeInTheDocument();
+  });
+
+  it("disables smart layout at the container layer above the measured unit limit", async () => {
+    mockToolbarRect();
+    const bounds = {
+      count: SELECTION_LAYOUT_SMART_MAX_UNITS + 1,
+      hasGroup: false,
+      bbox: { x: 100, y: 100, width: 200, height: 100 },
+      frameVisible: true,
+      containerBbox: { x: 60, y: 32, width: 280, height: 208 },
+    };
+
+    render(
+      <SelectionToolbarLayer
+        bounds={bounds}
+        selectionKey="a"
+        layoutUnitCount={SELECTION_LAYOUT_SMART_MAX_UNITS + 1}
+      />,
+    );
+    await act(async () => {});
+    await openLayoutMenu();
+
+    expect(screen.getByRole("menuitem", { name: "node.smartLayout" })).toHaveAttribute(
+      "data-disabled",
+    );
+    expect(
+      screen.getByText(`common.smartLayoutLimit:${SELECTION_LAYOUT_SMART_MAX_UNITS}`),
+    ).toBeInTheDocument();
   });
 
   it("caps the toolbar width to the viewport so the row wraps instead of overflowing", async () => {
@@ -251,7 +400,7 @@ describe("SelectionToolbar", () => {
     };
 
     const { container } = render(
-      <SelectionToolbarLayer bounds={bounds} selectionKey="a" />,
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={2} />,
     );
     const positioned = container.querySelector<HTMLElement>(".absolute");
 
@@ -270,7 +419,7 @@ describe("SelectionToolbar", () => {
     };
 
     const { container } = render(
-      <SelectionToolbarLayer bounds={bounds} selectionKey="a" />,
+      <SelectionToolbarLayer bounds={bounds} selectionKey="a" layoutUnitCount={2} />,
     );
     const positioned = container.querySelector<HTMLElement>(".absolute");
 

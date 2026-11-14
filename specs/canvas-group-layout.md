@@ -75,6 +75,7 @@
 - 组框位置（布局不改组节点 `position`）、组成员归属、组的边。
 - 布局动画、布局的 Agent 工具入口、布局结果的碰撞避让。
 - 组外节点与组内成员之间的连线参与分层。
+- 选区级多选布局不在本 Spec 范围；规则见 `specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。
 
 ## 4. 业务规则
 
@@ -208,12 +209,13 @@
 - 新增 `web/src/features/canvas/shared/layered-layout.ts`：`packLayered`（dagre 只求层，层内按读序堆叠，4.10）、`collectLinks`（连线端点 → 布局单元依赖边）、`LayoutBox`（布局期几何快照）。
 - 新增 `web/src/features/canvas/shared/node-size.ts`：`measureNode` / `Size` 从 `tidy-layout.ts` 迁出，节点测量不再依赖布局模块。
 - 新增 `web/src/features/canvas/shared/group-layout.ts`：纯函数，无 React / store 依赖。
-  - `GroupLayoutMode = "smart" | "grid" | "horizontal" | "vertical"`
+  - `CanvasLayoutMode = "smart" | "grid" | "horizontal" | "vertical"`（原 `GroupLayoutMode`，2026-11-15 更名并迁至 `layout-modes.ts`）
   - `arrangeGroup(members, edges, mode): { positions: Map<string, { x: number; y: number }>; width: number; height: number }`
   - `positions` 为组内相对坐标；`width` / `height` 为组框尺寸。
   - 盒子类型复用 `LayoutBox`；组内边经 `collectLinks` 过滤（4.5.1）。
+- 2026-11-15（多选布局增量）：宫格 / 水平 / 垂直 / 智能的排列核心从 `group-layout.ts` 迁至新增的 `web/src/features/canvas/shared/layout-modes.ts`，对外提供 `arrangeBoxes(boxes, links, mode)`；多选布局与组内布局共用同一核心。`group-layout.ts` 只保留成员→`LayoutBox`、连线过滤与 `toGroupLayout` finalize，`arrangeGroup` 的签名与行为不变。
 - `web/src/features/canvas/shared/tidy-layout.ts`：`sortByReading` 改为委托 `sortBoxesByReading`，删除本地实现与 `MIN_BAND_HEIGHT`（排序行为与输出不变）；`packRows` 的行内 y 由行顶改为行内居中（4.9）；`packWithDagre` 删除，分层模式改调 `packLayered` 并只保留块级边映射 `blockLinks`；`measureNode` / `Size` 迁出到 `node-size.ts`。
-- `web/src/features/canvas/hooks/use-group-operations.ts`：删除 `applyGridLayout` / `applyHorizontalLayout` / `applyVerticalLayout` / `measureMembers`，组框矩形与布局原点由 `group-bounds.ts` 的 `groupRectFromContent` 统一派生（编组创建与组内布局同口径，4.6.1）；`onNodeAction` 改为读 store 的 `edges` 后调用 `arrangeGroup`；`mode` 联合类型扩展为 `GroupLayoutMode`。
+- `web/src/features/canvas/hooks/use-group-operations.ts`：删除 `applyGridLayout` / `applyHorizontalLayout` / `applyVerticalLayout` / `measureMembers`，组框矩形与布局原点由 `group-bounds.ts` 的 `groupRectFromContent` 统一派生（编组创建与组内布局同口径，4.6.1）；`onNodeAction` 改为读 store 的 `edges` 后调用 `arrangeGroup`；`mode` 联合类型扩展为 `CanvasLayoutMode`（从 `layout-modes.ts` 导入）。
 - `web/src/features/canvas/nodes/NodeToolbar.tsx`：布局下拉新增「智能布局」项（首位）与图标；选中布局项时本次关闭不播放退出动画（4.6.7）。
 - `web/src/components/ui/dropdown-menu.tsx`：`DropdownMenuContent` 新增 `closeAnimation`（默认 `true`）；调用方按动作语义关闭退出动画，避免浮层在触发器几何变更后继续存活。
 - `web/src/lib/i18n/zh-CN.json` / `en-US.json`：新增 `node.smartLayout`（中「智能布局」/ 英「Smart Layout」）。

@@ -18,6 +18,8 @@
     "group": "编组",
     "ungroup": "解组",
     "layout": "布局",
+    "organize": "整理",
+    "smartLayoutLimit": "选区超过 {{limit}} 个布局单元，智能布局暂不可用",
     "replace": "替换",
     "download": "下载",
     "downloadFailed": "下载失败，请稍后重试",

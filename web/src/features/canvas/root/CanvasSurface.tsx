@@ -52,6 +52,7 @@ import {
   getCanvasDerived,
   selectCanvasToolbarMode,
 } from "@/features/canvas/shared/canvas-derived";
+import { collectSelectionLayoutUnits } from "@/features/canvas/shared/selection-layout";
 import { findFreePosition, getCanvasProjectId, markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
 import type { AnyNode } from "@/features/canvas/types";
@@ -258,6 +259,19 @@ function CanvasSurface({ slots }: CanvasSurfaceProps) {
   const panels = useCanvasPanels({ showSelectionChrome: canvasInteraction.showSelectionChrome });
   const { resetTransientPanels } = panels;
 
+  // 布局单元数只在聚合工具条实际可渲染时计算（与 GlobalOverlays 的渲染条件一致）。
+  // 拖动 / 框选 / 连线期间 toolbarMode 为 hidden，媒体 / 文本编辑态在此排除，
+  // 因此不进入拖动逐帧路径；结果只决定「整理」按钮是否出现，不参与选区投影。
+  const layoutUnitCount = useMemo(
+    () =>
+      toolbarMode.kind === "aggregate" &&
+      !panels.editingNodeId &&
+      !panels.editingTextNodeId
+        ? collectSelectionLayoutUnits(nodes, selectedNodeIds).length
+        : 0,
+    [toolbarMode.kind, panels.editingNodeId, panels.editingTextNodeId, nodes, selectedNodeIds],
+  );
+
   // 指针层：按下点补偿、节点拖动 / 点击 / 右键与画布右键菜单
   const {
     handleCanvasPressCapture,
@@ -360,6 +374,7 @@ function CanvasSurface({ slots }: CanvasSurfaceProps) {
         nodes={nodes}
         selectedNodeIds={selectedNodeIds}
         selectionKey={selectionKey}
+        layoutUnitCount={layoutUnitCount}
         toolbarMode={toolbarMode}
         selectionFrame={selectionFrame}
         batchConnectAnchor={batchConnectAnchor}

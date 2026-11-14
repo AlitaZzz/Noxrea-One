@@ -18,6 +18,8 @@
     "group": "Group",
     "ungroup": "Ungroup",
     "layout": "Layout",
+    "organize": "Organize",
+    "smartLayoutLimit": "Smart layout is unavailable above {{limit}} layout units",
     "replace": "Replace",
     "download": "Download",
     "downloadFailed": "Download failed. Please try again.",

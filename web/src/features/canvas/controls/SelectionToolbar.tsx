@@ -21,18 +21,36 @@ import {
   DeleteOutlined,
   DuplicateIcon,
   EllipsisOutlined,
+  GridLayoutIcon,
+  GroupGridIcon,
   GroupIcon,
+  HorizontalLayoutIcon,
+  SmartLayoutIcon,
   UngroupIcon,
+  VerticalLayoutIcon,
 } from "@/components/ui/AppIcon";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { useCanvasClipboardFeedback } from "@/features/canvas/hooks/use-canvas-clipboard-feedback";
 import type { SelectionChromeBounds } from "@/features/canvas/shared/canvas-derived";
-import { copySelection, deleteSelection, duplicateSelection } from "@/features/canvas/shared/canvas-edit-actions";
+import {
+  arrangeSelection,
+  copySelection,
+  deleteSelection,
+  duplicateSelection,
+} from "@/features/canvas/shared/canvas-edit-actions";
 import type { Rect } from "@/features/canvas/shared/geometry";
-import { EventNames } from "@/lib/constants";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
+import { EventNames, SELECTION_LAYOUT_SMART_MAX_UNITS } from "@/lib/constants";
 
 /** 工具条与选区包围盒的固定视觉间距（屏幕像素） */
 const SELECTION_TOOLBAR_GAP = 12;
@@ -53,8 +71,13 @@ interface SelectionToolbarProps {
    * 会随选区变化重建，读屏无法播报。
    */
   selectionKey: string;
+  /** 布局单元数 ≥ 2 时显示「整理」；不足时隐藏，不是禁用 */
+  canLayout: boolean;
+  /** 单元数超过实测计算上限时禁用智能布局，其余模式仍可用 */
+  smartLayoutDisabled: boolean;
   onGroup: () => void;
   onUngroup: () => void;
+  onLayout: (mode: CanvasLayoutMode) => void;
   onDuplicate: () => void;
   onCopy: () => void;
   onDelete: () => void;
@@ -64,8 +87,11 @@ export const SelectionToolbar = memo(function SelectionToolbar({
   count,
   hasGroup,
   selectionKey,
+  canLayout,
+  smartLayoutDisabled,
   onGroup,
   onUngroup,
+  onLayout,
   onDuplicate,
   onCopy,
   onDelete,
@@ -92,11 +118,50 @@ export const SelectionToolbar = memo(function SelectionToolbar({
           {t("common.group")}
         </Button>
       )}
+      {canLayout && (
+        <DropdownMenu key={`layout:${selectionKey}`}>
+          {/* 与「更多」同样不使用 Tooltip：Radix Tooltip 会吞掉下一次 Esc，
+              破坏「第一次 Esc 关菜单、第二次 Esc 清空选区」的约定。 */}
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="ghost">
+              <GroupGridIcon style={{ width: 16, height: 16 }} />
+              {t("common.organize")}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="center" closeAnimation={false}>
+            <DropdownMenuItem onSelect={() => onLayout("grid")}>
+              <GridLayoutIcon />
+              {t("node.gridLayout")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={smartLayoutDisabled}
+              onSelect={() => onLayout("smart")}
+            >
+              <SmartLayoutIcon />
+              {t("node.smartLayout")}
+            </DropdownMenuItem>
+            {smartLayoutDisabled && (
+              <DropdownMenuLabel className="max-w-56 whitespace-normal font-normal leading-snug">
+                {t("common.smartLayoutLimit", { limit: SELECTION_LAYOUT_SMART_MAX_UNITS })}
+              </DropdownMenuLabel>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onLayout("horizontal")}>
+              <HorizontalLayoutIcon />
+              {t("node.horizontalLayout")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onLayout("vertical")}>
+              <VerticalLayoutIcon />
+              {t("node.verticalLayout")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Button size="sm" variant="ghost" onClick={onDuplicate}>
         <DuplicateIcon style={{ width: 16, height: 16 }} />
         {t("common.duplicate")}
       </Button>
-      <DropdownMenu key={selectionKey}>
+      <DropdownMenu key={`more:${selectionKey}`}>
         {/* 这里刻意不用 Tooltip：Radix Tooltip 在焦点回到触发器时会立即打开，
             并用 preventDefault 吞掉下一次 Esc，破坏「第一次 Esc 关菜单、第二次 Esc
             清空选区」的约定。title 提供悬停提示，aria-label 提供可访问名称。 */}
@@ -209,11 +274,17 @@ export function computeSelectionToolbarPlacement({
 
 interface SelectionToolbarLayerProps {
   bounds: SelectionChromeBounds;
-  /** 选区签名（排序后的 id 拼接），变化时由展示层关闭「更多」菜单。 */
+  /** 选区签名（排序后的 id 拼接），变化时由展示层关闭菜单。 */
   selectionKey: string;
+  /** 布局单元数；≥ 2 时显示「整理」入口 */
+  layoutUnitCount: number;
 }
 
-export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbarLayerProps) {
+export function SelectionToolbarLayer({
+  bounds,
+  selectionKey,
+  layoutUnitCount,
+}: SelectionToolbarLayerProps) {
   const notifyClipboardWrite = useCanvasClipboardFeedback();
   const viewport = useViewport();
   const viewportWidth = useStore((state) => state.width);
@@ -264,6 +335,9 @@ export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbar
   const handleUngroup = useCallback(() => {
     window.dispatchEvent(new CustomEvent(EventNames.CANVAS_UNGROUP_NODES));
   }, []);
+  const handleLayout = useCallback((mode: CanvasLayoutMode) => {
+    arrangeSelection(mode);
+  }, []);
   const handleDuplicate = useCallback(() => {
     duplicateSelection();
   }, []);
@@ -296,8 +370,11 @@ export function SelectionToolbarLayer({ bounds, selectionKey }: SelectionToolbar
           count={bounds.count}
           hasGroup={bounds.hasGroup}
           selectionKey={selectionKey}
+          canLayout={layoutUnitCount >= 2}
+          smartLayoutDisabled={layoutUnitCount > SELECTION_LAYOUT_SMART_MAX_UNITS}
           onGroup={handleGroup}
           onUngroup={handleUngroup}
+          onLayout={handleLayout}
           onDuplicate={handleDuplicate}
           onCopy={handleCopy}
           onDelete={handleDelete}

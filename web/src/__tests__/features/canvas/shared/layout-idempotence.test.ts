@@ -10,9 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   arrangeGroup,
-  type GroupLayoutMode,
   type GroupLayoutResult,
 } from "@/features/canvas/shared/group-layout";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
 import type { AnyNode } from "@/features/canvas/types";
 import { NODE_TYPE } from "@/lib/constants";
 
@@ -49,7 +49,7 @@ function snapshot(result: GroupLayoutResult): Array<[string, { x: number; y: num
 }
 
 /** 连续执行三次：第 2、3 次都必须与第 1 次完全相同（含组框尺寸） */
-function expectStable(members: AnyNode[], edges: Edge[], mode: GroupLayoutMode) {
+function expectStable(members: AnyNode[], edges: Edge[], mode: CanvasLayoutMode) {
   const first = arrangeGroup(members, edges, mode);
   const second = arrangeGroup(apply(members, first), edges, mode);
   const third = arrangeGroup(apply(apply(members, first), second), edges, mode);
@@ -141,7 +141,7 @@ describe("布局幂等（随机拓扑）", () => {
       [200, 120],
       [800, 500],
     ] as const;
-    const modes: GroupLayoutMode[] = ["smart", "grid", "horizontal", "vertical"];
+    const modes: CanvasLayoutMode[] = ["smart", "grid", "horizontal", "vertical"];
     const failures: string[] = [];
 
     for (let seed = 1; seed <= 300; seed += 1) {

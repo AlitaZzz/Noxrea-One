@@ -70,6 +70,17 @@ export const GROUP_LAYOUT_GAP = 60;
 /** 智能布局的列间距（dagre ranksep）与尾列横向偏移 */
 export const GROUP_LAYOUT_COLUMN_GAP = 120;
 
+/**
+ * 选区智能布局的计算上限（布局单元数）。超过后只禁用智能布局，
+ * 宫格 / 水平 / 垂直不受影响（它们不使用 dagre）。
+ *
+ * 2026-11-14 实测（Node vitest，合成 200×120 单元，5 次中位数）：
+ * 129 单元链 22ms / 菱形 31ms；180 单元菱形 46ms；200 单元菱形 51ms，
+ * 开始越过 50ms 长任务边界。取 180 作为实测安全上限。
+ * 与 TIDY_MAX_ANIMATED_NODES 语义不同：这是纯计算阈值，不是动画阈值。
+ */
+export const SELECTION_LAYOUT_SMART_MAX_UNITS = 180;
+
 /** 吸附总开关默认值（store、项目恢复与拖动会话初值共用） */
 export const DEFAULT_SNAP_ENABLED = true;
 /** 网格吸附默认步长（store 初始值与拖动会话初值共用） */

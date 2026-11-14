@@ -19,8 +19,9 @@ import {
   groupRectFromContent,
   nodeAbsolutePosition,
 } from "@/features/canvas/shared/group-bounds";
-import { arrangeGroup, type GroupLayoutMode } from "@/features/canvas/shared/group-layout";
+import { arrangeGroup } from "@/features/canvas/shared/group-layout";
 import { groupMembers, isGroupMember, isGroupNode, pruneEmptyGroups } from "@/features/canvas/shared/group-membership";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
 import { measureNode } from "@/features/canvas/shared/node-size";
 import { markDirtyImmediate, takeCanvasSnapshot, useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import { useHistoryStore } from "@/features/canvas/stores/history-store";
@@ -172,7 +173,7 @@ export function useGroupOperations() {
       const detail = (e as CustomEvent).detail as {
         nodeId?: string;
         action?: string;
-        mode?: GroupLayoutMode;
+        mode?: CanvasLayoutMode;
       };
       if (detail.action !== "layout" || !detail.nodeId) return;
 

@@ -1,10 +1,11 @@
 # 画布多选聚合工具条
 
-状态：已实现（Phase 1，2026-11-03；Phase 2 未实现，需另行确认）。2026-11-11/12
-的组表面与批量连线增量为独立增量，已随 `ce08456f` 提交但尚未达到「已实现」条件，
-见第 9 节。
+状态：已实现（Phase 1，2026-11-03）。Phase 2（多选布局）见
+`specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。2026-11-11/12 的组表面与
+批量连线增量为独立增量，规则见 `specs/canvas-batch-connect-drag.md`（已实现，
+2026-11-14）。
 
-> 本 Spec 覆盖 Phase 1（本次实现）与 Phase 2（多选布局，后续扩展）。Phase 2 仅记录设计方向，不作为本次验收范围，需另行确认后才能实现。
+> 本 Spec 覆盖 Phase 1（已实现）。Phase 2 的规则由 `specs/canvas-multi-selection-layout.md` 定义，本 Spec 不再重复。
 
 ## 1. 背景与证据
 
@@ -94,7 +95,7 @@
 
 ### 3.2 不包含
 
-- 多选布局（智能 / 宫格 / 水平 / 垂直），见第 10 节 Phase 2。
+- 多选布局（智能 / 宫格 / 水平 / 垂直），见 `specs/canvas-multi-selection-layout.md`。
 - 批量下载、打包下载。
 - 画布节点标签 / 资产标签。
 - 对齐、分布、堆叠。
@@ -150,6 +151,8 @@
 | 1 个节点 | 聚合工具条整体隐藏，沿用该节点工具条 | — | — | — | — |
 | 0 个节点 / 仅选中连线 | 聚合工具条整体隐藏 | — | — | — | — |
 
+Phase 2 的「布局」按钮不改变上表的 Phase 1 按钮矩阵；其可见性见 `specs/canvas-multi-selection-layout.md` 4.1「入口与可见性」。
+
 ### 4.4 创建副本
 
 1. 选中节点数 ≥2 时显示“创建副本”（复用 `common.duplicate`），点击调用 `duplicateSelection()`。
@@ -196,7 +199,7 @@
 
 1. 工具条容器使用 `nodrag nopan`，并阻止指针事件冒泡到画布，避免点击按钮时开始框选、拖动节点或平移画布。
 2. 工具条挂载时不自动抢焦点；画布键盘快捷键（方向键微调、Delete、Ctrl+D、Ctrl+G 等）在工具条存在时继续可用。
-3. Tab 顺序：编组/解组 → 创建副本 → 更多；计数不进入焦点序列。
+3. Tab 顺序：编组/解组 → 布局（Phase 2）→ 创建副本 → 更多；计数不进入焦点序列。「布局」的可见性与菜单规则见 `specs/canvas-multi-selection-layout.md` 4.1「入口与可见性」。
 4. Esc 行为：
    - 工具条内菜单打开时，第一次 Esc 只关闭菜单，不清空画布选区；
    - 菜单关闭后再次 Esc，按现有画布行为清空选区并卸载工具条。
@@ -233,7 +236,7 @@
 
 ### 5.1 数据派生
 
-- 在 `web/src/features/canvas/shared/canvas-derived.ts` 增加 `selectionChromeBounds`，由全部选中节点的绝对坐标与 `measureNode` 计算，随 `nodes` 引用缓存。字段包含 `count`、`hasGroup`、原始并集 `bbox`、外框显隐 `frameVisible` 与工具条锚点 `containerBbox`。
+- 在 `web/src/features/canvas/shared/canvas-derived.ts` 增加 `selectionChromeBounds`，由全部选中节点的绝对坐标与 `measureNode` 计算，随 `nodes` 引用缓存。字段包含 `count`、`hasGroup`、原始并集 `bbox`、外框显隐 `frameVisible` 与工具条锚点 `containerBbox`。Phase 2 的布局单元数由 `CanvasSurface` 在聚合工具条实际可渲染时单独计算，不加入该投影。
 - `frameVisible` 与多选外框显隐同源：`CanvasSurface` 直接消费该字段，删除原先独立的选区扫描 memo。
 - 保留 `selectionFrame` 原语义与调用方不变；批量连线继续使用它。
 - 不新增 store 字段，不改变画布文档结构。
@@ -316,7 +319,7 @@
 ### 7.3 交互与可访问性
 
 - [x] 点击工具条按钮不会开始框选、拖动节点或平移画布（在计数区按下并拖动：无 `data-marquee-active`、节点位置不变、视口不变、选区保持）。
-- [x] 工具条挂载不抢焦点；Tab 可依次到达编组/解组、创建副本、更多（挂载后 `document.activeElement` 为 BODY；DOM 顺序为 编组 → 创建副本 → 更多，三者 tabIndex 均为 0。原生 Tab 键遍历未自动化，见第 9 节）。
+- [x] 工具条挂载不抢焦点；Tab 可依次到达编组/解组、创建副本、更多（挂载后 `document.activeElement` 为 BODY；DOM 顺序为 编组 → 创建副本 → 更多，三者 tabIndex 均为 0。原生 Tab 键遍历未自动化，见第 9 节）。Phase 2 将在编组/解组与创建副本之间插入「布局」，见 4.8-3。
 - [x] 菜单打开时第一次 Esc 只关闭菜单，不清空选区；再次 Esc 清空选区（第一次 Esc 关闭「更多」菜单并把焦点还给触发器，选区保持 2 节点；第二次 Esc 清空选区并卸载工具条）。
 - [x] 图标按钮有可访问名称；计数有 `aria-live` 播报（按钮文字 + 「更多」`aria-label="更多操作"`；计数节点 `aria-live="polite"`，文案「2 个节点」）。
 - [x] 明暗主题下按钮、边框、焦点环、悬停态对比度正常（按钮文字：深色 17.18:1 / 浅色 19.8:1；计数：深色 6.94:1 / 浅色 4.74:1；悬停文字：深色 15.79:1 / 浅色 18.97:1；焦点环沿用全局 `Button` 的 `ring-ring/50`，环色与卡片背景对比度深色 1.87:1 / 浅色 1.54:1，低于 WCAG 非文本 3:1，属全项目 Button 现状而非本次改动引入，见第 9 节观察项。真实主题切换被预览会话 401 阻断，明暗对比通过应用 colorMode 类实测）。
@@ -342,14 +345,14 @@
 5. **混合选择规则**：选中项含任意组节点时只显示“解组”，不显示“编组”，避免现有 `onGroupNodes` 静默过滤组节点导致误操作。
 6. **组专属动作**：多选时不提供组颜色/组内布局入口；用户单击该组进入单选后使用组节点工具条。
 7. **间距与钳制**：工具条与 `containerBbox` 间距 12px；普通多选锚定节点并集四边外扩 40px，顶部再加标题带 28px；选中的全是组时锚定组并集；可见性只看 `bbox` 与视口的交集（标题带与外框内边距单独相交不显示，见 4.1-5）；水平钳制时左右各留至少 8px。
-8. **Phase 2 方向**：布局结果以选区包围盒中心为锚点整体平移；组节点作为原子盒子，组内相对坐标不变；智能布局只统计选区内部连线；大选区性能阈值在 Phase 2 Spec 中基于实测确定，不预先拍数字。
+8. **Phase 2 方向**（2026-11-02）：多选布局进入 Phase 2；已确认的方向与后续细化见 `specs/canvas-multi-selection-layout.md` 8.1「已确认（2026-11-02）」。
 9. **术语**：产品文案统一使用“编组”，不再使用“分组”；`common.group`、`node.group`、`node.groupWithCount`、`shortcuts.group`、`shortcuts.desc.group` 一并更新，避免工具条、组节点与快捷键面板叫法不一致。
 10. **统一边距**：编组、组内布局、框选外框统一为「标题带在 body 外 + body 四边 40px」；编组创建时组框向上多扩 28px，成员绝对位置不动；旧组执行一次组内布局后归一。该决策取代此前「顶部 12px、刻意不对称」的取舍。
 
 ## 9. 当前状态
 
-- 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 设计与确认未开始，不在本次范围。
-- 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码已随 `ce08456f` 提交；整体未达到「已实现」条件。本增量依赖的 `canvas-batch-connect-drag.md` 仍为「待确认」；确认前该增量不构成本 Spec 的已实现范围。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
+- 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 见 `specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。
+- 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码已随 `ce08456f` 提交。该增量的规则由 `canvas-batch-connect-drag.md` 定义，该 Spec 已于 2026-11-14 收口为「已实现」；本 Spec 的 Phase 1 状态不受影响。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
 - 已完成：现状与即梦对照调查；Phase 1 方案、按钮矩阵、边界与验收标准；第 8 节全部决策确认；术语统一为“编组”；统一边距决策确认。
 - Phase 1 实现（2026-11-02 实现，2026-11-03 提交 `e6fc53ad`）：
   - `web/src/features/canvas/shared/canvas-derived.ts` 新增 `selectionChromeBounds`：全部选中节点（含组）的绝对包围盒、计数与是否含组，与 `selectionFrame` 并列且不改变其语义。
@@ -387,24 +390,15 @@
   - 删除已无调用方的 `PlusSquareOutlined` 图标导出及其 `LucideSquarePlus` 导入；修正 `idle ↔ box-selecting` 三处过时注释为 `box-selected`。
   - 回归：`canvas-derived.test.ts` 更新 `containerBbox` 断言；`SelectionToolbar.test.tsx` 改为 `anchorBounds` + `visibleBounds`，新增「仅锚点与视口相交时隐藏」与「定位取锚点、可见性取选区并集」两条用例。
 - 已执行（2026-11-03，代码审查根因修复）：定向回归 3 文件 / 32 用例通过（`canvas-derived` 8、`SelectionToolbar` 19、`use-canvas-interaction` 5）；canvas 全量 100 文件 / 942 用例通过（单 worker，串行）；变更文件 ESLint 0 error；web `tsc --noEmit` 通过。浏览器实机走查未在本次修复后重跑。
-- Phase 2 设计与确认未开始。
 - 组表面视觉对齐即梦（2026-11-11，用户确认「按即梦对齐」）：组 body 由半透明 `GROUP_COLORS.fill` 改为不透明表面——默认组 `--canvas-group-bg`（暗 `#161616` / 亮 `#ededed`），彩色组 `color-mix(in srgb, tint 16%, var(--canvas-group-bg))`；`GROUP_COLORS` 移除 `fill`、新增可选 `tint`，新增 `getGroupSurfaceBackground`（`web/src/lib/constants.ts`），`GroupNode` 与颜色选择色板复用。组表面不透明后，持久多选外框填充不再从组填充派生，改由 `globals.css` 的 `--selection-frame-bg` 独立提供（保持旧值 4% 白），`CanvasSurface` 的 `RF_STYLE` 不再注入该变量；规则 4.10.7 同步更新。回归：`GroupNode.test.tsx` 补默认/彩色表面用例，新增 `group-surface.test.ts` 覆盖全部色板字面量、未知 key 与 globals.css 的 token 契约（组底色为不透明 6 位 hex、选择外框不复用组表面）；`NodeToolbar.test.tsx` 补色板预览用例（default 与蓝色均使用不透明组表面）。web 全量 219 文件 / 1758 用例通过（单 worker，串行），`tsc --noEmit` 与变更文件 ESLint 通过。现场验证（dev 目标，2026-11-11）：暗色组 body 计算 `rgb(22, 22, 22)`、亮色 `rgb(237, 237, 237)`，均 `opacity: 1`；`color-mix` 蓝/黄色探针在暗亮两主题下均解析为不透明 `color(srgb …)`；`--selection-frame-bg` 解析为 `#ffffff0a`（4% 白）。组颜色选择器现场打开验证：弹层 10 个色板，default 计算 `rgb(22, 22, 22)`，蓝色 `color(srgb 0.0862745 0.147137 0.232471)`（≈`rgb(22, 38, 59)`），均不透明；验证后关闭弹层、清除选中（选中数回到 0）。未覆盖：当前画布无彩色组，彩色组 body 仅由单测断言内联表达式、浏览器侧用同表达式探针验证解析；明暗切换采用 colorMode + `<html>` 类同步模拟（与既有验证口径一致）；验证时缩放约 0.26（18 × 0.26 < 8），点阵按 LOD 未挂载（点阵规则见 `canvas-dot-grid.md`），点阵被组表面遮挡的最终视觉与真实多选外框均未现场观察（仅由不透明计算样式与层叠关系推断）。
 - 组表面拖线预览对齐即梦（2026-11-12，用户确认「一起对齐」）：`GroupNode` 的 body 不再内联 `background`，改为写入 `--group-surface`；正常态背景由 `.node-body.canvas-group-surface` 读取该变量，`.react-flow[data-connecting]` 期间改为 `color-mix(in srgb, var(--group-surface) 20%, transparent)`。只降低背景不透明度，标题与描边保持不透明，对齐即梦 `.is-connecting ... opacity-canvas-group-connection-preview`（`opacity: .2`）；规则见 4.10.10「组表面与拖线态」。回归：`GroupNode.test.tsx` 断言 `canvas-group-surface` 类、`--group-surface` 取值与无内联 background；`group-surface.test.ts` 新增 CSS 契约（正常态读变量、拖线态 20%、不使用元素 opacity）。定向 2 文件 / 9 用例、`tsc --noEmit`、变更文件 ESLint 通过。现场验证（dev 目标，2026-11-12）：手动给 `.react-flow` 加 `data-connecting` 后，暗色组 body 背景由 `rgb(22, 22, 22)` 变为 `color(srgb 0.0862745 0.0862745 0.0862745 / 0.2)`（同色 20% alpha），描边颜色不变、body/组 `opacity` 均为 1；亮色由 `rgb(237, 237, 237)` 变为 `color(srgb 0.929412 0.929412 0.929412 / 0.2)`；彩色探针 `color(srgb 0.0862745 0.147137 0.232471)` 在拖线态变为同色 `/ 0.2`；移除属性后恢复。验证期间 dev 页面因全局 CSS HMR 重载，已恢复原视口并确认 133 节点 / 66 边数据完整。真实指针拖线未能在后台标签页复现（`visibilityState=hidden`，CDP 受信鼠标事件未启动连接）；`data-connecting` 由交互状态机写入，已有 `use-canvas-interaction` 单测覆盖。审查根因修复（2026-11-12）：批量连接轨道（`GroupConnectRail` / `BatchConnectHandle`）原在 pointerdown 即调用 `onDragStart`，右键/中键或未越过 4px 的单击也会进入 connecting，使全部组表面短暂降到 20%；修复后的会话规则统一由 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」定义，本条目只保留修复与验证结论。回归：`use-batch-connect-drag.test.ts` 扩至 15 用例，新增右键/非主指针不拦截默认行为、阈值前 pointercancel、4px 边界只进入一次、其他指针不驱动/终止、非左键 pointerup 取消、左键松开取消、远距离 pointerup 补判等断言；定向 1 文件 / 15 用例、`tsc --noEmit` 与变更文件 ESLint 通过，web 全量 219 文件 / 1767 用例通过（单 worker，串行）。现场验证（dev 目标，2026-11-12，向组连接轨道派发 JS `PointerEvent` 驱动真实 React 处理器）：主键 pointerdown 后 `data-connecting` 不存在、组背景保持 `rgb(22, 22, 22)`；位移 2px 仍不进入；位移 8px 后 `data-connecting=true`、组背景变为同色 `/ 0.2`；其他指针的 cancel/move/up 不改变 connecting；左键松开（buttons 只剩右键位）与右键 pointerup 均取消并恢复背景；结束时 133 节点 / 66 边不变、无菜单。
+- Phase 2 已确认，见 `specs/canvas-multi-selection-layout.md`（状态：已确认，2026-11-14，实现中）。
 
 ## 10. 后续阶段（不在本次范围）
 
 ### 10.1 Phase 2：多选布局
 
-目标：在聚合工具条中增加“布局 ▾”，提供智能 / 宫格 / 水平 / 垂直四种模式，作用于当前选中的顶层项。
-
-设计方向（Phase 2 另行确认）：
-
-1. 从 `shared/group-layout.ts` 与 `shared/layered-layout.ts` 抽出可复用的布局核心；选区布局与组内布局共享排序、分层、间距与盒模型，但坐标空间不同。
-2. 组节点作为整体盒子移动；组内成员不单独参与布局；组内相对坐标保持不变。
-3. 智能布局只统计“两端都在选中集内”的连线；指向选区外的边不参与分层。
-4. 布局结果以选区包围盒中心为锚点整体平移；一次布局一条历史记录。
-5. 大选区需要性能上限或异步/动画策略，不能对上百节点同步跑 dagre；具体阈值在 Phase 2 Spec 中基于实测确定。
-6. 多选布局不修改组框内部布局；组内布局仍走组节点工具条。
+Phase 2 的规则（入口、布局单元、模式复用、智能布局边映射、中心锚定、性能与待确认项）见 `specs/canvas-multi-selection-layout.md`。本 Spec 只保留阶段归属，不重复规则。
 
 ### 10.2 其他候选
 

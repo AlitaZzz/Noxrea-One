@@ -36,7 +36,9 @@ import {
 import { nodeAcceptsInput } from "@/features/canvas/shared/connection-rules";
 import { toAbsoluteNodes } from "@/features/canvas/shared/group-bounds";
 import { isGroupNode, memberParentId } from "@/features/canvas/shared/group-membership";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
 import { applySelection, updateSelection } from "@/features/canvas/shared/selection";
+import { computeSelectionLayout } from "@/features/canvas/shared/selection-layout";
 import { textToTiptapHtml } from "@/features/canvas/shared/text-to-html";
 import type { CanvasState } from "@/features/canvas/stores/canvas-store";
 import { markDirtyImmediate, markDirtyUndo, pushHistoryThrottled, takeCanvasSnapshot, useCanvasStore, withHistoryBatch } from "@/features/canvas/stores/canvas-store";
@@ -251,6 +253,39 @@ export function duplicateSelection(): boolean {
     { x: minX + LAYOUT_GAP, y: minY + LAYOUT_GAP },
     { includeExternalEdges: true },
   );
+}
+
+/**
+ * 选区布局：按模式重排选中的布局单元，整体以布局前单元并集中心为锚。
+ *
+ * 只写单元节点（组节点 / 顶层节点）的 position；成员相对坐标、组框尺寸、
+ * data、parentId、edges 与选区都不变。一次布局一条历史记录；没有实际移动
+ * 时不压栈、不标记 dirty。规则见 specs/canvas-multi-selection-layout.md 4.5–4.6。
+ * @returns 是否实际写入位置
+ */
+export function arrangeSelection(mode: CanvasLayoutMode): boolean {
+  const state = useCanvasStore.getState();
+  const selectedIds = new Set(
+    state.nodes.filter((node) => node.selected).map((node) => node.id),
+  );
+  const { positions, movedCount } = computeSelectionLayout(
+    state.nodes,
+    state.edges,
+    selectedIds,
+    mode,
+  );
+  if (positions.size === 0 || movedCount === 0) return false;
+
+  // 离散操作必须绕过 300ms 节流；一次 setNodes 提交全部单元位置
+  useHistoryStore.getState().push(takeCanvasSnapshot());
+  state.setNodes(
+    state.nodes.map((node) => {
+      const position = positions.get(node.id);
+      return position ? { ...node, position } : node;
+    }),
+  );
+  markDirtyImmediate();
+  return true;
 }
 
 /**

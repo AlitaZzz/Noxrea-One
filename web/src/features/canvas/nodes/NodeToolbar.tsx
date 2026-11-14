@@ -48,7 +48,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { unsaveAssetsByFileKeys, useKnownAssetKeys } from "@/entities/asset";
 import AudioSpeedPanel from "@/features/canvas/editing/AudioSpeedPanel";
 import { mediaDataHasContent } from "@/features/canvas/shared/gen-settings-node";
-import type { GroupLayoutMode } from "@/features/canvas/shared/group-layout";
+import type { CanvasLayoutMode } from "@/features/canvas/shared/layout-modes";
 import { dispatchNodeAction } from "@/features/canvas/shared/node-action";
 import PresetMenuContent from "@/features/canvas/shared/PresetMenuContent";
 import { usePromptTemplateCatalog } from "@/features/canvas/shared/prompt-presets";
@@ -356,7 +356,7 @@ function NodeToolbar({
     [nodeId, onShowInspector]
   );
   const handleLayout = useCallback(
-    (mode: GroupLayoutMode) => {
+    (mode: CanvasLayoutMode) => {
       setLayoutCloseInstant(true);
       dispatchNodeAction(nodeId, "layout", { mode });
     },
