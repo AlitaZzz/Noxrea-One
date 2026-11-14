@@ -1,6 +1,6 @@
 # 画布批量连线拖拽会话（Batch Connect Drag）
 
-状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理与窗口失焦收尾；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；主体代码已随 `ce08456f` 提交，窗口失焦修复为未提交增量；整体未达到「已实现」条件，待用户确认本 Spec）
+状态：待确认（2026-11-12 回填主体会话规则并补组件卸载清理与窗口失焦收尾；现场验证已覆盖 `GroupConnectRail` 与 `BatchConnectHandle` 组件级；主体代码已随 `ce08456f` 提交，窗口失焦修复已随 `8a8eb1fb` 提交；整体未达到「已实现」条件，待用户确认本 Spec）
 
 ## 目标
 
@@ -108,7 +108,7 @@
 - `web/src/features/canvas/shared/node-hit-test.ts`、`shared/connection-rules.ts`：
   命中与候选对口径。
 - 测试：`web/src/__tests__/features/canvas/controls/use-batch-connect-drag.test.ts`
-  （21 用例）。
+  （32 用例）。
 
 ## 异常与边界
 
@@ -128,29 +128,29 @@
 
 ## 验收标准
 
-1. 定向测试 21 用例通过：扇出/扇入建对、空白弹菜单、`<4px` 误触、拖回参与集取消、
+1. 定向测试 32 用例通过：扇出/扇入建对、空白弹菜单、`<4px` 误触、拖回参与集取消、
    pointercancel（阈值前后）、窗口失焦（阈值前后、失焦后重入）、4px 边界只进入一次、
-   其他指针隔离、非左键 pointerup 取消、失键 move 取消、快速甩动补判、拖拽中卸载
-   清理（含阈值前与会话结束后幂等）、重入保护、右键/非主指针不拦截。测试未断言规则 4
-   的 ok/blocked 倾斜、规则 3.4 的左右锚点、规则 1.4 的参与集冻结与异常 4 的其他指针
-   `pointercancel`，见第 4 条。
+   其他指针隔离（move / up / cancel）、非左键 pointerup 取消、失键 move 取消、快速
+   甩动补判、拖拽中卸载清理（含阈值前与会话结束后幂等）、重入保护、右键/非主指针
+   不拦截、输出/输入左右锚点、可连/不可连 × 输出/输入四种倾斜组合、每次越过阈值
+   后的 move 重新反馈、参与集冻结（命中与空白落点）。测试只断言 `applyConnectionTilt`
+   的调用参数与 `nodeEdgeAnchor` 的方向/返回值透传，不覆盖二者的样式与几何实现，
+   见第 4 条。
 2. 现场验证（2026-11-12，dev，向组连接轨道派发 JS `PointerEvent` 驱动真实 React
    处理器）：主键 pointerdown 后不进入 connecting、组背景保持不透明；位移 2px 不
    进入；8px 后 `data-connecting=true`、组背景降到 20%；其他指针的 cancel/move/up
    不改变 connecting；左键松开（buttons 只剩右键位）与右键 pointerup 均取消并恢复
    背景；结束时 133 节点 / 66 边不变、无菜单。本次现场只覆盖 `GroupConnectRail`；
    `BatchConnectHandle` 的组件级现场验证见第 6 条。
-3. 回归：`tsc --noEmit`、变更文件 ESLint、web 全量测试通过（单 worker，串行）；
-   全量中的已知满载抖动用例须隔离运行确认。
-4. 自动化测试未覆盖：
-   - 规则 4 的 ok/blocked 倾斜断言（测试 mock 了 `applyConnectionTilt`，未断言调用）；
-   - 规则 3.4 输出/输入左右锚点差异（`nodeEdgeAnchor` 固定返回，无方向断言）；
-   - 规则 1.4 参与集在拖动中变化的用例；
-   - 异常 4 其他指针的 `pointercancel`（单测未覆盖；`GroupConnectRail` 现场已验证，
-     `BatchConnectHandle` 未验证）；
+3. 回归：`tsc --noEmit`、`npm run lint`（0 error，6 个既有
+   `@next/next/no-img-element` warning）、web 全量 226 文件 / 1841 用例通过
+   （2026-11-14，单 worker，249.81s）；全量中的已知满载抖动用例须隔离运行确认。
+4. 自动化测试仍不覆盖（走查 / 真机项）：
    - 输入方向（扇入）与拖动中 `ok` / `blocked` 倾斜的现场断言（走查只覆盖输出方向，
      未在 Escape 前截取 connecting 态）；
-   - 触控笔/异常平台 `buttons` 真机。
+   - 触控笔/异常平台 `buttons` 真机；
+   - `connection-tilt` 的样式实现与 `nodeEdgeAnchor` 的几何计算（单测 mock，只锁定
+     调用契约与方向 / 参数透传）。
 5. 规则 6.5（已验证）：拖拽中卸载消费者会结束会话——移除 window 监听、清除倾斜、
    置空 `dragRef`，已进入 connecting 时调用一次 `onDragEnd`；卸载路径只执行非 React
    副作用，不更新组件本地状态；卸载后同一指针的 `pointerup` 不再调用 `onConnect` /
@@ -177,9 +177,10 @@
 
 ## 当前状态
 
-- 状态：待确认；规则 1–6 均已实现，自动化验证通过（定向 21 用例），现场验证已覆盖
+- 状态：待确认；规则 1–6 均已实现，自动化验证通过（定向 32 用例），现场验证已覆盖
   `GroupConnectRail` 与 `BatchConnectHandle` 组件级，主体代码已随 `ce08456f` 提交
-  （2026-11-12）；窗口失焦修复为未提交增量；整体未达到「已实现」条件。
+  （2026-11-12），窗口失焦修复已随 `8a8eb1fb` 提交（2026-11-12）；整体未达到
+  「已实现」条件，待用户确认本 Spec 与剩余走查项。
 - 组件卸载清理（2026-11-12，用户要求修复）：hook 以 `endSessionRef` 持有会话结束
   函数（只做非 React 副作用），`useEffect` 卸载时调用；事件路径 `cleanupDrag` =
   `endSession` + 清空预览，卸载路径不触达组件状态。`endSession` 以会话级标记保证
@@ -195,16 +196,20 @@
   修复为监听 window `blur` 并按取消收尾，与 marquee 的失焦取消一致；批量连线的
   提交即建边，落点语义不可信，不做 resize 式的末帧提交。新增 3 条回归用例
   （阈值后失焦、阈值前失焦、失焦后重新起手），并确认修复前 3 条均失败、修复后通过。
-  本次修复为工作区改动，尚未提交；修复后复跑 canvas controls 11 文件 / 64 用例与
-  `GroupNode` 3 用例通过；真机窗口失焦路径未现场复现（单测用合成 `Event("blur")`
-  验证）。
+  本次修复已随 `8a8eb1fb` 提交（2026-11-12）；修复后复跑 canvas controls 11 文件 /
+  64 用例与 `GroupNode` 3 用例通过；真机窗口失焦路径未现场复现（单测用合成
+  `Event("blur")` 验证）。
 - 实现：`use-batch-connect-drag.ts` 作为唯一实现；`BatchConnectHandle` 与
   `GroupConnectRail` 共用。
-- 验证：定向 21 用例、`tsc --noEmit`、变更文件 ESLint 通过（含 `endSession` /
-  `cleanupDrag` 拆分后的复跑）；web 全量 219 文件 / 1770 用例三轮分别 1759、1768、
-  1759 通过，失败集中在与本次改动无关的媒体/URL 真实计时器用例（`HoverCard`、
-  `ResolvedHoverMedia`、`MediaAccessError`、`UseFileAccessUrl`、
-  `useSseTaskMonitor`；隔离运行均通过），批量连线用例无失败；dev 现场验证见验收
-  2 / 6（2026-11-12）。未覆盖项见「验收标准」第 4 条。
+- 测试补齐（2026-11-14）：新增 11 条用例，覆盖此前验收 4 列出的四项自动化缺口——
+  输出/输入锚点方向、可连/不可连 × 输出/输入四种倾斜组合、每次越过阈值后的 move
+  重新反馈、参与集冻结（命中与空白落点）、其他指针 `pointercancel`。新增断言另经
+  3 组实现变异验证（倾斜按方向绑定、仅首次 move 反馈、空白落点重读参与集），均按
+  预期失败后还原实现。
+- 验证：定向 32 用例、`tsc --noEmit`、`npm run lint`（0 error，6 个既有 warning）
+  通过；web 全量 226 文件 / 1841 用例通过（2026-11-14，单 worker，249.81s）。此前的
+  历史记录：web 全量 219 文件 / 1770 用例三轮分别 1759、1768、1759 通过，失败集中在
+  与本次改动无关的媒体/URL 真实计时器用例（隔离运行均通过），批量连线用例无失败；
+  dev 现场验证见验收 2 / 6（2026-11-12）。未覆盖项见「验收标准」第 4 条。
 - 来源：`canvas-multi-selection-toolbar.md` 2026-11-12「组表面拖线预览对齐即梦」
   条目中的审查根因修复记录。

@@ -563,4 +563,180 @@ describe("useBatchConnectDrag", () => {
     expect(ctx.onConnect).toHaveBeenCalledTimes(1);
     expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    { direction: "output" as const, connectable: true, expected: "ok" },
+    { direction: "output" as const, connectable: false, expected: "blocked" },
+    { direction: "input" as const, connectable: true, expected: "ok" },
+    { direction: "input" as const, connectable: false, expected: "blocked" },
+  ])(
+    "$direction 方向可连=$connectable 时按 $expected 倾斜，并随每次 move 更新",
+    ({ direction, connectable, expected }) => {
+      const ctx = setup(direction);
+      mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+      mocks.pairsWouldCreate.mockReturnValue(connectable);
+      const pairs = direction === "output"
+        ? [{ source: "a", target: "t" }]
+        : [{ source: "t", target: "a" }];
+      (direction === "output" ? mocks.buildFanoutPairs : mocks.buildFanInPairs)
+        .mockReturnValue(pairs);
+
+      act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+      pointerMove(20, 0);
+
+      // 反馈与松手共用 buildPairs + pairsWouldCreate，且方向决定构建器
+      if (direction === "output") {
+        expect(mocks.buildFanoutPairs).toHaveBeenCalledWith([nodes[0], nodes[1]], nodes[2]);
+        expect(mocks.buildFanInPairs).not.toHaveBeenCalled();
+      } else {
+        expect(mocks.buildFanInPairs).toHaveBeenCalledWith(nodes[2], [nodes[0], nodes[1]]);
+        expect(mocks.buildFanoutPairs).not.toHaveBeenCalled();
+      }
+      expect(mocks.pairsWouldCreate).toHaveBeenCalledWith(pairs, []);
+      expect(mocks.applyConnectionTilt).toHaveBeenLastCalledWith(
+        { id: "t", box: { x: 0, y: 0, width: 100, height: 100 } },
+        { x: 40, y: 0 },
+        expected,
+      );
+      expect(mocks.clearConnectionTilt).not.toHaveBeenCalled();
+
+      // 规则 4.1：越过阈值后的每次 move 都更新终点并重新判定倾斜
+      pointerMove(30, 40);
+
+      expect(mocks.findNodeAtFlowPoint).toHaveBeenCalledTimes(2);
+      expect(mocks.applyConnectionTilt).toHaveBeenCalledTimes(2);
+      expect(mocks.applyConnectionTilt).toHaveBeenLastCalledWith(
+        { id: "t", box: { x: 0, y: 0, width: 100, height: 100 } },
+        { x: 60, y: 80 },
+        expected,
+      );
+      expect(ctx.result.current.preview?.to).toEqual({ x: 60, y: 80 });
+      expect(mocks.clearConnectionTilt).not.toHaveBeenCalled();
+    }
+  );
+
+  it("未命中节点：清除倾斜，不产生 ok/blocked 反馈", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(null);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+
+    expect(mocks.applyConnectionTilt).not.toHaveBeenCalled();
+    expect(mocks.clearConnectionTilt).toHaveBeenCalled();
+  });
+
+  it("命中节点但没有有效盒：清除倾斜", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+    mocks.getNodeBox.mockReturnValue(null);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+
+    expect(mocks.applyConnectionTilt).not.toHaveBeenCalled();
+    expect(mocks.clearConnectionTilt).toHaveBeenCalled();
+  });
+
+  it.each([
+    { direction: "output" as const, side: "right" },
+    { direction: "input" as const, side: "left" },
+  ])("$direction 预览束线从参与节点的 $side 缘锚点出发", ({ direction, side }) => {
+    const ctx = setup(direction);
+    mocks.nodeEdgeAnchor.mockImplementation((node: NodeLike) => ({
+      x: node.id === "a" ? 1 : 2,
+      y: 3,
+    }));
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0)); });
+    pointerMove(20, 0);
+
+    expect(mocks.nodeEdgeAnchor).toHaveBeenNthCalledWith(1, nodes[0], side, expect.any(Map));
+    expect(mocks.nodeEdgeAnchor).toHaveBeenNthCalledWith(2, nodes[1], side, expect.any(Map));
+    expect(ctx.result.current.preview).toEqual({
+      sources: [{ x: 1, y: 3 }, { x: 2, y: 3 }],
+      to: { x: 40, y: 0 },
+    });
+  });
+
+  it("参与集在起手时冻结：拖动中变化不改变反馈与提交", () => {
+    let participantIds = ["a", "b"];
+    const getParticipantIds = vi.fn(() => participantIds);
+    const onConnect = vi.fn();
+
+    const { result } = renderHook(() => useBatchConnectDrag({
+      direction: "output",
+      getParticipantIds,
+      onConnect,
+      onConnectToBlank: vi.fn(),
+      onDragStart: vi.fn(),
+      onDragEnd: vi.fn(),
+      screenToFlowPosition: (p) => ({ x: p.x * 2, y: p.y * 2 }),
+    }));
+
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+
+    act(() => { result.current.startDrag(pointerEvent(0, 0)); });
+    expect(getParticipantIds).toHaveBeenCalledTimes(1);
+
+    // 起手后组成员 / 选区变化：本次会话仍使用起手时冻结的参与集
+    participantIds = ["a"];
+    pointerMove(20, 0);
+    pointerUp(20, 0);
+
+    expect(getParticipantIds).toHaveBeenCalledTimes(1);
+    expect(mocks.buildFanoutPairs).toHaveBeenCalledWith([nodes[0], nodes[1]], nodes[2]);
+    expect(onConnect).toHaveBeenCalledWith([{ source: "a", target: "t" }]);
+  });
+
+  it("参与集冻结：空白落点仍携带起手时的参与集", () => {
+    let participantIds = ["a", "b"];
+    const getParticipantIds = vi.fn(() => participantIds);
+    const onConnectToBlank = vi.fn();
+
+    const { result } = renderHook(() => useBatchConnectDrag({
+      direction: "output",
+      getParticipantIds,
+      onConnect: vi.fn(),
+      onConnectToBlank,
+      onDragStart: vi.fn(),
+      onDragEnd: vi.fn(),
+      screenToFlowPosition: (p) => ({ x: p.x * 2, y: p.y * 2 }),
+    }));
+
+    mocks.findNodeAtFlowPoint.mockReturnValue(null);
+
+    act(() => { result.current.startDrag(pointerEvent(0, 0)); });
+    // 起手后参与集变化：空白提交仍必须使用冻结集
+    participantIds = ["a"];
+    pointerMove(20, 10);
+    pointerUp(20, 10);
+
+    expect(getParticipantIds).toHaveBeenCalledTimes(1);
+    expect(onConnectToBlank).toHaveBeenCalledWith(
+      ["a", "b"],
+      { x: 40, y: 20 },
+      { x: 20, y: 10 },
+      "output",
+    );
+  });
+
+  it("其他指针的 pointercancel 不终止本次拖拽", () => {
+    const ctx = setup("output");
+    mocks.findNodeAtFlowPoint.mockReturnValue(nodes[2]);
+
+    act(() => { ctx.result.current.startDrag(pointerEvent(0, 0, { pointerId: 1 })); });
+    pointerMove(20, 0, { pointerId: 1 });
+    expect(ctx.result.current.preview).not.toBeNull();
+
+    pointerCancel(2);
+
+    expect(ctx.onDragEnd).not.toHaveBeenCalled();
+    expect(ctx.result.current.preview).not.toBeNull();
+
+    // 主指针仍可正常提交
+    pointerUp(20, 0, { pointerId: 1 });
+    expect(ctx.onConnect).toHaveBeenCalledWith([{ source: "a", target: "t" }]);
+    expect(ctx.onDragEnd).toHaveBeenCalledTimes(1);
+  });
 });

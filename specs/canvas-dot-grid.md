@@ -56,7 +56,7 @@
   `<Background variant={Dots} gap={20} size={1.5} color="var(--input)" />`，并在
   `RF_STYLE` 注入 `--xy-background-color: var(--canvas-bg)`。
 - `web/src/styles/globals.css`：新增 `--canvas-bg` / `--canvas-dot-color`，明暗两套。
-- 测试：`web/src/__tests__/features/canvas/controls/CanvasDotGrid.test.tsx`（4 用例）。
+- 测试：`web/src/__tests__/features/canvas/controls/CanvasDotGrid.test.tsx`（6 用例：几何、LOD、CSS token 生效值、`RF_STYLE` 定义与实际应用）。
 
 ## 异常与边界
 
@@ -73,14 +73,15 @@
 1. 几何（已验证）：zoom 0.5 时间距 9px、点半径 0.5px；zoom 2 时间距 36px、点半径
    0.5px。
 2. LOD（已验证）：zoom 0.44 不渲染 `.react-flow__background`；0.45 渲染。
-3. 颜色契约（人工核对，未被自动化测试锁定）：组件向 `Background` 传
-   `color="var(--canvas-dot-color)"`；`globals.css` 明暗两套 token 见业务规则 4；
-   `--xy-background-color` 读取 `--canvas-bg`。测试只断言 `color` prop 透传，
-   token 与 `RF_STYLE` 注入需人工复核。
+3. 颜色契约（已验证，自动化锁定）：组件向 `Background` 传
+   `color="var(--canvas-dot-color)"`（渲染断言）；`globals.css` 明暗两套 token
+   按源码顺序合并后的生效值与业务规则 4 一致（覆盖注释失效与后置级联覆盖）；
+   `CanvasSurface` 的 `RF_STYLE` 经 AST 断言定义 `--xy-background-color:
+   var(--canvas-bg)`，且实际挂到 `<ReactFlow style={RF_STYLE}>`。
 4. 实机视觉（未验证，待用户走查）：明暗两套主题、低缩放整层卸载、组表面遮挡下的
    最终视觉。
-5. 回归（已验证）：web 全量 219 文件 / 1767 用例、`tsc --noEmit`、`npm run lint`
-   通过（2026-11-12 记录）。
+5. 回归（已验证）：web 全量 226 文件 / 1841 用例、`tsc --noEmit`、`npm run lint`
+   通过（2026-11-14，单 worker）。
 
 ## 待确认事项
 
@@ -91,12 +92,16 @@
 ## 当前状态
 
 - 状态：待确认；实现与单测已完成，代码已随 `ce08456f` 提交（2026-11-12）。
-- 验证：`CanvasDotGrid.test.tsx` 4 用例通过；全量 web 219 文件 / 1767 用例、
-  `tsc --noEmit`、`npm run lint` 通过。2026-11-12 运行中画布完成明暗主题 token
-  实测（暗 `#0d0d0d` / 白 20% 点阵，亮 `#f5f5f5` / `rgb(115,115,115) 45%`，间距 18、
-  点半径 0.5）；低缩放整层卸载与组表面遮挡的最终视觉仍未走查（缩放约 0.26 时
-  点阵按 LOD 未挂载）。
-- 已知缺口：颜色/CSS 契约未被自动化测试锁定；1px 点径与色值只有目测依据，见
-  「业务规则」参数证据与「待确认事项」第 1 条。
+  2026-11-14 补齐颜色/CSS 契约自动化测试，锁定 token 生效值、注释/级联假阳性与
+  `RF_STYLE` 的实际注入。
+- 验证：`CanvasDotGrid.test.tsx` 6 用例通过；`tsc --noEmit`、`npm run lint`
+  通过；web 全量 226 文件 / 1841 用例通过（2026-11-14，单 worker，249.81s）。
+  新增断言另经 3 组实现变异验证（注释 token、后置 `.dark` 覆盖、移除
+  `style={RF_STYLE}`），均按预期失败后还原实现。2026-11-12 运行中画布完成明暗主题 token 实测
+  （暗 `#0d0d0d` / 白 20% 点阵，亮 `#f5f5f5` / `rgb(115,115,115) 45%`，间距 18、
+  点半径 0.5）。
+- 已知缺口：1px 点径与色值仍只有目测依据（见「待确认事项」第 1 条）；低缩放
+  整层卸载与组表面遮挡的最终视觉仍未走查（缩放约 0.26 时点阵按 LOD 未挂载）。
+  颜色/CSS 契约已由自动化测试锁定，不再列为缺口。
 - 来源：`canvas-multi-selection-toolbar.md` 2026-11-11 组表面条目与点阵旁注；用户
   要求「点阵也对齐」。
