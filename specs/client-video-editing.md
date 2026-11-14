@@ -1,6 +1,6 @@
 # Client Video Editing（媒体编辑操作客户端化）
 
-状态：已确认（用户 2026-10-14 确认；实现按「管线 + 裁剪 → 截取 → 分离音轨 → 变速」顺序进行；2026-11-03 代理就绪度增量经用户确认，代码已提交，待真实浏览器走查）
+状态：已实现（用户 2026-10-14 确认；实现按「管线 + 裁剪 → 截取 → 分离音轨 → 变速」顺序进行；2026-11-03 代理就绪度增量经用户确认；2026-11-14 按用户走查前指示完成真实浏览器走查并收口，分离音轨 / 音频变速 / `UrlSource` Range 证据见「当前状态」；32 kHz 源能力探测粒度作为遗留优化记录，不影响验收）
 
 ## 目标
 
@@ -310,3 +310,20 @@
 
 - 2026-11-08 派生工厂参数形状更新：本 Spec 2026-10-22 审查处置中「维持 `createVideoNodeFromRef` 位置参数」与「两种派生工厂位置参数顺序不同」的表述已过时；三个 `*FromRef` 工厂现均接收单一参数对象，`options` 统一收在 `CreateDerivedNodeParams`。当前契约见 [web-module-contracts.md](web-module-contracts.md) 规则 9（派生节点工厂与提交出口）。
 - 2026-11-12 编辑面板指针会话失焦收尾（用户要求根因修复）：`FrameStripPanel` 与 `ClipStripPanel` 的拖拽会话原先只监听指针事件（帧面板甚至没有 `pointercancel`），窗口失焦后浏览器可能不再派发 `pointerup` / `pointercancel`，导致未按键的移动继续搓擦播放头、`dragPointerRef` 锁死后续拖动、过期会话在下一次 `pointerup` 上按旧落点补提交。该跨面板契约由 [canvas-editing-panel-pointer-sessions.md](canvas-editing-panel-pointer-sessions.md) 规则 1「会话建立」–规则 4「卸载收尾」定义，本 Spec 的客户端管线规则不变。起始键过滤已按同一规则 1「会话建立」统一补齐，提交为 `539710f3`。回归：`FrameStripPanel.test.tsx` 5 例、`ClipStripPanel.test.tsx` 4 例与共享原语 3 例通过；Frame 的挂起 seek / 多指并发用例在修复前失败。主体修复已提交 `ea0083d9`；本轮审查修复与文档修正已提交为 `416e3ea5`。2026-11-12 真实 Chromium 走查：两面板的失焦取消与起始键过滤均按预期；预览页为后台隐藏状态，实际切标签页 / Alt+Tab 未现场复现。
+
+2026-11-14 浏览器走查（续：真实 Chromium 预览 + 服务端日志 + `window.fetch` 插桩，测试画布 `mtxij9lscl5m0a`，131→137 节点）：
+
+**已验证事实**
+
+- 分离音轨客户端全链路：源 h264+AAC 12.256 s；服务端只收到两次 `POST /api/files/upload`（`source=derived`，音轨 m4a 198,601 B + 静音 mp4 9,337,864 B，后者触发既有 `stage=poster_master`），无 `POST /api/files/detach-audio`；一次动作产出「视频 (静音)」+「视频 (音频)」两个节点。为 Range 插桩重复一次，产物哈希相同（去重），再次验证同一链路。
+- 音频变速客户端路径（44.1 kHz mono AAC，7.709 s）：服务端无 `apply-audio-speed` 调用，产物经 `POST /api/files/upload?source=derived` 入库（84,782 B）；新节点「变速 1.5x」显示 00:05，播放进度正常推进；产物解码 44.1 kHz mono 5.201 s，时长比 0.6747 ≈ 1/1.5 + 50 ms 尾部余量。自相关基频中位数：源 131.25 Hz、产物 132.83 Hz（偏差约 1.2%，远小于按 1.5× 变调会产生的 50%），作为「保持音调」的客观代理。
+- 音频变速回退路径（32 kHz AAC 源）：客户端在 `audioSource.add` 报 `This specific encoder configuration (mp4a.40.2, 128000 bps, 2 channels, 32000 Hz) is not supported in this environment`，自动回退 `POST /api/files/apply-audio-speed`（200，999 ms）并产出「变速 1.5x」00:08 节点，可播放。`AudioEncoder.isConfigSupported` 实测本机仅 44.1 / 48 kHz（mono/stereo）AAC 可用，8 / 16 / 22.05 / 24 / 32 / 96 kHz 均不支持；32 kHz 回退属编码器配置限制。遗留优化（不影响验收）：`canEncodeAudio("aac")` 仍只按默认 48 kHz 探测，未按实际源采样率探测——32 kHz 源会先完成全量解码 + 拉伸后才失败回退（结果正确但做了无效工作）；后续可改为按实际配置探测（失败即刻回退），或重采样到 48 kHz 以扩大客户端覆盖。
+- `UrlSource` Range：fetch 插桩捕获同一源 mp4 的 `Range: bytes=0-` 与 `Range: bytes=2097152-`，MinIO 均返回 `206` + `Content-Range: bytes …/9,540,486` + `Accept-Ranges: bytes`；变速源 m4a 亦为 `Range: bytes=0-` → 206。按需 Range 读取确认生效（此前只能证明分次 fetch）。
+- 走查产生的 6 个派生节点（两次分离音轨各 2 个、32 kHz 变速回退 1 个、44.1 kHz 变速 1 个）保留在测试画布，未擅自删除。
+
+**本轮未覆盖**
+
+- 「保持音调」未做人耳试听，仅用基频统计代理；音频片段截取（AudioNode clip）客户端路径未单独执行——AAC 源走包级拷贝，不依赖 AAC 编码器，2026-10-27 的「本环境无法执行」仅适用于变速重编码与 32 kHz 源。
+- 探测负缓存跨会话、真实网络断开、服务端兜底失败提示未构造。
+
+验收结论：分离音轨、音频变速的客户端路径与回退、`UrlSource` Range 均已获得真实浏览器证据；裁剪与片段截取沿用此前已完成的浏览器走查。按用户 2026-11-14 走查前指示，本 Spec 状态更新为「已实现」；上述未覆盖项与 32 kHz 探测粒度为遗留优化，不构成验收缺口。
