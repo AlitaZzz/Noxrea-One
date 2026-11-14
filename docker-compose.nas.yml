@@ -60,6 +60,13 @@ services:
   noxrea:
     image: ghcr.io/alitazzz/noxrea-one:latest
     container_name: noxrea-one
+    # PID 1 使用 Docker 内置 init：转发 SIGTERM（entrypoint 以 exec 启动 npm，
+    # npm run-script 再向子进程转发）并回收孤儿进程，保证优雅停机链路可达。
+    init: true
+    # 停机窗口必须覆盖服务端排空：进程退出兜底 = worker.drain_timeout_seconds × 3
+    # （默认 15s × 3 = 45s）再加 HTTP / 队列 / 数据库收尾。Docker 默认 10s 会在排空
+    # 完成前 SIGKILL，使规则 9 的优雅停机失效；调整 drain 设置时同步放大本值。
+    stop_grace_period: 60s
     depends_on:
       postgres:
         condition: service_healthy

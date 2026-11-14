@@ -1,6 +1,6 @@
 # 任务队列 Redis + BullMQ 化（Task Queue BullMQ Migration）
 
-状态：已实现（2026-11-14 用户指示收口；实现随 `abd22c10` 提交，启动探测修复与四轮实机收口随 `e425ebb4` 提交。方案演进：v5 定稿修正提交前中断接管 retryCount 预算约束、取消矩阵轮询段 delayed job、max_retries 口径，待确认清零；v4 依据参考项目 open-ai-canvas-main 实读证据引入提交闸门与轮询 tick 化；v1 审查 P0/P1/P2 修订全项保留。详见「当前状态」）
+状态：已实现（2026-11-14 用户指示收口；实现随 `abd22c10` 提交，启动探测修复与四轮实机收口随 `e425ebb4` 提交；2026-11-14 收口后加固：测试基座 statement_timeout 与 compose 停机窗口，见「当前状态」。方案演进：v5 定稿修正提交前中断接管 retryCount 预算约束、取消矩阵轮询段 delayed job、max_retries 口径，待确认清零；v4 依据参考项目 open-ai-canvas-main 实读证据引入提交闸门与轮询 tick 化；v1 审查 P0/P1/P2 修订全项保留。详见「当前状态」）
 
 ## 目标
 
@@ -184,3 +184,9 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 ⑤ **检查结果与测试基座缺陷**：typecheck、lint:server 通过；全量 server Vitest 1236 通过 / 1 失败（`file-ref-ledger-bulk` 5 万规模用例 120s 超时）+ 8 个真实库测试文件的 beforeAll hook 连锁超时。根因：该超时用例的 `UPDATE file_objects …` 在 Prisma 事务超时后仍在服务端执行并持有关系锁，后续文件阻塞在文件级 advisory lock 上。终止本次运行产生的残留会话后：8 个文件 81/81 通过，该用例单独运行 17.5s 通过。queue 相关测试（含真 Redis 集成）全绿。该失败与队列改动无关，但暴露测试基座缺陷（事务超时不取消服务端查询 → 超时用例卡死后续文件），列入遗留问题另行处置。
 
 状态更新为「已实现」（2026-11-14，用户验收确认）：①–④ 已覆盖；剩余未验项（OS 级信号投递、生产入口信号转发、带在途 job 的实机排空）经用户接受为平台/部署形态限制，不影响本 Spec 业务规则验收。实现代码与收口记录随 `e425ebb4` 提交。
+
+- 2026-11-14 收口后加固（工作区未提交；不改变业务规则，均为验证基座与部署配置）：
+  - **测试基座根因修复（上条 ⑤ 遗留）**：客户端超时（Prisma 事务预算 / Vitest 用例超时）不会取消已发往 PostgreSQL 的语句，超时语句继续持有关系锁，使后续文件卡在文件级 advisory lock 上连锁失败。`server/__tests__/helpers/test-database.ts` 现为测试库连接附加服务端 `statement_timeout=90s`（连接串 `options=-c statement_timeout=…`，低于 Vitest 120s 用例上限，并保留调用方已有 options），文件锁连接同样带 90s 上限；新增 `server/__tests__/helpers/test-database.test.ts`（默认 90s、已有查询参数与 options 合并）。机制实测：1s 上限下 `SELECT pg_sleep(3)` 在约 1.1s 被 PostgreSQL 以 SQLSTATE 57014 取消（Prisma P2010），证明语句由服务端取消而非客户端放弃。
+  - **部署停机窗口加固**：`docker-compose.nas.yml` 应用服务增加 `init: true`（PID 1 信号转发与孤儿回收）与 `stop_grace_period: 60s`。依据：`worker.drain_timeout_seconds` 默认 15s，进程退出兜底 = 3 × 15s = 45s（`server/index.ts`），Docker 默认 10s 会在排空完成前 SIGKILL，使规则 9 的优雅停机失效；entrypoint 以 `exec npm run start` 启动，npm `run-script` 内置 signal-manager 向子进程转发 SIGINT/SIGTERM（本机 npm 源码实读）。未验证：本机无 Docker，未做真实 `docker stop` 实机演练（已做 YAML 解析与静态配置核对）。
+  - 验证（已验证事实）：`npx tsc --noEmit`、`npm run lint:server` 通过；全量 server Vitest 117 文件 / 1320 通过 / 14 跳过（单 worker、串行，107.85s），此前「超时用例卡死后续文件」未复现；`file-ref-ledger-bulk` 7/7（5 万用例 16.5s）；真 Redis 队列集成 9/9（`TEST_REDIS_URL` 指向专用 DB index 15，含自调度与 stalled 接管）；真 Redis 限流集成 2/2。
+  - 未新增队列集成用例：验收 4 的「pending 行 + 无 live job → 清扫重激活」由 `reactivateTask` 真 Redis 集成、`reconcileSweep` 单测与 crud 候选查询测试分段覆盖；运行期 Redis 停机排水仍受共享开发库限制，未构造隔离演练。

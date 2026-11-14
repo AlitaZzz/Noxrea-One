@@ -126,8 +126,9 @@ describe.skipIf(!databaseTestsEnabled)("removeSourceFileRefsBatchTx（真实 Pos
     expect(await prisma!.fileRef.count({ where: { userId: 1, sourceType: "asset_item" } })).toBe(0);
     expect(await prisma!.fileObject.count({ where: { userId: 1, refCount: { not: 0 } } })).toBe(0);
     expect(await prisma!.fileObject.count({ where: { userId: 1, refCount: { lt: 0 } } })).toBe(0);
-  // 数据准备本身约 20s；单 worker 全量运行叠加其他用例后 30s 上限会被环境抖动击穿，
-  // 超时又会把文件级 advisory lock 留在未完成的查询上，导致后续文件连锁超时。
+  // 数据准备本身约 20s；单 worker 全量运行叠加其他用例后 30s 上限会被环境抖动击穿。
+  // 测试库连接统一带 90s 服务端 statement_timeout（helpers/test-database.ts）：
+  // 即使本用例超时，PostgreSQL 也会取消在途语句并释放锁，不再连锁卡死后续文件。
   }, 120_000);
 });
 

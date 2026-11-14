@@ -7,6 +7,9 @@
  * - 隔离：会话级 advisory lock（独立连接持锁至文件结束）+ 文件开始前
  *   TRUNCATE ... RESTART IDENTITY CASCADE（排除 _prisma_migrations）。
  * - 连接：应用侧 Prisma 仍读 DATABASE_URL，helper 在文件期间临时指向测试库并在结束时恢复。
+ * - 服务端超时：测试库连接统一附带 statement_timeout（90s，低于 Vitest 120s 用例上限）。
+ *   客户端超时（Prisma 事务预算 / Vitest 用例超时）不会取消已在 PostgreSQL 执行的语句；
+ *   没有服务端超时，超时语句会继续持有锁，后续文件卡在 advisory 文件锁上连锁失败。
  */
 import { Client } from "pg";
 
@@ -21,6 +24,25 @@ export const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 export const databaseTestsEnabled = Boolean(testDatabaseUrl);
 
 const LOCK_NAMESPACE = "noxrea-test-db:";
+
+/**
+ * 测试库单条语句的服务端上限。必须低于 Vitest 的单用例超时（120s），
+ * 使「客户端已放弃、服务端仍在跑」的语句由 PostgreSQL 取消并释放锁；
+ * 正常路径远低于该值（5 万来源批量账本用例单独运行约 20s）。
+ */
+const STATEMENT_TIMEOUT_MS = 90_000;
+
+/**
+ * 给测试库连接串附加服务端 statement_timeout，保留调用方已有的查询参数与 options。
+ * node-postgres 把 `options` 原样传给 PostgreSQL 启动参数，`-c` 逐项生效。
+ */
+export function withStatementTimeout(url: string, timeoutMs = STATEMENT_TIMEOUT_MS): string {
+  const parsed = new URL(url);
+  const existing = parsed.searchParams.get("options");
+  const timeoutOption = `-c statement_timeout=${timeoutMs}`;
+  parsed.searchParams.set("options", existing ? `${existing} ${timeoutOption}` : timeoutOption);
+  return parsed.toString();
+}
 
 /** 恢复 helper 临时改写的环境变量；undefined 表示原本未设置。 */
 function restoreEnv(name: string, value: string | undefined): void {
@@ -76,7 +98,8 @@ export async function setupTestDatabase(): Promise<() => Promise<void>> {
 
   const identity = assertSafeTestDatabaseUrl(testUrl, process.env.DATABASE_URL);
   const lockKey = `${LOCK_NAMESPACE}${identity.database}`;
-  const lock = new Client({ connectionString: testUrl });
+  // 文件锁等待同样受服务端上限约束：持锁文件异常时不至于把后续文件永久挂起。
+  const lock = new Client({ connectionString: testUrl, statement_timeout: STATEMENT_TIMEOUT_MS });
   try {
     await lock.connect();
     await lock.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [lockKey]);
@@ -90,7 +113,8 @@ export async function setupTestDatabase(): Promise<() => Promise<void>> {
   // 避免真实库用例把整个测试输出淹没（原五个测试文件各自维护同一段保存/恢复逻辑）。
   const previousUrl = process.env.DATABASE_URL;
   const previousLogLevel = process.env.LOG_LEVEL;
-  process.env.DATABASE_URL = testUrl;
+  // 应用侧连接附加服务端 statement_timeout；校验始终针对原始 TEST_DATABASE_URL。
+  process.env.DATABASE_URL = withStatementTimeout(testUrl);
   process.env.LOG_LEVEL = "ERROR";
   let cleaned = false;
 
