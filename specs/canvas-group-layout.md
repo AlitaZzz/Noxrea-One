@@ -75,7 +75,7 @@
 - 组框位置（布局不改组节点 `position`）、组成员归属、组的边。
 - 布局动画、布局的 Agent 工具入口、布局结果的碰撞避让。
 - 组外节点与组内成员之间的连线参与分层。
-- 选区级多选布局不在本 Spec 范围；规则见 `specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。
+- 选区级多选布局不在本 Spec 范围；规则见 `specs/canvas-multi-selection-layout.md`（已实现，2026-11-15）。
 
 ## 4. 业务规则
 

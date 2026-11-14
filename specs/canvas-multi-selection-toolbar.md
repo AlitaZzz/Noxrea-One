@@ -1,7 +1,7 @@
 # 画布多选聚合工具条
 
 状态：已实现（Phase 1，2026-11-03）。Phase 2（多选布局）见
-`specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。2026-11-11/12 的组表面与
+`specs/canvas-multi-selection-layout.md`（已实现，2026-11-15）。2026-11-11/12 的组表面与
 批量连线增量为独立增量，规则见 `specs/canvas-batch-connect-drag.md`（已实现，
 2026-11-14）。
 
@@ -351,7 +351,7 @@ Phase 2 的「布局」按钮不改变上表的 Phase 1 按钮矩阵；其可见
 
 ## 9. 当前状态
 
-- 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 见 `specs/canvas-multi-selection-layout.md`（已确认，2026-11-14；2026-11-15 实现完成，待人工走查）。
+- 状态：已实现（Phase 1；2026-11-03 用户确认）。Phase 2 见 `specs/canvas-multi-selection-layout.md`（已实现，2026-11-15）。
 - 增量状态（2026-11-11/12）：组表面 CSS 已手工验证；`GroupConnectRail` 的拖线预览仅有状态机单测与 JS `PointerEvent` 现场验证，真实指针拖线未复现；批量连线主体规则实现完成，`canvas-batch-connect-drag.md` 规则 6「清理」第 5 条（组件卸载清理）已于 2026-11-12 修复并补回归用例；`BatchConnectHandle` 已于 2026-11-12 用 headless Chrome CDP 完成组件级现场走查（正常批量连线、拖拽中卸载取消、卸载后重拖，见 `canvas-batch-connect-drag.md` 验收 6）；代码已随 `ce08456f` 提交。该增量的规则由 `canvas-batch-connect-drag.md` 定义，该 Spec 已于 2026-11-14 收口为「已实现」；本 Spec 的 Phase 1 状态不受影响。规则见 4.10.10「组表面与拖线态」与 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」。
 - 已完成：现状与即梦对照调查；Phase 1 方案、按钮矩阵、边界与验收标准；第 8 节全部决策确认；术语统一为“编组”；统一边距决策确认。
 - Phase 1 实现（2026-11-02 实现，2026-11-03 提交 `e6fc53ad`）：
@@ -392,7 +392,7 @@ Phase 2 的「布局」按钮不改变上表的 Phase 1 按钮矩阵；其可见
 - 已执行（2026-11-03，代码审查根因修复）：定向回归 3 文件 / 32 用例通过（`canvas-derived` 8、`SelectionToolbar` 19、`use-canvas-interaction` 5）；canvas 全量 100 文件 / 942 用例通过（单 worker，串行）；变更文件 ESLint 0 error；web `tsc --noEmit` 通过。浏览器实机走查未在本次修复后重跑。
 - 组表面视觉对齐即梦（2026-11-11，用户确认「按即梦对齐」）：组 body 由半透明 `GROUP_COLORS.fill` 改为不透明表面——默认组 `--canvas-group-bg`（暗 `#161616` / 亮 `#ededed`），彩色组 `color-mix(in srgb, tint 16%, var(--canvas-group-bg))`；`GROUP_COLORS` 移除 `fill`、新增可选 `tint`，新增 `getGroupSurfaceBackground`（`web/src/lib/constants.ts`），`GroupNode` 与颜色选择色板复用。组表面不透明后，持久多选外框填充不再从组填充派生，改由 `globals.css` 的 `--selection-frame-bg` 独立提供（保持旧值 4% 白），`CanvasSurface` 的 `RF_STYLE` 不再注入该变量；规则 4.10.7 同步更新。回归：`GroupNode.test.tsx` 补默认/彩色表面用例，新增 `group-surface.test.ts` 覆盖全部色板字面量、未知 key 与 globals.css 的 token 契约（组底色为不透明 6 位 hex、选择外框不复用组表面）；`NodeToolbar.test.tsx` 补色板预览用例（default 与蓝色均使用不透明组表面）。web 全量 219 文件 / 1758 用例通过（单 worker，串行），`tsc --noEmit` 与变更文件 ESLint 通过。现场验证（dev 目标，2026-11-11）：暗色组 body 计算 `rgb(22, 22, 22)`、亮色 `rgb(237, 237, 237)`，均 `opacity: 1`；`color-mix` 蓝/黄色探针在暗亮两主题下均解析为不透明 `color(srgb …)`；`--selection-frame-bg` 解析为 `#ffffff0a`（4% 白）。组颜色选择器现场打开验证：弹层 10 个色板，default 计算 `rgb(22, 22, 22)`，蓝色 `color(srgb 0.0862745 0.147137 0.232471)`（≈`rgb(22, 38, 59)`），均不透明；验证后关闭弹层、清除选中（选中数回到 0）。未覆盖：当前画布无彩色组，彩色组 body 仅由单测断言内联表达式、浏览器侧用同表达式探针验证解析；明暗切换采用 colorMode + `<html>` 类同步模拟（与既有验证口径一致）；验证时缩放约 0.26（18 × 0.26 < 8），点阵按 LOD 未挂载（点阵规则见 `canvas-dot-grid.md`），点阵被组表面遮挡的最终视觉与真实多选外框均未现场观察（仅由不透明计算样式与层叠关系推断）。
 - 组表面拖线预览对齐即梦（2026-11-12，用户确认「一起对齐」）：`GroupNode` 的 body 不再内联 `background`，改为写入 `--group-surface`；正常态背景由 `.node-body.canvas-group-surface` 读取该变量，`.react-flow[data-connecting]` 期间改为 `color-mix(in srgb, var(--group-surface) 20%, transparent)`。只降低背景不透明度，标题与描边保持不透明，对齐即梦 `.is-connecting ... opacity-canvas-group-connection-preview`（`opacity: .2`）；规则见 4.10.10「组表面与拖线态」。回归：`GroupNode.test.tsx` 断言 `canvas-group-surface` 类、`--group-surface` 取值与无内联 background；`group-surface.test.ts` 新增 CSS 契约（正常态读变量、拖线态 20%、不使用元素 opacity）。定向 2 文件 / 9 用例、`tsc --noEmit`、变更文件 ESLint 通过。现场验证（dev 目标，2026-11-12）：手动给 `.react-flow` 加 `data-connecting` 后，暗色组 body 背景由 `rgb(22, 22, 22)` 变为 `color(srgb 0.0862745 0.0862745 0.0862745 / 0.2)`（同色 20% alpha），描边颜色不变、body/组 `opacity` 均为 1；亮色由 `rgb(237, 237, 237)` 变为 `color(srgb 0.929412 0.929412 0.929412 / 0.2)`；彩色探针 `color(srgb 0.0862745 0.147137 0.232471)` 在拖线态变为同色 `/ 0.2`；移除属性后恢复。验证期间 dev 页面因全局 CSS HMR 重载，已恢复原视口并确认 133 节点 / 66 边数据完整。真实指针拖线未能在后台标签页复现（`visibilityState=hidden`，CDP 受信鼠标事件未启动连接）；`data-connecting` 由交互状态机写入，已有 `use-canvas-interaction` 单测覆盖。审查根因修复（2026-11-12）：批量连接轨道（`GroupConnectRail` / `BatchConnectHandle`）原在 pointerdown 即调用 `onDragStart`，右键/中键或未越过 4px 的单击也会进入 connecting，使全部组表面短暂降到 20%；修复后的会话规则统一由 `canvas-batch-connect-drag.md` 规则 1「起手」至规则 6「清理」定义，本条目只保留修复与验证结论。回归：`use-batch-connect-drag.test.ts` 扩至 15 用例，新增右键/非主指针不拦截默认行为、阈值前 pointercancel、4px 边界只进入一次、其他指针不驱动/终止、非左键 pointerup 取消、左键松开取消、远距离 pointerup 补判等断言；定向 1 文件 / 15 用例、`tsc --noEmit` 与变更文件 ESLint 通过，web 全量 219 文件 / 1767 用例通过（单 worker，串行）。现场验证（dev 目标，2026-11-12，向组连接轨道派发 JS `PointerEvent` 驱动真实 React 处理器）：主键 pointerdown 后 `data-connecting` 不存在、组背景保持 `rgb(22, 22, 22)`；位移 2px 仍不进入；位移 8px 后 `data-connecting=true`、组背景变为同色 `/ 0.2`；其他指针的 cancel/move/up 不改变 connecting；左键松开（buttons 只剩右键位）与右键 pointerup 均取消并恢复背景；结束时 133 节点 / 66 边不变、无菜单。
-- Phase 2 已确认，见 `specs/canvas-multi-selection-layout.md`（状态：已确认，2026-11-14，实现中）。
+- Phase 2 已实现，见 `specs/canvas-multi-selection-layout.md`（状态：已实现，2026-11-15）。
 
 ## 10. 后续阶段（不在本次范围）
 
