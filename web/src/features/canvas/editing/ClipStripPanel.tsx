@@ -4,7 +4,10 @@
  * 与 FrameStripPanel 同构（雪碧图轨道 + scrub 代理），区别在于轨道上没有独立的
  * 播放头：[起点, 终点] 双手柄与选中区间就是「位置」本身——点击/拖动轨道移动
  * 就近的手柄并连续 scrub，按住选区中段可整段平移，播放被约束在选区内循环，
- * 进度以白色竖线呈现。确认后把区间交给 VideoNode 走既有的事件链路创建派生视频节点。
+ * 进度以白色竖线呈现。手柄 / 轨道拖动时暂停并把画面固定在指针帧，整段平移把
+ * 画面固定在新区间入点帧；松手后按拖动前的播放状态恢复循环（出点也预览其边界
+ * 帧，见 finishDragPreview）。
+ * 确认后把区间交给 VideoNode 走既有的事件链路创建派生视频节点。
  *
  * 挂载位置由 CanvasOverlays 的节点级浮层用 RfNodeToolbar(Position.Bottom) 决定：
  * 浮在节点下方居中，且不随画布缩放，轨道尺寸始终稳定。与帧序列面板互斥。
@@ -201,18 +204,19 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       必须先取消挂起的 rAF seek 再用 setVideoTime 同步定位——seekVideo 会 pause，
       若让挂起的 rAF 在 resume() 之后执行，正好把刚恢复的播放在下一帧按停，
       而 wasPlayingRef 在下次按下时捕获到的已是 false，面板内再无恢复路径。
-      播放中的恢复只有入点侧重新定位播放头（出点变化不挪播放头，否则循环 tick
-      判定越界立刻折回入点，表现成「微调出点就从头播放」——与键盘分支、音频
-      面板及拖动中途的 seekPreview 门控同一规则）。暂停 scrub 的收尾才走
-      seekPreview 的 rAF 节流（含出点侧，属预览行为，暂停时不回跳无副作用） */
+      恢复位置统一为选区入点（镜像是钳制后的手柄位置）：入点拖动落在新入点，
+      出点拖动时入点未变，回到入点重新循环；指针原始位置只用于拖动中的预览
+      （出点帧同样只在拖动中预览；若从出点起播，循环 tick 判定越界会立刻折回，
+      反而多闪一帧越界画面）。暂停 scrub 的收尾才走 seekPreview 的 rAF 节流
+      （属预览行为，暂停时不回跳无副作用） */
   const finishDragPreview = useCallback(
-    (which: "in" | "out", time: number) => {
+    (time: number) => {
       if (wasPlayingRef.current) {
         cancelAnimationFrame(seekRafRef.current);
-        if (which === "in") {
-          setVideoTime(nodeId, time);
-          setPlayedRatio(duration > 0 ? clamp01(time / duration) : 0);
-        }
+        // 读镜像而不是闭包 state，与 setHandle 的竞态规避同源
+        const { inRatio: resumeRatio } = loopStateRef.current;
+        setVideoTime(nodeId, resumeRatio * duration);
+        setPlayedRatio(resumeRatio);
         resume();
       } else {
         seekPreview(time);
@@ -221,10 +225,10 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
     [nodeId, duration, seekPreview, resume],
   );
 
-  /** 点击/拖动轨道：移动「就近的那只手柄」（帧截取同款）。入点侧与暂停中的
-      scrub 跟手预览；出点侧循环播放中不 scrub（与 finishDragPreview 的 out
-      分支同一规则）：seekVideo 会暂停并把播放头拖到出点，松手 resume 后循环
-      tick 判定越界立即折回入点，表现成「微调出点就从头播放」。按下与拖动共用 */
+  /** 点击/拖动轨道：移动「就近的那只手柄」（帧截取同款）。任一手柄都跟手预览：
+     拖动即暂停并把画面固定在指针帧，松手由 finishDragPreview 按拖动前状态
+     恢复循环——出点在播放中也不再跳过 scrub，否则用户看不到截取边界帧。
+     按下与拖动共用 */
   const handleTrackDown = useCallback(
     (e: React.PointerEvent) => {
       // 只接受主指针左键：右键 / 中键 / 额外手指放行，不建立拖拽会话
@@ -250,12 +254,11 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       wasPlayingRef.current = isVideoPlaying(nodeId);
       setActiveHandle(which);
       setDragging(which);
-      // 挪手柄 + 出点侧循环播放中不 scrub（与 finishDragPreview 的 out 分支同一
-      // 规则）：seekVideo 会暂停并把播放头拖到出点，松手 resume 后循环 tick
-      // 判定越界立即折回入点，表现成「微调出点就从头播放」。按下与拖动共用
+      // 挪手柄 + 跟手预览：seekVideo 会暂停，画面固定在指针帧；松手恢复循环的
+      // 定位由 finishDragPreview 统一处理。按下与拖动共用
       const scrub = (r: number) => {
         setHandle(which, r);
-        if (which === "in" || !wasPlayingRef.current) seekPreview(r * duration);
+        seekPreview(r * duration);
       };
       let latest = next;
       scrub(next);
@@ -283,12 +286,13 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         setDragging(null);
         if (wasPlayingRef.current) resume();
       };
-      // 松手：补一次精确定位（最后一次 rAF 可能落后于最终指针位置），再恢复循环
+      // 松手：暂停时补一次精确定位；播放中取消挂起 seek 并回到入点续播
+      // （见 finishDragPreview）
       const onUp = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         cleanup();
         setDragging(null);
-        finishDragPreview(which, latest * duration);
+        finishDragPreview(latest * duration);
       };
       // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
       // scrub 已 pause 的播放按拖动前状态还回，否则取消一次就永久静音
@@ -323,12 +327,11 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         setDragging(which);
         const next = ratioFromClientX(trackRef.current, e.clientX);
         let latest: number | null = next;
-        // 挪手柄 + 出点侧循环播放中不 scrub：seekVideo 会暂停并把播放头拖到
-        // 出点，松手 resume 后循环 tick 判定越界立即折回入点，表现成「微调
-        // 出点就从头播放」。暂停 scrub 与入点侧照常跟手预览；按下与拖动共用
+        // 挪手柄 + 跟手预览：seekVideo 会暂停，画面固定在指针帧；松手恢复循环的
+        // 定位由 finishDragPreview 统一处理。按下与拖动共用
         const scrub = (r: number) => {
           setHandle(which, r);
-          if (which === "in" || !wasPlayingRef.current) seekPreview(r * duration);
+          seekPreview(r * duration);
         };
         if (next !== null) {
           scrub(next);
@@ -355,12 +358,12 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
           setDragging(null);
           if (wasPlayingRef.current) resume();
         };
-        // 与轨道拖动一致：松手补精确定位，再恢复循环
+        // 与轨道拖动一致：松手交给 finishDragPreview 定位/恢复
         const onUp = (ev: PointerEvent) => {
           if (ev.pointerId !== pointerId) return;
           cleanup();
           setDragging(null);
-          if (latest !== null) finishDragPreview(which, latest * duration);
+          if (latest !== null) finishDragPreview(latest * duration);
           else if (wasPlayingRef.current) resume();
         };
         // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
@@ -400,8 +403,9 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
       const clamped = setHandle(activeHandle, target);
       if (isVideoPlaying(nodeId)) {
         // 改用 setVideoTime 只定位不打断（seekVideo 会 pause 的理由见上）。且
-        // 只有入点变化才重新定位播放头（与拖动/音频面板一致）：调出点不挪
-        // 播放头，否则循环 tick 判定越界立刻折回入点，表现成「从头播放」
+        // 只有入点变化才重新定位播放头：键盘是离散微调、没有拖动松手的恢复
+        // 时机，调出点不挪播放头，否则每次按键都从入点重播、画面连闪；指针
+        // 拖动则在拖动中预览出点帧、松手回到入点（见 finishDragPreview）
         if (activeHandle === "in") {
           setVideoTime(nodeId, clamped * duration);
           setPlayedRatio(clamped);
@@ -537,12 +541,13 @@ function ClipStripPanel({ nodeId, videoRef, onClose }: ClipStripPanelProps) {
         setDragging(null);
         if (wasPlayingRef.current) resume();
       };
-      // 松手：补一次精确定位（最后一次 rAF 可能落后于最终指针位置），再恢复循环
+      // 松手：暂停时补一次精确定位；播放中取消挂起 seek 并回到入点续播
+      // （见 finishDragPreview）
       const onUp = (ev: PointerEvent) => {
         if (ev.pointerId !== pointerId) return;
         cleanup();
         setDragging(null);
-        finishDragPreview("in", latestIn * duration);
+        finishDragPreview(latestIn * duration);
       };
       // pointercancel / 窗口失焦都是被系统接管的取消手势：收尾但不做定位，
       // scrub 已 pause 的播放按拖动前状态还回
