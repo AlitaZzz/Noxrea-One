@@ -1,6 +1,6 @@
 # 任务队列 Redis + BullMQ 化（Task Queue BullMQ Migration）
 
-状态：已确认（2026-10-20，用户确认；「已确认」= 方案获批、可以开始实现。v5 定稿：v4 → v5 自审修正：① 提交前中断接管补 retryCount 预算约束（否则崩溃循环下无限重试，且对齐现行 cleanupZombieTasks 预算语义）；② 取消矩阵区分轮询段 delayed job；③ max_retries 设置行与规则 1 口径统一；④ 待确认事项按行业成熟形态转设计规则（残余风险处置入规则 3），待确认清零。v4 依据参考项目 open-ai-canvas-main 实读证据引入的提交闸门与轮询 tick 化保留。v1 审查 P0/P1/P2 修订全项保留）
+状态：已实现（2026-11-14 用户指示收口；实现随 `abd22c10` 提交，启动探测修复与四轮实机收口随 `e425ebb4` 提交。方案演进：v5 定稿修正提交前中断接管 retryCount 预算约束、取消矩阵轮询段 delayed job、max_retries 口径，待确认清零；v4 依据参考项目 open-ai-canvas-main 实读证据引入提交闸门与轮询 tick 化；v1 审查 P0/P1/P2 修订全项保留。详见「当前状态」）
 
 ## 目标
 
@@ -159,7 +159,7 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 
 ## 当前状态
 
-已确认（2026-10-20，用户确认）。方案演进：v1 审查 P0/P1/P2 全项修订；v2 自审将无争议事项降为设计；v4 依据参考项目（open-ai-canvas-main）实读证据引入提交闸门（DispatchState 同构 CAS，双提交结构性排除）与轮询 tick 化（`DeferRunningTaskForProviderPoll`/`next_poll_at` 同构，长驻轮询循环与轮询段心跳删除）；v5 自审修正三处缺陷（接管无预算约束、取消矩阵轮询段口径、max_retries 行与规则 1 不一致）并将残余风险处置按行业成熟形态转设计规则。
+方案确认：2026-10-20（用户确认）。方案演进：v1 审查 P0/P1/P2 全项修订；v2 自审将无争议事项降为设计；v4 依据参考项目（open-ai-canvas-main）实读证据引入提交闸门（DispatchState 同构 CAS，双提交结构性排除）与轮询 tick 化（`DeferRunningTaskForProviderPoll`/`next_poll_at` 同构，长驻轮询循环与轮询段心跳删除）；v5 自审修正三处缺陷（接管无预算约束、取消矩阵轮询段口径、max_retries 行与规则 1 不一致）并将残余风险处置按行业成熟形态转设计规则。
 
 实现完成（2026-10-20；代码于 2026-10-21 随 `abd22c10` 提交并推送）：schema additive 迁移（submissionState / nextPollAt / asyncPollAttempts）已对 dev 服务器库 `migrate deploy` 应用；新增 worker 层 queue.ts（重激活原语/取消路由/健康上报/启动探测）、handler.ts（规则 1 分派）、poll-attempt.ts（单次轮询尝试 + defer/预算重入队）、worker.ts（BullMQ Worker + per-job abort + 规则 9 停机时序）、reconcile.ts（对账清扫）；executor 改提交段（闸门 + 异步受理调度首 tick）、manager 改提交边界（submission_uncertain 分类 + acceptUpstreamTask 落库）、poll-loop 改单次轮询、crud 增 CAS 原语并删 zombie/recover；路由创建侧 best-effort 入队 + 取消侧队列移除；/api/health 扩展 redis/worker/queueDepth；设置删 `poll_interval_seconds`/`poll_check_interval_ms`（连带删除无消费方的 `timerMillis` 类型）；NAS compose 增 Redis 7（AOF + noeviction + 9835 映射）与 REDIS_URL 注入，entrypoint 增必填校验与就绪等待；.env(.example)/README 同步。两处实现期偏离已回写上文：依赖取当前主版本（bullmq/ioredis ^6）；StopSignal 随长驻循环整体删除（无迁出消费者）。
 
@@ -183,4 +183,4 @@ DB-first 取消不变（`cancelTask` 先行）。队列侧：
 
 ⑤ **检查结果与测试基座缺陷**：typecheck、lint:server 通过；全量 server Vitest 1236 通过 / 1 失败（`file-ref-ledger-bulk` 5 万规模用例 120s 超时）+ 8 个真实库测试文件的 beforeAll hook 连锁超时。根因：该超时用例的 `UPDATE file_objects …` 在 Prisma 事务超时后仍在服务端执行并持有关系锁，后续文件阻塞在文件级 advisory lock 上。终止本次运行产生的残留会话后：8 个文件 81/81 通过，该用例单独运行 17.5s 通过。queue 相关测试（含真 Redis 集成）全绿。该失败与队列改动无关，但暴露测试基座缺陷（事务超时不取消服务端查询 → 超时用例卡死后续文件），列入遗留问题另行处置。
 
-状态维持「已确认」：①–④ 已覆盖，剩余未验项为 OS 级信号投递、生产入口信号转发与带在途 job 的实机排空；待用户验收后再更新为「已实现」。
+状态更新为「已实现」（2026-11-14，用户验收确认）：①–④ 已覆盖；剩余未验项（OS 级信号投递、生产入口信号转发、带在途 job 的实机排空）经用户接受为平台/部署形态限制，不影响本 Spec 业务规则验收。实现代码与收口记录随 `e425ebb4` 提交。
