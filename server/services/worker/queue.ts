@@ -24,6 +24,14 @@ const REMOVE_ON_FAIL = { age: 86400, count: 1000 } as const;
 /** 基础设施级瞬断的 BullMQ 重试上限；业务失败由 handler 写 DB 终态正常完成，不经此路径 */
 const JOB_ATTEMPTS = 3;
 
+/**
+ * 启动探测上限（规则 7）：探测连接与运行期连接分离——运行期需要
+ * `maxRetriesPerRequest: null` 无限重连，若用它做 PING，Redis 不可达时
+ * 命令会永久排队、启动挂起而不是失败。探测口径与请求路径 Redis 一致。
+ */
+const PROBE_CONNECT_TIMEOUT_MS = 3_000;
+const PROBE_COMMAND_TIMEOUT_MS = 2_000;
+
 let connection: Redis | null = null;
 let queue: Queue | null = null;
 
@@ -70,12 +78,29 @@ export function getTaskQueue(): Queue {
 
 /**
  * 启动探测（bootstrap 调用，规则 7）：PING 失败即启动失败。
+ *
+ * 使用一次性、有限重试的探测连接：连接失败 / 命令超时都会拒绝。运行期
+ * 队列连接仍按 BullMQ 要求创建（`maxRetriesPerRequest: null`），只在探测
+ * 通过后建立，避免不可达时启动挂起。
  */
 export async function initTaskQueue(): Promise<void> {
-  const conn = getQueueConnection();
-  const pong = await conn.ping();
-  if (pong !== "PONG") {
-    throw new Error(`Redis PING returned unexpected reply: ${pong}`);
+  const probe = new IORedis(getConfig().REDIS_URL, {
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+    connectTimeout: PROBE_CONNECT_TIMEOUT_MS,
+    commandTimeout: PROBE_COMMAND_TIMEOUT_MS,
+  });
+  // connect()/ping() 的拒绝已承载启动失败语义；未处理的 error 事件会让进程崩溃
+  probe.on("error", () => {});
+  try {
+    await probe.connect();
+    const pong = await probe.ping();
+    if (pong !== "PONG") {
+      throw new Error(`Redis PING returned unexpected reply: ${pong}`);
+    }
+  } finally {
+    probe.disconnect();
   }
   // 触发队列单例构建，提前暴露连接串/前缀问题
   getTaskQueue();

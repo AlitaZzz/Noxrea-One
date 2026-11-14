@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     close: vi.fn(),
   };
   const connInstance = {
+    connect: vi.fn(),
     ping: vi.fn(),
     on: vi.fn(),
     disconnect: vi.fn(),
@@ -58,6 +59,7 @@ function makeJob(state: string, remove: () => Promise<void> = async () => {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.connInstance.connect.mockResolvedValue(undefined);
   mocks.queueInstance.add.mockResolvedValue({});
   mocks.queueInstance.getJobCounts.mockResolvedValue({ waiting: 0, delayed: 0, active: 0 });
 });
@@ -66,7 +68,20 @@ describe("initTaskQueue", () => {
   it("PING 返回 PONG → 探测通过，并以专用前缀与默认 job 选项构建队列单例", async () => {
     mocks.connInstance.ping.mockResolvedValue("PONG");
     await expect(initTaskQueue()).resolves.toBeUndefined();
-    expect(mocks.IORedis).toHaveBeenCalledWith("redis://localhost:6399", { maxRetriesPerRequest: null });
+    // 探测连接：一次性、有限重试，探测结束后断开
+    expect(mocks.IORedis).toHaveBeenNthCalledWith(1, "redis://localhost:6399", {
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+      connectTimeout: 3_000,
+      commandTimeout: 2_000,
+    });
+    expect(mocks.connInstance.connect).toHaveBeenCalledTimes(1);
+    expect(mocks.connInstance.disconnect).toHaveBeenCalledTimes(1);
+    // 运行期队列连接：BullMQ 语义保持无限重试
+    expect(mocks.IORedis).toHaveBeenNthCalledWith(2, "redis://localhost:6399", {
+      maxRetriesPerRequest: null,
+    });
     expect(mocks.Queue).toHaveBeenCalledWith(
       TASK_QUEUE_NAME,
       expect.objectContaining({
@@ -77,14 +92,23 @@ describe("initTaskQueue", () => {
     expect(TASK_QUEUE_PREFIX).toMatch(/:$/);
   });
 
-  it("PING 非 PONG → 启动失败（规则 7）", async () => {
+  it("PING 非 PONG → 启动失败（规则 7），探测连接仍断开", async () => {
     mocks.connInstance.ping.mockResolvedValue("PONG2");
     await expect(initTaskQueue()).rejects.toThrow("unexpected reply");
+    expect(mocks.connInstance.disconnect).toHaveBeenCalledTimes(1);
   });
 
-  it("PING 抛错（不可达）→ 启动失败", async () => {
+  it("PING 抛错（不可达）→ 启动失败，探测连接仍断开", async () => {
     mocks.connInstance.ping.mockRejectedValue(new Error("ECONNREFUSED"));
     await expect(initTaskQueue()).rejects.toThrow("ECONNREFUSED");
+    expect(mocks.connInstance.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("建连失败（Redis 不可达）→ 启动失败并断开探测连接，不进入无限重试", async () => {
+    mocks.connInstance.connect.mockRejectedValue(new Error("Connection is closed."));
+    await expect(initTaskQueue()).rejects.toThrow("Connection is closed.");
+    expect(mocks.connInstance.ping).not.toHaveBeenCalled();
+    expect(mocks.connInstance.disconnect).toHaveBeenCalledTimes(1);
   });
 });
 
