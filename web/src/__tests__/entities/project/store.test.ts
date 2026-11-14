@@ -39,6 +39,7 @@ vi.mock("@/lib/i18n/config", () => ({
   default: { t: (k: string) => k, exists: () => false },
 }));
 
+import { getProjectRevision } from "@/entities/project";
 import { useProjectStore } from "@/entities/project/store";
 
 const seed = () => {
@@ -238,5 +239,21 @@ describe("project store 创建", () => {
     await expect(pending).resolves.toBeNull();
     expect(mocks.notify.error).not.toHaveBeenCalled();
     expect(useProjectStore.getState().projects.some((p) => p.id === "p9")).toBe(false);
+  });
+});
+
+describe("getProjectRevision", () => {
+  beforeEach(seed);
+
+  it("列表内项目返回其 revision", () => {
+    useProjectStore.setState({
+      projects: [{ id: "p1", name: "A", revision: 5, updatedAt: 0, nodeCount: 0 }],
+    });
+
+    expect(getProjectRevision("p1")).toBe(5);
+  });
+
+  it("项目缺项返回 null（保存链路据此折算初始 revision 1，不得把 null 写进请求）", () => {
+    expect(getProjectRevision("missing")).toBeNull();
   });
 });

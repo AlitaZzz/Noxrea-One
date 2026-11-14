@@ -1,154 +1,173 @@
 /**
- * RF 事件处理器过期闭包测试。
+ * React Flow 事件处理器的过期闭包回归测试（驱动生产 hook）。
  *
- * 建模背景：拆分前 CanvasSurface 的五个事件 handler（handleNodesChange /
- * handleEdgesChange / handleNodeClick / handlePaneClick / handleConnect）闭包捕获
- * RenderScope 的 nodes/edges；拆分后分别落在 use-canvas-node-changes /
- * use-canvas-edge-changes / use-canvas-pointer / use-canvas-connections，约束不变。
- * React Flow 在同一渲染帧内可能连续派发多次变更（选中 + 位置/尺寸），若第二次以
- * 过期闭包基底计算，会覆盖第一次的选中写入。
+ * 建模背景：React Flow 在同一渲染帧内可能连续派发多次变更（选中 + 位置/尺寸）。
+ * 生产 hook（use-canvas-node-changes / use-canvas-edge-changes）必须始终以
+ * store 实时状态为基底应用变更；若以渲染期闭包中的 nodes/edges 为基底，第二次
+ * 变更会覆盖第一次的选中写入（拆分前 CanvasSurface 的五个 handler 即此缺陷）。
  *
- * 本测试不模拟 handler 本身，而是用 applyNodeChanges / applyEdgeChanges 直接证明：
- * "同帧两次变更时，用 store 实时基底的结果包含两次变更；用过期闭包基底则丢失前一次"。
- * 这是 handler 修复"改 store 读"必须跨过的门槛。
+ * 本测试不再手工重演 applyNodeChanges 语义，而是渲染真实 hook 并调用其返回的
+ * handler，断言同帧变更全部落地。
  */
+// @vitest-environment jsdom
 
-import { applyEdgeChanges,applyNodeChanges } from "@xyflow/react";
-import { beforeEach,describe, expect, it } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import type { Edge, EdgeChange, NodeChange } from "@xyflow/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { DragPreviewSession } from "@/features/canvas/drag/drag-preview-session";
+import { useCanvasEdgeChanges } from "@/features/canvas/hooks/use-canvas-edge-changes";
+import { useCanvasNodeChanges } from "@/features/canvas/hooks/use-canvas-node-changes";
+import { saveManager } from "@/features/canvas/persistence/save-manager";
+import type { ResizeSession } from "@/features/canvas/resize/resize-session";
 import { useCanvasStore } from "@/features/canvas/stores/canvas-store";
 import type { AnyNode } from "@/features/canvas/types";
 
 /** 快速构造一个节点 */
 function node(id: string, overrides: Record<string, unknown> = {}): AnyNode {
   return {
-    id, type: "text-node",
+    id,
+    type: "text-node",
     position: { x: 100, y: 200 },
     data: { label: id, content: "" },
     ...overrides,
   } as AnyNode;
 }
 
+/** 位置帧接收方替身：本文件只验证分流，不验证会话内部行为 */
+function dragSession(active = false): DragPreviewSession {
+  return {
+    isActive: () => active,
+    preview: vi.fn(),
+    commit: vi.fn(),
+  } as unknown as DragPreviewSession;
+}
+
+function resizeSession(resizingNodeId: string | null = null): ResizeSession {
+  return {
+    isResizingNode: (id: string) => id === resizingNodeId,
+  } as unknown as ResizeSession;
+}
+
+function renderNodeChanges(options?: { dragActive?: boolean; resizingNodeId?: string | null }) {
+  return renderHook(() =>
+    useCanvasNodeChanges({
+      dragSession: dragSession(options?.dragActive),
+      resizeSession: resizeSession(options?.resizingNodeId),
+    }),
+  );
+}
+
 beforeEach(() => {
   useCanvasStore.setState({ nodes: [], edges: [] });
+  saveManager.resetForProjectSwitch();
 });
 
-describe("同帧连续两次 onNodesChange：选中 + 位置 → store 实时读能保留两者，过期闭包基底丢失选中", () => {
-  it("仅位置变更也可正确应用（基线：applyNodeChanges 行为不受基底来源影响）", () => {
+afterEach(() => {
+  saveManager.resetForProjectSwitch();
+});
+
+describe("同帧连续两次 onNodesChange（生产 hook）", () => {
+  it("单次派发内 select + position：两次变更都落地", () => {
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
+    const { result } = renderNodeChanges();
 
-    const changes: Array<{ type: "position"; id: string; position: { x: number; y: number }; dragging: boolean }> = [{ type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true }];
-    // 任意基底，只有一条变更，结果相同
-    const result = applyNodeChanges(changes, [n0]);
-    expect(result[0].position).toEqual({ x: 500, y: 500 });
+    const changes: NodeChange<AnyNode>[] = [
+      { type: "select", id: "n0", selected: true },
+      { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: false },
+    ];
+    act(() => result.current.handleNodesChange(changes));
+
+    const stored = useCanvasStore.getState().nodes[0];
+    expect(stored.selected).toBe(true);
+    expect(stored.position).toEqual({ x: 500, y: 500 });
   });
 
-  it("选中后紧跟位置变更：过期闭包基底丢失选中（重现 bug）", () => {
+  it("分两次派发 select 与 position：第二次仍以 store 实时状态为基底", () => {
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
+    const { result } = renderNodeChanges();
 
-    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "n0", selected: true };
-    const positionChange: { type: "position"; id: string; position: { x: number; y: number }; dragging: boolean } = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
+    act(() => {
+      result.current.handleNodesChange([{ type: "select", id: "n0", selected: true }]);
+      result.current.handleNodesChange([
+        { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: false },
+      ]);
+    });
 
-    // 第一次：选中变更应用到 store
-    const afterSelect = applyNodeChanges([selectChange], [n0]);
-    useCanvasStore.setState({ nodes: afterSelect });
-
-    // 第二次：用**过期闭包基底**（仍是选中前的 n0）算位置变更
-    const staleBase = [n0]; // ← 这是 handleNodesChange 闭包里的旧引用
-    const fromStale = applyNodeChanges([positionChange], staleBase);
-
-    // Bug 复现：过期基底算出的结果丢失了选中状态
-    expect(fromStale[0].selected).not.toBe(true);
-    // 正确行为（store 实时读）应该同时有位置和选中 —— 见下一个 test
+    const stored = useCanvasStore.getState().nodes[0];
+    // 若第二次以过期闭包基底计算，选中会被覆盖回 false
+    expect(stored.selected).toBe(true);
+    expect(stored.position).toEqual({ x: 500, y: 500 });
   });
 
-  it("同帧两次变更时 store 实时读基底保留两次变更（修复后期望）", () => {
+  it("单次派发内 select + dimensions：实测尺寸与选中都落地", () => {
     const n0 = node("n0");
     useCanvasStore.setState({ nodes: [n0] });
+    const { result } = renderNodeChanges();
 
-    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "n0", selected: true };
-    const positionChange: { type: "position"; id: string; position: { x: number; y: number }; dragging: boolean } = { type: "position", id: "n0", position: { x: 500, y: 500 }, dragging: true };
+    act(() =>
+      result.current.handleNodesChange([
+        { type: "select", id: "n0", selected: true },
+        { type: "dimensions", id: "n0", dimensions: { width: 320, height: 180 } },
+      ]),
+    );
 
-    // 第一次变更入 store
-    const afterSelect = applyNodeChanges([selectChange], [n0]);
-    useCanvasStore.setState({ nodes: afterSelect });
-
-    // 第二次：用 store 实时读（修复后的方式）
-    const storeBase = useCanvasStore.getState().nodes;
-    const fromStore = applyNodeChanges([positionChange], storeBase);
-
-    // 修复后：位置变了，选中也在
-    expect(fromStore[0].selected).toBe(true);
-    expect(fromStore[0].position).toEqual({ x: 500, y: 500 });
+    const stored = useCanvasStore.getState().nodes[0];
+    expect(stored.selected).toBe(true);
+    expect(stored.measured).toEqual({ width: 320, height: 180 });
   });
 
-  it("更复杂的场景：node 数组中有两个节点，过期基底可能包括已删节点导致幽灵复活", () => {
+  it("选中节点的尺寸回传在建会话中消费：store 不重复写入尺寸", () => {
     const n0 = node("n0");
-    const n1 = node("n1");
-    useCanvasStore.setState({ nodes: [n0, n1] });
+    useCanvasStore.setState({ nodes: [n0] });
+    const { result } = renderNodeChanges({ resizingNodeId: "n0" });
 
-    // 第一次：选中 n0
-    const afterSelect = applyNodeChanges([{ type: "select", id: "n0", selected: true }], [n0, n1]);
-    useCanvasStore.setState({ nodes: afterSelect });
+    act(() =>
+      result.current.handleNodesChange([
+        { type: "select", id: "n0", selected: true },
+        { type: "dimensions", id: "n0", dimensions: { width: 320, height: 180 } },
+      ]),
+    );
 
-    // 过期基底：n1 已被删除（第二次变更前 n1 不存在于 store 中）
-    const afterDelete = afterSelect.filter((n) => n.id !== "n1");
-    useCanvasStore.setState({ nodes: afterDelete });
-
-    // 用过期基底（仍含 n1）算 n0 的位置变更
-    const staleBase = [n0, n1]; // n1 已不在 store 中
-    const fromStale = applyNodeChanges([{ type: "position", id: "n0", position: { x: 999, y: 999 }, dragging: true }], staleBase);
-    // 过期基底把 n1 复活了
-    expect(fromStale.length).toBe(2);
-    expect(fromStale.find((n) => n.id === "n1")).toBeDefined();
-
-    // Store 实时读不会复活
-    const storeBase = useCanvasStore.getState().nodes;
-    const fromStore = applyNodeChanges([{ type: "position", id: "n0", position: { x: 999, y: 999 }, dragging: true }], storeBase);
-    expect(fromStore.length).toBe(1);
-    expect(fromStore[0].id).toBe("n0");
-    expect(fromStore[0].selected).toBe(true);
+    const stored = useCanvasStore.getState().nodes[0];
+    expect(stored.selected).toBe(true);
+    expect(stored.measured).toBeUndefined();
   });
 });
 
-describe("同帧连续两次 onEdgesChange", () => {
-  it("选中边 + 同帧其他变更：过期闭包基底丢失选中状态", () => {
-    const e0 = { id: "e0", source: "n0", target: "n1" };
-    useCanvasStore.setState({ edges: [e0] });
-
-    const selectChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "e0", selected: true };
-    const otherChange: { type: "select"; id: string; selected: boolean } = { type: "select", id: "e0", selected: false }; // 模拟误派发的二次 select
-
-    // 第一次变更入 store
-    const afterSelect = applyEdgeChanges([selectChange], [e0]);
-    useCanvasStore.setState({ edges: afterSelect });
-
-    // 过期闭包基底（选中前的 e0）
-    const fromStale = applyEdgeChanges([otherChange], [e0]);
-    // 过期基底：选中前 e0 没有 selected=true，会正常把 selected 设为 false
-    // 但关键是：第二次变更应基于第一次的结果
-    // 真正的问题在另一种模式：RF先发一条无关变更、后发 select，select 用过期基底
-    // 这里只验证基线 —— edges 的 applyEdgeChanges 同样受基底影响
-    expect(fromStale.length).toBe(1);
+describe("同帧连续两次 onEdgesChange（生产 hook）", () => {
+  const edge = (id: string, source: string, target: string): Edge => ({
+    id,
+    source,
+    target,
   });
 
-  it("store 实时读基底保留边选中（修复后期望）", () => {
-    const e0 = { id: "e0", source: "n0", target: "n1" };
-    useCanvasStore.setState({ edges: [e0] });
+  it("逐次派发的两次选中都保留（基底取 store 实时状态）", () => {
+    useCanvasStore.setState({ edges: [edge("e0", "n0", "n1"), edge("e1", "n1", "n2")] });
+    const { result } = renderHook(() => useCanvasEdgeChanges());
 
-    // 先选中边
-    const afterSelect = applyEdgeChanges([{ type: "select", id: "e0", selected: true }], [e0]);
-    useCanvasStore.setState({ edges: afterSelect });
+    act(() => {
+      result.current.handleEdgesChange([{ type: "select", id: "e0", selected: true }]);
+      result.current.handleEdgesChange([{ type: "select", id: "e1", selected: true }]);
+    });
 
-    // 一条无关变更（如另一条边变化），用 store 实时读
-    const storeBase = useCanvasStore.getState().edges;
-    // 模拟 RF 报告 e0 尺寸变化（实际上边没有尺寸，这里是建模第二变更不碰第一变更的项）
-    const fromStore = applyEdgeChanges([], storeBase);
+    const edges = useCanvasStore.getState().edges;
+    expect(edges.find((e) => e.id === "e0")?.selected).toBe(true);
+    expect(edges.find((e) => e.id === "e1")?.selected).toBe(true);
+  });
 
-    // 选中仍在
-    expect(fromStore.length).toBe(1);
-    expect(fromStore[0].selected).toBe(true);
+  it("单次派发内两条 select 都落地", () => {
+    useCanvasStore.setState({ edges: [edge("e0", "n0", "n1"), edge("e1", "n1", "n2")] });
+    const { result } = renderHook(() => useCanvasEdgeChanges());
+
+    const changes: EdgeChange<Edge>[] = [
+      { type: "select", id: "e0", selected: true },
+      { type: "select", id: "e1", selected: true },
+    ];
+    act(() => result.current.handleEdgesChange(changes));
+
+    expect(useCanvasStore.getState().edges.every((e) => e.selected === true)).toBe(true);
   });
 });

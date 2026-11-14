@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { render } from "@testing-library/react";
+import { createElement, StrictMode, useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { stubRaf } from "@/__tests__/test-utils/raf";
@@ -442,6 +444,30 @@ describe("ResizeSession 外部写入与生命周期", () => {
     h.release({ x: 50, y: 60 });
     expect(h.setNodes).not.toHaveBeenCalled();
     expect(h.markDirtyImmediate).not.toHaveBeenCalled();
+    expect(h.pushHistory).not.toHaveBeenCalled();
+  });
+
+  it("StrictMode 双挂载：effect 清理 dispose 后尺寸与帧队列无残留", () => {
+    const raf = stubRaf();
+    const h = createHarness();
+    const wrapper = h.wrappers.get("n1")!;
+    h.begin();
+    h.move({ x: 50, y: 60 });
+
+    function SessionEffect() {
+      useEffect(() => () => h.session.dispose(), []);
+      return null;
+    }
+
+    // StrictMode 会执行 setup → cleanup → setup：cleanup 即卸载清理路径
+    const view = render(createElement(StrictMode, null, createElement(SessionEffect)));
+    raf.flush();
+    view.unmount();
+
+    expect(wrapperSize(wrapper)).toEqual({ width: "200px", height: "100px" });
+    expect(h.session.isResizingNode("n1")).toBe(false);
+    h.release({ x: 50, y: 60 });
+    expect(h.setNodes).not.toHaveBeenCalled();
     expect(h.pushHistory).not.toHaveBeenCalled();
   });
 

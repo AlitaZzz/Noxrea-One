@@ -87,7 +87,11 @@ vi.mock("@/features/canvas/hooks/use-canvas-image", () => ({
   },
 }));
 vi.mock("@/features/canvas/nodes/NodeTitle", () => ({ default: () => null }));
-vi.mock("@/features/canvas/nodes/BusyOverlay", () => ({ default: () => null }));
+// 忙碌浮层暴露取消入口：客户端媒体任务进行中可中止并丢弃产物
+vi.mock("@/features/canvas/nodes/BusyOverlay", () => ({
+  default: ({ onCancel }: { onCancel?: () => void }) =>
+    onCancel ? <button type="button" aria-label="busy-cancel" onClick={onCancel} /> : <div data-testid="busy" />,
+}));
 vi.mock("@/features/canvas/controls/ConnectionSideRail", () => ({ default: () => null }));
 vi.mock("@/features/canvas/shared/MediaPreviewOverlay", () => ({ default: () => null }));
 vi.mock("@/features/canvas/editing/VideoCropPanel", () => ({ default: function MockVideoCropPanel({ videoSize }: { videoSize?: { w: number; h: number } }) {
@@ -608,6 +612,32 @@ describe("VideoNode 编辑会话", () => {
     expect(serverExtractClip).toHaveBeenCalledWith(SOURCE_KEY, 0, 2, expect.any(AbortSignal));
     expectDerivedVideoNode(CLIP_KEY);
     expectDerivedCommit(["clip-node"]);
+  });
+
+  it("客户端截取进行中取消：中止管线、产物丢弃、浮层复位", async () => {
+    let aborted = false;
+    tryClipOnClient.mockImplementationOnce(
+      (_key: string, _range: unknown, ctx: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          ctx.signal.addEventListener("abort", () => {
+            aborted = true;
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        }),
+    );
+    render(<Scene />);
+    await flushMicrotasks();
+    act(() => window.dispatchEvent(new CustomEvent(EventNames.CANVAS_NODE_ACTION, { detail: { nodeId: "video", action: "extract-clip", start: 0, end: 2 } })));
+    await flushMicrotasks();
+
+    fireEvent.click(screen.getByRole("button", { name: "busy-cancel" }));
+    await flushMicrotasks();
+
+    expect(aborted).toBe(true);
+    expect(createVideoNodeFromRef).not.toHaveBeenCalled();
+    expect(commitDerivedNodes).not.toHaveBeenCalled();
+    expect(serverExtractClip).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "busy-cancel" })).toBeNull();
   });
 
   it("客户端管线裁剪产物写入存储 key，不写展示 URL", async () => {

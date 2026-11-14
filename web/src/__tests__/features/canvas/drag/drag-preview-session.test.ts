@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
+import { render } from "@testing-library/react";
 import { Position } from "@xyflow/react";
+import { createElement, StrictMode, useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { stubRaf } from "@/__tests__/test-utils/raf";
@@ -886,6 +888,36 @@ describe("DragPreviewSession", () => {
     expect(getPreviewGuides()).toEqual([]);
     expect(setNodes).not.toHaveBeenCalled();
     expect(session.isActive()).toBe(false);
+  });
+
+  it("StrictMode 双挂载：effect 清理调用 dispose，预览与帧队列无残留", () => {
+    const raf = stubRaf();
+    const harness = createHarness([node("a", 0, 0, { selected: true })]);
+    const { session, container, setNodes } = harness;
+    const el = addNodeEl(container, "a");
+    const labelLayer = document.createElement("div");
+    labelLayer.className = "react-flow__edgelabel-renderer";
+    container.appendChild(labelLayer);
+
+    session.begin(["a"], NO_GRID);
+    session.preview([{ id: "a", position: { x: 10, y: 0 } }]);
+    raf.flush();
+    expect(el.style.translate).toBe("10px 0px");
+
+    function SessionEffect() {
+      useEffect(() => () => session.dispose(), []);
+      return null;
+    }
+
+    // StrictMode 会执行 setup → cleanup → setup：cleanup 即卸载清理路径
+    const view = render(createElement(StrictMode, null, createElement(SessionEffect)));
+    raf.flush();
+    view.unmount();
+
+    expect(el.style.translate).toBe("");
+    expect(labelLayer.style.visibility).toBe("");
+    expect(session.isActive()).toBe(false);
+    expect(setNodes).not.toHaveBeenCalled();
   });
 
   it("滞回：锁定后 8px 内保持，超出后释放，回到 5px 内重新进入", () => {

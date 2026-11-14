@@ -9,7 +9,7 @@ import { NODE_TYPE } from "@/lib/constants";
 const mocks = vi.hoisted(() => ({
   saveProjectRaw: vi.fn(),
   saveProjectDeltaRaw: vi.fn(),
-  revision: 7,
+  revision: 7 as number | null,
 }));
 
 vi.mock("@/features/canvas/persistence/project-transport", () => ({
@@ -583,5 +583,21 @@ describe("SaveManager save phase", () => {
 
     saveManager.notifySessionValid("p1");
     expect(internals.persistedCanvas).toBe(baseline);
+  });
+});
+
+describe("SaveManager 初始 revision", () => {
+  it("项目缺项（revision 为 null）时以 baseRevision 1 提交，null 不进入请求", async () => {
+    useCanvasStore.setState({ nodes: [textNode("n1")], edges: [] });
+    mocks.revision = null;
+
+    saveManager.markDirty();
+    await saveManager.flushAndWait();
+
+    expect(mocks.saveProjectRaw).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(mocks.saveProjectRaw.mock.calls[0]![1] as string) as {
+      baseRevision: number;
+    };
+    expect(body.baseRevision).toBe(1);
   });
 });

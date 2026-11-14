@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
+import { render } from "@testing-library/react";
 import type { Edge } from "@xyflow/react";
+import { createElement, StrictMode, useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { stubRaf } from "@/__tests__/test-utils/raf";
@@ -972,5 +974,41 @@ describe("MarqueeSession", () => {
 
     expect(warn).toHaveBeenCalledWith("[marquee] 自动平移失败", expect.any(Error));
     expect(harness.marquee.dataset.active).toBe("true");
+  });
+
+  it("StrictMode 双挂载：attach/dispose 幂等，卸载后监听与画布属性无残留", () => {
+    const harness = createHarness({ nodes: [marqueeBox("a", 0, 0)] });
+    // harness 创建时已 attach：先清空，只观察 React effect 的挂载序列
+    harness.session.dispose();
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const callsOf = (spy: typeof addSpy, type: string) =>
+      spy.mock.calls.filter(([eventType]) => eventType === type).length;
+
+    function SessionEffect() {
+      useEffect(() => {
+        harness.session.attach();
+        return () => harness.session.dispose();
+      }, []);
+      return null;
+    }
+
+    const view = render(createElement(StrictMode, null, createElement(SessionEffect)));
+
+    // effect 序列 setup → cleanup → setup：监听最终只有一套，dispose 后无属性残留
+    expect(callsOf(addSpy, "keydown")).toBe(2);
+    expect(callsOf(removeSpy, "keydown")).toBe(1);
+    expect(callsOf(addSpy, "contextmenu")).toBe(2);
+    expect(callsOf(removeSpy, "contextmenu")).toBe(1);
+    expect(harness.marquee.dataset.active).toBeUndefined();
+    expect(harness.wrappers.get("a")?.hasAttribute("data-marquee-hit")).toBe(false);
+
+    view.unmount();
+
+    expect(callsOf(removeSpy, "keydown")).toBe(2);
+    expect(callsOf(removeSpy, "blur")).toBe(2);
+    expect(callsOf(removeSpy, "contextmenu")).toBe(2);
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });
