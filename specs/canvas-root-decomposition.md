@@ -1,6 +1,6 @@
 # Canvas Root Decomposition（画布根组件拆分）
 
-状态：已确认（2026-11-04 修订：采用模块契约架构；2026-11-04 二次修订：项目写互斥归 `entities/project`，`AssetHoverPreview` 留在 assets（后由四次修订改判为泛化下沉），`features/model` 下沉，补齐页面加载门、保存 flush 与导演桥接契约；2026-11-04 三次修订：补齐资产库原始批量上传与共享音视频组件下沉，清除 `features/assets → features/canvas` 残留导入；2026-11-04 交叉核对：与 `specs/web-module-contracts.md` 对齐 `uploadMany` / `uploadOne` 逐项契约、`clamp01` 归属与 `features/settings` 的 canvas 边界；2026-11-04 四次修订：按审核结论修正保存循环依赖、输入闸门落位、`assetsDialog` 开关参数、公共 API 签名与悬浮预览归属；2026-11-04 五次修订：按二次审核结论修正 `CanvasSaveSource` 注册时机、`assetsDialog` slot 只注入插入动作、`CanvasPortsContext` 下发 ports、`nodeTypes` 模块级稳定、`AssetBrowserPanel` 拖拽路径与提示词预加载可用性语义；2026-11-04 六次修订：按三次审核结论修正设置门返回值语义、保存注册时机表述、用户菜单开关归属与 `canvas-save-source.ts` 落位；2026-11-04 用户确认；2026-11-09 七次修订：保存改为静态无环分层，删除 `CanvasSaveSource` 注册表，经用户授权调整核心架构）
+状态：已实现（2026-11-14 验收 12 走查通过、经用户授权设置；2026-11-04 修订：采用模块契约架构；2026-11-04 二次修订：项目写互斥归 `entities/project`，`AssetHoverPreview` 留在 assets（后由四次修订改判为泛化下沉），`features/model` 下沉，补齐页面加载门、保存 flush 与导演桥接契约；2026-11-04 三次修订：补齐资产库原始批量上传与共享音视频组件下沉，清除 `features/assets → features/canvas` 残留导入；2026-11-04 交叉核对：与 `specs/web-module-contracts.md` 对齐 `uploadMany` / `uploadOne` 逐项契约、`clamp01` 归属与 `features/settings` 的 canvas 边界；2026-11-04 四次修订：按审核结论修正保存循环依赖、输入闸门落位、`assetsDialog` 开关参数、公共 API 签名与悬浮预览归属；2026-11-04 五次修订：按二次审核结论修正 `CanvasSaveSource` 注册时机、`assetsDialog` slot 只注入插入动作、`CanvasPortsContext` 下发 ports、`nodeTypes` 模块级稳定、`AssetBrowserPanel` 拖拽路径与提示词预加载可用性语义；2026-11-04 六次修订：按三次审核结论修正设置门返回值语义、保存注册时机表述、用户菜单开关归属与 `canvas-save-source.ts` 落位；2026-11-04 用户确认；2026-11-09 七次修订：保存改为静态无环分层，删除 `CanvasSaveSource` 注册表，经用户授权调整核心架构）
 
 ## 背景
 
@@ -552,3 +552,15 @@ canvas 试点遵循 `specs/web-module-contracts.md` 的通用规则，本节只�
   - 验收 15：`drag-preview-session` / `resize-session` / `marquee-session` 各补 StrictMode 双挂载 effect 清理用例（清理后 DOM 预览、行内尺寸、窗口监听与画布 `data-*` 属性均无残留，且不写 store、不压历史）。
   - 验证（已验证事实）：`cd web && npx tsc --noEmit` 通过；`npm run lint` 0 error（6 个既有 `<img>` warning）；web Vitest 233 文件 / 1904 用例通过（单 worker、串行）；架构测试 5 文件 / 50 用例通过（`module-boundaries.baseline.json` violations=[]、cycles=[]）。server 全量未重跑（本轮仅 web 测试与 Spec 变更）。
   - 剩余未完成：验收 12（用户手工走查）仍未执行与确认；状态保持「已确认」，不得据此标「已实现」。
+- 2026-11-14 验收 12 走查通过（用户启动 dev 预览后明确授权「走查完成后，没有问题就改状态为已实现」；走查由助手在该预览中以浏览器交互执行——合成鼠标/键盘事件驱动真实页面，后端为真实 NAS PG/Redis/MinIO，使用专用项目 `Project 7`（canvas 文档 id `mwfzbu9rkmc5da`），未改动既有项目）：
+  - 单选/多选/框选：单击选中、窗口级 Ctrl 按下 + Ctrl 单击多选、空白起拖框选均生效（框选期间 `.react-flow` 出现 `data-marquee-active`，选区矩形约 730×560）。
+  - 拖动与吸附：节点拖动后按吸附结果提交位置并由自动保存落库；对齐辅助线在合成事件下未直接观测到，吸附数学仍以 [canvas-snap-alignment.md](canvas-snap-alignment.md) 的用例为准。
+  - 编组/取消编组：Ctrl+G 生成组节点 `g-MYXhzZn6qVi8o`，Ctrl+Shift+G 取消编组并还原成员节点。
+  - 连线与批量接驳：手柄单连成功；多选后批量接驳轨道扇出到既有节点（1→3 条边）；拖到空白弹出新建菜单，新建节点并生成 2 条边（本项共 5 条边）。
+  - 文件拖入：拖拽遮罩「释放以添加文件」出现；拖入 MP4 后生成视频节点并完成上传（占位 → 可播放）。
+  - 编辑面板开关：裁剪（CropPanel 工具条位于 React Flow `.react-flow__node-toolbar` portal）、AI 标注画笔、全屏预览、片段截取、抽帧面板均能打开与关闭，互斥状态正确。
+  - 裁剪/截取/分离音频：视频裁剪面板显示 256×192 结果规格；片段截取面板读取时长并生成代理（3.92s）；抽帧面板可抽帧；分离音频生成音频节点 `a-mNmc0WmydLOSr`。
+  - 撤销/重做：撤销使节点数 10 → 8，重做恢复为 10；音频节点随撤销删除、随重做恢复。
+  - 自动保存：编辑后多次 `PUT /api/canvas/projects/<id>` 均为 200，状态按「未保存 → 保存中 → 已保存」流转。
+  - 明暗主题：切换后 `html` class、`body` 背景与 React Flow `colorMode` 在 dark ↔ light 间同步切换并保持。
+  - 结论：验收 12 的十项均通过，未发现功能问题；生成面板（`GenerationPanelHost`）不在验收 12 范围，本轮未纳入判定。实现代码已随 `a2f521c0` 提交，验收 12 由用户授权助手代行确认；据用户授权将状态改为「已实现」。上方各条中的「验收 12 未确认 / 状态保持已确认」自本条起不再代表当前状态。

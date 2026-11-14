@@ -5,7 +5,7 @@
 上游与关联：
 
 - [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）：托管媒体解析层、规则 3.2（缓存（内存 + 客户端持久化，2026-10-26 修订））、规则 3.4（分发形态学习）。本 Spec 只约束**解析结果的读取时机**，不改变描述接口、签名、缓存键、持久化格式与淘汰规则；该 Spec 规则 3.2（缓存（内存 + 客户端持久化，2026-10-26 修订））已增加读取时机指针（2026-11-08）。
-- [web-module-contracts.md](web-module-contracts.md)（已确认）规则 4（`entities/user` 状态与生命周期）：`entities/user` 的 SSR cookie 契约与 `CachedUserProvider`。本 Spec 只消费该契约，不改变用户状态归属。
+- [web-module-contracts.md](web-module-contracts.md)（已实现）规则 4（`entities/user` 状态与生命周期）：`entities/user` 的 SSR cookie 契约与 `CachedUserProvider`。本 Spec 只消费该契约，不改变用户状态归属。
 - [canvas-media-loading-skeleton.md](canvas-media-loading-skeleton.md)（已确认）：画布媒体的骨架与加载态。本 Spec 不改变画布侧的加载调度，只约束水合首帧。
 
 ## 目标
