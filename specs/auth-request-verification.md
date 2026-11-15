@@ -6,7 +6,7 @@
 
 - [user-table-upgrade.md](user-table-upgrade.md)（已实现）：用户表字段与 `toPublicUser`。
 - [file-access-ownership.md](file-access-ownership.md)（已实现）：会话归属与能力凭据边界（读路径鉴权语义不变）。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）：批量描述让「每请求一次用户查询」的成本按条目放大，本 Spec 为该成本的根因解法；该 Spec 只依赖本 Spec 的结果。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现）：批量描述让「每请求一次用户查询」的成本按条目放大，本 Spec 为该成本的根因解法；该 Spec 只依赖本 Spec 的结果。
 - [task-queue-bullmq.md](task-queue-bullmq.md)（已实现）：Redis 依赖、启动探测口径（本 Spec 沿用同一口径）。
 - [observability-baseline.md](observability-baseline.md)（已确认）：快照命中率、回源与失效失败指标。
 

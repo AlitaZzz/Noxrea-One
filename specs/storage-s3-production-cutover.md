@@ -2,7 +2,7 @@
 
 状态：已确认（2026-10-19，用户「全按推荐（必须符合行业内成熟方案）」确认全部待确认事项；「已实现」待生产验收清单走查通过后设置）
 
-> **2026-10-24 读路径修订（生产执行前必读）**：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）取代浏览器读路径——S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket，**不再有 302，也不再保留应用代理（`delivery=proxy`）备选**；`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.s3.signed_url_window_seconds`、`storage.edge.origin_secret` 只存在于规划稿，从未落库）。本 Spec 中凡出现这些键、「302 → 预签名」验收项或「proxy 兜底」表述的**可执行条目**，均以该条目的 2026-10-24 补记或本注记为准；仅作历史留痕的实测证据段（如 2026-10-20 各条）保持原文；「公网可达性」的处置收敛为：bucket 必须能被浏览器 https 访问，不可达时只能改用 `storage.backend=local`，没有代理回流的备选。
+> **2026-10-24 读路径修订（生产执行前必读）**：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现）取代浏览器读路径——S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket，**不再有 302，也不再保留应用代理（`delivery=proxy`）备选**；`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.s3.signed_url_window_seconds`、`storage.edge.origin_secret` 只存在于规划稿，从未落库）。本 Spec 中凡出现这些键、「302 → 预签名」验收项或「proxy 兜底」表述的**可执行条目**，均以该条目的 2026-10-24 补记或本注记为准；仅作历史留痕的实测证据段（如 2026-10-20 各条）保持原文；「公网可达性」的处置收敛为：bucket 必须能被浏览器 https 访问，不可达时只能改用 `storage.backend=local`，没有代理回流的备选。
 
 上游 Spec：[storage-s3-backend.md](storage-s3-backend.md)（已实现）——机制正确性已经 MinIO 切换演练实证（2738 对象迁移 + ETag==MD5 全过 + 切换回归 + 回滚补迁闭环）；本 Spec 治理**生产环境的部署正确性**，不复验机制。
 

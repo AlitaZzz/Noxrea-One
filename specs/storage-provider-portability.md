@@ -5,7 +5,7 @@
 上游与关联：
 
 - [storage-s3-backend.md](storage-s3-backend.md)（已实现）：后端接口、双凭据、上传直传、迁移、GC、bucket CORS 清单。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认，2026-10-26 修订）：浏览器读路径依赖 `presignGet` 的 `response-*` 覆盖能力；本 Spec 为其提供能力探测与降级。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现，2026-10-26 修订）：浏览器读路径依赖 `presignGet` 的 `response-*` 覆盖能力；本 Spec 为其提供能力探测与降级。
 - [storage-s3-production-cutover.md](storage-s3-production-cutover.md)（已确认）：生产部署演练。
 - [observability-baseline.md](observability-baseline.md)（已确认）：探测摘要进入健康检查与指标。
 - 参考实现（只读调查，2026-10-26）：`H:\infinite-canvas\open-ai-canvas-main` 的 `backend/internal/storage/s3.go`（按端点形态决定寻址风格、path-style 自动探测）。

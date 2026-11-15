@@ -2,7 +2,7 @@
 
 状态：已废弃（2026-10-24 用户确认；由 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md) 取代）
 
-> **2026-10-24 废弃说明**：本 Spec 的浏览器读分发前提（302 到预签名）已被 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）取代——S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket，`GET /api/files/*` 只返回字节、**不再 302**；`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds`、`storage.s3.signed_url_window_seconds` 三个键已删除，TTL/窗口改为 [signing.ts](../server/services/storage/signing.ts) 常量。
+> **2026-10-24 废弃说明**：本 Spec 的浏览器读分发前提（302 到预签名）已被 [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现）取代——S3 下浏览器经 `POST /api/files/access` 拿预签名 GET 直连 bucket，`GET /api/files/*` 只返回字节、**不再 302**；`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds`、`storage.s3.signed_url_window_seconds` 三个键已删除，TTL/窗口改为 [signing.ts](../server/services/storage/signing.ts) 常量。
 >
 > 仍然有效的签名窗口**机制**（epoch 对齐、窗口内 URL 字节一致、能力凭据不继承长窗口）与能力凭据缺省窗口的**实现约束**（缺省不得为「不对齐」，否则探测缓存永久不命中）已**并入**该 Spec 规则 4.1 / 4.4 / 4.6，由该 Spec 承载；本 Spec 其余全部规则（设置键、302 语义、代理模式、阶段 C）随废弃失效，正文只作「302 时代」的历史证据保留，不得作为实现依据。
 >

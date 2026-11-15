@@ -7,7 +7,7 @@
 - [task-queue-bullmq.md](task-queue-bullmq.md)（已实现）：`/api/health` 的 `redis` / `worker` / `queueDepth` 口径与告警建议。
 - [storage-provider-portability.md](storage-provider-portability.md)（已确认）：启动探测的能力摘要进入健康检查与指标。
 - [auth-request-verification.md](auth-request-verification.md)（已确认）：快照命中/回源/失效失败需要指标。
-- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）：描述接口与派生缓存的观测点。
+- [storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现）：描述接口与派生缓存的观测点。
 
 ## 目标
 

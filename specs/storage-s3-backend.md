@@ -2,7 +2,7 @@
 
 状态：已实现（基础范围 2026-10-18 用户确认切换并已实现；实施顺序六项全部完成，切换演练证据见当前状态。2026-10-19 修订：上游引用交付收敛为 `storage.upstream_ref_delivery` 单一开关，见实施修订。建议在 [storage-reference-key-unification.md](storage-reference-key-unification.md) 之后实施——该 Spec 亦已实现）。2026-11-03 规则 8 预检查增量经用户确认，自动化验收通过、代码已提交，见当前状态。
 
-> 2026-10-24 读路径修订：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已确认）取代浏览器读路径的全部分发规则——`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.edge.origin_secret`、`storage.s3.signed_url_window_seconds` 只存在于规划稿、从未落库），TTL/窗口改为 [server/services/storage/signing.ts](../server/services/storage/signing.ts) 常量；S3 下浏览器一律经 `POST /api/files/access` 拿预签名 GET 直连 bucket，`/api/files/*` 不再 302。本 Spec 中「读取默认 302」「`delivery=proxy` 备选」等表述均由该 Spec 取代；S3 后端实现、上传直传、迁移与 GC 规则不变。
+> 2026-10-24 读路径修订：[storage-signed-direct-delivery.md](storage-signed-direct-delivery.md)（已实现）取代浏览器读路径的全部分发规则——`storage.s3.delivery`、`storage.s3.signed_url_ttl_seconds` 两个曾落库的键已删除（`storage.edge.origin_secret`、`storage.s3.signed_url_window_seconds` 只存在于规划稿、从未落库），TTL/窗口改为 [server/services/storage/signing.ts](../server/services/storage/signing.ts) 常量；S3 下浏览器一律经 `POST /api/files/access` 拿预签名 GET 直连 bucket，`/api/files/*` 不再 302。本 Spec 中「读取默认 302」「`delivery=proxy` 备选」等表述均由该 Spec 取代；S3 后端实现、上传直传、迁移与 GC 规则不变。
 
 > 状态时效说明（2026-11-08）：2026-11-07/08 的派生前缀单源与本地派生根回收修订已记录于「当前状态」，但对应代码尚未提交；「已实现」仍指基础范围与 2026-11-03 增量，不覆盖该增量。
 
