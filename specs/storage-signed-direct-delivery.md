@@ -152,7 +152,7 @@
 
 2.5 描述接口只接受会话凭据；查询里的签名参数不参与鉴权，无会话一律 401。能力凭据用于无会话上游直接读取，不经过描述接口。
 
-2.6 `download: true` 参与描述：`signed` 模式下预签名带 `response-content-disposition=attachment` 与 `response-cache-control=private, no-store`；`stream` 模式下返回的 URL 带 `download=1&filename=`，由 GET 字节路由输出 `Content-Disposition`。
+2.6 `download: true` 参与描述：`signed` 模式下预签名带 `response-content-disposition=attachment` 与 `response-cache-control=private, no-store`；`stream` 模式下返回的 URL 带 `download=1&filename=`，由 GET 字节路由输出 `Content-Disposition`。下载的触发形态（不得顶层导航）见规则 3.9。
 
 2.7 `filename` 清洗与补扩展名沿用 GET 字节路由的现有规则（`attachmentDisposition` + `downloadBaseName`），附件名上限 255 字符由两条读路径共用同一常量（超长按上限截断并保留扩展名，不另立 400 分支）；客户端 URL 构造不引入 `rv`（服务端从未读取，见规则 6.5）。
 
@@ -203,7 +203,7 @@
 
 404 的边界（2026-10-26 补充）：预签名 GET 的 403 通常是签名过期、时钟偏移或 bucket 策略；404 通常是对象已删除（部分 S3 兼容实现与策略配置也会对无读权限返回 404）。元素失败路径不区分 403/404，都按本规则重描述一次——重新描述成功仍返回 404 说明对象确实不可读，属终态，Hook 不再重试；只有描述成功且地址变化（或重挂同一地址后恢复）才可能恢复加载。
 
-3.7 下载的失败反馈：下载必须先解析再触发（规则 3.5），因此它从同步跳转变成了可能失败的异步动作。描述失败属**用户点击的即时反馈**，按 `web/AGENTS.md` 七.1 走轻量消息（`showGlobalMessage().error`），不走通知——失败原因无需展开说明，消息条足以让用户知道「这次没成」并自行重试（同规则适用于试听失败，见「当前状态」）。消息通道没有 `key` 去重能力，连点同一项下载可能叠出多条（文案相同、随即消失），这是轻量消息的既有行为，不为去重改用通知。非托管值（外部 URL / `data:` / `blob:`）不解析、不会走这条失败路径。
+3.7 下载的失败反馈：下载必须先解析再触发（规则 3.5），因此它从同步跳转变成了可能失败的异步动作。描述失败属**用户点击的即时反馈**，按 `web/AGENTS.md` 七.1 走轻量消息（`showGlobalMessage().error`），不走通知——失败原因无需展开说明，消息条足以让用户知道「这次没成」并自行重试（同规则适用于试听失败，见「当前状态」）。消息通道没有 `key` 去重能力，连点同一项下载可能叠出多条（文案相同、随即消失），这是轻量消息的既有行为，不为去重改用通知。非托管值（外部 URL / `data:` / `blob:`）不解析、不会走描述失败路径；规则 3.9 的 scheme 白名单拒绝复用同一条轻量消息，但不属于描述失败。本规则只覆盖描述失败；描述成功后的字节级失败（403/404、CSP 或混合内容拦截）没有可靠信号，见「异常与边界」。
 
 3.8 主动刷新（2026-10-26 用户确认）：`signed` 描述在 `refreshAt` 到点后由 Hook 主动重新描述，不再只依赖元素加载失败。
 
@@ -213,6 +213,15 @@
 - 抖动：会话级 ±10%，按 `refreshAt → expiresAt` 的余量缩放并取一半。同一页面共享偏移，仍可合并；不同标签页/用户各自随机，避免所有客户端在寿命 80% 的同一时刻形成请求尖峰。
 - 失败退避：瞬时故障（网络层 `status = 0`、非 503 的 5xx、`files.signing_failed`）按 30s 起指数退避、5min 封顶，最晚到失效前安全线（5s）；401 / 404 / 429 / 503 等终态不重试，由元素失败路径与手动重试兜底。主动刷新失败不进入页面失败态：当前地址通常仍可用。
 - 有界：服务端未推进寿命（`expiresAt` 不增）、或新描述的建议时刻仍落在客户端过去（客户端时钟超前）时停止循环，避免时钟异常或中间层缓存造成请求自旋；后台标签页的定时器节流由焦点/可见性/网络恢复唤醒补做；会话切换与卸载取消定时器与在途请求。
+
+3.9 下载触发形态（2026-11-15 用户确认）：下载不得以顶层文档导航触发。顶层导航在附件响应头到达前就会派发页面 `beforeunload`，画布存在未落库改动时表现为「离开此网站?」确认框（该保护本身正确，见 `specs/canvas-save-status.md` 规则 12 卸载提示条件）。按下载描述分流：
+
+- 所有下载地址（无论是否带 `delivery`）先做 scheme 白名单：只允许 `http:`、`https:`、`blob:`、`data:`；其余（`javascript:`、`file:` 等）按规则 3.7 报失败，不得交给锚点、iframe 或新标签。
+- `delivery = "signed"`：每次下载新建一个隐藏 iframe 承接（先 `append` 再赋 `src`；离屏 0 尺寸、`aria-hidden`、`tabindex=-1`、非空 `title`、`referrerpolicy=no-referrer`；不设 `sandbox`、不复用），附件响应直接交给浏览器下载管理器，顶层文档不导航。iframe 在固定 60s 后移除，并在 `pagehide` 时统一清理；不得依赖 `load` 事件判断完成（附件导航没有可靠的完成信号）。判断先于 origin：即使签名 URL 恰好同源也走 iframe。页面为 https 而签名 URL 为 http 时，子框架会被混合内容拦截（顶层导航不受此限），退回新标签打开；该组合属部署配置错误（生产 TLS 门槛见 `specs/storage-s3-production-cutover.md` 规则 2），不是受支持形态。该退路在描述完成后执行，慢描述可能超出浏览器瞬时激活窗口而被拦截，只保证不破坏当前页面。
+- `delivery = "stream"`：同源 URL 用 `<a download>`（URL 已带 `download=1&filename=`，见规则 2.6）。该形态由服务端构造为同源路径，前提是浏览器只面向一个应用源（`/api/*` 经应用源代理到服务端，见 `web/next.config.ts` 的 `WEB_API_ORIGIN`）；跨域 stream 地址不得交给同标签锚点。
+- 无 `delivery`（外部 URL / `data:` / `blob:`）：`blob:` / `data:` 与同源 http(s) 用 `<a download>`；外部跨域 http(s) 的 `download` 属性被浏览器忽略，改为新标签打开（`target="_blank"` + `rel="noopener noreferrer"`），不承诺产生下载文件（浏览器可能直接展示该对象）。
+- `<a download>` 分支一律设置 `download` 属性（空串也设置）：调用方未提供文件名时，同源附件依赖该属性避免退化为顶层导航；代价是可能覆盖同源外部附件的响应头文件名（调用方提供的名字优先）。
+- 外部跨域的新标签分支实际可达：资产的 `fileKey`、画布节点与预览的引用值域都接受外部 http(s) URL。非托管外部值不经描述请求，点击后立即打开；该分支只保证不破坏当前页面，不保证产生下载文件。
 
 ### 4. 签名常量与缓存头
 
@@ -329,8 +338,8 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
   - 其他界面：`ProjectListPage.tsx`、`DirectorViewport.tsx`、`Inspector.tsx`、`AssetCard.tsx`、`AssetInspector.tsx`、`AssetHoverPreview.tsx`、`AssetCreateDialog.tsx`、`SettingsModal.tsx`、`CanvasExplorer.tsx`、`ConfirmCard.tsx`、`reference.ts`、`use-sse-task-monitor.ts`、`lib/utils/download.ts`。
   - 服务端响应里的逻辑 URL 同样是解析层输入：媒体编辑路由返回的 `url`、`video-proxy` 的代理地址、`frame-sprite` 的雪碧图地址都在产出的 hook（`use-video-proxy.ts`、`use-frame-sprite.ts`）内解析，元素与 CSS 背景只消费最终地址；解析失败按该产物自身的失败态处理（代理回退原视频 scrub、雪碧图退化为无缩略图轨道），不得把逻辑 URL 透出给浏览器。
 - [web/src/lib/file-url.ts](../web/src/lib/file-url.ts)：保留 `fileRefUrl` / `managedFileUrl` / `withManagedFileWidth` 作为逻辑 URL 派生；不引入 `rv` 追加，不引用 `RESIZE_CACHE_VERSION`；不再直接作为跨域媒体元素的最终 `src`。
-- 下载改为解析后触发：`signed` 用响应头强制附件名（跨域 `href` 的 `a.download` 无效，不设），`stream` 保持 `a.download` + 查询参数；失败反馈按规则 3.7。
-- 测试：解析服务（批量合并、缓存、去重、作用域、过期、持久化复用与清理、形态学习、forceRefresh）、Hook、`CanvasImage`、`VideoNode`、下载工具、媒体编辑链路（至少一处 `crossOrigin` + 直连）。
+- 下载改为解析后触发，触发形态按规则 3.9：`signed` 用一次性隐藏 iframe（附件名由响应头强制，跨域 `href` 的 `a.download` 无效）；`stream` / 同源 / `blob:` / `data:` 用 `<a download>`（属性一律设置）；外部跨域用新标签；失败反馈按规则 3.7。
+- 测试：解析服务（批量合并、缓存、去重、作用域、过期、持久化复用与清理、形态学习、forceRefresh）、Hook、`CanvasImage`、`VideoNode`、下载工具（signed 跨域 / signed 同源 / signed 混合内容 / stream 空文件名 / 跨域 stream / 同源外部 / 外部跨域 / blob / data / 危险 scheme / 畸形 URL / iframe 0 尺寸与无 sandbox / 60s 与 pagehide 清理）、媒体编辑链路（至少一处 `crossOrigin` + 直连）。
 
 ### 数据与持久化
 
@@ -353,7 +362,7 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 - **批内重复 key**：按条独立处理（不合并），结果与请求同序；重复描述不会产生额外派生（同键单飞）。
 - **派生图未生成**：`w` 触发 `getResizedWebP` / `getVideoPosterWebP`；图片失败回退原图（与现路由一致），视频海报失败 404（与现路由一致）。
 - **APNG**：不生成静态档位，描述原图（现有行为）。
-- **下载与大文件**：签名 URL 由浏览器直连，Range 天然支持；不经过应用内存。
+- **下载与大文件**：签名 URL 由浏览器直连，Range 天然支持；不经过应用内存。隐藏 iframe / 新标签分支拿不到字节级结果：签名过期、403/404、CSP `frame-src` 或混合内容拦截都不会产生 UI 信号（描述失败仍按规则 3.7 提示）。部署侧需用冒烟检查覆盖「点击下载后文件落盘」；不得为此改为 fetch + Blob 回读（大文件内存与桶 CORS）。
 - **登出/切换账号**：内存缓存与 IndexedDB 条目按作用域清空；已签发的 URL 在 TTL 内仍可被持有者使用（能力凭据边界）。
 - **多标签页**：各自描述、各自内存缓存；字节缓存按 URL 共享（浏览器 HTTP 缓存），可接受。
 - **时钟偏移**：窗口按 epoch 对齐，多实例需 NTP；偏差跨越窗口边界会产生不同 URL（各缓存一次，不损坏）。
@@ -380,7 +389,7 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 - 90 图项目首次加载：描述请求全部为 `POST /api/files/access` 批量（≤50 条/请求，整屏约 2 个请求；无字节响应、无 302）；bucket 请求 90 个，成功解码；Network 中 302 数为 0。
 - 同标签页刷新：未过期条目从 IndexedDB 复用，描述请求数接近 0；bucket 请求全部命中浏览器缓存，传输 0 字节；`refreshAt` 之后刷新会重新描述一次。
 - 跨签名窗口（用短窗口常量模拟）：同一对象 URL 变化一次，缓存未命中一次，其后命中。
-- 下载：点击下载得到 `Content-Disposition: attachment` 的文件名，字节不经过应用。
+- 下载：画布存在未保存改动时点击下载不出现「离开此网站?」（`Page.javascriptDialogOpening` 为 0），`signed` 每次下载各建一个隐藏 iframe，文件以 `Content-Disposition: attachment` 的文件名落盘、字节不经过应用；预览下载（无调用方文件名）与批量下载走同一分支；`local` 后端的 stream 下载用同源 `<a download>`，同样不弹离开确认。
 - 视频：`<video>` 直连播放，seek 触发 206；抓帧/裁剪/标注等 canvas 像素操作正常（CORS 回归）。
 - `local` 后端：首次描述返回 `stream`，其后画布媒体直接走应用 URL；无 bucket 请求；无 302。
 
@@ -418,6 +427,7 @@ export const CAPABILITY_URL_TTL_SECONDS = 3600;      // 上游引用 / 媒体输
 - 2026-10-26：**规则 3.6 的重试预算按失败地址计**（不再按逻辑源生命周期）——同一地址只重描述一次；换到新地址后再次失败可再重试，避免长会话第二次过期直接进入失败态。
 - 2026-10-26：**新增规则 3.8 主动刷新**——寿命 80%（`refreshAt`）后台重描述，只更新缓存与 Hook 内新鲜地址槽、不替换已挂载元素地址；共享调度 + 会话级 ±10% 抖动 + 瞬时失败指数退避；元素失败优先消费新鲜地址。原「是否需要抖动待实测」事项由此关闭。
 - 2026-10-29：规则 3.6 补记音频播放元素的例外——重试预算按逻辑源失败回合计（`specs/canvas-audio-peaks-cache.md` 规则 4.7，2026-10-28 用户确认），不按失败地址重新获得；其余媒体元素形态与「重新签发的新地址再失败可再重试」的既有语义不变。
+- 2026-11-15：**下载触发形态改为不导航顶层文档**（新增规则 3.9）——`signed` 用一次性隐藏 iframe，同源 / `blob:` / `data:` 用 `<a download>`（属性一律设置），外部跨域用新标签；修复画布未保存时点击下载弹出「离开此网站?」。不改 `beforeunload` 的保护条件，也不为下载临时关闭提示。
 
 ## 已确认事项（2026-10-26 用户确认）
 
@@ -520,7 +530,7 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 - **`VideoPlayer` 自动播放恒静音**：地址异步化后 effect 在 `accessUrl` 未就绪时调用 `play()`，无源元素以 `NotSupportedError` 拒绝，被误当作自动播放策略拦截而永久静音。现仅在地址就绪后播放，且只有 `NotAllowedError` 才降级静音。回归用例：`VideoPlayer.test.tsx`。
 - **`AssetCard` 旧尝试中止新尝试**：解析途中再次点击时，旧尝试的 abort 拒绝进入 `catch`，其收尾 `stopAudio()` 会 abort `playbackRef.current`（新尝试）。现以「是否仍是当前尝试」判定，被取代的尝试不执行收尾。回归用例：`AssetCard.test.tsx`「旧尝试的 abort 拒绝不会中止新尝试」。
 - **`stream` 学习覆盖排队项**：`runJob` 在请求真正发出前重新检查已学习形态，学习后排队的描述请求直接由 `buildManagedFileQueryUrl` 构造；学习前已启动的首批请求受并发上限约束。学习结果保持在会话作用域内（会话切换仍由 `resetAccessState` 清空，规则 3.2 / 3.4 已按此修正措辞）。回归用例：`file-access.test.ts`「stream 学习后，排队中的描述请求不再发起」。
-- **LOD `zoomingOut` 方向**：改为相邻两帧缩放比较，同一手势内反向（放大后回缩 / 缩小后回放）立即翻转，规则 3.9 的在途中止据此生效。回归用例：`CanvasMediaLoadingProvider.test.tsx` 反向用例。
+- **LOD `zoomingOut` 方向**：改为相邻两帧缩放比较，同一手势内反向（放大后回缩 / 缩小后回放）立即翻转，`specs/canvas-media-resolution-lod.md` 规则 3.9 的在途中止据此生效。回归用例：`CanvasMediaLoadingProvider.test.tsx` 反向用例。
 - **客户端媒体管线取消**：`resolveMediaUrl` 传入 `signal`，并在打开媒体源前再次 `ensureNotAborted`，取消不再等待媒体探测完成。
 - **重试结果携带地址**：`retrySigned` 返回重描述后的最终地址（未重试为 `null`）。`CanvasImage` 仅在地址未变（同一签名窗口）时重试调度任务；地址已换时由新 lease 自行加载，不再多探一次过期地址。
 - **命令式位图加载只对 `signed` 重试**：`loadMediaImage` 检查 `delivery`，`stream` / 外部地址失败直接上抛，与元素形态（`retrySigned` 返回 `null`）一致。
@@ -572,3 +582,29 @@ Spec 收敛与文档回写（2026-10-24，用户「按建议」授权）：
 2026-11-08 路径校正（仅文档）：
 
 - 上文历史记录中的 `web/src/features/media/components/*` 已随模块迁移改为 `web/src/components/media/*`（`specs/web-module-contracts.md` 验收 20）；仅更新路径，不改变规则、行为与验收结论。
+
+2026-11-15 下载触发形态修复（规则 3.9，用户确认后实现；工作区未提交）：
+
+- **根因（已验证）**：旧实现用合成 `<a>` 点击触发下载。`signed` 跨域地址上的 `download` 属性被浏览器忽略，`stream` 调用方未给文件名时（`MediaPreviewOverlay` 即如此）同样没有 `download` 属性；两者都退化为顶层文档导航。Chrome 在响应头（`Content-Disposition: attachment`）到达之前就触发 `beforeunload`，画布存在未保存改动时 `SaveManager` 的守卫（`specs/canvas-save-status.md` 规则 12 卸载提示条件）`preventDefault`，于是弹出「离开此网站?」。守卫行为本身正确，缺陷在触发形态。
+- **修复**：`web/src/lib/utils/download.ts` 重写。`signed` → 每次下载一个一次性隐藏 iframe（先挂载后赋 `src`，`aria-hidden` / `tabindex=-1` / `referrerpolicy=no-referrer`，60s 定时与 `pagehide` 清理，不复用、不依赖 `load` 事件）；同源 / `blob:` / `data:` → 同源 `<a download>`（`download` 属性一律设置，空串也设置）；外部跨域 → 新标签（`noopener noreferrer`，不设 `download`）；危险 scheme 与描述失败 → 规则 3.7 轻量消息。`downloadManagedFile` 的签名和全部调用方不变，预览下载与批量下载自动走同一分支。
+- 未改 `beforeunload` 条件，未为下载临时关闭提示；`specs/canvas-save-status.md` 规则 12 卸载提示条件已加指针说明「下载不属于真实离开」。
+
+静态检查与测试（2026-11-15，串行执行）：
+
+- `web/src/__tests__/lib/utils/download-managed-file.test.ts` 重写为 11 个用例（`https://app.example` jsdom）：signed 跨域与 signed 同源都走 iframe、先挂载后赋 `src`、iframe 属性与 60s / `pagehide` 清理；signed 混合内容退回新标签；stream 带/不带文件名都设置 `download`；同源外部 URL 用锚点；外部跨域用新标签；`blob:` / `data:` 保留；`javascript:` / `file:` 拒绝并提示；描述失败提示且不下载。11/11 通过。
+- web 全量 Vitest：234 文件 / 1943 用例全部通过（263.59s，退出码 0）；web `tsc --noEmit` 通过；web lint 0 error（6 条既有 `no-img-element` warning）。
+
+浏览器实测（2026-11-15，CDP + Chrome 157 headless，`localhost:3000` 登录态，后端 `s3` / MinIO `http://10.10.10.2:9833`）：
+
+- 用 API 建临时项目并在画布上加文本节点，`Network.setBlockedURLs` 阻断 `*/api/canvas/projects/*` 让保存保持失败；下载前合成 `beforeunload` 事件为 `{ defaultPrevented: true, notCancelled: false }`，证明守卫处于激活态。
+- 打开资产管理 → 「待分类资产」→ 选中临时上传的 PNG → 点击检查器「下载」：`Page.javascriptDialogOpening` 计数 **0**；DOM 中出现一个 `aria-hidden=true` 的隐藏 iframe，`src` 为 `http://10.10.10.2:9833/noxrea/...` 的签名地址；`Browser.downloadWillBegin` 文件名 = 资产名，`Browser.downloadProgress` 以 `completed` 结束，落盘 137 字节（与上传字节数一致）；下载后守卫仍为 `defaultPrevented: true`。临时资产与项目已删除。
+- 未实测：Firefox / Safari（本机未安装，仅 Chrome 验证）；`stream` 后端（运行时为 `s3`，该分支由单测与「同源 + `download` 属性不导航顶层文档」的语义保证）；外部跨域新标签分支（可达：资产 `fileKey` 与画布/预览引用接受外部 URL；本机未实测）。字节级失败（签名过期、403/404、CSP / 混合内容拦截）按「异常与边界」仍无可靠信号，部署冒烟检查仍为必需项。
+
+2026-11-15 审查修复（用户「根因修复所有问题」，工作区未提交）：
+
+- 代码：`download.ts` 导入 `ResolvedMediaUrl` 取代重复内联类型；`blob:` / `data:` 判定只算一次；删除同标签锚点上的无效 `rel="noopener"`；触发按 `DownloadTarget` 三种形态各自成函数，不再把模式折回布尔；scheme 白名单的注释与规则一致（先白名单，后按 `delivery` 分流）。
+- 测试：新增「跨域 stream 必须退新标签」「畸形 URL 不导航 + 轻量消息」「非托管值原样交给解析层」「iframe 0px 宽高且无 sandbox」；现为 13 个用例，13/13 通过。
+- Spec：规则 3.9 对规则 12 的引用改为「文件名 + 规则编号 + 规则标题」并删除复述；`canvas-save-status.md` 的引用同样只保留标题；scheme 白名单明确适用于所有下载地址；外部跨域新标签分支改为「实际可达」；3.7 补白名单拒绝的例外；3.9 补混合内容退路可能被瞬时激活窗口拦截的限制。
+- 复核（串行）：web 全量 234 文件 / 1945 用例通过（36.82s，退出码 0）；`npm run typecheck` 通过；`npm run lint` 0 error（6 条既有 `no-img-element` warning）。CDP 走查重跑：守卫激活、`Page.javascriptDialogOpening` 0、隐藏 iframe 下载完成，落盘 139 字节（与本次上传一致）；临时资产与项目已删除。
+
+状态保持「已确认」：实现与上述检查已完成，但代码尚未提交（提交须经用户确认），「已实现」仍由用户设置。

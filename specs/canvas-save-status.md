@@ -203,6 +203,8 @@
 
 `pagehide` 与 `visibilitychange` 永不 `preventDefault`，只执行既有 flush。浏览器不允许自定义提示文案，不得依赖文案传达状态。
 
+下载不属于真实离开：托管下载的触发形态见 `specs/storage-signed-direct-delivery.md` 规则 3.9 下载触发形态。本规则的提示条件不因此放宽，任何代码不得为下载临时关闭提示。
+
 ### 13. 卸载提示与 flush 的关系
 
 提示不是保存手段。命中提示时仍按既有语义执行 `flushOnUnload`（keepalive），提示与 flush 同时发生；必须先判定并设置提示，再调用 `flushOnUnload`——`flush` 会在派发时同步把 `dirty` 置为 false，反序会让提示被跳过。keepalive 因 64KB 或网络失败时，内容保持 dirty，提示是用户唯一可见的警告；不得在该路径追加 toast / notification。用户取消离开后页面继续存活，既有重试路径接管；不得因一次未完成 flush 进入 `blocked` / `expired`。`pagehide` 与 `beforeunload` 在同一关闭流程中写请求至多一次（`saving` 时 keepalive 分支直接返回）。
